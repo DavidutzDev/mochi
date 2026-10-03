@@ -56,13 +56,25 @@ Item {
             return;
         }
 
-        // Same activity and view: only the payload changed, so no morph.
-        if (previous && previous.id === next.id && previous.view === next.view && frontLoader.item) {
+        // The same activity, or a keyed replacement of it, in the same view:
+        // only the payload changed, so update it in place without a morph.
+        // A volume OSD then moves its bar instead of reloading on every step.
+        if (previous && frontLoader.item && continues(previous, next)) {
             frontLoader.item.payload = next.payload;
             activity = next;
+        } else if (!load(next)) {
             return;
         }
 
+        // The daemon ignores events for activities that are gone, so a new
+        // one (a keyed replacement too) has to hear that the pointer is
+        // already over the island.
+        if (hover.hovered && (!previous || previous.id !== next.id))
+            Daemon.event("hover_enter");
+    }
+
+    // Loads the next view into the hidden slot and swaps the slots.
+    function load(next: var): bool {
         // root: URLs keep views inside Quickshell's config tree. A plain file
         // path would break singletons like Theme and hot reload.
         const url = `root:/modules/${next.module}/${next.view}.qml`;
@@ -71,16 +83,18 @@ Item {
         if (backLoader.status !== Loader.Ready) {
             console.warn(`mochi: could not load ${url}, keeping the current view`);
             backLoader.source = "";
-            return;
+            return false;
         }
 
         front = 1 - front;
         activity = next;
+        return true;
+    }
 
-        // The daemon ignores events for activities that are gone, so the new
-        // one has to hear that the pointer is already over the island.
-        if (hover.hovered && (!previous || previous.id !== next.id))
-            Daemon.event("hover_enter");
+    function continues(previous: var, next: var): bool {
+        if (previous.module !== next.module || previous.view !== next.view)
+            return false;
+        return previous.id === next.id || (next.key != null && next.key === previous.key);
     }
 
     Connections {

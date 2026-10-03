@@ -49,8 +49,9 @@
               pkgs.rustfmt
               pkgs.rust-analyzer
 
-              # Native dependencies for zbus and friends
+              # Native dependencies: libpulse for the OSD module, dbus for zbus
               pkgs.pkg-config
+              pkgs.libpulseaudio
               pkgs.dbus
 
               # UI

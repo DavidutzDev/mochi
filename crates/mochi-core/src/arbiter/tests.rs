@@ -205,10 +205,11 @@ fn same_key_replaces_in_place() {
     );
 
     assert_eq!(bench.shown(), Some(second));
-    assert_eq!(
-        bench.arbiter.shown().unwrap().payload,
-        json!({ "level": 45 })
-    );
+    let shown = bench.arbiter.shown().unwrap();
+    assert_eq!(shown.payload, json!({ "level": 45 }));
+    // The UI uses the key to update the bar in place instead of switching
+    // views.
+    assert_eq!(shown.key.as_deref(), Some("volume"));
     // A fresh 2s from now, not what was left of the first one.
     assert_eq!(bench.arbiter.next_deadline(), Some(bench.at(3)));
     assert_eq!(bench.ended(), [(first, EndReason::Replaced)]);

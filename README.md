@@ -9,7 +9,7 @@ Early work in progress: the island, the idle clock and a demo module work today.
 Everything runs from the dev shell (`nix develop`, or `direnv allow` once).
 
 ```sh
-cargo run -p mochid -- --dev --modules idle,demo
+cargo run -p mochid -- --dev --modules idle,osd,demo
 ```
 
 `--dev` links the QML to the source tree, so editing any `qml/` file updates the running island. `--modules` overrides the module list in `~/.config/mochi/config.toml`. Stop it with Ctrl+C.
@@ -80,16 +80,28 @@ To watch the island go through the arbiter's rules on your screen and record it 
 cargo test -p mochid --test record -- --ignored --nocapture
 ```
 
+## Modules
+
+| Module | What it does |
+|---|---|
+| `idle` | The clock shown when nothing else is. |
+| `osd` | Shows volume, mute, output device switches, microphone mute, Caps Lock and Num Lock as they change, from any source. Needs pipewire-pulse or PulseAudio. |
+| `demo` | Test views and `mochi ipc demo` actions for trying the island. |
+
 ## Configuration
 
-Both files are optional and live in `~/.config/mochi/`.
+Both files are optional and live in `~/.config/mochi/`. Without a `config.toml`, only `idle` runs.
 
 ```toml
 # config.toml
-modules = ["idle", "demo"]
+modules = ["idle", "osd"]
 
 [module.idle]
 format = "HH:mm:ss"
+
+[module.osd]
+timeout_ms = 1500
+microphone = false   # volume, device, microphone and locks can each be turned off
 ```
 
 ```toml

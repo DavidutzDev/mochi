@@ -512,6 +512,7 @@ impl Entry {
             payload: self.spec.payload.clone(),
             expanded: self.expanded,
             expandable: self.expandable(),
+            key: self.spec.key.clone(),
         }
     }
 }

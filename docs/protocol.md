@@ -99,12 +99,15 @@ Command arguments are always strings, as typed on the command line. The daemon c
     "view": "Compact",
     "payload": {"title": "Hello"},
     "expanded": false,
-    "expandable": true
+    "expandable": true,
+    "key": "group-42"
   }
 }
 ```
 
 The UI loads `root:/modules/<module>/<view>.qml` and passes `payload` to it. `activity` is `null` only when no module has anything to show, not even the idle pill.
+
+`key` is only present when the module set one. A module uses it to replace its own activity, for example a volume OSD on every volume step. When the next `present` has the same `module`, `key` and `view` as the shown activity, the UI updates the view's `payload` in place instead of switching views, even though the `id` is new.
 
 ### Action descriptions
 

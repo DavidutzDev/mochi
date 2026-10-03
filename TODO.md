@@ -185,10 +185,21 @@ Mochi must work on any wlroots-style compositor (Hyprland, niri, mango, ...). St
 
 ### OSD
 
-- [ ] Volume through PipeWire or wireplumber
-- [ ] Brightness through logind `SetBrightness`
-- [ ] Actions: `mochi ipc osd volume +5`, `mochi ipc osd brightness -10`
-- [ ] Interrupts the current activity and lets it resume afterwards
+Listens only: it shows changes made anywhere and has no actions.
+
+- [x] Framework: activities carry their `key` to the UI, which updates a keyed replacement in place (the volume bar slides instead of the view reloading)
+- [x] Output volume and mute from the default sink, over the PulseAudio protocol (`libpulse-binding`, served by pipewire-pulse), with reconnect and backoff
+- [x] Output device switches, with a headset, speakers or display icon
+- [x] Microphone mute on the default source
+- [x] Caps Lock and Num Lock from the kernel LEDs, polled every 100 ms
+- [x] One shared slot (`key = "osd"`), high priority so it interrupts normal activities, 1.5 s timeout
+- [x] Silent at startup and after a reconnect
+- [x] Settings: `timeout_ms`, and `volume`, `device`, `microphone`, `locks` to turn events off
+- [x] Theme-colored line icons drawn in QML
+- [ ] Confirm Caps Lock and Num Lock with a physical key press (a virtual keyboard doesn't change the hardware LEDs)
+- [ ] Check whether headset dials (Arctis Nova 7) report volume through the audio server
+- [ ] Laptop screen brightness: sysfs backlight with udev events
+- [ ] Keyboard backlight
 
 ### Notifications
 

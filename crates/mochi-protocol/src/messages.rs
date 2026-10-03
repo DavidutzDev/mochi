@@ -94,6 +94,11 @@ pub struct Activity {
     pub expanded: bool,
     /// Whether a click toggles between a compact and an expanded view.
     pub expandable: bool,
+    /// The module's replacement key. A new activity with the same module, key
+    /// and view continues the previous one: the UI updates the payload in
+    /// place instead of switching views.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -163,6 +168,7 @@ mod tests {
             payload: json!({ "title": "Hello" }),
             expanded: false,
             expandable: true,
+            key: None,
         }
     }
 
@@ -263,6 +269,25 @@ mod tests {
                 kind: EventKind::HoverEnter
             }
         );
+    }
+
+    #[test]
+    fn the_key_is_only_sent_when_set() {
+        let keyed = Activity {
+            key: Some("osd".into()),
+            ..activity()
+        };
+        let json = serde_json::to_value(&keyed).unwrap();
+        assert_eq!(json["key"], "osd");
+
+        let back: Activity = serde_json::from_value(json).unwrap();
+        assert_eq!(back, keyed);
+
+        let without: Activity = serde_json::from_str(
+            r#"{"id":1,"module":"idle","view":"Pill","payload":{},"expanded":false,"expandable":false}"#,
+        )
+        .unwrap();
+        assert_eq!(without.key, None);
     }
 
     #[test]

@@ -84,7 +84,10 @@ fn init_logging() {
 /// Every module compiled into this binary.
 fn builtin_modules() -> Vec<Box<dyn Module>> {
     #[allow(unused_mut)]
-    let mut modules: Vec<Box<dyn Module>> = vec![Box::new(mochi_module_idle::Idle)];
+    let mut modules: Vec<Box<dyn Module>> = vec![
+        Box::new(mochi_module_idle::Idle),
+        Box::new(mochi_module_osd::Osd),
+    ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));
     modules

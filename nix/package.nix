@@ -2,6 +2,8 @@
   lib,
   rustPlatform,
   makeWrapper,
+  pkg-config,
+  libpulseaudio,
   quickshell,
 }:
 
@@ -25,7 +27,12 @@ rustPlatform.buildRustPackage {
 
   cargoLock.lockFile = ../Cargo.lock;
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [
+    makeWrapper
+    pkg-config
+  ];
+  # libpulse for the OSD module.
+  buildInputs = [ libpulseaudio ];
 
   # The unit ships with /usr/bin paths; point them at this package. mochid
   # gets the Quickshell it was tested against, whatever is in the user's PATH.
