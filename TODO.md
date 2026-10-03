@@ -124,12 +124,12 @@ Supervisor
 
 ## Daemon (`mochid`)
 
-- [x] Entry point with flags: `--dev`, `--config`
+- [x] Entry point with flags: `--dev`, `--config`, `--modules`, `--runtime-dir`, `--quickshell`
 - [x] Logging through `tracing`, readable in `journalctl --user -u mochid`
 - [x] Socket server that accepts Quickshell and `mochi` connections (plugins later)
 - [x] Claim the socket before writing assets, and refuse to start when another daemon is running
 - [x] Clean shutdown on SIGTERM: dismiss everything, stop Quickshell and plugins
-- [ ] `systemd/mochid.service` with `Restart=on-failure`, bound to `graphical-session.target`
+- [x] `systemd/mochid.service` with `Restart=on-failure`, bound to `graphical-session.target`, `ExecReload` running `mochi reload`
 
 ## CLI (`mochi`)
 
@@ -137,7 +137,7 @@ Supervisor
 - [x] `mochi ipc list` lists every module and its actions
 - [x] `mochi ipc <module>` lists one module's actions with argument help
 - [x] `mochi status` shows daemon and UI health (plugins later)
-- [ ] `mochi reload` reloads config and theme
+- [x] `mochi reload` reloads the theme (config changes still need a restart)
 - [ ] `mochi plugins list|enable|disable`
 - [x] Clear error when `mochid` isn't running
 - [ ] `--json` output for scripts
@@ -230,9 +230,15 @@ Mochi must work on any wlroots-style compositor (Hyprland, niri, mango, ...). St
 
 ## Integration and docs
 
-- [ ] Hyprland setup notes for both config formats (Hyprland 0.56 uses Lua): starting `mochid`, environment import, keybind examples
+- [x] Session setup notes: uwsm and `graphical-session.target`, or starting `mochid` from the compositor's autostart (README)
+- [ ] Keybind examples for `mochi ipc` in Hyprland's Lua config
 - [ ] Decide how the island and Waybar share the top edge, or whether Mochi replaces Waybar
-- [ ] Install instructions (cargo, and later a Nix package)
+- [x] Install instructions (Nix package and cargo)
+- [x] Flake `packages` output: both binaries, the systemd unit, and `mochid` wrapped with the pinned Quickshell
+- [x] `nix flake check` builds the package and runs the test suite
+- [x] End-to-end daemon tests with a fake Quickshell (run in the Nix build)
+- [x] Recording test against the real binaries (`cargo test -p mochid --test record -- --ignored`), writing outside the repository
+- [ ] NixOS or home-manager module
 - [ ] `docs/architecture.md`
 
 ## Later
@@ -249,6 +255,9 @@ Mochi must work on any wlroots-style compositor (Hyprland, niri, mango, ...). St
 4. Does the theme control the animation springs, or are they fixed per view?
 
 ## Suggested order
+
+Phase 1 (the framework, the idle module and packaging) is done.
+
 
 1. Spike
 2. Protocol, core, daemon, CLI and QML core, with the idle module as the first user

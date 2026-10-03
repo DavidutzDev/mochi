@@ -5,6 +5,7 @@ mod daemon;
 mod ipc;
 
 use std::ffi::OsString;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -35,14 +36,18 @@ struct Args {
     #[arg(long, value_name = "IDS", value_delimiter = ',')]
     modules: Option<Vec<String>>,
 
+    /// Keep the socket and the generated shell here instead of
+    /// $XDG_RUNTIME_DIR/mochi, for example to run a second daemon in tests.
+    #[arg(long, value_name = "DIR")]
+    runtime_dir: Option<PathBuf>,
+
     /// The Quickshell executable.
     #[arg(long, value_name = "PATH", default_value = "quickshell")]
     quickshell: OsString,
 }
 
 fn main() -> ExitCode {
-    let filter = EnvFilter::try_from_env("MOCHI_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt().with_env_filter(filter).init();
+    init_logging();
 
     let args = Args::parse();
     let runtime = match tokio::runtime::Runtime::new() {
@@ -61,6 +66,21 @@ fn main() -> ExitCode {
     }
 }
 
+/// Logs to stderr, filtered by `MOCHI_LOG` (default `info`). Colors only on a
+/// terminal, and no timestamps under systemd, whose journal adds its own.
+fn init_logging() {
+    let filter = EnvFilter::try_from_env("MOCHI_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
+    let logs = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .with_ansi(std::io::stderr().is_terminal());
+    if std::env::var_os("JOURNAL_STREAM").is_some() {
+        logs.without_time().init();
+    } else {
+        logs.init();
+    }
+}
+
 /// Every module compiled into this binary.
 fn builtin_modules() -> Vec<Box<dyn Module>> {
     #[allow(unused_mut)]
@@ -71,7 +91,10 @@ fn builtin_modules() -> Vec<Box<dyn Module>> {
 }
 
 async fn run(args: Args) -> anyhow::Result<()> {
-    let paths = Paths::from_env()?;
+    let mut paths = Paths::from_env()?;
+    if let Some(dir) = args.runtime_dir {
+        paths.runtime_dir = dir;
+    }
     let config_file = args.config.unwrap_or_else(|| paths.config_file());
     let theme_file = config_file.with_file_name("theme.toml");
 

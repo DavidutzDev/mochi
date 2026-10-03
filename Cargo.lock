@@ -296,6 +296,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "clap",
+ "libc",
  "mochi-core",
  "mochi-module-demo",
  "mochi-module-idle",

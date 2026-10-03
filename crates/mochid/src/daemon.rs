@@ -106,7 +106,15 @@ impl Daemon {
 
             tokio::select! {
                 Some(event) = inputs.connections.recv() => self.on_connection(event),
-                Some(request) = inputs.requests.recv() => self.on_request(request),
+                Some(request) = inputs.requests.recv() => {
+                    // Take everything modules sent together, like the several
+                    // withdrawals of a `clear`, so the island goes straight to
+                    // the end result instead of flashing what lies between.
+                    self.on_request(request);
+                    while let Ok(request) = inputs.requests.try_recv() {
+                        self.on_request(request);
+                    }
+                }
                 Some((module, result)) = inputs.exits.recv() => self.on_exit(module, result),
                 Some(event) = inputs.ui.recv() => self.on_ui_process(event),
                 () = sleep => {}

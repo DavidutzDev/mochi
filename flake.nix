@@ -12,7 +12,12 @@
   };
 
   outputs =
-    { nixpkgs, quickshell, ... }:
+    {
+      self,
+      nixpkgs,
+      quickshell,
+      ...
+    }:
     let
       systems = [
         "x86_64-linux"
@@ -21,6 +26,18 @@
       forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system} system);
     in
     {
+      packages = forAllSystems (
+        pkgs: system: {
+          default = self.packages.${system}.mochi;
+          mochi = pkgs.callPackage ./nix/package.nix {
+            quickshell = quickshell.packages.${system}.default;
+          };
+        }
+      );
+
+      # `nix flake check` builds the package, which runs the test suite.
+      checks = forAllSystems (_: system: { package = self.packages.${system}.mochi; });
+
       devShells = forAllSystems (
         pkgs: system: {
           default = pkgs.mkShell {

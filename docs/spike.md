@@ -23,7 +23,7 @@ cargo run -q -- ipc demo show Big
 cargo run -q -- ipc idle show
 ```
 
-To watch the whole sequence without typing commands, run the recording test. It starts the spike, shows every view, waits for the timeout, and saves `spike/recordings/demo.mp4`:
+To watch the whole sequence without typing commands, run the recording test. It starts the spike, shows every view, waits for the timeout, and saves a video of it:
 
 ```sh
 cargo test --test demo -- --ignored --nocapture
