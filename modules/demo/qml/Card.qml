@@ -30,7 +30,8 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Messages · click to expand"
                 color: Theme.muted
-                font.pixelSize: 12
+                font.pixelSize: Theme.textLabel
+                font.family: Theme.fontFamily
             }
         }
 
@@ -38,7 +39,8 @@ Item {
             width: parent.width
             text: payload.text || "The island grows to fit this text. A longer text makes a taller card."
             color: Theme.foreground
-            font.pixelSize: 13
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
             wrapMode: Text.Wrap
             maximumLineCount: 3
             elide: Text.ElideRight

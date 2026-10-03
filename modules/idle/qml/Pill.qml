@@ -36,7 +36,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: Qt.formatTime(clock.date, root.format)
             color: Theme.foreground
-            font.pixelSize: 14
+            font.pixelSize: Theme.textSubtitle
+            font.family: Theme.fontFamily
             font.weight: Font.DemiBold
         }
     }

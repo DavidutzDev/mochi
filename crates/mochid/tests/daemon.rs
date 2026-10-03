@@ -7,7 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 use common::{Client, Daemon, shown};
-use mochi_protocol::{Area, ClientMessage, DaemonMessage, ErrorCode, EventKind, Role, Theme};
+use mochi_protocol::{Area, ClientMessage, DaemonMessage, ErrorCode, EventKind, Role};
 
 fn error_code(message: DaemonMessage) -> ErrorCode {
     match message {
@@ -36,7 +36,7 @@ fn ui_gets_the_full_state_after_hello() {
     assert_eq!(
         ui.recv(),
         DaemonMessage::Theme {
-            theme: Theme::default()
+            theme: Box::default()
         }
     );
     let present = ui.next_present();
@@ -319,7 +319,7 @@ fn status_and_actions_describe_the_daemon() {
     assert_eq!(
         names,
         [
-            "show", "alert", "stack", "volume", "bubble", "pop", "clear", "call"
+            "show", "alert", "stack", "volume", "bubble", "pop", "clear", "controls", "call"
         ]
     );
 }

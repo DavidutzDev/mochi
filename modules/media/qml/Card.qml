@@ -9,12 +9,15 @@ Item {
     property var payload: null
     readonly property bool playing: payload?.status === "playing"
 
+    implicitHeight: payload === null ? 40 : 96
+
     Text {
         anchors.centerIn: parent
         visible: root.payload === null
         text: "Nothing playing"
         color: Theme.muted
-        font.pixelSize: 13
+        font.pixelSize: Theme.textBody
+        font.family: Theme.fontFamily
     }
 
     Position {
@@ -33,7 +36,7 @@ Item {
 
             anchors.verticalCenter: parent.verticalCenter
             source: root.payload?.art ?? ""
-            size: Math.min(parent.height, 112)
+            size: 96
         }
 
         Column {
@@ -46,7 +49,8 @@ Item {
                 text: root.payload?.title ?? ""
                 elide: Text.ElideRight
                 color: Theme.foreground
-                font.pixelSize: 17
+                font.pixelSize: Theme.textTitle
+                font.family: Theme.fontFamily
                 font.weight: Font.DemiBold
             }
 
@@ -55,52 +59,38 @@ Item {
                 text: [root.payload?.artist, root.payload?.player].filter(part => part).join(" · ")
                 elide: Text.ElideRight
                 color: Theme.muted
-                font.pixelSize: 12
+                font.pixelSize: Theme.textLabel
+                font.family: Theme.fontFamily
             }
 
-            Item {
+            ProgressBar {
                 width: parent.width
-                height: 14
                 visible: clock.length > 0
-
-                Rectangle {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width
-                    height: 4
-                    radius: 2
-                    color: Qt.rgba(1, 1, 1, 0.12)
-
-                    Rectangle {
-                        width: parent.width * clock.progress
-                        height: parent.height
-                        radius: parent.radius
-                        color: Theme.foreground
-                    }
-                }
+                value: clock.progress
             }
 
             Row {
                 spacing: 10
 
-                Button {
+                IconButton {
                     icon: "previous"
-                    action: "previous"
                     size: 18
                     enabled: root.payload?.can_previous ?? false
+                    onClicked: Daemon.command("media", "previous", [])
                 }
 
-                Button {
+                IconButton {
                     icon: root.playing ? "pause" : "play"
-                    action: "play-pause"
                     size: 22
                     enabled: root.payload?.can_play_pause ?? false
+                    onClicked: Daemon.command("media", "play-pause", [])
                 }
 
-                Button {
+                IconButton {
                     icon: "next"
-                    action: "next"
                     size: 18
                     enabled: root.payload?.can_next ?? false
+                    onClicked: Daemon.command("media", "next", [])
                 }
             }
         }

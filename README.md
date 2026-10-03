@@ -2,7 +2,7 @@
 
 A desktop shell built around a central island, like a dynamic island. `mochid`, a Rust daemon, owns state and system integration and supervises a Quickshell UI. `mochi` is its command-line client.
 
-Early work in progress: the island, the idle clock and a demo module work today. `TODO.md` has the plan, `docs/protocol.md` the daemon's protocol and `docs/spike.md` the results of the first prototype.
+Early work in progress: the island, the idle clock and a demo module work today. `TODO.md` has the plan, `docs/protocol.md` the daemon's protocol, `docs/views.md` how to write views with the built-in controls and `docs/spike.md` the results of the first prototype.
 
 ## Running it
 
@@ -123,7 +123,11 @@ wide = true            # text pills instead of small round bubbles
 ```toml
 # theme.toml: any token left out keeps its default
 [colors]
-accent = "#30d158"
+accent = "#30d158"      # also background, surface, raised, highlight, foreground,
+                        # muted, on_accent, danger, success
+
+[text]
+family = "Inter"        # empty keeps the system font"
 
 [layout]
 mode = "notch"     # "island" floats; "notch" attaches to the edge with curved corners

@@ -20,6 +20,7 @@ Row {
         anchors.verticalCenter: parent.verticalCenter
         text: payload.text ?? ""
         color: Theme.foreground
-        font.pixelSize: 13
+        font.pixelSize: Theme.textBody
+        font.family: Theme.fontFamily
     }
 }

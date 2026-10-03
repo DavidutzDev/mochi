@@ -30,7 +30,8 @@ Item {
                 width: parent.width - dnd.width - clear.width - parent.spacing * 2
                 text: "Notifications"
                 color: Theme.foreground
-                font.pixelSize: 15
+                font.pixelSize: Theme.textTitle
+                font.family: Theme.fontFamily
                 font.weight: Font.DemiBold
             }
 
@@ -54,7 +55,8 @@ Item {
             visible: root.notes.length === 0
             text: "Nothing missed"
             color: Theme.muted
-            font.pixelSize: 13
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
         }
 
         Repeater {
@@ -95,7 +97,8 @@ Item {
                             elide: Text.ElideRight
                             textFormat: Text.PlainText
                             color: Theme.foreground
-                            font.pixelSize: 13
+                            font.pixelSize: Theme.textBody
+                            font.family: Theme.fontFamily
                             font.weight: Font.DemiBold
                         }
 
@@ -106,7 +109,8 @@ Item {
                             elide: Text.ElideRight
                             textFormat: Text.PlainText
                             color: Theme.muted
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.textLabel
+                            font.family: Theme.fontFamily
                         }
                     }
 
@@ -125,7 +129,8 @@ Item {
             visible: root.notes.length > root.shown
             text: `${root.notes.length - root.shown} more`
             color: Theme.muted
-            font.pixelSize: 12
+            font.pixelSize: Theme.textLabel
+            font.family: Theme.fontFamily
         }
     }
 }

@@ -271,7 +271,12 @@ impl Daemon {
                 .collect();
             self.reply(id, DaemonMessage::Contributions { contributions });
             let theme = self.theme.clone();
-            self.reply(id, DaemonMessage::Theme { theme });
+            self.reply(
+                id,
+                DaemonMessage::Theme {
+                    theme: Box::new(theme),
+                },
+            );
             for (module, state) in self.states.clone() {
                 self.reply(id, DaemonMessage::State { module, state });
             }
@@ -424,7 +429,9 @@ impl Daemon {
         match mochi_core::config::load_theme(&self.theme_file) {
             Ok(theme) => {
                 self.theme = theme.clone();
-                self.broadcast(&DaemonMessage::Theme { theme });
+                self.broadcast(&DaemonMessage::Theme {
+                    theme: Box::new(theme),
+                });
                 tracing::info!(file = %self.theme_file.display(), "reloaded the theme");
                 self.reply(id, DaemonMessage::Ok);
             }

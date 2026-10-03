@@ -18,7 +18,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: "Volume"
             color: Theme.muted
-            font.pixelSize: 13
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
         }
 
         Rectangle {
@@ -26,7 +27,7 @@ Item {
             width: 150
             height: 6
             radius: 3
-            color: Theme.surface
+            color: Theme.raised
 
             Rectangle {
                 width: parent.width * level

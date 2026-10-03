@@ -14,7 +14,7 @@ Item {
         anchors.centerIn: parent
         spacing: 10
 
-        Icon {
+        Symbol {
             anchors.verticalCenter: parent.verticalCenter
             name: payload.kind === "headset" ? "headset" : payload.kind === "display" ? "display" : "speakers"
         }
@@ -24,7 +24,8 @@ Item {
             width: Math.min(implicitWidth, 280)
             text: payload.description ?? ""
             color: Theme.foreground
-            font.pixelSize: 14
+            font.pixelSize: Theme.textSubtitle
+            font.family: Theme.fontFamily
             elide: Text.ElideRight
         }
     }

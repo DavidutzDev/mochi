@@ -12,6 +12,7 @@
 //! mochi ipc demo pop wifi                # removes that bubble
 //! mochi ipc demo clear                   # removes every demo activity and bubble
 //! mochi ipc demo call launcher open      # runs another module's action
+//! mochi ipc demo controls                # every built-in control, to try
 //! ```
 //!
 //! Clicking a demo bubble shows its name on the island.
@@ -86,6 +87,7 @@ impl Module for Demo {
             ActionSpec::new("pop", "Remove a bubble by name.")
                 .arg(ArgSpec::string("name", "The bubble's name")),
             ActionSpec::new("clear", "Remove every demo activity and bubble."),
+            ActionSpec::new("controls", "Show every built-in control, for 30 seconds."),
             ActionSpec::new(
                 "call",
                 "Run another module's action from this module, to try calls.",
@@ -130,6 +132,9 @@ impl Module for Demo {
                     "alert" => Ok(view(&command.args).priority(Priority::HIGH)),
                     "stack" => Ok(view(&command.args).same_priority(SamePriority::Stack)),
                     "volume" => volume(&command.args),
+                    "controls" => Ok(ActivitySpec::new("Controls")
+                        .key("controls")
+                        .timeout(Duration::from_secs(30))),
                     "call" => {
                         let module = command.args.str("module").unwrap_or_default();
                         let action = command.args.str("action").unwrap_or_default();

@@ -27,7 +27,7 @@ ClippingRectangle {
     radius: note.image ? size / 4 : 0
     color: "transparent"
 
-    Glyph {
+    Symbol {
         anchors.centerIn: parent
         visible: picture.status !== Image.Ready
         name: "bell"

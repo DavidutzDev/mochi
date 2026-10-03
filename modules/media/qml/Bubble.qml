@@ -24,7 +24,7 @@ Item {
         width: 20
         height: 20
         radius: 10
-        color: Theme.surface
+        color: Theme.raised
         opacity: clock.playing ? 1 : 0.5
 
         Behavior on opacity {
@@ -33,7 +33,7 @@ Item {
             }
         }
 
-        Glyph {
+        Symbol {
             anchors.centerIn: parent
             visible: cover.status !== Image.Ready
             name: "note"
@@ -60,7 +60,7 @@ Item {
         // The track behind the progress.
         ShapePath {
             fillColor: "transparent"
-            strokeColor: Theme.surface
+            strokeColor: Theme.raised
             strokeWidth: 2
 
             PathAngleArc {

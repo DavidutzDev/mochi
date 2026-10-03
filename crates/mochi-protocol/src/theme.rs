@@ -13,26 +13,47 @@ pub struct Theme {
     pub colors: Colors,
     pub layout: Layout,
     pub motion: Motion,
+    pub text: Text,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
+/// Color roles. The defaults are "Obsidian": a black island that blends into
+/// the bezel, graphite layers on it, and one accent used sparingly.
 pub struct Colors {
+    /// The island and the hub panel.
     pub background: Color,
+    /// Cards and tiles on the background.
     pub surface: Color,
+    /// Controls, tracks and dividers: one step above `surface`.
+    pub raised: Color,
+    /// Hovered or pressed controls: one step above `raised`.
+    pub highlight: Color,
     pub foreground: Color,
+    /// Secondary text and icons.
     pub muted: Color,
+    /// Active, selected or important things, and nothing else.
     pub accent: Color,
+    /// Text and icons on `accent`.
+    pub on_accent: Color,
+    /// Destructive actions, like a shut down waiting for its second click.
+    pub danger: Color,
+    pub success: Color,
 }
 
 impl Default for Colors {
     fn default() -> Self {
         Self {
-            background: Color::fixed("#e60c0c0f"),
-            surface: Color::fixed("#26ffffff"),
-            foreground: Color::fixed("#f5f5f7"),
-            muted: Color::fixed("#98989f"),
+            background: Color::fixed("#f5000000"),
+            surface: Color::fixed("#1c1c1e"),
+            raised: Color::fixed("#2c2c2e"),
+            highlight: Color::fixed("#3a3a3c"),
+            foreground: Color::fixed("#ffffff"),
+            muted: Color::fixed("#8e8e93"),
             accent: Color::fixed("#ff9f0a"),
+            on_accent: Color::fixed("#000000"),
+            danger: Color::fixed("#ff453a"),
+            success: Color::fixed("#30d158"),
         }
     }
 }
@@ -58,6 +79,12 @@ pub struct Layout {
     pub padding: u32,
     /// Largest corner radius. Short islands are fully rounded pills.
     pub max_radius: u32,
+    /// Corners of small controls: chips, badges, icon buttons.
+    pub radius_small: u32,
+    /// Corners of rows and buttons.
+    pub radius_medium: u32,
+    /// Corners of cards and tiles.
+    pub radius_large: u32,
     /// Height of the transparent surface the island grows inside. Nothing
     /// can be taller than this.
     pub surface_height: u32,
@@ -74,7 +101,10 @@ impl Default for Layout {
             spacing: 8,
             idle_height: 34,
             padding: 14,
-            max_radius: 26,
+            max_radius: 34,
+            radius_small: 8,
+            radius_medium: 14,
+            radius_large: 20,
             surface_height: 640,
             notch: Notch::default(),
         }
@@ -126,6 +156,10 @@ pub struct Motion {
     /// How long the new view waits before fading in, so the shape moves
     /// first.
     pub fade_delay_ms: u32,
+    /// Small state changes: colors, hovers.
+    pub fast_ms: u32,
+    /// Things moving or resizing inside a view, with a slight overshoot.
+    pub move_ms: u32,
 }
 
 impl Default for Motion {
@@ -136,6 +170,43 @@ impl Default for Motion {
             fade_in_ms: 220,
             fade_out_ms: 120,
             fade_delay_ms: 90,
+            fast_ms: 150,
+            move_ms: 350,
+        }
+    }
+}
+
+/// The type scale, in pixels. An empty `family` keeps the system font.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Text {
+    pub family: String,
+    /// Badges and fine print.
+    pub caption: u32,
+    /// Section labels and metadata.
+    pub label: u32,
+    pub body: u32,
+    /// Names and summaries in lists.
+    pub subtitle: u32,
+    /// Titles of cards and tracks.
+    pub title: u32,
+    /// Page titles.
+    pub headline: u32,
+    /// Big numbers, like a clock.
+    pub display: u32,
+}
+
+impl Default for Text {
+    fn default() -> Self {
+        Self {
+            family: String::new(),
+            caption: 11,
+            label: 12,
+            body: 13,
+            subtitle: 14,
+            title: 16,
+            headline: 20,
+            display: 42,
         }
     }
 }

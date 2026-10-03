@@ -39,7 +39,8 @@ Item {
                 text: root.payload.app ?? ""
                 elide: Text.ElideRight
                 color: Theme.muted
-                font.pixelSize: 11
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
             }
 
             Text {
@@ -48,7 +49,8 @@ Item {
                 elide: Text.ElideRight
                 textFormat: Text.PlainText
                 color: root.critical ? Theme.accent : Theme.foreground
-                font.pixelSize: 15
+                font.pixelSize: Theme.textTitle
+                font.family: Theme.fontFamily
                 font.weight: Font.DemiBold
             }
 
@@ -61,7 +63,8 @@ Item {
                 elide: Text.ElideRight
                 textFormat: Text.PlainText
                 color: Theme.muted
-                font.pixelSize: 13
+                font.pixelSize: Theme.textBody
+                font.family: Theme.fontFamily
             }
         }
     }

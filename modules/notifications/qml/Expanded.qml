@@ -46,7 +46,8 @@ Item {
                 text: [root.payload.app, root.ago(root.payload.received_ms ?? Date.now())].filter(part => part).join(" · ")
                 elide: Text.ElideRight
                 color: Theme.muted
-                font.pixelSize: 11
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
             }
 
             Button {
@@ -80,7 +81,8 @@ Item {
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
                     color: root.payload.urgency === "critical" ? Theme.accent : Theme.foreground
-                    font.pixelSize: 15
+                    font.pixelSize: Theme.textTitle
+                    font.family: Theme.fontFamily
                     font.weight: Font.DemiBold
                 }
 
@@ -94,7 +96,8 @@ Item {
                     textFormat: Text.PlainText
                     color: Theme.foreground
                     opacity: 0.85
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.textBody
+                    font.family: Theme.fontFamily
                 }
             }
 

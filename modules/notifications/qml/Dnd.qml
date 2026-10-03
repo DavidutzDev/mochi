@@ -8,7 +8,7 @@ Item {
     implicitWidth: 26
     implicitHeight: 26
 
-    Glyph {
+    Symbol {
         anchors.centerIn: parent
         name: "moon"
         size: 16

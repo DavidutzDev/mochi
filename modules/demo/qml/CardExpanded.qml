@@ -33,14 +33,16 @@ Item {
                 Text {
                     text: "Mochi"
                     color: Theme.foreground
-                    font.pixelSize: 15
+                    font.pixelSize: Theme.textTitle
+                    font.family: Theme.fontFamily
                     font.weight: Font.DemiBold
                 }
 
                 Text {
                     text: "Messages · click to collapse, right click to close"
                     color: Theme.muted
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.textLabel
+                    font.family: Theme.fontFamily
                 }
             }
         }
@@ -49,7 +51,8 @@ Item {
             width: parent.width
             text: payload.text || "The island grows to fit this text. A longer text makes a taller card."
             color: Theme.foreground
-            font.pixelSize: 14
+            font.pixelSize: Theme.textSubtitle
+            font.family: Theme.fontFamily
             wrapMode: Text.Wrap
         }
 
@@ -65,7 +68,7 @@ Item {
                     width: label.implicitWidth + 24
                     height: 30
                     radius: 15
-                    color: Theme.surface
+                    color: Theme.raised
 
                     Text {
                         id: label
@@ -73,7 +76,8 @@ Item {
                         anchors.centerIn: parent
                         text: parent.modelData
                         color: Theme.foreground
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.textBody
+                        font.family: Theme.fontFamily
                     }
                 }
             }

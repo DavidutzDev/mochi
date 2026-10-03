@@ -14,8 +14,9 @@ Rectangle {
     Text {
         anchors.centerIn: parent
         text: (payload.text ?? "?").charAt(0).toUpperCase()
-        color: Theme.background
-        font.pixelSize: 12
+        color: Theme.onAccent
+        font.pixelSize: Theme.textLabel
+        font.family: Theme.fontFamily
         font.weight: Font.Bold
     }
 }

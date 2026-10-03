@@ -100,7 +100,7 @@ impl Module for Notifications {
         vec![
             ContributionSpec::new("hub", "card", "missed", "Card", "Notifications")
                 .icon("bell")
-                .order(20)
+                .order(5)
                 .options(json!({ "span": 1 })),
             ContributionSpec::new("hub", "page", "history", "Page", "Notifications")
                 .icon("bell")

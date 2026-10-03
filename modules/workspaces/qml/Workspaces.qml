@@ -24,7 +24,8 @@ Item {
             visible: root.payload.label != null
             text: root.payload.label ?? ""
             color: Theme.muted
-            font.pixelSize: 12
+            font.pixelSize: Theme.textLabel
+            font.family: Theme.fontFamily
         }
 
         Row {
@@ -50,8 +51,9 @@ Item {
 
                     Behavior on width {
                         NumberAnimation {
-                            duration: 200
-                            easing.type: Easing.OutCubic
+                            duration: Theme.move
+                            easing.type: Easing.BezierSpline
+                            easing.bezierCurve: Theme.overshoot
                         }
                     }
 
@@ -76,7 +78,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: root.payload.active ?? ""
             color: Theme.foreground
-            font.pixelSize: 14
+            font.pixelSize: Theme.textSubtitle
+            font.family: Theme.fontFamily
             font.weight: Font.DemiBold
         }
     }

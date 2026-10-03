@@ -16,7 +16,7 @@ Item {
         anchors.centerIn: parent
         spacing: 10
 
-        Icon {
+        Symbol {
             anchors.verticalCenter: parent.verticalCenter
             name: caps ? "caps-lock" : "num-lock"
             color: on ? Theme.accent : Theme.muted
@@ -26,14 +26,16 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: caps ? "Caps Lock" : "Num Lock"
             color: Theme.foreground
-            font.pixelSize: 14
+            font.pixelSize: Theme.textSubtitle
+            font.family: Theme.fontFamily
         }
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: on ? "on" : "off"
             color: on ? Theme.accent : Theme.muted
-            font.pixelSize: 14
+            font.pixelSize: Theme.textSubtitle
+            font.family: Theme.fontFamily
             font.weight: Font.DemiBold
         }
     }

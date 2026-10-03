@@ -17,14 +17,56 @@ Item {
 
     // On a 24x24 grid: a filled path, holes by the even-odd rule, or an
     // object with a `fill` and a 2px `stroke` path.
+    readonly property string speaker: "M3 9h4l5-4v14l-5-4H3z"
+    readonly property string wave1: "M15.5 9.5a3.5 3.5 0 0 1 0 5"
+    readonly property string wave2: "M18 7a7 7 0 0 1 0 10"
+    readonly property string wave3: "M20.5 4.5a10.5 10.5 0 0 1 0 15"
+    readonly property string micBody: "M9 5a3 3 0 0 1 6 0v6a3 3 0 0 1-6 0z"
+    readonly property string micStand: "M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"
+
     readonly property var icons: ({
+        // Places and things.
         "home": "M12 3.2 3 10.4V20a1 1 0 0 0 1 1h5.5v-6h5v6H20a1 1 0 0 0 1-1v-9.6z",
         "bell": "M12 2a6 6 0 0 0-6 6v3.6l-1.7 3A1 1 0 0 0 5.2 16h13.6a1 1 0 0 0 .9-1.4L18 11.6V8a6 6 0 0 0-6-6zM9.5 18a2.5 2.5 0 0 0 5 0z",
         "music": "M18.5 3.1a1 1 0 0 1 .5.86V15.5a3.5 3.5 0 1 1-2-3.16V7.3l-7 1.75v8.45a3.5 3.5 0 1 1-2-3.16V6.5a1 1 0 0 1 .76-.97l9-2.25a1 1 0 0 1 .74-.18z",
         "clock": "M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16zm-1 3v6.2l4.9 2.9 1-1.7-3.9-2.3V7z",
         "grid": "M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z",
         "moon": "M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a.6.6 0 0 0-.8-.7A9.5 9.5 0 1 0 21.2 15a.6.6 0 0 0-.7-.8z",
-        "volume": "M3 9h4l5-4v14l-5-4H3zM15 8.5a5 5 0 0 1 0 7l-1.4-1.4a3 3 0 0 0 0-4.2zM17.8 5.7a9 9 0 0 1 0 12.6l-1.4-1.4a7 7 0 0 0 0-9.8z",
+        "search": "M10 3a7 7 0 1 0 4.2 12.6l4.6 4.6 1.4-1.4-4.6-4.6A7 7 0 0 0 10 3zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10z",
+
+        // Media.
+        "play": "M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z",
+        "pause": "M6 5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zM13 5a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3a1 1 0 0 1-1-1z",
+        "next": "M4 6.4v11.2a1 1 0 0 0 1.55.83L14 12.8a1 1 0 0 0 0-1.6L5.55 5.57A1 1 0 0 0 4 6.4zM17 5h2a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z",
+        "previous": "M20 6.4v11.2a1 1 0 0 1-1.55.83L10 12.8a1 1 0 0 1 0-1.6l8.45-5.63A1 1 0 0 1 20 6.4zM7 5H5a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1z",
+        "note": "M18.5 3.1a1 1 0 0 1 .5.86V15.5a3.5 3.5 0 1 1-2-3.16V7.3l-7 1.75v8.45a3.5 3.5 0 1 1-2-3.16V6.5a1 1 0 0 1 .76-.97l9-2.25a1 1 0 0 1 .74-.18z",
+
+        // Audio and devices.
+        "volume": { "fill": speaker, "stroke": `${wave1}${wave2}` },
+        "volume-0": { "fill": speaker, "stroke": "" },
+        "volume-1": { "fill": speaker, "stroke": wave1 },
+        "volume-2": { "fill": speaker, "stroke": `${wave1}${wave2}` },
+        "volume-3": { "fill": speaker, "stroke": `${wave1}${wave2}${wave3}` },
+        "volume-muted": { "fill": speaker, "stroke": "M16 9.5l5 5M21 9.5l-5 5" },
+        "mic": { "fill": micBody, "stroke": micStand },
+        "mic-muted": { "fill": micBody, "stroke": `${micStand}M4 3l16 18` },
+        "headset": { "fill": "M3 14h4v7H5a2 2 0 0 1-2-2zM17 14h4v5a2 2 0 0 1-2 2h-2z", "stroke": "M4 15v-3a8 8 0 0 1 16 0v3" },
+        "speakers": {
+            "fill": "M10.75 7a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0-2.5 0z",
+            "stroke": "M7 2.5h10a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H7a1.5 1.5 0 0 1-1.5-1.5V4A1.5 1.5 0 0 1 7 2.5zM8.5 15a3.5 3.5 0 1 0 7 0a3.5 3.5 0 1 0-7 0"
+        },
+        "display": { "fill": "", "stroke": "M4 4.5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1zM9 20.5h6M12 16.5v4" },
+        "caps-lock": { "fill": "", "stroke": "M12 4l-7 7h4v5h6v-5h4zM9 20h6" },
+        "num-lock": {
+            "fill": "",
+            "stroke": "M6 3.5h12a2.5 2.5 0 0 1 2.5 2.5v12a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5zM10.5 9l2-1.5V17M10 17h5"
+        },
+
+        // Connections.
+        "wifi": { "fill": "M10.5 18.5a1.5 1.5 0 1 0 3 0 1.5 1.5 0 1 0-3 0", "stroke": "M3 9a13 13 0 0 1 18 0M6 12.5a8.5 8.5 0 0 1 12 0M9 15.8a4 4 0 0 1 6 0" },
+        "bluetooth": { "fill": "", "stroke": "M7 7.5l10 9-5 4.5V3l5 4.5-10 9" },
+
+        // Power.
         "power": { "fill": "", "stroke": "M12 3v9M6.5 6.5a8 8 0 1 0 11 0" },
         "lock": {
             "fill": "M6 11h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z",
@@ -36,7 +78,14 @@ Item {
         "chip": { "fill": "", "stroke": "M8 8h8v8H8zM10 3v3M14 3v3M10 18v3M14 18v3M3 10h3M3 14h3M18 10h3M18 14h3" },
         "leaf": "M20 4C10 4 4 9 4 15c0 2 .6 3.6 1.5 5l1.4-1.4C9 15 12 12.5 16 11c-3.3 2-6 4.6-7.4 8.1.9.6 2.1.9 3.4.9 6 0 8-7 8-16z",
         "bolt": "M13 2 4 14h7l-1 8 9-12h-7z",
-        "scale": { "fill": "", "stroke": "M12 4v16M7 20h10M5 7h14M5 7l-2.5 6a2.5 2.5 0 0 0 5 0zM19 7l-2.5 6a2.5 2.5 0 0 0 5 0z" }
+        "scale": { "fill": "", "stroke": "M12 4v16M7 20h10M5 7h14M5 7l-2.5 6a2.5 2.5 0 0 0 5 0zM19 7l-2.5 6a2.5 2.5 0 0 0 5 0z" },
+
+        // Controls.
+        "close": { "fill": "", "stroke": "M6.5 6.5l11 11M17.5 6.5l-11 11" },
+        "check": { "fill": "", "stroke": "M5 12.5l4.5 4.5L19 7.5" },
+        "chevron": { "fill": "", "stroke": "M9.5 6l6 6-6 6" },
+        "plus": { "fill": "", "stroke": "M12 5v14M5 12h14" },
+        "minus": { "fill": "", "stroke": "M5 12h14" }
     })
     readonly property var icon: icons[name] ?? null
     readonly property string fill: typeof icon === "string" ? icon : icon?.fill ?? ""

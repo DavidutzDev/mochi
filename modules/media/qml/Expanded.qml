@@ -17,7 +17,7 @@ Item {
     readonly property real shownPosition: seeking >= 0 ? seeking : position
 
     onPayloadChanged: {
-        if (!bar.pressed)
+        if (!bar.dragging)
             seeking = -1;
     }
 
@@ -67,7 +67,8 @@ Item {
                     text: root.payload.player ?? ""
                     elide: Text.ElideRight
                     color: Theme.muted
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
                 }
 
                 Text {
@@ -75,7 +76,8 @@ Item {
                     text: root.payload.title ?? ""
                     elide: Text.ElideRight
                     color: Theme.foreground
-                    font.pixelSize: 15
+                    font.pixelSize: Theme.textTitle
+                    font.family: Theme.fontFamily
                     font.weight: Font.DemiBold
                 }
 
@@ -85,7 +87,8 @@ Item {
                     text: root.payload.artist ?? ""
                     elide: Text.ElideRight
                     color: Theme.muted
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.textBody
+                    font.family: Theme.fontFamily
                 }
             }
         }
@@ -103,60 +106,23 @@ Item {
                 horizontalAlignment: Text.AlignRight
                 text: root.time(root.shownPosition)
                 color: Theme.muted
-                font.pixelSize: 11
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
                 font.features: { "tnum": 1 }
             }
 
-            Item {
+            Slider {
+                id: bar
+
                 anchors.verticalCenter: parent.verticalCenter
                 width: parent.width - elapsed.width - total.width - parent.spacing * 2
-                height: 14
-
-                Rectangle {
-                    id: track
-
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width
-                    height: bar.containsMouse || bar.pressed ? 6 : 4
-                    radius: height / 2
-                    color: Theme.surface
-
-                    Behavior on height {
-                        NumberAnimation {
-                            duration: 120
-                        }
-                    }
-
-                    Rectangle {
-                        width: parent.width * Math.min(root.shownPosition / Math.max(root.length, 1), 1)
-                        height: parent.height
-                        radius: parent.radius
-                        color: Theme.foreground
-                    }
-                }
-
-                MouseArea {
-                    id: bar
-
-                    // A taller target than the thin bar.
-                    anchors.fill: parent
-                    enabled: root.payload.can_seek ?? false
-                    hoverEnabled: true
-                    cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
-
-                    function at(x: real): real {
-                        return Math.max(0, Math.min(x / width, 1)) * root.length;
-                    }
-
-                    onPressed: mouse => root.seeking = at(mouse.x)
-                    onPositionChanged: mouse => {
-                        if (pressed)
-                            root.seeking = at(mouse.x);
-                    }
-                    onReleased: mouse => {
-                        root.seeking = at(mouse.x);
-                        Daemon.command("media", "seek", [(root.seeking / 1000).toFixed(2)]);
-                    }
+                thickness: 4
+                enabled: root.payload.can_seek ?? false
+                value: root.length > 0 ? root.shownPosition / root.length : 0
+                onMoved: value => root.seeking = value * root.length
+                onReleased: value => {
+                    root.seeking = value * root.length;
+                    Daemon.command("media", "seek", [(root.seeking / 1000).toFixed(2)]);
                 }
             }
 
@@ -166,7 +132,8 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.time(root.length)
                 color: Theme.muted
-                font.pixelSize: 11
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
                 font.features: { "tnum": 1 }
             }
         }
@@ -175,26 +142,28 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: 18
 
-            Button {
+            IconButton {
                 anchors.verticalCenter: parent.verticalCenter
                 icon: "previous"
-                action: "previous"
                 enabled: root.payload.can_previous ?? false
+                size: 20
+                onClicked: Daemon.command("media", "previous", [])
             }
 
-            Button {
+            IconButton {
                 anchors.verticalCenter: parent.verticalCenter
                 icon: root.playing ? "pause" : "play"
-                action: "play-pause"
                 size: 26
                 enabled: root.payload.can_play_pause ?? false
+                onClicked: Daemon.command("media", "play-pause", [])
             }
 
-            Button {
+            IconButton {
                 anchors.verticalCenter: parent.verticalCenter
                 icon: "next"
-                action: "next"
                 enabled: root.payload.can_next ?? false
+                size: 20
+                onClicked: Daemon.command("media", "next", [])
             }
         }
     }

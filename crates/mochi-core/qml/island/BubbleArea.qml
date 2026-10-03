@@ -109,7 +109,8 @@ Row {
             anchors.centerIn: parent
             text: `+${root.hidden}`
             color: Theme.muted
-            font.pixelSize: 13
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
             font.weight: Font.DemiBold
         }
 

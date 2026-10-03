@@ -23,7 +23,8 @@ Row {
         text: root.payload.title ?? ""
         elide: Text.ElideRight
         color: root.playing ? Theme.foreground : Theme.muted
-        font.pixelSize: 13
+        font.pixelSize: Theme.textBody
+        font.family: Theme.fontFamily
         font.weight: Font.DemiBold
 
         Behavior on color {

@@ -15,7 +15,7 @@ Item {
         anchors.centerIn: parent
         spacing: 10
 
-        Icon {
+        Symbol {
             anchors.verticalCenter: parent.verticalCenter
             name: muted ? "mic-muted" : "mic"
             color: muted ? Theme.accent : Theme.foreground
@@ -25,7 +25,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: muted ? "Microphone muted" : "Microphone on"
             color: Theme.foreground
-            font.pixelSize: 14
+            font.pixelSize: Theme.textSubtitle
+            font.family: Theme.fontFamily
         }
     }
 }

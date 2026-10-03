@@ -12,9 +12,9 @@ ClippingRectangle {
     implicitWidth: size
     implicitHeight: size
     radius: Math.round(size / 5)
-    color: Theme.surface
+    color: Theme.raised
 
-    Glyph {
+    Symbol {
         anchors.centerIn: parent
         visible: cover.status !== Image.Ready
         name: "note"

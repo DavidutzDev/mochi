@@ -14,6 +14,8 @@ Item {
     // The action waiting for its second click, or "".
     property string armed: ""
 
+    implicitHeight: column.implicitHeight
+
     readonly property var profileLooks: ({
         "power-saver": { "label": "Power saver", "icon": "leaf" },
         "balanced": { "label": "Balanced", "icon": "scale" },
@@ -39,14 +41,13 @@ Item {
     }
 
     Column {
-        width: parent.width
-        spacing: 12
+        id: column
 
-        Text {
+        width: parent.width
+        spacing: 10
+
+        SectionLabel {
             text: "Session"
-            color: Theme.muted
-            font.pixelSize: 12
-            font.weight: Font.DemiBold
         }
 
         Row {
@@ -58,51 +59,16 @@ Item {
             Repeater {
                 model: root.buttons
 
-                Rectangle {
-                    id: tile
-
+                Tile {
                     required property var modelData
                     readonly property bool asking: root.armed === modelData.action
 
                     width: (tiles.width - tiles.spacing * (root.buttons.length - 1)) / Math.max(root.buttons.length, 1)
-                    height: 112
-                    radius: 16
-                    color: asking ? Theme.accent : area.containsMouse ? Qt.lighter(Theme.surface, 1.5) : Theme.surface
-
-                    Behavior on color {
-                        ColorAnimation {
-                            duration: 150
-                        }
-                    }
-
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: 10
-
-                        Symbol {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            name: tile.modelData.icon
-                            size: 26
-                            color: tile.asking ? Theme.background : Theme.foreground
-                        }
-
-                        Text {
-                            anchors.horizontalCenter: parent.horizontalCenter
-                            text: tile.asking ? `${tile.modelData.label}?` : tile.modelData.label
-                            color: tile.asking ? Theme.background : Theme.foreground
-                            font.pixelSize: 13
-                            font.weight: Font.DemiBold
-                        }
-                    }
-
-                    MouseArea {
-                        id: area
-
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.press(tile.modelData)
-                    }
+                    icon: modelData.icon
+                    title: asking ? `${modelData.label}?` : modelData.label
+                    checked: asking
+                    tone: "danger"
+                    onClicked: root.press(modelData)
                 }
             }
         }
@@ -112,91 +78,18 @@ Item {
             height: 8
         }
 
-        Text {
+        SectionLabel {
             visible: root.profiles.length > 0
             text: "Power profile"
-            color: Theme.muted
-            font.pixelSize: 12
-            font.weight: Font.DemiBold
         }
 
-        // Like the navbar: the active profile is a white pill.
-        Rectangle {
-            id: segments
-
+        Segmented {
             visible: root.profiles.length > 0
             width: parent.width
             height: 52
-            radius: height / 2
-            color: Theme.surface
-
-            readonly property real segment: (width - 8) / Math.max(root.profiles.length, 1)
-            readonly property int active: root.profiles.indexOf(root.payload?.profile ?? "")
-
-            Rectangle {
-                visible: segments.active >= 0
-                x: 4 + segments.segment * segments.active
-                y: 4
-                width: segments.segment
-                height: parent.height - 8
-                radius: height / 2
-                color: Theme.foreground
-
-                Behavior on x {
-                    NumberAnimation {
-                        duration: 220
-                        easing.type: Easing.OutCubic
-                    }
-                }
-            }
-
-            Row {
-                x: 4
-                y: 4
-
-                Repeater {
-                    model: root.profiles
-
-                    Item {
-                        id: choice
-
-                        required property string modelData
-                        required property int index
-                        readonly property bool selected: index === segments.active
-                        readonly property var look: root.profileLooks[modelData] ?? { "label": modelData, "icon": "" }
-
-                        width: segments.segment
-                        height: segments.height - 8
-
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: 8
-
-                            Symbol {
-                                anchors.verticalCenter: parent.verticalCenter
-                                visible: choice.look.icon !== ""
-                                name: choice.look.icon
-                                size: 18
-                                color: choice.selected ? Theme.background : Theme.muted
-                            }
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: choice.look.label
-                                color: choice.selected ? Theme.background : Theme.foreground
-                                font.pixelSize: 13
-                                font.weight: Font.DemiBold
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: Daemon.command("power", "profile", [choice.modelData])
-                        }
-                    }
-                }
-            }
+            options: root.profiles.map(name => Object.assign({ "value": name }, root.profileLooks[name] ?? { "label": name, "icon": "" }))
+            current: root.payload?.profile ?? ""
+            onPicked: value => Daemon.command("power", "profile", [value])
         }
     }
 }

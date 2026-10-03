@@ -10,6 +10,10 @@ Item {
     property var payload: null
     readonly property var notes: payload?.notes ?? []
     readonly property bool dnd: payload?.dnd ?? false
+    // Up to five rows show; more scroll.
+    readonly property int rows: Math.min(notes.length, 5)
+
+    implicitHeight: toolbar.height + 12 + (notes.length === 0 ? 60 : rows * 60 + (rows - 1) * 8)
 
     Item {
         id: toolbar
@@ -21,7 +25,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: root.notes.length === 1 ? "1 missed" : `${root.notes.length} missed`
             color: Theme.muted
-            font.pixelSize: 13
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
         }
 
         Row {
@@ -47,7 +52,8 @@ Item {
         visible: root.notes.length === 0
         text: "Nothing missed"
         color: Theme.muted
-        font.pixelSize: 14
+        font.pixelSize: Theme.textSubtitle
+        font.family: Theme.fontFamily
     }
 
     ListView {
@@ -55,79 +61,36 @@ Item {
 
         anchors.top: toolbar.bottom
         anchors.topMargin: 12
-        anchors.bottom: parent.bottom
         width: parent.width
+        height: root.rows * 60 + Math.max(root.rows - 1, 0) * 8
         clip: true
         spacing: 8
         boundsBehavior: Flickable.StopAtBounds
         model: root.notes
 
-        delegate: Rectangle {
+        delegate: ListRow {
             id: row
 
             required property var modelData
 
             width: list.width
             height: 60
-            radius: 14
-            color: area.containsMouse ? Qt.lighter(Theme.surface, 1.4) : Theme.surface
-
-            MouseArea {
-                id: area
-
-                anchors.fill: parent
-                hoverEnabled: true
-                cursorShape: row.modelData.default ? Qt.PointingHandCursor : Qt.ArrowCursor
-                onClicked: {
-                    if (row.modelData.default)
-                        Daemon.command("notifications", "invoke", [String(row.modelData.id), "default"]);
-                }
+            title: modelData.summary || modelData.app
+            subtitle: [modelData.app, (modelData.body ?? "").split("\n")[0]].filter(part => part).join(" · ")
+            onClicked: {
+                if (row.modelData.default)
+                    Daemon.command("notifications", "invoke", [String(row.modelData.id), "default"]);
             }
 
-            AppIcon {
-                id: icon
-
-                x: 14
-                anchors.verticalCenter: parent.verticalCenter
+            leading: AppIcon {
                 note: row.modelData
                 size: 34
             }
 
-            Column {
-                anchors.left: icon.right
-                anchors.leftMargin: 12
-                anchors.right: close.left
-                anchors.rightMargin: 12
-                anchors.verticalCenter: parent.verticalCenter
-
-                Text {
-                    width: parent.width
-                    text: row.modelData.summary || row.modelData.app
-                    elide: Text.ElideRight
-                    textFormat: Text.PlainText
-                    color: Theme.foreground
-                    font.pixelSize: 14
-                    font.weight: Font.DemiBold
-                }
-
-                Text {
-                    width: parent.width
-                    visible: text !== ""
-                    text: [row.modelData.app, (row.modelData.body ?? "").split("\n")[0]].filter(part => part).join(" · ")
-                    elide: Text.ElideRight
-                    textFormat: Text.PlainText
-                    color: Theme.muted
-                    font.pixelSize: 12
-                }
-            }
-
-            Button {
-                id: close
-
-                anchors.right: parent.right
-                anchors.rightMargin: 14
-                anchors.verticalCenter: parent.verticalCenter
+            trailing: IconButton {
                 icon: "close"
+                size: 14
+                tone: "neutral"
                 onClicked: Daemon.command("notifications", "dismiss", [String(row.modelData.id)])
             }
         }

@@ -26,7 +26,8 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: payload.text || "Headphones connected"
             color: Theme.foreground
-            font.pixelSize: 14
+            font.pixelSize: Theme.textSubtitle
+            font.family: Theme.fontFamily
         }
     }
 }

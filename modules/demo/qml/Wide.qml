@@ -41,7 +41,8 @@ Item {
             width: parent.width
             text: payload.text || "Some song - Some artist"
             color: Theme.foreground
-            font.pixelSize: 14
+            font.pixelSize: Theme.textSubtitle
+            font.family: Theme.fontFamily
             elide: Text.ElideRight
         }
 
@@ -49,7 +50,7 @@ Item {
             width: parent.width
             height: 4
             radius: 2
-            color: Theme.surface
+            color: Theme.raised
 
             Rectangle {
                 width: parent.width * 0.4

@@ -83,7 +83,7 @@ pub enum DaemonMessage {
         overflow: Vec<Overflow>,
     },
     /// Design tokens. Sent to the UI after `hello` and on reload.
-    Theme { theme: Theme },
+    Theme { theme: Box<Theme> },
     /// A request succeeded.
     Ok,
     /// Answer to `status`.
@@ -278,7 +278,7 @@ mod tests {
             }],
         });
         round_trip_daemon(DaemonMessage::Theme {
-            theme: Theme::default(),
+            theme: Box::default(),
         });
         round_trip_daemon(DaemonMessage::Ok);
         round_trip_daemon(DaemonMessage::Status {

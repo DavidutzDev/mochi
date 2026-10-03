@@ -8,6 +8,8 @@ Item {
     property var payload: null
     property date now: new Date()
 
+    implicitHeight: column.implicitHeight
+
     Timer {
         interval: 1000
         repeat: true
@@ -16,14 +18,15 @@ Item {
     }
 
     Column {
-        anchors.left: parent.left
-        anchors.bottom: parent.bottom
+        id: column
+
         spacing: 2
 
         Text {
             text: root.now.toLocaleTimeString(Qt.locale(), "HH:mm")
             color: Theme.foreground
-            font.pixelSize: 42
+            font.pixelSize: Theme.textDisplay
+            font.family: Theme.fontFamily
             font.weight: Font.DemiBold
             font.features: { "tnum": 1 }
         }
@@ -31,7 +34,8 @@ Item {
         Text {
             text: root.now.toLocaleDateString(Qt.locale(), "dddd d MMMM")
             color: Theme.muted
-            font.pixelSize: 13
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
         }
     }
 }

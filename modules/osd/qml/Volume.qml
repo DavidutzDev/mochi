@@ -17,7 +17,7 @@ Item {
         anchors.centerIn: parent
         spacing: 12
 
-        Icon {
+        Symbol {
             anchors.verticalCenter: parent.verticalCenter
             name: {
                 if (muted)
@@ -29,33 +29,13 @@ Item {
             color: muted ? Theme.muted : Theme.foreground
         }
 
-        Rectangle {
+        ProgressBar {
             anchors.verticalCenter: parent.verticalCenter
             width: 160
             height: 6
-            radius: 3
-            color: Theme.surface
-
-            Rectangle {
-                width: parent.width * Math.min(percent, 100) / 100
-                height: parent.height
-                radius: parent.radius
-                // Above 100% the bar stays full and turns to the accent color.
-                color: muted ? Theme.muted : percent > 100 ? Theme.accent : Theme.foreground
-
-                Behavior on width {
-                    NumberAnimation {
-                        duration: 150
-                        easing.type: Easing.OutCubic
-                    }
-                }
-
-                Behavior on color {
-                    ColorAnimation {
-                        duration: 150
-                    }
-                }
-            }
+            value: Math.min(percent, 100) / 100
+            // Above 100% the bar stays full and turns to the accent color.
+            fill: muted ? Theme.muted : percent > 100 ? Theme.accent : Theme.foreground
         }
     }
 }

@@ -177,6 +177,19 @@ Mochi must work on any compositor that speaks the standard protocols (Hyprland, 
 - [ ] Keyboard layout, which has no standard protocol: per-compositor IPC (Hyprland first) behind the same handle
 - [ ] Fallback for compositors without background effects: apply a runtime rule where possible (Hyprland `hyprctl eval`), otherwise `mochi setup <compositor>` prints the config snippet
 
+## Design system
+
+"Obsidian", picked on 2026-10-03 after looking at end-4's illogical-impulse and caelestia: layered surfaces, a fixed radius scale, a type scale, motion with a slight overshoot, and the accent only on what matters.
+
+- [x] Color roles in `theme.toml`: `background` (a black island, 96%), `surface` for cards, `raised` for controls, tracks and dividers, `highlight` for hovered controls, `foreground`, `muted`, `accent` with `on_accent`, `danger`, `success`
+- [x] Radius scale `radius_small` 8, `radius_medium` 14, `radius_large` 20, and `max_radius` 34 so the hub's cards sit concentric in its 14px padding
+- [x] Type scale in `[text]`: caption 11, label 12, body 13, subtitle 14, title 16, headline 20, display 42, and `family` (empty keeps the system font); every view uses it
+- [x] Motion: `fast_ms` for colors and hovers, `move_ms` with Material 3's expressive curve (`0.38, 1.21, 0.22, 1`) for things that move, on the navbar, the power profiles and the workspace pill
+- [x] Every view moved to roles: no raw colors or sizes outside the demo module
+- [ ] Colors generated from the wallpaper, as an option of the same roles
+- [ ] Light variant of the palette
+- [x] Built-in controls in the core: `Button`, `IconButton`, `Slider`, `ProgressBar`, `Switch`, `Segmented`, `Tile`, `ListRow`, `Badge`, `SectionLabel`, all drawn from theme roles. Media, notifications, the OSD, power and the launcher use them; their private buttons and icon sets are gone, and every icon lives in `Symbol`. `mochi ipc demo controls` shows them all; `docs/views.md` describes them
+
 ## Layout
 
 Where the island sits and what shape it takes. Island mode floats it as a pill, `margin` away from the edge. Notch mode attaches it to the edge, like a MacBook notch: square where it meets the edge, with concave rounded corners ("ears") that flare into the edge, and round corners on the free side. Built on 2026-10-03, before bubbles, since the bubble shapes depend on it.
@@ -332,12 +345,12 @@ Listens only: it shows changes made anywhere and has no actions.
 
 ### Hub
 
-- [x] A module, not part of the framework: `mochi ipc hub toggle|open [page]|close` grows the island into a modal panel, 880 px wide
-- [x] Home: cards from `target = "hub", kind = "card"` contributions in a three-column flow, `options.span` columns wide, with the title above each. Pages: `kind = "page"` contributions as tabs in the bottom navbar
+- [x] A module, not part of the framework: `mochi ipc hub toggle|open [page]|close` grows the island into a modal panel, 640 px wide, as tall as its content
+- [x] Home: cards from `target = "hub", kind = "card"` contributions in a two-column flow, `options.span` columns wide, each a labeled section on a surface, like a control center; card views give their natural height. Pages: `kind = "page"` contributions as tabs in the bottom navbar, also at their natural height
 - [x] Contributed views get their module's published state as `payload`: media publishes the shown player, notifications its history and do not disturb
 - [x] Cards: date and time (the hub's own), Now Playing (media, two columns, with progress and controls), the latest missed notifications. Page: the notification history
 - [x] The hub and the launcher close each other on open through `ctx.call`, ignoring `NotEnabled`
-- [x] Look: a page title (and `options.subtitle`), cards with an icon and title, a divider, and a navbar of icon pills like the workspace dots, the current one stretched into a white pill with its name
+- [x] Look, from the controls gallery: no page title, small section labels with an icon, tight spacing, a divider, and a navbar of icon pills like the workspace dots, the current one stretched into a white pill with its name
 - [x] `Symbol`: a built-in icon set in the core (home, bell, music, clock, grid, moon, volume, power, lock, logout, reboot, snow, chip, leaf, bolt, scale), filled or stroked, so contribution icons look the same everywhere; other names come from the icon theme
 - [x] Tested in a private D-Bus session: the three cards, the notifications page opened with `open notifications/history`, and the launcher replacing the hub
 - [ ] Cards spanning two rows, like the tall Now Playing tile in the inspiration

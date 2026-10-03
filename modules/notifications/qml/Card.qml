@@ -1,37 +1,32 @@
 import QtQuick
 import qs.island
 
-// The hub card: how many were missed, and the latest few.
+// The hub card: the latest two missed notifications.
 Item {
     id: root
 
     property var payload: null
     readonly property var notes: payload?.notes ?? []
 
-    Text {
-        anchors.right: parent.right
-        anchors.bottom: parent.top
-        anchors.bottomMargin: 10
-        visible: root.payload?.dnd ?? false
-        text: "Do not disturb"
-        color: Theme.muted
-        font.pixelSize: 10
-    }
+    implicitHeight: notes.length === 0 ? 40 : column.implicitHeight
 
     Text {
         anchors.centerIn: parent
         visible: root.notes.length === 0
         text: "Nothing missed"
         color: Theme.muted
-        font.pixelSize: 13
+        font.pixelSize: Theme.textBody
+        font.family: Theme.fontFamily
     }
 
     Column {
+        id: column
+
         width: parent.width
         spacing: 10
 
         Repeater {
-            model: root.notes.slice(0, 3)
+            model: root.notes.slice(0, 2)
 
             Row {
                 id: entry
@@ -57,7 +52,8 @@ Item {
                         elide: Text.ElideRight
                         textFormat: Text.PlainText
                         color: Theme.foreground
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.textBody
+                        font.family: Theme.fontFamily
                         font.weight: Font.DemiBold
                     }
 
@@ -68,7 +64,8 @@ Item {
                         elide: Text.ElideRight
                         textFormat: Text.PlainText
                         color: Theme.muted
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.textLabel
+                        font.family: Theme.fontFamily
                     }
                 }
             }
