@@ -170,6 +170,21 @@ Mochi must work on any compositor that speaks the standard protocols (Hyprland, 
 - [ ] Keyboard layout, which has no standard protocol: per-compositor IPC (Hyprland first) behind the same handle
 - [ ] Fallback for compositors without background effects: apply a runtime rule where possible (Hyprland `hyprctl eval`), otherwise `mochi setup <compositor>` prints the config snippet
 
+## Bubbles
+
+Small, long-lived status items beside the island, owned by modules: earbuds battery while they're connected, a microphone-in-use indicator, a running timer. Activities are short-lived and one at a time; bubbles last as long as their condition holds and several show side by side. Decided on 2026-10-03, to build after the workspaces module.
+
+- [ ] `ModuleCtx`: `show_bubble(spec)`, `update_bubble(id, payload)`, `hide_bubble(id)`; spec with `key`, view, payload, priority, optional side
+- [ ] Clicks reach the module as an event; the usual answer is presenting an expanded activity in the island
+- [ ] Bubble manager next to the arbiter, pure and unit-tested: order by priority then age; a module may ask for left or right, otherwise the side with fewer bubbles
+- [ ] Overflow past the per-side maximum: the lowest priorities hide behind a "+N" bubble that lists them all in the island when clicked
+- [ ] Protocol: a `bubbles` snapshot message on every change; clicks in `event`, aimed at a bubble (both additions, API 1)
+- [ ] UI: a row on each side of the island in the same layer surface, sized from each view with the island's springs; bubbles slide outward as the island grows and only hide when the screen runs out of room; they appear out of and merge back into the island's edge
+- [ ] Input mask and blur region cover the island plus the bubbles
+- [ ] Config: maximum per side, bubbles off per module, a module's side forced
+- [ ] Plugin backends get the same calls through the protocol
+- [ ] First real user: a Bluetooth module (connected device battery from BlueZ over D-Bus)
+
 ## Modules
 
 ### Idle
