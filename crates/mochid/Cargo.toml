@@ -19,6 +19,7 @@ mochi-core.workspace = true
 mochi-module-demo = { workspace = true, optional = true }
 mochi-module-idle.workspace = true
 mochi-module-osd.workspace = true
+mochi-module-workspaces.workspace = true
 mochi-protocol.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }

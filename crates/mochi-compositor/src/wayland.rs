@@ -1,10 +1,11 @@
-//! The Wayland backend: a client connection that binds `ext-workspace-v1`
-//! and every `wl_output`, and feeds their events into the [`Model`].
+//! The Wayland backend: a client connection that binds `ext-workspace-v1`,
+//! every `wl_output` and, when available, `wlr-foreign-toplevel-management`,
+//! and feeds their events into the [`Model`].
 //!
 //! The connection runs as a tokio task. It waits for the socket to become
-//! readable or for an action from a module, whichever comes first, and
-//! publishes a new snapshot each time the compositor marks a batch of
-//! changes done.
+//! readable, for an action from a module, or for a focus report from
+//! compositor IPC, and publishes a new snapshot each time the compositor
+//! marks a batch of changes done.
 
 use std::collections::HashMap;
 use std::io::ErrorKind;
@@ -23,12 +24,18 @@ use wayland_protocols::ext::workspace::v1::client::{
     ext_workspace_handle_v1::{self, ExtWorkspaceHandleV1},
     ext_workspace_manager_v1::{self, ExtWorkspaceManagerV1},
 };
+use wayland_protocols_wlr::foreign_toplevel::v1::client::{
+    zwlr_foreign_toplevel_handle_v1::{self, ZwlrForeignToplevelHandleV1},
+    zwlr_foreign_toplevel_manager_v1::{self, ZwlrForeignToplevelManagerV1},
+};
 
 use crate::model::Model;
-use crate::{Action, Compositor, State};
+use crate::{Action, Compositor, State, hyprland};
 
 /// `wl_output` version 4 added the `name` and `description` events.
 const OUTPUT_VERSION: u32 = 4;
+/// `zwlr_foreign_toplevel_handle_v1.state` value for the focused window.
+const ACTIVATED: u32 = 2;
 
 pub(crate) fn start() -> Result<Compositor, String> {
     let connection = Connection::connect_to_env()
@@ -37,23 +44,40 @@ pub(crate) fn start() -> Result<Compositor, String> {
         .map_err(|error| format!("cannot read the Wayland globals: {error}"))?;
     let handle = queue.handle();
 
+    // Outputs first: the compositor only tells a client that a window is on
+    // an output once the client has bound that output.
+    let mut outputs = HashMap::new();
+    for global in globals.contents().clone_list() {
+        if global.interface == wl_output::WlOutput::interface().name {
+            bind_output(
+                &mut outputs,
+                globals.registry(),
+                &handle,
+                global.name,
+                global.version,
+            );
+        }
+    }
+
     let manager: ExtWorkspaceManagerV1 = globals
         .bind(&handle, 1..=1, ())
         .map_err(|_| "the compositor doesn't support ext-workspace-v1".to_owned())?;
+    // Windows only tell which output has focus, so they're optional.
+    let toplevels: Option<ZwlrForeignToplevelManagerV1> = globals.bind(&handle, 1..=3, ()).ok();
+    if toplevels.is_none() {
+        tracing::info!(
+            "no wlr-foreign-toplevel-management: the focused output comes from IPC only"
+        );
+    }
 
     let mut client = Client {
         model: Model::default(),
         manager,
         workspaces: HashMap::new(),
-        outputs: HashMap::new(),
+        outputs,
         done: false,
         finished: false,
     };
-    for global in globals.contents().clone_list() {
-        if global.interface == wl_output::WlOutput::interface().name {
-            client.bind_output(globals.registry(), &handle, global.name, global.version);
-        }
-    }
 
     // The first round trip delivers the workspaces and binds the outputs,
     // the second delivers the outputs' names.
@@ -63,10 +87,19 @@ pub(crate) fn start() -> Result<Compositor, String> {
             .map_err(|error| format!("Wayland round trip failed: {error}"))?;
     }
 
+    // Compositor IPC fills in what the protocols can't say.
+    let focus = hyprland::socket_dir().map(|dir| {
+        let (sender, receiver) = mpsc::unbounded_channel();
+        tokio::spawn(hyprland::watch_focus(dir, sender));
+        receiver
+    });
+
     let snapshot = client.model.snapshot();
     tracing::info!(
         outputs = snapshot.outputs.len(),
         workspaces = snapshot.workspaces.len(),
+        windows = toplevels.is_some(),
+        hyprland_ipc = focus.is_some(),
         "connected to the compositor through ext-workspace-v1"
     );
     let (state_sender, state) = watch::channel(snapshot);
@@ -77,6 +110,7 @@ pub(crate) fn start() -> Result<Compositor, String> {
         client,
         state_sender,
         action_receiver,
+        focus,
     ));
     Ok(Compositor { state, actions })
 }
@@ -87,6 +121,7 @@ async fn run(
     mut client: Client,
     state: watch::Sender<State>,
     mut actions: mpsc::UnboundedReceiver<Action>,
+    mut focus: Option<mpsc::UnboundedReceiver<String>>,
 ) {
     let socket = match AsyncFd::new(Socket(connection.backend().poll_fd().as_raw_fd())) {
         Ok(socket) => socket,
@@ -144,11 +179,29 @@ async fn run(
                     None => return,
                 }
             }
+            output = next_focus(&mut focus) => {
+                drop(guard);
+                match output {
+                    Some(output) => {
+                        client.model.ipc_focus(output);
+                        client.done = true;
+                    }
+                    None => focus = None,
+                }
+            }
         }
     }
 
     // Tell modules there is nothing to rely on any more.
     state.send_replace(State::default());
+}
+
+/// The next focus report from IPC. Never returns when there is no IPC.
+async fn next_focus(focus: &mut Option<mpsc::UnboundedReceiver<String>>) -> Option<String> {
+    match focus {
+        Some(receiver) => receiver.recv().await,
+        None => std::future::pending().await,
+    }
 }
 
 /// The connection's file descriptor, for tokio to watch. The connection owns
@@ -174,22 +227,24 @@ struct Client {
     finished: bool,
 }
 
-impl Client {
-    fn bind_output(
-        &mut self,
-        registry: &wl_registry::WlRegistry,
-        handle: &QueueHandle<Self>,
-        name: u32,
-        version: u32,
-    ) {
-        if version < OUTPUT_VERSION {
-            tracing::warn!(version, "wl_output is too old to report output names");
-            return;
-        }
-        let output = registry.bind::<wl_output::WlOutput, _, _>(name, OUTPUT_VERSION, handle, ());
-        self.outputs.insert(name, output);
+/// Binds an output, keyed by its registry name so it can be released when it
+/// goes away.
+fn bind_output(
+    outputs: &mut HashMap<u32, wl_output::WlOutput>,
+    registry: &wl_registry::WlRegistry,
+    handle: &QueueHandle<Client>,
+    name: u32,
+    version: u32,
+) {
+    if version < OUTPUT_VERSION {
+        tracing::warn!(version, "wl_output is too old to report output names");
+        return;
     }
+    let output = registry.bind::<wl_output::WlOutput, _, _>(name, OUTPUT_VERSION, handle, ());
+    outputs.insert(name, output);
+}
 
+impl Client {
     fn perform(&mut self, action: Action) {
         match action {
             Action::ActivateWorkspace(id) => match self.workspaces.get(&id.0) {
@@ -218,7 +273,7 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for Client {
                 interface,
                 version,
             } if interface == wl_output::WlOutput::interface().name => {
-                client.bind_output(registry, handle, name, version);
+                bind_output(&mut client.outputs, registry, handle, name, version);
             }
             wl_registry::Event::GlobalRemove { name } => {
                 if let Some(output) = client.outputs.remove(&name) {
@@ -360,6 +415,66 @@ impl Dispatch<ExtWorkspaceHandleV1, ()> for Client {
                 client.model.workspace_removed(id);
                 client.workspaces.remove(&id);
                 workspace.destroy();
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Dispatch<ZwlrForeignToplevelManagerV1, ()> for Client {
+    fn event(
+        _: &mut Self,
+        _: &ZwlrForeignToplevelManagerV1,
+        _: zwlr_foreign_toplevel_manager_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        // New windows arrive as handles, whose own events carry the state.
+    }
+
+    event_created_child!(Client, ZwlrForeignToplevelManagerV1, [
+        zwlr_foreign_toplevel_manager_v1::EVT_TOPLEVEL_OPCODE => (ZwlrForeignToplevelHandleV1, ()),
+    ]);
+}
+
+impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for Client {
+    fn event(
+        client: &mut Self,
+        toplevel: &ZwlrForeignToplevelHandleV1,
+        event: zwlr_foreign_toplevel_handle_v1::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+        let id = toplevel.id().protocol_id();
+        match event {
+            zwlr_foreign_toplevel_handle_v1::Event::OutputEnter { output } => {
+                client
+                    .model
+                    .toplevel_output(id, output.id().protocol_id(), true);
+            }
+            zwlr_foreign_toplevel_handle_v1::Event::OutputLeave { output } => {
+                client
+                    .model
+                    .toplevel_output(id, output.id().protocol_id(), false);
+            }
+            zwlr_foreign_toplevel_handle_v1::Event::State { state } => {
+                // An array of native-endian u32 values.
+                let activated = state
+                    .as_chunks::<4>()
+                    .0
+                    .iter()
+                    .any(|bytes| u32::from_ne_bytes(*bytes) == ACTIVATED);
+                client.model.toplevel_activated(id, activated);
+            }
+            zwlr_foreign_toplevel_handle_v1::Event::Done => {
+                client.model.toplevel_done(id);
+                client.done = true;
+            }
+            zwlr_foreign_toplevel_handle_v1::Event::Closed => {
+                client.model.toplevel_closed(id);
+                toplevel.destroy();
             }
             _ => {}
         }

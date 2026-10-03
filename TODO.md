@@ -162,11 +162,13 @@ Mochi must work on any compositor that speaks the standard protocols (Hyprland, 
 - [x] `mochi-compositor` crate: one `Compositor` handle for modules, with a `State` snapshot (outputs, workspaces), change notifications and actions
 - [x] Wayland backend: `ext-workspace-v1` for workspaces (per output, active, urgent, hidden, coordinates) and `wl_output` v4 for output names, with output hotplug
 - [x] Action: switch to a workspace
+- [x] Focused output: from the focused window (`wlr-foreign-toplevel-management`, standard), and on Hyprland exactly from its event socket, which also covers empty workspaces; modules only see `State::focused_output`
 - [x] Without a supported compositor, an `unsupported` state instead of an error; modules keep running
 - [x] `ModuleCtx::compositor()` for modules; `mochi status` shows the backend, outputs and workspace count
 - [x] Pure model unit-tested; live test against the session's compositor (`cargo test -p mochi-compositor --test live -- --ignored`), passing on Hyprland 0.56
 - [ ] Check which protocols niri, mango and Sway support: `ext-background-effect-v1`, `ext-workspace-v1`, `wlr-foreign-toplevel-management`
-- [ ] Windows (title, app id, focus) from `wlr-foreign-toplevel-management` or `ext-foreign-toplevel-list`, when a module needs them
+- [ ] Windows (title, app id) in the state, from the toplevel protocol already bound for focus, when a module needs them
+- [ ] niri: focused output from its IPC, like Hyprland, if its standard protocols leave the same gap
 - [ ] Keyboard layout, which has no standard protocol: per-compositor IPC (Hyprland first) behind the same handle
 - [ ] Fallback for compositors without background effects: apply a runtime rule where possible (Hyprland `hyprctl eval`), otherwise `mochi setup <compositor>` prints the config snippet
 
@@ -195,10 +197,15 @@ Small, long-lived status items beside the island, owned by modules: earbuds batt
 
 ### Workspaces
 
-- [ ] Workspace events from `ModuleCtx::compositor()`, never from a compositor directly
-- [ ] Publish workspace state
-- [ ] Short compact activity on workspace switch
-- [ ] Multi-monitor behavior (see open questions)
+- [x] Workspace changes from `ModuleCtx::compositor()`, never from a compositor directly
+- [x] A pure tracker compares snapshots by output and workspace name: a switch wins over an urgent workspace, which wins over workspaces created or removed; silent at startup and when outputs or the compositor appear
+- [x] Focus moving to another monitor without a workspace change shows that monitor (`focus` setting); fixes focusing workspace 10, alone on the second monitor, showing nothing
+- [x] Indicator: the monitor's workspace dots with the active one stretched into a pill, its name, and a monitor label when two or more monitors are connected (connector name, or a name from `labels`)
+- [x] One slot (`key = "workspaces"`), high priority, stacking over the OSD, 1.2 s timeout; fast switching slides the pill in place
+- [x] Clicking a dot switches to that workspace; the same action is `mochi ipc workspaces switch <output> <workspace>`
+- [x] Settings: `timeout_ms`, `focus`, `urgent`, `changes`, `labels`
+- [x] Tested against Hyprland 0.56: switches through the action and by clicking a dot
+- [ ] Per-output islands, so the indicator only shows on the monitor that switched (the island is mirrored on every monitor for now)
 
 ### OSD
 

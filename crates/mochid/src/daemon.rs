@@ -444,6 +444,7 @@ impl Daemon {
                 .map(|output| output.name)
                 .collect(),
             workspaces: state.workspaces.len(),
+            focused: state.focused_output,
         }
     }
 

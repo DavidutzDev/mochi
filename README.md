@@ -60,7 +60,7 @@ systemctl --user enable --now mochid
 
 `mochid` needs Quickshell 0.3.1 in its `PATH` and refuses to start with another version.
 
-Workspace information comes from the standard `ext-workspace-v1` Wayland protocol, so it works on any compositor that supports it, with no compositor-specific setup. `mochi status` shows what the daemon found.
+Workspace information comes from the standard `ext-workspace-v1` Wayland protocol, so it works on any compositor that supports it, with no compositor-specific setup. The focused monitor comes from the focused window (`wlr-foreign-toplevel-management`); on Hyprland, its event socket makes that exact. `mochi status` shows what the daemon found.
 
 ### Session
 
@@ -88,6 +88,7 @@ cargo test -p mochid --test record -- --ignored --nocapture
 |---|---|
 | `idle` | The clock shown when nothing else is. |
 | `osd` | Shows volume, mute, output device switches, microphone mute, Caps Lock and Num Lock as they change, from any source. Needs pipewire-pulse or PulseAudio. |
+| `workspaces` | Shows a monitor's workspaces when you switch, when focus moves to it, when one asks for attention, or when they're created or removed. Click a dot to switch. Needs a compositor with `ext-workspace-v1`. |
 | `demo` | Test views and `mochi ipc demo` actions for trying the island. |
 
 ## Configuration
@@ -96,7 +97,7 @@ Both files are optional and live in `~/.config/mochi/`. Without a `config.toml`,
 
 ```toml
 # config.toml
-modules = ["idle", "osd"]
+modules = ["idle", "osd", "workspaces"]
 
 [module.idle]
 format = "HH:mm:ss"

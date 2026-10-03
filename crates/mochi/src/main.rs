@@ -78,8 +78,13 @@ fn run(command: Command) -> Result<(), String> {
                 if compositor.backend == "unsupported" {
                     println!("compositor: no workspace information");
                 } else {
+                    let focused = compositor
+                        .focused
+                        .as_deref()
+                        .map(|output| format!(", focus on {output}"))
+                        .unwrap_or_default();
                     println!(
-                        "compositor: {}, outputs {}, {} workspaces",
+                        "compositor: {}, outputs {}, {} workspaces{focused}",
                         compositor.backend,
                         compositor.outputs.join(" "),
                         compositor.workspaces

@@ -18,6 +18,18 @@ pub(crate) struct Model {
     outputs: BTreeMap<u32, OutputInfo>,
     groups: BTreeMap<u32, Group>,
     workspaces: BTreeMap<u32, WorkspaceInfo>,
+    toplevels: BTreeMap<u32, Toplevel>,
+    /// The output of the window that was focused last.
+    window_focus: Option<u32>,
+    /// The focused output from compositor IPC, by name. Exact, so it wins
+    /// over the window guess.
+    ipc_focus: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct Toplevel {
+    outputs: Vec<u32>,
+    activated: bool,
 }
 
 #[derive(Debug, Default)]
@@ -107,6 +119,47 @@ impl Model {
         }
     }
 
+    pub fn toplevel_output(&mut self, toplevel: u32, output: u32, entered: bool) {
+        let outputs = &mut self.toplevels.entry(toplevel).or_default().outputs;
+        outputs.retain(|id| *id != output);
+        if entered {
+            outputs.push(output);
+        }
+    }
+
+    pub fn toplevel_activated(&mut self, toplevel: u32, activated: bool) {
+        self.toplevels.entry(toplevel).or_default().activated = activated;
+    }
+
+    /// The window's state is complete. A focused window moves the focus to
+    /// its output. A window losing focus doesn't: focus went somewhere else,
+    /// which that window's own `done` reports.
+    pub fn toplevel_done(&mut self, toplevel: u32) {
+        if let Some(window) = self.toplevels.get(&toplevel)
+            && window.activated
+            && let Some(output) = window.outputs.first()
+        {
+            self.window_focus = Some(*output);
+        }
+    }
+
+    pub fn toplevel_closed(&mut self, toplevel: u32) {
+        self.toplevels.remove(&toplevel);
+    }
+
+    pub fn ipc_focus(&mut self, output: String) {
+        self.ipc_focus = Some(output);
+    }
+
+    fn focused_output(&self) -> Option<String> {
+        self.ipc_focus.clone().or_else(|| {
+            self.window_focus
+                .and_then(|output| self.outputs.get(&output))
+                .map(|output| output.name.clone())
+                .filter(|name| !name.is_empty())
+        })
+    }
+
     /// Outputs by name, and workspaces grouped by output in the order a user
     /// expects: by coordinates, then by the number their name starts with,
     /// then by name.
@@ -151,6 +204,7 @@ impl Model {
             backend: Backend::Wayland,
             outputs,
             workspaces,
+            focused_output: self.focused_output(),
         }
     }
 
@@ -267,6 +321,49 @@ mod tests {
         let mut model = Model::default();
         model.output_description(1, "Not named yet".into());
         assert!(model.snapshot().outputs.is_empty());
+    }
+
+    #[test]
+    fn the_focused_window_gives_the_focused_output() {
+        let mut model = dual_monitor();
+        assert_eq!(model.snapshot().focused_output, None);
+
+        model.toplevel_output(30, 2, true);
+        model.toplevel_activated(30, true);
+        model.toplevel_done(30);
+        assert_eq!(model.snapshot().focused_output.as_deref(), Some("HDMI-A-1"));
+
+        // Losing focus alone moves nothing; the next focused window does.
+        model.toplevel_activated(30, false);
+        model.toplevel_done(30);
+        assert_eq!(model.snapshot().focused_output.as_deref(), Some("HDMI-A-1"));
+        model.toplevel_output(31, 1, true);
+        model.toplevel_activated(31, true);
+        model.toplevel_done(31);
+        assert_eq!(model.snapshot().focused_output.as_deref(), Some("DP-3"));
+    }
+
+    #[test]
+    fn a_window_focused_before_it_enters_an_output_counts_once_it_does() {
+        let mut model = dual_monitor();
+        model.toplevel_activated(30, true);
+        model.toplevel_done(30);
+        assert_eq!(model.snapshot().focused_output, None);
+        model.toplevel_output(30, 1, true);
+        model.toplevel_done(30);
+        assert_eq!(model.snapshot().focused_output.as_deref(), Some("DP-3"));
+    }
+
+    #[test]
+    fn ipc_focus_wins_over_the_window_guess() {
+        let mut model = dual_monitor();
+        model.toplevel_output(30, 1, true);
+        model.toplevel_activated(30, true);
+        model.toplevel_done(30);
+        // Focusing an empty workspace on the other output: no window gets
+        // focus, but the compositor's IPC says where focus is.
+        model.ipc_focus("HDMI-A-1".into());
+        assert_eq!(model.snapshot().focused_output.as_deref(), Some("HDMI-A-1"));
     }
 
     #[test]

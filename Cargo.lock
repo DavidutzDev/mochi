@@ -317,11 +317,13 @@ dependencies = [
 name = "mochi-compositor"
 version = "0.1.0"
 dependencies = [
+ "serde_json",
  "thiserror",
  "tokio",
  "tracing",
  "wayland-client",
  "wayland-protocols",
+ "wayland-protocols-wlr",
 ]
 
 [[package]]
@@ -374,6 +376,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-workspaces"
+version = "0.1.0"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-protocol"
 version = "0.1.0"
 dependencies = [
@@ -393,6 +407,7 @@ dependencies = [
  "mochi-module-demo",
  "mochi-module-idle",
  "mochi-module-osd",
+ "mochi-module-workspaces",
  "mochi-protocol",
  "serde_json",
  "tokio",
@@ -845,6 +860,19 @@ dependencies = [
  "bitflags",
  "wayland-backend",
  "wayland-client",
+ "wayland-scanner",
+]
+
+[[package]]
+name = "wayland-protocols-wlr"
+version = "0.3.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eb04e52f7836d7c7976c78ca0250d61e33873c34156a2a1fc9474828ec268234"
+dependencies = [
+ "bitflags",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
  "wayland-scanner",
 ]
 

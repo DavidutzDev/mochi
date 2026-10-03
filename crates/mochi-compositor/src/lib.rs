@@ -3,14 +3,21 @@
 //!
 //! The state comes from standard Wayland protocols, so any compositor that
 //! supports them works without compositor-specific code: workspaces from
-//! `ext-workspace-v1` and output names from `wl_output`. Without a Wayland
-//! session, or on a compositor without the protocols, [`connect`] returns a
-//! handle whose state says [`Backend::Unsupported`], and modules keep working.
+//! `ext-workspace-v1`, output names from `wl_output`, and the focused output
+//! from the focused window (`wlr-foreign-toplevel-management`). Without a
+//! Wayland session, or on a compositor without the protocols, [`connect`]
+//! returns a handle whose state says [`Backend::Unsupported`], and modules
+//! keep working.
+//!
+//! Compositor IPC only fills gaps the standards leave, and modules never see
+//! it: on Hyprland, its event socket reports the focused output exactly,
+//! including when focus moves to an empty workspace.
 //!
 //! Modules read the latest [`State`], wait for changes with
 //! [`Compositor::subscribe`], and act with methods like
 //! [`Compositor::activate_workspace`].
 
+mod hyprland;
 mod model;
 mod wayland;
 
@@ -45,6 +52,8 @@ pub struct State {
     pub outputs: Vec<Output>,
     /// Grouped by output, each output's workspaces in display order.
     pub workspaces: Vec<Workspace>,
+    /// The output with keyboard focus, by name, when the compositor says.
+    pub focused_output: Option<String>,
 }
 
 impl State {
@@ -74,9 +83,11 @@ pub struct Output {
     pub description: String,
 }
 
-/// Valid while the workspace exists. Compositors may reuse it afterwards.
+/// Valid while the workspace exists. Compositors may reuse it afterwards, so
+/// to recognize a workspace across changes, compare its output and name.
+/// Public so modules can build states in their tests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct WorkspaceId(pub(crate) u32);
+pub struct WorkspaceId(pub u32);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Workspace {
@@ -103,6 +114,9 @@ pub enum CompositorError {
     NotAllowed(WorkspaceId),
 }
 
+/// Wakes on every new snapshot; see [`Compositor::subscribe`].
+pub type StateReceiver = watch::Receiver<State>;
+
 #[derive(Debug)]
 pub(crate) enum Action {
     ActivateWorkspace(WorkspaceId),
@@ -128,8 +142,9 @@ impl Compositor {
         self.state.borrow().clone()
     }
 
-    /// A receiver that wakes on every new snapshot.
-    pub fn subscribe(&self) -> watch::Receiver<State> {
+    /// A receiver that wakes on every new snapshot. Its `changed()` fails
+    /// once no more snapshots will come.
+    pub fn subscribe(&self) -> StateReceiver {
         self.state.clone()
     }
 
@@ -194,6 +209,7 @@ mod tests {
             backend: Backend::Wayland,
             outputs: Vec::new(),
             workspaces: vec![workspace(1, true), workspace(2, false)],
+            focused_output: None,
         });
         let (actions, mut received) = mpsc::unbounded_channel();
         let compositor = Compositor { state, actions };

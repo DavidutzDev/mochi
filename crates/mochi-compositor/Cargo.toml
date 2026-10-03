@@ -8,11 +8,13 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["net", "rt", "sync"] }
+tokio = { workspace = true, features = ["io-util", "net", "rt", "sync", "time"] }
 tracing.workspace = true
 wayland-client.workspace = true
 wayland-protocols.workspace = true
+wayland-protocols-wlr.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }

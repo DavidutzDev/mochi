@@ -65,6 +65,7 @@ async fn wait_until_active(compositor: &Compositor, output: &str, id: WorkspaceI
 
 fn print(state: &State) {
     eprintln!("backend: {}", state.backend);
+    eprintln!("focused: {:?}", state.focused_output);
     for output in &state.outputs {
         eprintln!("{} ({})", output.name, output.description);
         for workspace in state.workspaces_on(&output.name) {
