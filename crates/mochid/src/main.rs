@@ -150,12 +150,21 @@ async fn run(args: Args) -> anyhow::Result<()> {
     let (exit_sender, exits) = mpsc::unbounded_channel();
     let (ui_sender, ui) = mpsc::unbounded_channel();
 
+    // Without a supported compositor this logs why and returns a handle whose
+    // state says so; modules that need it stay idle.
+    let compositor = mochi_core::compositor::connect();
+
     let ids = ActivityIds::default();
     let mut slots = Vec::new();
     for module in enabled {
         let id = module.id();
-        let (ctx, events) =
-            ModuleCtx::new(id, config.settings(id), ids.clone(), request_sender.clone());
+        let (ctx, events) = ModuleCtx::new(
+            id,
+            config.settings(id),
+            compositor.clone(),
+            ids.clone(),
+            request_sender.clone(),
+        );
         slots.push((
             id,
             ModuleSlot {
@@ -183,7 +192,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
         ui_sender,
     )?;
 
-    let daemon = Daemon::new(slots, theme, theme_file, supervisor);
+    let daemon = Daemon::new(slots, theme, theme_file, supervisor, compositor);
     let result = daemon
         .run(Inputs {
             connections,

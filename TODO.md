@@ -156,17 +156,19 @@ Supervisor
 
 ## Compositor support
 
-Mochi must work on any wlroots-style compositor (Hyprland, niri, mango, ...). Standard Wayland protocols come first, and compositor-specific code lives behind one adapter in the daemon.
+Mochi must work on any compositor that speaks the standard protocols (Hyprland, niri, mango, ...). The daemon is a Wayland client of its own and uses standard protocols first; compositor IPC only fills gaps the standards leave. Modules only ever see `mochi-compositor`'s state and actions, never a compositor directly.
 
 - [x] Blur through `ext-background-effect-v1`, no compositor rule needed (tested on Hyprland)
-- [ ] Check which protocols niri, mango and Sway support: `ext-background-effect-v1`, `ext-workspace-v1`, `wlr-layer-shell`
-- [ ] `Compositor` trait in the daemon: detection from the environment (`HYPRLAND_INSTANCE_SIGNATURE`, `NIRI_SOCKET`, ...), workspaces, focused output
-- [ ] Generic adapter on `ext-workspace-v1` for compositors that support it
-- [ ] Hyprland adapter (socket2 events, `hyprctl`)
-- [ ] niri adapter (`NIRI_SOCKET` JSON IPC)
-- [ ] mango adapter
+- [x] `mochi-compositor` crate: one `Compositor` handle for modules, with a `State` snapshot (outputs, workspaces), change notifications and actions
+- [x] Wayland backend: `ext-workspace-v1` for workspaces (per output, active, urgent, hidden, coordinates) and `wl_output` v4 for output names, with output hotplug
+- [x] Action: switch to a workspace
+- [x] Without a supported compositor, an `unsupported` state instead of an error; modules keep running
+- [x] `ModuleCtx::compositor()` for modules; `mochi status` shows the backend, outputs and workspace count
+- [x] Pure model unit-tested; live test against the session's compositor (`cargo test -p mochi-compositor --test live -- --ignored`), passing on Hyprland 0.56
+- [ ] Check which protocols niri, mango and Sway support: `ext-background-effect-v1`, `ext-workspace-v1`, `wlr-foreign-toplevel-management`
+- [ ] Windows (title, app id, focus) from `wlr-foreign-toplevel-management` or `ext-foreign-toplevel-list`, when a module needs them
+- [ ] Keyboard layout, which has no standard protocol: per-compositor IPC (Hyprland first) behind the same handle
 - [ ] Fallback for compositors without background effects: apply a runtime rule where possible (Hyprland `hyprctl eval`), otherwise `mochi setup <compositor>` prints the config snippet
-- [ ] `mochi status` shows the detected compositor and which features are active
 
 ## Modules
 
@@ -178,7 +180,7 @@ Mochi must work on any wlroots-style compositor (Hyprland, niri, mango, ...). St
 
 ### Workspaces
 
-- [ ] Workspace events from the compositor adapter, never from a compositor directly
+- [ ] Workspace events from `ModuleCtx::compositor()`, never from a compositor directly
 - [ ] Publish workspace state
 - [ ] Short compact activity on workspace switch
 - [ ] Multi-monitor behavior (see open questions)

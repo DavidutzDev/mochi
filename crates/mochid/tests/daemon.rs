@@ -159,6 +159,9 @@ fn status_and_actions_describe_the_daemon() {
     };
     assert!(!status.ui_connected);
     assert_eq!(status.modules, ["idle", "demo"]);
+    // The test daemon can't reach the session's compositor, and says so
+    // instead of failing.
+    assert_eq!(status.compositor.backend, "unsupported");
 
     let _ui = daemon.client(Role::Ui);
     ctl.send(&ClientMessage::Status);

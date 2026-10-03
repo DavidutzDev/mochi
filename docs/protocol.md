@@ -82,7 +82,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `present` | `activity` (object or `null`) | UI |
 | `theme` | `theme` | UI |
 | `ok` | | whoever sent `command` or `reload` |
-| `status` | `status`: `version`, `api`, `ui_connected`, `modules` | control |
+| `status` | `status`: `version`, `api`, `ui_connected`, `modules`, `compositor` (`backend`, `outputs`, `workspaces`) | control |
 | `actions` | `modules`: list of `{module, actions}` | control |
 | `error` | `code`, `message` | everyone |
 

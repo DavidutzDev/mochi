@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use include_dir::Dir;
+use mochi_compositor::Compositor;
 use mochi_protocol::{ActionSpec, ActivityId};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -135,6 +136,7 @@ impl ModuleCommand {
 pub struct ModuleCtx {
     module: &'static str,
     settings: toml::Table,
+    compositor: Compositor,
     ids: ActivityIds,
     requests: mpsc::UnboundedSender<ModuleRequest>,
     events: mpsc::UnboundedReceiver<ModuleEvent>,
@@ -146,6 +148,7 @@ impl ModuleCtx {
     pub fn new(
         module: &'static str,
         settings: toml::Table,
+        compositor: Compositor,
         ids: ActivityIds,
         requests: mpsc::UnboundedSender<ModuleRequest>,
     ) -> (Self, mpsc::UnboundedSender<ModuleEvent>) {
@@ -153,6 +156,7 @@ impl ModuleCtx {
         let ctx = Self {
             module,
             settings,
+            compositor,
             ids,
             requests,
             events,
@@ -168,6 +172,13 @@ impl ModuleCtx {
     /// there take their `Default` values when `T` uses `#[serde(default)]`.
     pub fn settings<T: DeserializeOwned>(&self) -> Result<T, toml::de::Error> {
         toml::Value::Table(self.settings.clone()).try_into()
+    }
+
+    /// Workspaces and outputs, the same for every compositor. Check
+    /// `state().backend` before relying on it: without a supported compositor
+    /// the state stays empty.
+    pub fn compositor(&self) -> &Compositor {
+        &self.compositor
     }
 
     /// Replaces the module's state, which the UI can read from any view.
@@ -219,7 +230,13 @@ mod tests {
     fn context(settings: &str) -> (ModuleCtx, mpsc::UnboundedReceiver<ModuleRequest>) {
         let (requests, received) = mpsc::unbounded_channel();
         let settings = toml::from_str(settings).unwrap();
-        let (ctx, _events) = ModuleCtx::new("clock", settings, ActivityIds::default(), requests);
+        let (ctx, _events) = ModuleCtx::new(
+            "clock",
+            settings,
+            Compositor::unsupported(),
+            ActivityIds::default(),
+            requests,
+        );
         (ctx, received)
     }
 
@@ -278,6 +295,7 @@ mod tests {
         let (mut ctx, events) = ModuleCtx::new(
             "clock",
             toml::Table::new(),
+            Compositor::unsupported(),
             ActivityIds::default(),
             requests,
         );
@@ -306,6 +324,7 @@ mod tests {
         let (mut ctx, events) = ModuleCtx::new(
             "clock",
             toml::Table::new(),
+            Compositor::unsupported(),
             ActivityIds::default(),
             requests,
         );

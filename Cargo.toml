@@ -11,6 +11,7 @@ publish = false
 
 [workspace.dependencies]
 mochi-protocol = { path = "crates/mochi-protocol" }
+mochi-compositor = { path = "crates/mochi-compositor" }
 mochi-core = { path = "crates/mochi-core" }
 mochi-module-demo = { path = "modules/demo" }
 mochi-module-idle = { path = "modules/idle" }
@@ -28,6 +29,8 @@ tokio = "1"
 toml = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
 
 [workspace.lints.rust]
 missing_debug_implementations = "warn"

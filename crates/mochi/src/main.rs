@@ -72,8 +72,19 @@ fn run(command: Command) -> Result<(), String> {
                 } else {
                     "not connected"
                 };
-                println!("ui:      {ui}");
-                println!("modules: {}", status.modules.join(", "));
+                println!("ui:         {ui}");
+                println!("modules:    {}", status.modules.join(", "));
+                let compositor = &status.compositor;
+                if compositor.backend == "unsupported" {
+                    println!("compositor: no workspace information");
+                } else {
+                    println!(
+                        "compositor: {}, outputs {}, {} workspaces",
+                        compositor.backend,
+                        compositor.outputs.join(" "),
+                        compositor.workspaces
+                    );
+                }
                 Ok(())
             }
             other => Err(unexpected(&other)),

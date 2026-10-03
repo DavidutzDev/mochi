@@ -60,6 +60,8 @@ systemctl --user enable --now mochid
 
 `mochid` needs Quickshell 0.3.1 in its `PATH` and refuses to start with another version.
 
+Workspace information comes from the standard `ext-workspace-v1` Wayland protocol, so it works on any compositor that supports it, with no compositor-specific setup. `mochi status` shows what the daemon found.
+
 ### Session
 
 The unit starts with `graphical-session.target`. Session managers such as uwsm start that target and import `WAYLAND_DISPLAY` and `HYPRLAND_INSTANCE_SIGNATURE` into the user manager. Without one, start `mochid` directly from your compositor's autostart instead; it doesn't need systemd.

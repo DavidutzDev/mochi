@@ -14,7 +14,8 @@ mod theme;
 
 pub use actions::{ActionSpec, ArgKind, ArgSpec, ModuleActions};
 pub use messages::{
-    Activity, ActivityId, ClientMessage, DaemonMessage, ErrorCode, EventKind, Role, Status,
+    Activity, ActivityId, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode, EventKind,
+    Role, Status,
 };
 pub use theme::{Color, ColorError, Colors, Layout, Motion, Theme};
 

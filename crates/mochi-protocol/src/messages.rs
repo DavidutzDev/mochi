@@ -119,6 +119,19 @@ pub struct Status {
     pub api: u32,
     pub ui_connected: bool,
     pub modules: Vec<String>,
+    #[serde(default)]
+    pub compositor: CompositorStatus,
+}
+
+/// What the daemon knows about the compositor.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct CompositorStatus {
+    /// `wayland`, or `unsupported` when no compositor information is
+    /// available.
+    pub backend: String,
+    /// Output names.
+    pub outputs: Vec<String>,
+    pub workspaces: usize,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -222,6 +235,11 @@ mod tests {
                 api: 1,
                 ui_connected: true,
                 modules: vec!["idle".into()],
+                compositor: CompositorStatus {
+                    backend: "wayland".into(),
+                    outputs: vec!["DP-3".into()],
+                    workspaces: 4,
+                },
             },
         });
         round_trip_daemon(DaemonMessage::Actions {

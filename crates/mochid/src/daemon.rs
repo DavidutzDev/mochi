@@ -6,13 +6,14 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use mochi_core::actions;
+use mochi_core::compositor::Compositor;
 use mochi_core::supervisor::{Supervisor, UiEvent};
 use mochi_core::{
     Arbiter, Assets, Effect, ModuleCommand, ModuleError, ModuleEvent, ModuleRequest, Request,
 };
 use mochi_protocol::{
-    API, ActionSpec, ClientMessage, DaemonMessage, ErrorCode, EventKind, ModuleActions, Role,
-    Status, Theme,
+    API, ActionSpec, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode, EventKind,
+    ModuleActions, Role, Status, Theme,
 };
 use serde_json::Value;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -62,6 +63,7 @@ pub struct Daemon {
     theme: Theme,
     theme_file: PathBuf,
     supervisor: Supervisor,
+    compositor: Compositor,
     handshake_deadline: Option<Instant>,
 }
 
@@ -71,6 +73,7 @@ impl Daemon {
         theme: Theme,
         theme_file: PathBuf,
         supervisor: Supervisor,
+        compositor: Compositor,
     ) -> Self {
         Self {
             order: modules.iter().map(|(id, _)| *id).collect(),
@@ -81,6 +84,7 @@ impl Daemon {
             theme,
             theme_file,
             supervisor,
+            compositor,
             handshake_deadline: None,
         }
     }
@@ -206,6 +210,7 @@ impl Daemon {
                     api: API,
                     ui_connected: self.ui_connected(),
                     modules: self.order.iter().map(|id| (*id).to_owned()).collect(),
+                    compositor: self.compositor_status(),
                 };
                 self.reply(id, DaemonMessage::Status { status });
             }
@@ -426,6 +431,19 @@ impl Daemon {
             .and_then(|slot| slot.events.as_ref())
         {
             let _ = events.send(event);
+        }
+    }
+
+    fn compositor_status(&self) -> CompositorStatus {
+        let state = self.compositor.state();
+        CompositorStatus {
+            backend: state.backend.to_string(),
+            outputs: state
+                .outputs
+                .into_iter()
+                .map(|output| output.name)
+                .collect(),
+            workspaces: state.workspaces.len(),
         }
     }
 

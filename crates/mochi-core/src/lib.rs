@@ -12,6 +12,8 @@ pub mod module;
 pub mod supervisor;
 
 // Protocol types modules need, so a module only depends on this crate.
+/// Compositor state and actions, from [`ModuleCtx::compositor`].
+pub use mochi_compositor as compositor;
 pub use mochi_protocol::{ActionSpec, ActivityId, ArgSpec};
 
 pub use actions::{ArgError, ArgValue, Args};
