@@ -1,0 +1,17 @@
+[package]
+name = "mochi-module-idle"
+description = "The idle island: a clock that shows whenever nothing else does"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+include_dir.workspace = true
+mochi-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true

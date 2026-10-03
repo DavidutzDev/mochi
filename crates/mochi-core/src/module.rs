@@ -1,0 +1,315 @@
+//! The interface every module implements, builtin or plugin.
+//!
+//! A module runs as its own task. It talks to the daemon only through its
+//! [`ModuleCtx`]: it publishes state and activities, and receives commands and
+//! activity events. Every `ModuleCtx` call maps to one protocol message, which
+//! is what lets an external plugin process stand in for a builtin module.
+
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+use include_dir::Dir;
+use mochi_protocol::{ActionSpec, ActivityId};
+use serde::de::DeserializeOwned;
+use serde_json::Value;
+use tokio::sync::{mpsc, oneshot};
+
+use crate::actions::Args;
+use crate::arbiter::{ActivitySpec, EndReason};
+
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
+
+pub type ModuleError = Box<dyn std::error::Error + Send + Sync>;
+
+pub trait Module: Send + 'static {
+    /// Stable identifier: the name in `config.toml`, in `mochi ipc <module>`
+    /// and in `modules/<id>/` for its views.
+    fn id(&self) -> &'static str;
+
+    /// The module's QML views.
+    fn assets(&self) -> Assets;
+
+    /// The actions `mochi ipc <module> <action>` can run.
+    fn actions(&self) -> Vec<ActionSpec> {
+        Vec::new()
+    }
+
+    /// Runs the module until the daemon shuts down, which closes
+    /// [`ModuleCtx::next_event`]. Returning early stops the module and
+    /// withdraws its activities.
+    fn run(self: Box<Self>, ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>>;
+}
+
+/// A directory of QML files, embedded in the binary and also known by its
+/// path in the source tree, which dev mode links to for hot reload.
+///
+/// ```ignore
+/// static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
+///
+/// fn assets(&self) -> Assets {
+///     Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+/// }
+/// ```
+#[derive(Debug, Clone, Copy)]
+pub struct Assets {
+    pub embedded: &'static Dir<'static>,
+    pub source: &'static str,
+}
+
+impl Assets {
+    pub const fn new(embedded: &'static Dir<'static>, source: &'static str) -> Self {
+        Self { embedded, source }
+    }
+}
+
+/// Hands out activity ids that are unique across all modules.
+#[derive(Debug, Clone, Default)]
+pub struct ActivityIds(Arc<AtomicU64>);
+
+impl ActivityIds {
+    pub fn next(&self) -> ActivityId {
+        ActivityId(self.0.fetch_add(1, Ordering::Relaxed) + 1)
+    }
+}
+
+/// What a module asks the daemon to do.
+#[derive(Debug)]
+pub struct ModuleRequest {
+    pub module: &'static str,
+    pub request: Request,
+}
+
+#[derive(Debug)]
+pub enum Request {
+    PublishState(Value),
+    Present { id: ActivityId, spec: ActivitySpec },
+    Update { id: ActivityId, payload: Value },
+    Withdraw { id: ActivityId },
+}
+
+/// What the daemon tells a module.
+#[derive(Debug)]
+pub enum ModuleEvent {
+    Command(ModuleCommand),
+    /// A click on one of its activities that has no expanded view.
+    Clicked(ActivityId),
+    /// One of its activities is gone for good.
+    Ended {
+        activity: ActivityId,
+        reason: EndReason,
+    },
+}
+
+/// A validated `mochi ipc` command. Answer it with [`ModuleCommand::reply`].
+/// Dropping it unanswered reports a failure to the caller.
+#[derive(Debug)]
+pub struct ModuleCommand {
+    pub action: String,
+    pub args: Args,
+    reply: oneshot::Sender<Result<(), String>>,
+}
+
+impl ModuleCommand {
+    /// Returns the command and the receiver its reply arrives on.
+    pub fn new(action: String, args: Args) -> (Self, oneshot::Receiver<Result<(), String>>) {
+        let (reply, receiver) = oneshot::channel();
+        (
+            Self {
+                action,
+                args,
+                reply,
+            },
+            receiver,
+        )
+    }
+
+    pub fn reply(self, result: Result<(), String>) {
+        // The caller may have disconnected; there is nobody left to tell.
+        let _ = self.reply.send(result);
+    }
+}
+
+#[derive(Debug)]
+pub struct ModuleCtx {
+    module: &'static str,
+    settings: toml::Table,
+    ids: ActivityIds,
+    requests: mpsc::UnboundedSender<ModuleRequest>,
+    events: mpsc::UnboundedReceiver<ModuleEvent>,
+}
+
+impl ModuleCtx {
+    /// Creates the context for one module. The daemon keeps the returned
+    /// sender to deliver the module's events.
+    pub fn new(
+        module: &'static str,
+        settings: toml::Table,
+        ids: ActivityIds,
+        requests: mpsc::UnboundedSender<ModuleRequest>,
+    ) -> (Self, mpsc::UnboundedSender<ModuleEvent>) {
+        let (sender, events) = mpsc::unbounded_channel();
+        let ctx = Self {
+            module,
+            settings,
+            ids,
+            requests,
+            events,
+        };
+        (ctx, sender)
+    }
+
+    pub fn module(&self) -> &'static str {
+        self.module
+    }
+
+    /// The module's `[module.<id>]` table from `config.toml`. Fields missing
+    /// there take their `Default` values when `T` uses `#[serde(default)]`.
+    pub fn settings<T: DeserializeOwned>(&self) -> Result<T, toml::de::Error> {
+        toml::Value::Table(self.settings.clone()).try_into()
+    }
+
+    /// Replaces the module's state, which the UI can read from any view.
+    pub fn publish_state(&self, state: Value) {
+        self.send(Request::PublishState(state));
+    }
+
+    /// Submits an activity to the arbiter and returns its id at once. Whether
+    /// and when it shows is up to the arbiter.
+    pub fn present(&self, spec: ActivitySpec) -> ActivityId {
+        let id = self.ids.next();
+        self.send(Request::Present { id, spec });
+        id
+    }
+
+    /// Replaces the payload of one of the module's activities.
+    pub fn update(&self, id: ActivityId, payload: Value) {
+        self.send(Request::Update { id, payload });
+    }
+
+    /// Removes one of the module's activities, shown or waiting.
+    pub fn withdraw(&self, id: ActivityId) {
+        self.send(Request::Withdraw { id });
+    }
+
+    /// The next command or activity event. `None` once the daemon is
+    /// shutting down.
+    pub async fn next_event(&mut self) -> Option<ModuleEvent> {
+        self.events.recv().await
+    }
+
+    fn send(&self, request: Request) {
+        // Fails only while the daemon shuts down, when the request no longer
+        // matters.
+        let _ = self.requests.send(ModuleRequest {
+            module: self.module,
+            request,
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use serde::Deserialize;
+    use serde_json::json;
+
+    use super::*;
+
+    fn context(settings: &str) -> (ModuleCtx, mpsc::UnboundedReceiver<ModuleRequest>) {
+        let (requests, received) = mpsc::unbounded_channel();
+        let settings = toml::from_str(settings).unwrap();
+        let (ctx, _events) = ModuleCtx::new("clock", settings, ActivityIds::default(), requests);
+        (ctx, received)
+    }
+
+    #[test]
+    fn ids_are_unique_across_clones() {
+        let ids = ActivityIds::default();
+        let other = ids.clone();
+        assert_eq!(ids.next(), ActivityId(1));
+        assert_eq!(other.next(), ActivityId(2));
+    }
+
+    #[test]
+    fn requests_are_tagged_with_the_module() {
+        let (ctx, mut received) = context("");
+        ctx.publish_state(json!({ "time": "12:00" }));
+        let id = ctx.present(ActivitySpec::new("Pill"));
+        ctx.withdraw(id);
+
+        let first = received.try_recv().unwrap();
+        assert_eq!(first.module, "clock");
+        assert!(matches!(first.request, Request::PublishState(_)));
+        assert!(
+            matches!(received.try_recv().unwrap().request, Request::Present { id: sent, .. } if sent == id)
+        );
+        assert!(matches!(
+            received.try_recv().unwrap().request,
+            Request::Withdraw { .. }
+        ));
+    }
+
+    #[test]
+    fn settings_deserialize_with_defaults() {
+        #[derive(Debug, Deserialize, Default, PartialEq)]
+        #[serde(default, deny_unknown_fields)]
+        struct Settings {
+            format: String,
+            seconds: bool,
+        }
+
+        let (ctx, _) = context("format = \"HH:mm\"");
+        assert_eq!(
+            ctx.settings::<Settings>().unwrap(),
+            Settings {
+                format: "HH:mm".into(),
+                seconds: false
+            }
+        );
+
+        let (ctx, _) = context("fromat = \"HH:mm\"");
+        assert!(ctx.settings::<Settings>().is_err());
+    }
+
+    #[tokio::test]
+    async fn commands_reach_the_module_and_replies_come_back() {
+        let (requests, _received) = mpsc::unbounded_channel();
+        let (mut ctx, events) = ModuleCtx::new(
+            "clock",
+            toml::Table::new(),
+            ActivityIds::default(),
+            requests,
+        );
+
+        let (command, reply) = ModuleCommand::new("show".into(), Args::default());
+        events.send(ModuleEvent::Command(command)).unwrap();
+
+        let Some(ModuleEvent::Command(command)) = ctx.next_event().await else {
+            panic!("expected a command");
+        };
+        assert_eq!(command.action, "show");
+        command.reply(Err("nothing to show".into()));
+        assert_eq!(reply.await.unwrap(), Err("nothing to show".to_owned()));
+    }
+
+    #[tokio::test]
+    async fn dropping_a_command_is_visible_to_the_caller() {
+        let (command, reply) = ModuleCommand::new("show".into(), Args::default());
+        drop(command);
+        assert!(reply.await.is_err());
+    }
+
+    #[tokio::test]
+    async fn events_end_when_the_daemon_drops_its_sender() {
+        let (requests, _received) = mpsc::unbounded_channel();
+        let (mut ctx, events) = ModuleCtx::new(
+            "clock",
+            toml::Table::new(),
+            ActivityIds::default(),
+            requests,
+        );
+        drop(events);
+        assert!(ctx.next_event().await.is_none());
+    }
+}

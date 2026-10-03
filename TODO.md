@@ -61,88 +61,98 @@ Answers the risky questions before the framework depends on them. Done: code in 
 - [x] A small Rust program spawns `quickshell -p <tmpfs dir>`, sends JSON lines over a socket and receives clicks back
 - [x] Hot reload works when the shell tree is made of symlinks
 - [x] Write down the findings in `docs/spike.md` and pin the Quickshell version
-- [ ] Delete `spike/` once the real daemon and QML core replace it
+- [x] Delete `spike/` (kept in commit `c441f31`)
 
 ## Protocol (`mochi-protocol`)
 
-- [ ] Newline-delimited JSON over a Unix socket
-- [ ] `hello {api}` handshake in both directions, reject unsupported versions with a clear error
-- [ ] Daemon to UI: `modules`, `state`, `present`, `dismiss`, `theme`
-- [ ] UI to daemon: `command`, `event` (hover, click, dismissed)
-- [ ] CLI to daemon: `command`, `status`, `reload`, `list_actions`, plugin management
-- [ ] Error replies with a code and a message
-- [ ] State snapshots re-sent on every reconnect
-- [ ] Round-trip tests for every message type
-- [ ] `docs/protocol.md`
+Described in `docs/protocol.md`.
+
+- [x] Newline-delimited JSON over a Unix socket, 1 MiB line limit
+- [x] `hello {api}` handshake in both directions, `unsupported_api` error on mismatch
+- [x] Daemon to UI: `modules`, `state`, `present`, `theme` (no `dismiss`: `present` always names what is shown, `null` when nothing is)
+- [x] UI to daemon: `command`, `event` (click, hover enter and leave, dismiss)
+- [x] CLI to daemon: `command`, `status`, `reload`, `list_actions`
+- [x] Error replies with a code and a message
+- [x] Round-trip tests for every message type, plus fixed wire-format tests for what the UI parses
+- [x] `docs/protocol.md`
+- [ ] Plugin management messages (with the plugin system)
+- [x] State snapshots re-sent on every reconnect (daemon, step 6)
 
 ## Core (`mochi-core`)
 
 Module API
-- [ ] `Module` trait: `id`, `assets`, `actions`, `start`, `handle_command`
-- [ ] `ModuleCtx`: `publish_state`, `submit_activity`, `dismiss`, settings access
-- [ ] Action declarations with argument names and types
-- [ ] Route `command` messages to modules and validate actions and arguments before the module sees them
+- [x] `Module` trait: `id`, `assets`, `actions`, `run(ctx)`. Each module runs as its own task and receives commands and activity events through its context, instead of `start` plus `handle_command` (an async `&mut self` method would make `Module` unusable as a trait object)
+- [x] `ModuleCtx`: `publish_state`, `present`, `update`, `withdraw`, typed `settings`, `next_event`
+- [x] Action declarations with argument names and types (`string`, `int`, `float`, `bool`, `choice`, optional and rest arguments)
+- [x] Argument parsing and spec validation, with usage lines in errors
+- [x] Route `command` messages to modules (daemon, step 6)
 
 Arbiter
-- [ ] Activity type: `{module, view, data, priority, timeout, interruptible}`
-- [ ] Priority queue with `idle`, `compact` and `expanded` states
-- [ ] Timeouts, with hover pausing the timeout
-- [ ] Interrupting an activity and resuming it afterwards
-- [ ] `split` state (two bubbles side by side), if it still looks worth it after the spike
-- [ ] Unit tests for every rule above
+- [x] Activity attributes: `key`, `compact` and `expanded` views, `payload`, `priority`, `timeout`, `interruptible`, `same_priority` (queue or stack)
+- [x] Interrupt and resume, queue by priority then arrival, suspended activities win ties
+- [x] Replacement by `key` within a module
+- [x] Timeouts pause while hovered, expanded or interrupted, and resume with at least 1 second
+- [x] Click toggles compact and expanded; clicks on activities without an expanded view go to the module
+- [x] Unit tests for every rule above
+- [ ] Per-module or per-action overrides of activity attributes in `config.toml`, once real modules show which rules users want to change
+- [ ] `split` state (two bubbles side by side), if it still looks worth it
 
 Config and theme
-- [ ] Load and validate `config.toml` and `theme.toml`, with errors that name the file and the key
-- [ ] Theme tokens: colors, radii, fonts, spring constants
-- [ ] Reload both files on `mochi reload` without restarting Quickshell
+- [x] Load and validate `config.toml` and `theme.toml`, with errors that name the file and the key
+- [x] Theme tokens: colors, layout sizes, spring and fade constants
+- [x] XDG paths for config, socket and the generated shell
+- [ ] Fonts in the theme
+- [x] `mochi reload` reloads `theme.toml` without restarting Quickshell
+- [ ] Apply `config.toml` changes on reload (enabling and disabling modules at runtime)
 
 Asset writer
-- [ ] Write the core QML and each enabled module's QML into `$XDG_RUNTIME_DIR/mochi/shell/`
-- [ ] Rewrite a file only when its content hash changed, so restarts don't force a UI reload
+- [x] Write the core QML and each enabled module's QML into `$XDG_RUNTIME_DIR/mochi/shell/`
+- [x] Rewrite a file only when its content hash changed, so restarts don't force a UI reload
 - [ ] Add and remove module directories at runtime when modules are enabled or disabled
-- [ ] Dev mode: symlink to the source `qml/` directories instead of copying
-- [ ] Generate `Modules.qml` at the shell root importing every enabled module, so Quickshell watches module files (see `docs/spike.md`)
-- [ ] Write through a temporary file and a rename, so Quickshell never reads a half-written file
+- [x] Dev mode: symlink to the source `qml/` directories instead of copying
+- [x] Generate `Modules.qml` at the shell root importing every enabled module, so Quickshell watches module files (see `docs/spike.md`)
+- [x] Write through a temporary file and a rename, so Quickshell never reads a half-written file
 
 Supervisor
-- [ ] Spawn Quickshell with `-p <shell dir>` and `MOCHI_SOCKET` set
-- [ ] `PR_SET_PDEATHSIG` so Quickshell dies with `mochid`, spawned from a dedicated thread that lives as long as the daemon (the signal follows the thread, not the process)
-- [ ] Pipe stdout and stderr into `tracing`
-- [ ] Restart with backoff, give up after 5 crashes in 30 seconds and log why
-- [ ] Restart if `hello` doesn't arrive within the handshake timeout, with SIGKILL (a hung process ignores SIGTERM)
-- [ ] Check the Quickshell version at startup
+- [x] Spawn Quickshell with `-p <shell dir>` and `MOCHI_SOCKET` set
+- [x] `PR_SET_PDEATHSIG` so Quickshell dies with `mochid`, spawned from a dedicated thread that lives as long as the daemon (the signal follows the thread, not the process)
+- [x] Pipe stdout and stderr into `tracing`
+- [x] Restart with backoff, give up after 5 crashes in 30 seconds and log why
+- [x] Restart if `hello` doesn't arrive within the handshake timeout, with SIGKILL (a hung process ignores SIGTERM)
+- [x] Check the Quickshell version at startup
 - [ ] The same supervisor runs plugin backends
 
 ## Daemon (`mochid`)
 
-- [ ] Entry point with flags: `--dev`, `--config`
-- [ ] Logging through `tracing`, readable in `journalctl --user -u mochid`
-- [ ] Socket server that accepts Quickshell, `mochi` and plugin connections
-- [ ] Claim the socket before writing assets, and refuse to start when another daemon is running
-- [ ] Clean shutdown on SIGTERM: dismiss everything, stop Quickshell and plugins
+- [x] Entry point with flags: `--dev`, `--config`
+- [x] Logging through `tracing`, readable in `journalctl --user -u mochid`
+- [x] Socket server that accepts Quickshell and `mochi` connections (plugins later)
+- [x] Claim the socket before writing assets, and refuse to start when another daemon is running
+- [x] Clean shutdown on SIGTERM: dismiss everything, stop Quickshell and plugins
 - [ ] `systemd/mochid.service` with `Restart=on-failure`, bound to `graphical-session.target`
 
 ## CLI (`mochi`)
 
-- [ ] `mochi ipc <module> <action> [args...]`, forwarded as `command`
-- [ ] `mochi ipc list` lists every module and its actions
-- [ ] `mochi ipc <module>` lists one module's actions with argument help
-- [ ] `mochi status` shows daemon, Quickshell and plugin health
+- [x] `mochi ipc <module> <action> [args...]`, forwarded as `command`
+- [x] `mochi ipc list` lists every module and its actions
+- [x] `mochi ipc <module>` lists one module's actions with argument help
+- [x] `mochi status` shows daemon and UI health (plugins later)
 - [ ] `mochi reload` reloads config and theme
 - [ ] `mochi plugins list|enable|disable`
-- [ ] Clear error when `mochid` isn't running
+- [x] Clear error when `mochid` isn't running
 - [ ] `--json` output for scripts
 - [ ] Shell completions
 
 ## QML core
 
-- [ ] Socket client that reads `MOCHI_SOCKET` and reconnects
-- [ ] Island container: springs on width, height and radius, morph between views, input mask
-- [ ] Two loaders taking turns, loading views through `root:/modules/<id>/<View>.qml` URLs (plain file paths break singletons and hot reload)
+- [x] Socket client that reads `MOCHI_SOCKET` and reconnects
+- [x] Island container: springs on width, height and radius, morph between views, input mask
+- [x] Two loaders taking turns, loading views through `root:/modules/<id>/<View>.qml` URLs (plain file paths break singletons and hot reload)
 - [ ] Decide whether views are revealed from the center or anchored to the top edge during a morph
 - [ ] Fall back to the builtin view when a view fails to load
-- [ ] Theme singleton fed by the `theme` message
-- [ ] Forward hover, click and dismiss events to the daemon
+- [x] Theme singleton fed by the `theme` message
+- [x] Forward hover, click and dismiss events to the daemon
+- [x] Re-send `hover_enter` for the new activity when the island changes while the pointer is still over it (the arbiter ignores events for activities that are no longer shown)
 
 ## Compositor support
 
@@ -162,8 +172,9 @@ Mochi must work on any wlroots-style compositor (Hyprland, niri, mango, ...). St
 
 ### Idle
 
-- [ ] Lowest-priority activity that never times out
-- [ ] Clock or a simple pill as the first view
+- [x] Lowest-priority activity that never times out
+- [x] Clock or a simple pill as the first view
+- [x] A `demo` module (Cargo feature, on by default) with test views and `show`, `alert`, `stack`, `volume` and `clear` actions for trying the arbiter
 
 ### Workspaces
 

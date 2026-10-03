@@ -1,0 +1,30 @@
+//! The daemon's building blocks: the module API, the arbiter that decides
+//! what the island shows, action argument parsing, configuration, the QML
+//! asset writer and the Quickshell supervisor.
+//!
+//! The UI's core QML lives in this crate's `qml/` directory; see [`QML`].
+
+pub mod actions;
+pub mod arbiter;
+pub mod assets;
+pub mod config;
+pub mod module;
+pub mod supervisor;
+
+// Protocol types modules need, so a module only depends on this crate.
+pub use mochi_protocol::{ActionSpec, ActivityId, ArgSpec};
+
+pub use actions::{ArgError, ArgValue, Args};
+pub use arbiter::{ActivitySpec, Arbiter, ArbiterError, Effect, EndReason, Priority, SamePriority};
+pub use config::{Config, ConfigError, Paths};
+pub use module::{
+    ActivityIds, Assets, BoxFuture, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent,
+    ModuleRequest, Request,
+};
+
+/// The core QML: `shell.qml` and the island. Modules add their views under
+/// `modules/<id>/` next to it.
+pub const QML: Assets = {
+    static DIR: include_dir::Dir = include_dir::include_dir!("$CARGO_MANIFEST_DIR/qml");
+    Assets::new(&DIR, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+};

@@ -1,6 +1,6 @@
 # Spike findings
 
-The spike in `spike/` checks the parts of the design that everything else depends on. It is throwaway code. Delete it once the real daemon and QML core replace it.
+The spike checked the parts of the design that everything else depends on. It was throwaway code and has been removed. Commit `c441f31` still has it: run `git checkout c441f31` to try it again, and the commands below work from there.
 
 Tested on 2026-10-03 with Quickshell 0.3.1 (revision `41651d7`), Hyprland 0.56.2 and two 1920x1080 monitors.
 
