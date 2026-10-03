@@ -93,6 +93,7 @@ Arbiter
 - [x] Replacement by `key` within a module
 - [x] Timeouts pause while hovered, expanded or interrupted, and resume with at least 1 second
 - [x] Click toggles compact and expanded; clicks on activities without an expanded view go to the module
+- [x] `expand_for`: an activity opens on its expanded view and collapses on its own after that time on screen; hovering pauses it, a click hands control to the user, a keyed replacement that sets it again opens it again, and a waiting activity expands when it comes on screen
 - [x] Unit tests for every rule above
 - [ ] Per-module or per-action overrides of activity attributes in `config.toml`, once real modules show which rules users want to change
 - [ ] `split` state (two bubbles side by side), if it still looks worth it
@@ -224,6 +225,20 @@ Listens only: it shows changes made anywhere and has no actions.
 - [ ] Check whether headset dials (Arctis Nova 7) report volume through the audio server
 - [ ] Laptop screen brightness: sysfs backlight with udev events
 - [ ] Keyboard backlight
+
+### Media
+
+- [x] MPRIS players over zbus: one task follows which players come and go, one task per player reads all its properties again after every change and every seek
+- [x] One player per process, so VLC's two bus names show once; playerctld is skipped because it mirrors other players
+- [x] The most recently active player wins (last to start playing or change track while playing), and a playing player always beats a paused one; `ignore` hides players by bus name or by the name they give themselves
+- [x] Compact view at low priority while playing: cover, title, bouncing bars. A pause dims it and leaves after `paused_ms`
+- [x] A track change opens the expanded view for `expand_ms` (the `expand_for` arbiter option): cover, player, title, artist, progress, previous, play or pause, next
+- [x] Progress moves in QML from the position and the time it was read, so it stays right when the activity comes back after an interruption
+- [x] Click or drag the bar to seek (`SetPosition` with the track id, or a relative `Seek` without one)
+- [x] Actions: `play-pause`, `play`, `pause`, `next`, `previous`, `seek <seconds>`
+- [x] Tested live with VLC: track changes, pause and resume, seek from the CLI and the bar, the buttons, the player quitting
+- [ ] A media bubble once bubbles exist, so music stays visible beside other activities
+- [ ] Volume per player
 
 ### Notifications
 

@@ -19,6 +19,10 @@
 //! - Timeouts only run while an activity is on screen and the pointer is not
 //!   over it, and not while it is expanded. When the timer starts again, the
 //!   activity gets at least [`MIN_VISIBLE`] more.
+//! - An activity with [`ActivitySpec::expand_for`] opens on its expanded view
+//!   the next time it comes on screen, and collapses on its own once that time
+//!   ran out with the pointer away. A click collapses it at once, and a view
+//!   the user expanded stays expanded.
 //!
 //! The arbiter never reads the clock: every call takes `now`. Changes are
 //! reported as [`Effect`]s for the daemon to act on.
@@ -65,6 +69,8 @@ pub struct ActivitySpec {
     pub compact: String,
     /// View shown after a click. Without one, clicks go to the module.
     pub expanded: Option<String>,
+    /// Opens on the expanded view for this long, then collapses.
+    pub expand_for: Option<Duration>,
     pub payload: Value,
     pub priority: Priority,
     /// Time on screen before the activity ends. `None` never times out.
@@ -80,6 +86,7 @@ impl ActivitySpec {
             key: None,
             compact: compact.into(),
             expanded: None,
+            expand_for: None,
             payload: Value::Null,
             priority: Priority::NORMAL,
             timeout: None,
@@ -95,6 +102,14 @@ impl ActivitySpec {
 
     pub fn expanded(mut self, view: impl Into<String>) -> Self {
         self.expanded = Some(view.into());
+        self
+    }
+
+    /// Opens on the expanded view, which needs one, and collapses after
+    /// `duration` on screen. A keyed replacement that sets it again opens it
+    /// again.
+    pub fn expand_for(mut self, duration: Duration) -> Self {
+        self.expand_for = Some(duration);
         self
     }
 
@@ -184,11 +199,12 @@ impl Arbiter {
         self.current.as_ref().map(Entry::activity)
     }
 
-    /// When the shown activity's timeout runs out, if it has one running.
+    /// When the shown activity collapses or its timeout runs out, whichever
+    /// comes first, if a timer is running.
     pub fn next_deadline(&self) -> Option<Instant> {
-        self.current
-            .as_ref()
-            .and_then(|entry| entry.timer.deadline())
+        let entry = self.current.as_ref()?;
+        let collapse = entry.collapse.as_ref().and_then(Timer::deadline);
+        collapse.into_iter().chain(entry.timer.deadline()).min()
     }
 
     /// Everything that changed since the last call.
@@ -277,6 +293,8 @@ impl Arbiter {
         };
         if current.expandable() {
             current.expanded = !current.expanded;
+            // The user decides from now on.
+            current.collapse = None;
             current.update_timer(now);
             self.dirty = true;
         } else {
@@ -295,8 +313,20 @@ impl Arbiter {
         }
     }
 
-    /// Ends the shown activity if its timeout ran out.
+    /// Collapses the shown activity or ends it if its time ran out.
     pub fn tick(&mut self, now: Instant) {
+        if let Some(current) = &mut self.current
+            && current
+                .collapse
+                .as_ref()
+                .and_then(Timer::deadline)
+                .is_some_and(|deadline| deadline <= now)
+        {
+            current.collapse = None;
+            current.expanded = false;
+            current.update_timer(now);
+            self.dirty = true;
+        }
         if self.next_deadline().is_some_and(|deadline| deadline <= now) {
             self.end_current(EndReason::Expired, now);
         }
@@ -304,6 +334,7 @@ impl Arbiter {
 
     fn show(&mut self, mut entry: Entry, now: Instant) {
         entry.hovered = false;
+        entry.auto_expand();
         entry.update_timer(now);
         entry.seen = true;
         self.current = Some(entry);
@@ -353,9 +384,16 @@ impl Arbiter {
         entry.id = id;
         entry.timer = Timer::new(spec.timeout);
         entry.expanded &= spec.expanded.is_some();
+        if !entry.expanded {
+            entry.collapse = None;
+        }
+        if spec.expand_for.is_some() {
+            entry.pending_expand = spec.expand_for;
+        }
         entry.spec = spec;
         if slot == Slot::Current {
             // A fresh timeout, as if it had just appeared.
+            entry.auto_expand();
             entry.seen = false;
             entry.update_timer(now);
             entry.seen = true;
@@ -451,6 +489,11 @@ struct Entry {
     spec: ActivitySpec,
     timer: Timer,
     expanded: bool,
+    /// Runs while the activity is expanded on its own, and collapses it when
+    /// it runs out.
+    collapse: Option<Timer>,
+    /// How long to expand the next time it is on screen.
+    pending_expand: Option<Duration>,
     hovered: bool,
     /// Has been on screen before. Its timer then gets `MIN_VISIBLE` when it
     /// starts again.
@@ -463,8 +506,10 @@ impl Entry {
             id,
             module: module.to_owned(),
             timer: Timer::new(spec.timeout),
+            pending_expand: spec.expand_for,
             spec,
             expanded: false,
+            collapse: None,
             hovered: false,
             seen: false,
         }
@@ -480,7 +525,22 @@ impl Entry {
     fn suspend(&mut self, now: Instant) {
         self.timer.pause(now);
         self.expanded = false;
+        self.collapse = None;
         self.hovered = false;
+    }
+
+    /// Opens the expanded view if the spec asked for it since the activity
+    /// was last on screen.
+    fn auto_expand(&mut self) {
+        let Some(duration) = self.pending_expand.take() else {
+            return;
+        };
+        // An expanded view the user opened stays open.
+        if !self.expandable() || (self.expanded && self.collapse.is_none()) {
+            return;
+        }
+        self.expanded = true;
+        self.collapse = Some(Timer::new(Some(duration)));
     }
 
     fn expandable(&self) -> bool {
@@ -488,14 +548,21 @@ impl Entry {
     }
 
     fn update_timer(&mut self, now: Instant) {
+        let floor = if self.seen {
+            MIN_VISIBLE
+        } else {
+            Duration::ZERO
+        };
+        if let Some(collapse) = &mut self.collapse {
+            if self.hovered {
+                collapse.pause(now);
+            } else {
+                collapse.run(now, floor);
+            }
+        }
         if self.hovered || self.expanded {
             self.timer.pause(now);
         } else {
-            let floor = if self.seen {
-                MIN_VISIBLE
-            } else {
-                Duration::ZERO
-            };
             self.timer.run(now, floor);
         }
     }

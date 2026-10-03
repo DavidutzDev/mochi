@@ -89,6 +89,7 @@ cargo test -p mochid --test record -- --ignored --nocapture
 | `idle` | The clock shown when nothing else is. |
 | `osd` | Shows volume, mute, output device switches, microphone mute, Caps Lock and Num Lock as they change, from any source. Needs pipewire-pulse or PulseAudio. |
 | `workspaces` | Shows a monitor's workspaces when you switch, when focus moves to it, when one asks for attention, or when they're created or removed. Click a dot to switch. Needs a compositor with `ext-workspace-v1`. |
+| `media` | Shows what's playing in any MPRIS player. It stays compact while music plays, opens with the cover, progress and controls when the track changes, and shows a pause briefly. Click to expand, use the buttons or click the bar to seek. `mochi ipc media play-pause`, `next`, `previous` and `seek <seconds>` do the same from a keybind. |
 | `demo` | Test views and `mochi ipc demo` actions for trying the island. |
 
 ## Configuration
@@ -97,7 +98,7 @@ Both files are optional and live in `~/.config/mochi/`. Without a `config.toml`,
 
 ```toml
 # config.toml
-modules = ["idle", "osd", "workspaces"]
+modules = ["idle", "osd", "workspaces", "media"]
 
 [module.idle]
 format = "HH:mm:ss"
@@ -105,6 +106,9 @@ format = "HH:mm:ss"
 [module.osd]
 timeout_ms = 1500
 microphone = false   # volume, device, microphone and locks can each be turned off
+
+[module.media]
+ignore = ["firefox"]   # players never shown
 ```
 
 ```toml

@@ -325,6 +325,104 @@ fn interrupted_activities_come_back_collapsed() {
     assert_eq!((shown.id, shown.expanded), (card, false));
 }
 
+fn peeking() -> ActivitySpec {
+    timed(4).expanded("Details").expand_for(2 * SECOND)
+}
+
+fn expanded(bench: &Bench) -> bool {
+    bench.arbiter.shown().is_some_and(|shown| shown.expanded)
+}
+
+#[test]
+fn auto_expanded_activities_collapse_then_time_out() {
+    let mut bench = Bench::new();
+    let card = bench.submit("media", peeking());
+    assert!(expanded(&bench));
+    assert_eq!(bench.arbiter.next_deadline(), Some(bench.at(2)));
+
+    bench.advance(2 * SECOND);
+    assert!(!expanded(&bench));
+    assert_eq!(bench.arbiter.next_deadline(), Some(bench.at(6)));
+
+    bench.advance(4 * SECOND);
+    assert_eq!(bench.ended(), [(card, EndReason::Expired)]);
+}
+
+#[test]
+fn hovering_keeps_an_auto_expanded_activity_open() {
+    let mut bench = Bench::new();
+    let card = bench.submit("media", peeking());
+    bench.advance(SECOND);
+    bench.arbiter.hover(card, true, bench.now);
+    assert_eq!(bench.arbiter.next_deadline(), None);
+
+    bench.advance(60 * SECOND);
+    assert!(expanded(&bench));
+
+    // One second was left, which is also the minimum.
+    bench.arbiter.hover(card, false, bench.now);
+    assert_eq!(bench.arbiter.next_deadline(), Some(bench.at(62)));
+}
+
+#[test]
+fn a_click_takes_over_from_auto_expansion() {
+    let mut bench = Bench::new();
+    let card = bench.submit("media", peeking());
+
+    bench.arbiter.click(card, bench.now);
+    assert!(!expanded(&bench));
+    assert_eq!(bench.arbiter.next_deadline(), Some(bench.at(4)));
+
+    bench.arbiter.click(card, bench.now);
+    assert!(expanded(&bench));
+    assert_eq!(bench.arbiter.next_deadline(), None);
+}
+
+#[test]
+fn keyed_replacements_expand_again_only_when_asked() {
+    let mut bench = Bench::new();
+    let compact = ActivitySpec::new("Card").expanded("Details").key("media");
+    bench.submit("media", compact.clone());
+    assert!(!expanded(&bench));
+
+    bench.submit("media", compact.clone().expand_for(2 * SECOND));
+    assert!(expanded(&bench));
+
+    // A plain update keeps the view open and its time running.
+    bench.advance(SECOND);
+    bench.submit("media", compact.clone());
+    assert!(expanded(&bench));
+    assert_eq!(bench.arbiter.next_deadline(), Some(bench.at(2)));
+
+    bench.advance(SECOND);
+    assert!(!expanded(&bench));
+}
+
+#[test]
+fn views_the_user_expanded_stay_expanded() {
+    let mut bench = Bench::new();
+    let compact = ActivitySpec::new("Card").expanded("Details").key("media");
+    let card = bench.submit("media", compact.clone());
+    bench.arbiter.click(card, bench.now);
+
+    bench.submit("media", compact.expand_for(2 * SECOND));
+    assert!(expanded(&bench));
+    assert_eq!(bench.arbiter.next_deadline(), None);
+}
+
+#[test]
+fn waiting_activities_expand_when_they_show() {
+    let mut bench = Bench::new();
+    bench.submit("osd", timed(1).priority(Priority::HIGH));
+    let card = bench.submit("media", peeking());
+    assert!(!expanded(&bench));
+
+    bench.advance(SECOND);
+    assert_eq!(bench.shown(), Some(card));
+    assert!(expanded(&bench));
+    assert_eq!(bench.arbiter.next_deadline(), Some(bench.at(3)));
+}
+
 #[test]
 fn clicks_without_an_expanded_view_go_to_the_module() {
     let mut bench = Bench::new();

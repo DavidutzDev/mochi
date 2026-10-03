@@ -88,6 +88,7 @@ fn builtin_modules() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_idle::Idle),
         Box::new(mochi_module_osd::Osd),
         Box::new(mochi_module_workspaces::Workspaces),
+        Box::new(mochi_module_media::Media),
     ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));
