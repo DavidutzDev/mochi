@@ -83,6 +83,7 @@ Described in `docs/protocol.md`.
 Module API
 - [x] `Module` trait: `id`, `assets`, `actions`, `run(ctx)`. Each module runs as its own task and receives commands and activity events through its context, instead of `start` plus `handle_command` (an async `&mut self` method would make `Module` unusable as a trait object)
 - [x] `ModuleCtx`: `publish_state`, `present`, `update`, `withdraw`, typed `settings`, `next_event`
+- [x] `ModuleCtx::data_dir`: a per-module directory under the runtime directory, emptied at startup, for files views load
 - [x] Action declarations with argument names and types (`string`, `int`, `float`, `bool`, `choice`, optional and rest arguments)
 - [x] Argument parsing and spec validation, with usage lines in errors
 - [x] Route `command` messages to modules (daemon, step 6)
@@ -295,12 +296,21 @@ Listens only: it shows changes made anywhere and has no actions.
 
 ### Notifications
 
-- [ ] Own `org.freedesktop.Notifications` with zbus
-- [ ] Actions, replaces-id, urgency, expiry, icons and images
-- [ ] History with persistence across daemon restarts
-- [ ] Do-not-disturb (`mochi ipc notifications dnd on|off|toggle`)
-- [ ] Grouping per app
-- [ ] Compact, expanded and history views
+- [x] Serves `org.freedesktop.Notifications` with zbus: `Notify`, `CloseNotification`, `GetCapabilities` (`actions`, `body`, `icon-static`, `persistence`), `GetServerInformation`, and the `NotificationClosed` and `ActionInvoked` signals
+- [x] Waits in line for the name behind another daemon (swaync, mako) and takes over when it stops, without taking the name away. zbus's default flags would replace the other daemon and hand the name to the next one; the request uses none
+- [x] `replaces_id` updates a notification where it is: the popup in place, or silently in the history
+- [x] Popups laid out like the top of the media player: a 64 px icon from the icon theme, the `desktop-entry` hint or the app name, or the picture (`image-path`, or `image-data` pixels written as a PNG to the module's data directory); then the app, the summary and two lines of body. Expanded: app and time, full text, action buttons; clicking the text runs `default`
+- [x] A new popup from an app replaces that app's popup in place (a key per app), so a burst shows only the latest and the replaced ones count as missed; `same_app = "stack"` shows each in turn instead. Popups from different apps stack, newest on top. Critical ones never replace or get replaced
+- [x] Timeouts from the app or `timeout_ms`; critical ones are urgent, uninterruptible and stay until closed
+- [x] Popups that time out go to the history (newest `history` kept), transient ones close. A bell bubble in `center-right` counts them; clicking it lists them on the island with dismiss, clear and do not disturb
+- [x] Do not disturb: everything but critical goes straight to the history, and a moon bubble joins the bell
+- [x] Actions: `history`, `clear`, `dnd on|off|toggle`, `dismiss <id>`, `invoke <id> <action>`
+- [x] A pure `Center` with unit tests for every rule above, and `note.rs` tests for odd hints and padded pixel rows
+- [x] Tested live in a private D-Bus session (`dbus-run-session`), leaving the real swaync alone: icons, a critical popup outlasting its timeout, pictures from a path and from bytes, a real click on an action button reaching `notify-send`, replacement, the history and its bubble, do not disturb, clear, and one daemon queueing behind another
+- [ ] Persist the history across daemon restarts
+- [ ] Body markup (`body-markup`): sanitize to the subset Qt's styled text handles
+- [ ] Inline replies (`inline-reply`)
+- [ ] Sounds (`sound-file`, `sound-name`)
 
 ### Launcher
 
@@ -359,10 +369,9 @@ Listens only: it shows changes made anywhere and has no actions.
 
 ## Suggested order
 
-Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, bubbles, and the OSD, workspaces and media modules.
+Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, bubbles, and the OSD, workspaces, media and notifications modules.
 
 1. A Bluetooth module, the next bubble user
-2. Notifications
-3. Launcher
-4. Power
-5. Plugins
+2. Launcher
+3. Power
+4. Plugins

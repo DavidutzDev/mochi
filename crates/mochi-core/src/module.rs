@@ -6,6 +6,7 @@
 //! is what lets an external plugin process stand in for a builtin module.
 
 use std::future::Future;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -144,6 +145,7 @@ pub struct ModuleCtx {
     settings: toml::Table,
     compositor: Compositor,
     ids: ActivityIds,
+    data_dir: PathBuf,
     requests: mpsc::UnboundedSender<ModuleRequest>,
     events: mpsc::UnboundedReceiver<ModuleEvent>,
 }
@@ -156,6 +158,7 @@ impl ModuleCtx {
         settings: toml::Table,
         compositor: Compositor,
         ids: ActivityIds,
+        data_dir: PathBuf,
         requests: mpsc::UnboundedSender<ModuleRequest>,
     ) -> (Self, mpsc::UnboundedSender<ModuleEvent>) {
         let (sender, events) = mpsc::unbounded_channel();
@@ -164,6 +167,7 @@ impl ModuleCtx {
             settings,
             compositor,
             ids,
+            data_dir,
             requests,
             events,
         };
@@ -185,6 +189,14 @@ impl ModuleCtx {
     /// the state stays empty.
     pub fn compositor(&self) -> &Compositor {
         &self.compositor
+    }
+
+    /// A directory only this module writes to, emptied when the daemon
+    /// starts. For files views load, like images a module received as
+    /// bytes. It lives in the runtime directory, so it never outlives the
+    /// session.
+    pub fn data_dir(&self) -> &Path {
+        &self.data_dir
     }
 
     /// Replaces the module's state, which the UI can read from any view.
@@ -258,6 +270,7 @@ mod tests {
             settings,
             Compositor::unsupported(),
             ActivityIds::default(),
+            PathBuf::from("/nonexistent"),
             requests,
         );
         (ctx, received)
@@ -320,6 +333,7 @@ mod tests {
             toml::Table::new(),
             Compositor::unsupported(),
             ActivityIds::default(),
+            PathBuf::from("/nonexistent"),
             requests,
         );
 
@@ -349,6 +363,7 @@ mod tests {
             toml::Table::new(),
             Compositor::unsupported(),
             ActivityIds::default(),
+            PathBuf::from("/nonexistent"),
             requests,
         );
         drop(events);

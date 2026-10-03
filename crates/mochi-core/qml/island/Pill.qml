@@ -106,9 +106,12 @@ Item {
                     height: root.height
 
                     // Under the view, so buttons inside the view get their
-                    // own clicks.
+                    // own clicks. It covers half the gap on each side, so no
+                    // spot in a group is dead.
                     MouseArea {
                         anchors.fill: parent
+                        anchors.leftMargin: -row.spacing / 2
+                        anchors.rightMargin: -row.spacing / 2
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             if (slot.bubble)

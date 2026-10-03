@@ -19,6 +19,7 @@ mochi-core.workspace = true
 mochi-module-demo = { workspace = true, optional = true }
 mochi-module-idle.workspace = true
 mochi-module-media.workspace = true
+mochi-module-notifications.workspace = true
 mochi-module-osd.workspace = true
 mochi-module-workspaces.workspace = true
 mochi-protocol.workspace = true

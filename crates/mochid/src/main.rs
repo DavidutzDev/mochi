@@ -89,6 +89,7 @@ fn builtin_modules() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_osd::Osd),
         Box::new(mochi_module_workspaces::Workspaces),
         Box::new(mochi_module_media::Media),
+        Box::new(mochi_module_notifications::Notifications),
     ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));
@@ -160,11 +161,20 @@ async fn run(args: Args) -> anyhow::Result<()> {
     let mut slots = Vec::new();
     for module in enabled {
         let id = module.id();
+        // Whatever a previous run left there is stale.
+        let data_dir = paths.data_dir(id);
+        if data_dir.exists() {
+            std::fs::remove_dir_all(&data_dir)
+                .with_context(|| format!("cannot empty {}", data_dir.display()))?;
+        }
+        std::fs::create_dir_all(&data_dir)
+            .with_context(|| format!("cannot create {}", data_dir.display()))?;
         let (ctx, events) = ModuleCtx::new(
             id,
             config.settings(id),
             compositor.clone(),
             ids.clone(),
+            data_dir,
             request_sender.clone(),
         );
         slots.push((

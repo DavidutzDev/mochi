@@ -80,6 +80,11 @@ impl Paths {
         self.runtime_dir.join("mochi.sock")
     }
 
+    /// A module's own files: [`crate::ModuleCtx::data_dir`].
+    pub fn data_dir(&self, module: &str) -> PathBuf {
+        self.runtime_dir.join("data").join(module)
+    }
+
     /// The generated QML tree Quickshell loads.
     pub fn shell_dir(&self) -> PathBuf {
         self.runtime_dir.join("shell")
