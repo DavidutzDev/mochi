@@ -50,17 +50,18 @@ mochi-shell/
 
 ## Spike (throwaway)
 
-Answers the risky questions before the framework depends on them.
+Answers the risky questions before the framework depends on them. Done: code in `spike/`, results in `docs/spike.md`.
 
-- [ ] Layer surface with a large transparent area and an input mask that follows the island item
-- [ ] Island resizes with springs to whatever content is loaded into it
-- [ ] Clicks outside the mask reach the windows underneath
-- [ ] Exclusive zone stays at the idle height while the island grows
-- [ ] Blur applies to the island only, using Hyprland layer rules (`ignorealpha`)
-- [ ] Morph: load the next view invisibly, read its implicit size, animate the container, then crossfade
-- [ ] A small Rust program spawns `quickshell -p <tmpfs dir>`, sends JSON lines over a socket and receives clicks back
-- [ ] Hot reload works when the shell tree is made of symlinks
-- [ ] Write down the findings in `docs/spike.md` and pin the Quickshell version
+- [x] Layer surface with a large transparent area and an input mask that follows the island item
+- [x] Island resizes with springs to whatever content is loaded into it
+- [x] Clicks outside the mask reach the windows underneath
+- [x] Exclusive zone stays at the idle height while the island grows
+- [x] Blur applies to the island only, using Hyprland layer rules (`ignore_alpha`)
+- [x] Morph: load the next view invisibly, read its implicit size, animate the container, then crossfade
+- [x] A small Rust program spawns `quickshell -p <tmpfs dir>`, sends JSON lines over a socket and receives clicks back
+- [x] Hot reload works when the shell tree is made of symlinks
+- [x] Write down the findings in `docs/spike.md` and pin the Quickshell version
+- [ ] Delete `spike/` once the real daemon and QML core replace it
 
 ## Protocol (`mochi-protocol`)
 
@@ -100,13 +101,15 @@ Asset writer
 - [ ] Rewrite a file only when its content hash changed, so restarts don't force a UI reload
 - [ ] Add and remove module directories at runtime when modules are enabled or disabled
 - [ ] Dev mode: symlink to the source `qml/` directories instead of copying
+- [ ] Generate `Modules.qml` at the shell root importing every enabled module, so Quickshell watches module files (see `docs/spike.md`)
+- [ ] Write through a temporary file and a rename, so Quickshell never reads a half-written file
 
 Supervisor
 - [ ] Spawn Quickshell with `-p <shell dir>` and `MOCHI_SOCKET` set
-- [ ] `PR_SET_PDEATHSIG` so Quickshell dies with `mochid`
+- [ ] `PR_SET_PDEATHSIG` so Quickshell dies with `mochid`, spawned from a dedicated thread that lives as long as the daemon (the signal follows the thread, not the process)
 - [ ] Pipe stdout and stderr into `tracing`
 - [ ] Restart with backoff, give up after 5 crashes in 30 seconds and log why
-- [ ] Restart if `hello` doesn't arrive within the handshake timeout
+- [ ] Restart if `hello` doesn't arrive within the handshake timeout, with SIGKILL (a hung process ignores SIGTERM)
 - [ ] Check the Quickshell version at startup
 - [ ] The same supervisor runs plugin backends
 
@@ -115,6 +118,7 @@ Supervisor
 - [ ] Entry point with flags: `--dev`, `--config`
 - [ ] Logging through `tracing`, readable in `journalctl --user -u mochid`
 - [ ] Socket server that accepts Quickshell, `mochi` and plugin connections
+- [ ] Claim the socket before writing assets, and refuse to start when another daemon is running
 - [ ] Clean shutdown on SIGTERM: dismiss everything, stop Quickshell and plugins
 - [ ] `systemd/mochid.service` with `Restart=on-failure`, bound to `graphical-session.target`
 
@@ -134,10 +138,25 @@ Supervisor
 
 - [ ] Socket client that reads `MOCHI_SOCKET` and reconnects
 - [ ] Island container: springs on width, height and radius, morph between views, input mask
-- [ ] One `Loader` per activity, loading `modules/<id>/<View>.qml`
+- [ ] Two loaders taking turns, loading views through `root:/modules/<id>/<View>.qml` URLs (plain file paths break singletons and hot reload)
+- [ ] Decide whether views are revealed from the center or anchored to the top edge during a morph
 - [ ] Fall back to the builtin view when a view fails to load
 - [ ] Theme singleton fed by the `theme` message
 - [ ] Forward hover, click and dismiss events to the daemon
+
+## Compositor support
+
+Mochi must work on any wlroots-style compositor (Hyprland, niri, mango, ...). Standard Wayland protocols come first, and compositor-specific code lives behind one adapter in the daemon.
+
+- [x] Blur through `ext-background-effect-v1`, no compositor rule needed (tested on Hyprland)
+- [ ] Check which protocols niri, mango and Sway support: `ext-background-effect-v1`, `ext-workspace-v1`, `wlr-layer-shell`
+- [ ] `Compositor` trait in the daemon: detection from the environment (`HYPRLAND_INSTANCE_SIGNATURE`, `NIRI_SOCKET`, ...), workspaces, focused output
+- [ ] Generic adapter on `ext-workspace-v1` for compositors that support it
+- [ ] Hyprland adapter (socket2 events, `hyprctl`)
+- [ ] niri adapter (`NIRI_SOCKET` JSON IPC)
+- [ ] mango adapter
+- [ ] Fallback for compositors without background effects: apply a runtime rule where possible (Hyprland `hyprctl eval`), otherwise `mochi setup <compositor>` prints the config snippet
+- [ ] `mochi status` shows the detected compositor and which features are active
 
 ## Modules
 
@@ -148,7 +167,7 @@ Supervisor
 
 ### Workspaces
 
-- [ ] Hyprland socket2 listener with reconnect
+- [ ] Workspace events from the compositor adapter, never from a compositor directly
 - [ ] Publish workspace state
 - [ ] Short compact activity on workspace switch
 - [ ] Multi-monitor behavior (see open questions)
@@ -200,8 +219,8 @@ Supervisor
 
 ## Integration and docs
 
-- [ ] Hyprland setup notes: `exec-once = systemctl --user start mochid`, environment import, keybind examples
-- [ ] Layer rules for blur
+- [ ] Hyprland setup notes for both config formats (Hyprland 0.56 uses Lua): starting `mochid`, environment import, keybind examples
+- [ ] Decide how the island and Waybar share the top edge, or whether Mochi replaces Waybar
 - [ ] Install instructions (cargo, and later a Nix package)
 - [ ] `docs/architecture.md`
 

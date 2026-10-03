@@ -40,6 +40,11 @@
               quickshell.packages.${system}.default
               # qmlls and qmlformat, built against the same Qt as Quickshell
               pkgs.kdePackages.qtdeclarative
+
+              # Visual checks: screenshots, recordings and real pointer events
+              pkgs.grim
+              pkgs.wlrctl
+              pkgs.wf-recorder
             ];
 
             RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
