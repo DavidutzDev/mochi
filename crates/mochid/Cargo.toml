@@ -23,6 +23,7 @@ mochi-module-launcher.workspace = true
 mochi-module-media.workspace = true
 mochi-module-notifications.workspace = true
 mochi-module-osd.workspace = true
+mochi-module-power.workspace = true
 mochi-module-workspaces.workspace = true
 mochi-protocol.workspace = true
 serde_json.workspace = true

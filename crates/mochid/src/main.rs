@@ -110,6 +110,7 @@ fn builtin_modules() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_notifications::Notifications),
         Box::new(mochi_module_launcher::Launcher),
         Box::new(mochi_module_hub::Hub),
+        Box::new(mochi_module_power::Power),
     ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));

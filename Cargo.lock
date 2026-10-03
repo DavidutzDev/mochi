@@ -662,6 +662,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-power"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "include_dir",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
 name = "mochi-module-workspaces"
 version = "0.1.0"
 dependencies = [
@@ -697,6 +711,7 @@ dependencies = [
  "mochi-module-media",
  "mochi-module-notifications",
  "mochi-module-osd",
+ "mochi-module-power",
  "mochi-module-workspaces",
  "mochi-protocol",
  "serde_json",

@@ -20,6 +20,7 @@ mochi-module-launcher = { path = "modules/launcher" }
 mochi-module-media = { path = "modules/media" }
 mochi-module-notifications = { path = "modules/notifications" }
 mochi-module-osd = { path = "modules/osd" }
+mochi-module-power = { path = "modules/power" }
 mochi-module-workspaces = { path = "modules/workspaces" }
 
 anyhow = "1"

@@ -338,7 +338,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] Cards: date and time (the hub's own), Now Playing (media, two columns, with progress and controls), the latest missed notifications. Page: the notification history
 - [x] The hub and the launcher close each other on open through `ctx.call`, ignoring `NotEnabled`
 - [x] Look: a page title (and `options.subtitle`), cards with an icon and title, a divider, and a navbar of icon pills like the workspace dots, the current one stretched into a white pill with its name
-- [x] `Symbol`: a built-in icon set in the core (home, bell, music, clock, grid, moon, volume, power) so contribution icons look the same everywhere; other names come from the icon theme
+- [x] `Symbol`: a built-in icon set in the core (home, bell, music, clock, grid, moon, volume, power, lock, logout, reboot, snow, chip, leaf, bolt, scale), filled or stroked, so contribution icons look the same everywhere; other names come from the icon theme
 - [x] Tested in a private D-Bus session: the three cards, the notifications page opened with `open notifications/history`, and the launcher replacing the hub
 - [ ] Cards spanning two rows, like the tall Now Playing tile in the inspiration
 - [ ] More cards and pages: audio devices and volumes, network, Bluetooth, power, system load
@@ -346,10 +346,17 @@ Listens only: it shows changes made anywhere and has no actions.
 
 ### Power
 
-- [ ] Shutdown, reboot and suspend through logind
-- [ ] Lock: choose between Quickshell `WlSessionLock` and handing off to hyprlock
-- [ ] Confirmation step in the expanded view
-- [ ] Actions: `mochi ipc power shutdown|reboot|suspend|lock`
+Lives only in the hub: no island view, a page and the CLI.
+
+- [x] logind over the system bus: `PowerOff`, `Reboot`, `Suspend`, `Hibernate`, and reboot to firmware through `SetRebootToFirmwareSetup`, all interactive so polkit can ask for a password. A button shows only when its `Can…` answer is `yes` or `challenge`
+- [x] Lock and log out act on the user's graphical session from `User.Display`, since a daemon often has no `XDG_SESSION_ID`: logind locks it (the locker answers), log out is `uwsm stop` under uwsm or ends the session. `lock` and `logout` settings replace either with a command
+- [x] Power profiles through power-profiles-daemon (`org.freedesktop.UPower.PowerProfiles`), the active one followed live; hidden when the service doesn't run
+- [x] Page: one tile per action, and a segmented control for profiles with the active one as a white pill. Log out, reboot, firmware and shut down need a second click within 3 seconds; acting closes the hub
+- [x] Actions: `lock`, `logout`, `suspend`, `hibernate`, `reboot`, `firmware`, `shutdown`, `profile <name>`
+- [x] Tested on this machine: hibernate hidden (logind says `na`), switching to performance and back from the CLI moves the selector, and two real clicks on Log out with a harmless replacement command (the first only asks)
+- [ ] The older `net.hadess.PowerProfiles` name, for power-profiles-daemon before 0.20
+- [ ] A lock screen of its own, if hyprlock and the others ever fall short (see open question 3)
+- [ ] Reboot into another OS, only once it can work with any bootloader and distro. Today no single way does: logind's one-shot boot loader entry only covers loaders that follow the Boot Loader Interface (systemd-boot), GRUB needs root to run `grub-reboot`, and the firmware's `BootNext` needs root too. Decided on 2026-10-03 to wait
 
 ## Plugins
 
@@ -393,8 +400,7 @@ Listens only: it shows changes made anywhere and has no actions.
 
 ## Suggested order
 
-Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, bubbles, and the OSD, workspaces, media, notifications, launcher and hub modules.
+Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, bubbles, and the OSD, workspaces, media, notifications, launcher, hub and power modules.
 
 1. Hub pages: audio, network, Bluetooth
-2. Power
-3. Plugins
+2. Plugins
