@@ -314,11 +314,17 @@ Listens only: it shows changes made anywhere and has no actions.
 
 ### Launcher
 
-- [ ] Index desktop entries and watch the directories for changes
-- [ ] Fuzzy search with `nucleo` in the daemon, results streamed to the UI
-- [ ] Keyboard focus on the layer surface
-- [ ] `mochi ipc launcher toggle`, bound in Hyprland
-- [ ] Launch through `systemd-run --user --scope` or `uwsm app` so apps aren't children of `mochid`
+- [x] Framework: `ActivitySpec::modal()`. A modal activity takes the keyboard (`Exclusive`, overlay layer) on the monitor its payload names, and the window covers the screen while it shows, so a click outside the island dismisses it on any compositor
+- [x] Desktop entries from `$XDG_DATA_HOME` and `$XDG_DATA_DIRS`, the first id winning, with `NoDisplay`, `Hidden`, `OnlyShowIn`, `NotShowIn` and `TryExec`, translations from the locale, and `[Desktop Action]` groups. Read again on every open, so new installs show up
+- [x] Search in the daemon with `nucleo-matcher`: the name counts most, then the generic name, keywords and program; actions match on their own name. Every keystroke is a `search`, and the view ignores answers for older queries
+- [x] Most used first: a score per app that grows by one per launch and halves every 30 days, saved to `$XDG_STATE_HOME/mochi/launcher.json`; it orders the empty list and boosts matches
+- [x] Starts apps through `uwsm app -- id.desktop[:action]` in a uwsm session, otherwise `systemd-run --user --scope` in `app.slice`, otherwise a detached process group; `Exec` field codes and quoting handled for the last two, terminal apps through `terminal` (default `xdg-terminal-exec`, or `$TERMINAL -e`)
+- [x] View like the screenshot: search box, up to seven rows with icon, name and description, the selection marked; arrows or Tab move, Enter starts, Escape closes, hover selects, click starts
+- [x] Actions: `toggle`, `open`, `close`, `search [query]`, `launch <id>`
+- [x] Tested on Hyprland: typing reaches the launcher, Enter starts a test app through uwsm and records it, it comes first next time, a click outside and Escape close, "private" finds Firefox's and Zen's private window actions
+- [ ] Keybind examples for Hyprland's Lua config and other compositors
+- [ ] Calculator and run-a-command results
+- [ ] Watch the application directories instead of reading them on every open, if opening ever feels slow
 
 ### Power
 
@@ -369,9 +375,8 @@ Listens only: it shows changes made anywhere and has no actions.
 
 ## Suggested order
 
-Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, bubbles, and the OSD, workspaces, media and notifications modules.
+Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, bubbles, and the OSD, workspaces, media, notifications and launcher modules.
 
 1. A Bluetooth module, the next bubble user
-2. Launcher
-3. Power
-4. Plugins
+2. Power
+3. Plugins

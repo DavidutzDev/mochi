@@ -32,7 +32,14 @@ PanelWindow {
         right: true
     }
 
-    implicitHeight: Theme.surfaceHeight
+    // A modal activity, like the launcher, takes the keyboard and catches
+    // every click so one outside the island can close it. Only the window
+    // on the activity's monitor does, when it names one: two surfaces asking
+    // for the keyboard would fight over it.
+    readonly property var activity: Daemon.activity
+    readonly property bool modal: (activity?.modal ?? false) && (activity.payload?.output == null || activity.payload.output === screen?.name)
+
+    implicitHeight: modal ? (screen?.height ?? Theme.surfaceHeight) : Theme.surfaceHeight
     color: "transparent"
 
     // Windows only make room for the idle island and the bubbles, so they
@@ -41,7 +48,8 @@ PanelWindow {
     exclusiveZone: Math.round(margin) + Theme.idleHeight
 
     WlrLayershell.namespace: "mochi-island"
-    WlrLayershell.layer: WlrLayer.Top
+    WlrLayershell.layer: modal ? WlrLayer.Overlay : WlrLayer.Top
+    WlrLayershell.keyboardFocus: modal ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     // Every pill on screen, for the regions below.
     property list<Item> pills
@@ -52,8 +60,23 @@ PanelWindow {
         pills = pills.filter(other => other !== pill);
     }
 
-    mask: Region {
+    mask: modal ? everywhere : shapes
+
+    property Region shapes: Region {
         regions: [root.islandMask, ...pillMasks.instances]
+    }
+
+    property Region everywhere: Region {
+        width: root.width
+        height: root.height
+    }
+
+    // Under everything: a click that misses the island while a modal
+    // activity shows closes it.
+    MouseArea {
+        anchors.fill: parent
+        enabled: root.modal
+        onClicked: Daemon.event("dismiss")
     }
 
     // Blur through ext-background-effect-v1. Compositors without the protocol

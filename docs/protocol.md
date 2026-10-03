@@ -116,6 +116,8 @@ Command arguments are always strings, as typed on the command line. The daemon c
 
 The UI loads `root:/modules/<module>/<view>.qml` and passes `payload` to it. `activity` is `null` only when no module has anything to show, not even the idle pill.
 
+`modal` is only present when `true`. A modal activity takes the keyboard while it's shown, for views you type into like the launcher, and the UI dismisses it on a click outside the island.
+
 `key` is only present when the module set one. A module uses it to replace its own activity, for example a volume OSD on every volume step. When the next `present` has the same `module`, `key` and `view` as the shown activity, the UI updates the view's `payload` in place instead of switching views, even though the `id` is new.
 
 ### Bubbles

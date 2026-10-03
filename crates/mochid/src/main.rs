@@ -90,6 +90,7 @@ fn builtin_modules() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_workspaces::Workspaces),
         Box::new(mochi_module_media::Media),
         Box::new(mochi_module_notifications::Notifications),
+        Box::new(mochi_module_launcher::Launcher),
     ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));

@@ -77,6 +77,9 @@ pub struct ActivitySpec {
     pub timeout: Option<Duration>,
     pub interruptible: bool,
     pub same_priority: SamePriority,
+    /// Takes the keyboard while shown; a click outside the island dismisses
+    /// it.
+    pub modal: bool,
 }
 
 impl ActivitySpec {
@@ -92,6 +95,7 @@ impl ActivitySpec {
             timeout: None,
             interruptible: true,
             same_priority: SamePriority::Queue,
+            modal: false,
         }
     }
 
@@ -130,6 +134,12 @@ impl ActivitySpec {
 
     pub fn uninterruptible(mut self) -> Self {
         self.interruptible = false;
+        self
+    }
+
+    /// For views that take typing, like a launcher.
+    pub fn modal(mut self) -> Self {
+        self.modal = true;
         self
     }
 
@@ -579,6 +589,7 @@ impl Entry {
             payload: self.spec.payload.clone(),
             expanded: self.expanded,
             expandable: self.expandable(),
+            modal: self.spec.modal,
             key: self.spec.key.clone(),
         }
     }

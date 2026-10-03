@@ -108,6 +108,10 @@ pub struct Activity {
     /// place instead of switching views.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
+    /// Takes the keyboard while shown, and a click anywhere outside the island
+    /// dismisses it. For views you type into, like a launcher.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub modal: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -193,6 +197,7 @@ mod tests {
             payload: json!({ "title": "Hello" }),
             expanded: false,
             expandable: true,
+            modal: false,
             key: None,
         }
     }
