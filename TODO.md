@@ -173,6 +173,36 @@ Mochi must work on any compositor that speaks the standard protocols (Hyprland, 
 - [ ] Keyboard layout, which has no standard protocol: per-compositor IPC (Hyprland first) behind the same handle
 - [ ] Fallback for compositors without background effects: apply a runtime rule where possible (Hyprland `hyprctl eval`), otherwise `mochi setup <compositor>` prints the config snippet
 
+## Layout
+
+Where the island sits and what shape it takes. Island mode floats it as a pill, `margin` away from the edge. Notch mode attaches it to the edge, like a MacBook notch: square where it meets the edge, with concave rounded corners ("ears") that flare into the edge, and round corners on the free side. Built on 2026-10-03, before bubbles, since the bubble shapes depend on it.
+
+Settings in `theme.toml`, applied by `mochi reload`:
+
+```toml
+[layout]
+mode = "island"     # or "notch"
+anchor = "top"      # top, bottom, top-left, top-right, bottom-left, bottom-right
+margin = 6          # gap to the edge in island mode; notch mode is always 0
+offset = 0          # pixels along the edge, away from the anchor's default position
+
+[layout.notch]
+ear_radius = 10
+```
+
+- [x] Theme: `mode`, `anchor`, `margin`, `offset` and `[layout.notch] ear_radius`; `top_margin` still reads as `margin`
+- [x] Layer surface on the top or bottom edge; the island grows away from the edge it's attached to
+- [x] `IslandShape`, one SVG path instead of the rounded `Rectangle`: worked out for the top edge and the left side, mirrored for the other anchors. A pill in island mode; in notch mode square on the attached edges, ears where it meets them, rounded free corners
+- [x] Corner anchors in notch mode touch both edges, with an ear along each and only the corner facing the screen round; with an offset they leave the side edge and get two ears along the main one
+- [x] Input mask and blur region follow the shape: per-corner radii, and for the blur each ear is a square with a circle subtracted (child regions use window coordinates, checked with a test shell)
+- [x] Exclusive zone on the attached edge: the idle island plus the margin, for every anchor, so the idle island never covers windows
+- [x] Switching mode on reload morphs: the island slides to the edge while its corners square off and the ears grow
+- [x] Views don't change, and the idle module still decides what idle shows
+- [x] Tested on Hyprland: top with an offset, bottom, both bottom corners, a corner with an offset, island and notch, the morph, expanding and collapsing by click
+- [ ] Switching the anchor jumps instead of moving, since the layer surface changes edge
+- [ ] Under another layer surface with an exclusive zone, like a bar, the notch attaches to that surface's edge, not the screen's. Matching the bar's color makes them look like one piece; a `[layout.notch] color` could help
+- [ ] Per-output layout once per-output islands exist
+
 ## Bubbles
 
 Small, long-lived status items beside the island, owned by modules: earbuds battery while they're connected, a microphone-in-use indicator, a running timer. Activities are short-lived and one at a time; bubbles last as long as their condition holds and several show side by side. Decided on 2026-10-03, to build after the workspaces module.
@@ -182,8 +212,9 @@ Small, long-lived status items beside the island, owned by modules: earbuds batt
 - [ ] Bubble manager next to the arbiter, pure and unit-tested: order by priority then age; a module may ask for left or right, otherwise the side with fewer bubbles
 - [ ] Overflow past the per-side maximum: the lowest priorities hide behind a "+N" bubble that lists them all in the island when clicked
 - [ ] Protocol: a `bubbles` snapshot message on every change; clicks in `event`, aimed at a bubble (both additions, API 1)
-- [ ] UI: a row on each side of the island in the same layer surface, sized from each view with the island's springs; bubbles slide outward as the island grows and only hide when the screen runs out of room; they appear out of and merge back into the island's edge
-- [ ] Input mask and blur region cover the island plus the bubbles
+- [ ] Notch mode: bubbles fuse into the notch as segments of one outline instead of floating pills. Bubbles are shorter than the island, so the outline steps between them with concave fillets, and the whole shape stays attached to the edge with its ears at the outer ends
+- [ ] Island mode: a row on each side of the island in the same layer surface, sized from each view with the island's springs; bubbles slide outward as the island grows and only hide when the screen runs out of room; they appear out of and merge back into the island's edge
+- [ ] Input mask and blur region cover the island plus the bubbles, in both layout modes
 - [ ] Config: maximum per side, bubbles off per module, a module's side forced
 - [ ] Plugin backends get the same calls through the protocol
 - [ ] First real user: a Bluetooth module (connected device battery from BlueZ over D-Bus)
@@ -306,14 +337,10 @@ Listens only: it shows changes made anywhere and has no actions.
 
 ## Suggested order
 
-Phase 1 (the framework, the idle module and packaging) is done.
+Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, and the OSD, workspaces and media modules.
 
-
-1. Spike
-2. Protocol, core, daemon, CLI and QML core, with the idle module as the first user
-3. Workspaces
-4. OSD
-5. Notifications
-6. Launcher
-7. Power
-8. Plugins
+1. Bubbles, with a Bluetooth module as the first user
+2. Notifications
+3. Launcher
+4. Power
+5. Plugins

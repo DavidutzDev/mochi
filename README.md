@@ -116,6 +116,15 @@ ignore = ["firefox"]   # players never shown
 [colors]
 accent = "#30d158"
 
+[layout]
+mode = "notch"     # "island" floats; "notch" attaches to the edge with curved corners
+anchor = "top"     # top, bottom, top-left, top-right, bottom-left, bottom-right
+margin = 6         # gap to the edge in island mode
+offset = 0         # shift along the edge
+
+[layout.notch]
+ear_radius = 10    # size of the curves that flare into the edge
+
 [motion]
 damping = 0.5
 ```

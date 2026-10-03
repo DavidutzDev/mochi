@@ -17,7 +17,7 @@ pub use messages::{
     Activity, ActivityId, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode, EventKind,
     Role, Status,
 };
-pub use theme::{Color, ColorError, Colors, Layout, Motion, Theme};
+pub use theme::{Anchor, Color, ColorError, Colors, Layout, Mode, Motion, Notch, Theme};
 
 /// The protocol version both sides announce in `hello`.
 pub const API: u32 = 1;

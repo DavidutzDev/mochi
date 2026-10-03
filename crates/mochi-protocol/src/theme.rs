@@ -35,12 +35,19 @@ impl Default for Colors {
     }
 }
 
-/// Sizes in logical pixels.
+/// Where the island sits and what shape it takes. Sizes in logical pixels.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Layout {
-    /// Gap between the screen edge and the island.
-    pub top_margin: u32,
+    pub mode: Mode,
+    pub anchor: Anchor,
+    /// Gap between the screen edges and the island in island mode. Notch
+    /// mode always touches the edge.
+    #[serde(alias = "top_margin")]
+    pub margin: u32,
+    /// Moves the island along its edge, away from where the anchor puts it:
+    /// right for `top` and `bottom`, away from the corner for the others.
+    pub offset: i32,
     /// Height of the idle island. Windows make room for this much.
     pub idle_height: u32,
     pub padding: u32,
@@ -49,17 +56,59 @@ pub struct Layout {
     /// Height of the transparent surface the island grows inside. Nothing
     /// can be taller than this.
     pub surface_height: u32,
+    pub notch: Notch,
 }
 
 impl Default for Layout {
     fn default() -> Self {
         Self {
-            top_margin: 6,
+            mode: Mode::Island,
+            anchor: Anchor::Top,
+            margin: 6,
+            offset: 0,
             idle_height: 34,
             padding: 14,
             max_radius: 26,
             surface_height: 640,
+            notch: Notch::default(),
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Mode {
+    /// Floats apart from the edge, rounded all around.
+    #[default]
+    Island,
+    /// Attached to the edge, with concave corners flaring into it.
+    Notch,
+}
+
+/// The screen edge or corner the island sits against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Anchor {
+    #[default]
+    Top,
+    Bottom,
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+/// Settings that only apply in notch mode.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Notch {
+    /// Radius of the concave corners where the notch meets the edge.
+    pub ear_radius: u32,
+}
+
+impl Default for Notch {
+    fn default() -> Self {
+        Self { ear_radius: 10 }
     }
 }
 
@@ -165,6 +214,23 @@ mod tests {
         assert_eq!(theme.motion.damping, 0.5);
         assert_eq!(theme.motion.spring, Motion::default().spring);
         assert_eq!(theme.layout, Layout::default());
+    }
+
+    #[test]
+    fn layout_reads_modes_anchors_and_the_old_margin_name() {
+        let theme: Theme = serde_json::from_str(
+            r#"{"layout":{"mode":"notch","anchor":"bottom-left","top_margin":4,"notch":{"ear_radius":8}}}"#,
+        )
+        .unwrap();
+        assert_eq!(theme.layout.mode, Mode::Notch);
+        assert_eq!(theme.layout.anchor, Anchor::BottomLeft);
+        assert_eq!(theme.layout.margin, 4);
+        assert_eq!(theme.layout.notch.ear_radius, 8);
+
+        let error = serde_json::from_str::<Theme>(r#"{"layout":{"anchor":"left"}}"#)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("left"), "{error}");
     }
 
     #[test]

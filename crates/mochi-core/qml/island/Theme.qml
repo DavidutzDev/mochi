@@ -15,7 +15,13 @@ Singleton {
     readonly property color muted: tokens?.colors.muted ?? "#98989f"
     readonly property color accent: tokens?.colors.accent ?? "#ff9f0a"
 
-    readonly property int topMargin: tokens?.layout.top_margin ?? 6
+    // "island" or "notch".
+    readonly property string mode: tokens?.layout.mode ?? "island"
+    // top, bottom, top-left, top-right, bottom-left or bottom-right.
+    readonly property string anchor: tokens?.layout.anchor ?? "top"
+    readonly property int margin: tokens?.layout.margin ?? 6
+    readonly property int offset: tokens?.layout.offset ?? 0
+    readonly property int earRadius: tokens?.layout.notch?.ear_radius ?? 10
     readonly property int idleHeight: tokens?.layout.idle_height ?? 34
     readonly property int padding: tokens?.layout.padding ?? 14
     readonly property int maxRadius: tokens?.layout.max_radius ?? 26

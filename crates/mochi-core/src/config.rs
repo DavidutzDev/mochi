@@ -193,11 +193,11 @@ fn check_theme(theme: &Theme) -> Result<(), String> {
     if layout.idle_height == 0 {
         return Err("layout.idle_height must be above 0".into());
     }
-    if layout.top_margin + layout.idle_height > layout.surface_height {
+    if layout.margin + layout.idle_height > layout.surface_height {
         return Err(format!(
-            "layout.surface_height ({}) must fit layout.top_margin + layout.idle_height ({})",
+            "layout.surface_height ({}) must fit layout.margin + layout.idle_height ({})",
             layout.surface_height,
-            layout.top_margin + layout.idle_height
+            layout.margin + layout.idle_height
         ));
     }
     Ok(())

@@ -16,7 +16,32 @@ Item {
     property var activity: null
     readonly property bool shown: activity !== null
 
-    readonly property real radius: Math.min(height / 2, Theme.maxRadius)
+    // Radius of the corners away from any edge.
+    readonly property real radius: Math.min(height / 2, width / 2, Theme.maxRadius)
+
+    // In notch mode the island touches the edge its anchor names, and the
+    // side edge too when it sits in a corner with no offset. Both animate, so
+    // switching modes morphs the shape.
+    readonly property bool atBottom: Theme.anchor.startsWith("bottom")
+    readonly property bool atRight: Theme.anchor.endsWith("right")
+    readonly property bool inCorner: Theme.anchor.includes("-")
+    property real attached: Theme.mode === "notch" ? 1 : 0
+    property real sideAttached: Theme.mode === "notch" && inCorner && Theme.offset === 0 ? 1 : 0
+    readonly property alias shape: shape
+
+    Behavior on attached {
+        NumberAnimation {
+            duration: 350
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    Behavior on sideAttached {
+        NumberAnimation {
+            duration: 350
+            easing.type: Easing.OutCubic
+        }
+    }
 
     property int front: 0
     readonly property Loader frontLoader: front === 0 ? first : second
@@ -107,9 +132,16 @@ Item {
 
     Component.onCompleted: present(Daemon.activity)
 
-    Rectangle {
+    IslandShape {
+        id: shape
+
         anchors.fill: parent
         radius: root.radius
+        attached: root.attached
+        sideAttached: root.sideAttached
+        earRadius: Theme.earRadius
+        flipX: root.atRight
+        flipY: root.atBottom
         color: Theme.background
     }
 
