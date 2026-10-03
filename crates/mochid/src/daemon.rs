@@ -9,15 +9,16 @@ use mochi_core::actions;
 use mochi_core::compositor::Compositor;
 use mochi_core::supervisor::{Supervisor, UiEvent};
 use mochi_core::{
-    Arbiter, Assets, Bubbles, Effect, ModuleCommand, ModuleError, ModuleEvent, ModuleRequest,
-    Request,
+    Arbiter, Assets, Bubbles, CallError, Effect, ModuleCommand, ModuleError, ModuleEvent,
+    ModuleRequest, Request,
 };
 use mochi_protocol::{
-    API, ActionSpec, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode, EventKind,
-    ModuleActions, Role, Status, Theme,
+    API, ActionSpec, ClientMessage, CompositorStatus, Contribution, DaemonMessage, ErrorCode,
+    EventKind, ModuleActions, Role, Status, Theme,
 };
 use serde_json::Value;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
+use tokio::sync::oneshot;
 use tokio::task::JoinError;
 
 use crate::ipc::{ConnectionEvent, ConnectionId};
@@ -32,8 +33,18 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub struct ModuleSlot {
     pub assets: Assets,
     pub actions: Vec<ActionSpec>,
+    pub contributions: Vec<Contribution>,
     /// `None` once the module's task has ended.
     pub events: Option<UnboundedSender<ModuleEvent>>,
+}
+
+/// Why a command never reached its module.
+#[derive(Debug)]
+enum Undelivered {
+    UnknownModule,
+    UnknownAction,
+    InvalidArgs(String),
+    NotRunning,
 }
 
 pub type ModuleExit = (&'static str, Result<Result<(), ModuleError>, JoinError>);
@@ -253,6 +264,12 @@ impl Daemon {
             self.handshake_deadline = None;
             let modules = self.order.iter().map(|id| (*id).to_owned()).collect();
             self.reply(id, DaemonMessage::Modules { modules });
+            let contributions = self
+                .order
+                .iter()
+                .flat_map(|module| self.modules[module].contributions.clone())
+                .collect();
+            self.reply(id, DaemonMessage::Contributions { contributions });
             let theme = self.theme.clone();
             self.reply(id, DaemonMessage::Theme { theme });
             for (module, state) in self.states.clone() {
@@ -265,35 +282,30 @@ impl Daemon {
     }
 
     fn on_command(&mut self, id: ConnectionId, module: &str, action: &str, args: &[String]) {
-        let Some(slot) = self.modules.get(module) else {
-            let enabled = self.order.join(", ");
-            let message = format!("no module {module:?} is enabled (enabled: {enabled})");
-            self.reply_error(id, ErrorCode::UnknownModule, message);
-            return;
-        };
-        let Some(spec) = slot.actions.iter().find(|spec| spec.name == action) else {
-            let message = format!("{module} has no action {action:?}, see `mochi ipc {module}`");
-            self.reply_error(id, ErrorCode::UnknownAction, message);
-            return;
-        };
-        let args = match actions::parse(spec, args) {
-            Ok(args) => args,
-            Err(error) => {
-                self.reply_error(id, ErrorCode::InvalidArgs, error.to_string());
+        let reply = match self.deliver(module, action, args) {
+            Ok(reply) => reply,
+            Err(undelivered) => {
+                let (code, message) = match undelivered {
+                    Undelivered::UnknownModule => {
+                        let enabled = self.order.join(", ");
+                        let message =
+                            format!("no module {module:?} is enabled (enabled: {enabled})");
+                        (ErrorCode::UnknownModule, message)
+                    }
+                    Undelivered::UnknownAction => {
+                        let message =
+                            format!("{module} has no action {action:?}, see `mochi ipc {module}`");
+                        (ErrorCode::UnknownAction, message)
+                    }
+                    Undelivered::InvalidArgs(message) => (ErrorCode::InvalidArgs, message),
+                    Undelivered::NotRunning => {
+                        (ErrorCode::ModuleFailed, format!("{module} is not running"))
+                    }
+                };
+                self.reply_error(id, code, message);
                 return;
             }
         };
-
-        let (command, reply) = ModuleCommand::new(action.to_owned(), args);
-        let delivered = slot
-            .events
-            .as_ref()
-            .is_some_and(|events| events.send(ModuleEvent::Command(command)).is_ok());
-        if !delivered {
-            let message = format!("{module} is not running");
-            self.reply_error(id, ErrorCode::ModuleFailed, message);
-            return;
-        }
 
         // Answer when the module does, without holding up the loop.
         let Some(sender) = self.clients.get(&id).map(|client| client.sender.clone()) else {
@@ -313,6 +325,76 @@ impl Daemon {
             };
             let _ = sender.send(answer);
         });
+    }
+
+    /// A module running another module's action.
+    fn on_call(
+        &self,
+        caller: &str,
+        module: &str,
+        action: &str,
+        args: &[String],
+        reply: oneshot::Sender<Result<(), CallError>>,
+    ) {
+        if caller == module {
+            let _ = reply.send(Err(CallError::Itself));
+            return;
+        }
+        let answer = match self.deliver(module, action, args) {
+            Ok(answer) => answer,
+            Err(undelivered) => {
+                let error = match undelivered {
+                    Undelivered::UnknownModule => CallError::NotEnabled(module.to_owned()),
+                    Undelivered::UnknownAction => CallError::UnknownAction {
+                        module: module.to_owned(),
+                        action: action.to_owned(),
+                    },
+                    Undelivered::InvalidArgs(message) => CallError::InvalidArgs(message),
+                    Undelivered::NotRunning => {
+                        CallError::Failed(format!("{module} is not running"))
+                    }
+                };
+                let _ = reply.send(Err(error));
+                return;
+            }
+        };
+        tokio::spawn(async move {
+            let result = match answer.await {
+                Ok(result) => result.map_err(CallError::Failed),
+                Err(_) => Err(CallError::Failed(
+                    "the module dropped the command without answering".into(),
+                )),
+            };
+            let _ = reply.send(result);
+        });
+    }
+
+    /// Checks a command against the module's actions and hands it over. The
+    /// receiver gets the module's answer.
+    fn deliver(
+        &self,
+        module: &str,
+        action: &str,
+        args: &[String],
+    ) -> Result<oneshot::Receiver<Result<(), String>>, Undelivered> {
+        let slot = self.modules.get(module).ok_or(Undelivered::UnknownModule)?;
+        let spec = slot
+            .actions
+            .iter()
+            .find(|spec| spec.name == action)
+            .ok_or(Undelivered::UnknownAction)?;
+        let args = actions::parse(spec, args)
+            .map_err(|error| Undelivered::InvalidArgs(error.to_string()))?;
+        let (command, reply) = ModuleCommand::new(action.to_owned(), args);
+        let delivered = slot
+            .events
+            .as_ref()
+            .is_some_and(|events| events.send(ModuleEvent::Command(command)).is_ok());
+        if delivered {
+            Ok(reply)
+        } else {
+            Err(Undelivered::NotRunning)
+        }
     }
 
     fn on_list_actions(&mut self, id: ConnectionId, module: Option<String>) {
@@ -392,6 +474,15 @@ impl Daemon {
                 .bubbles
                 .hide(module, id)
                 .map_err(|error| error.to_string()),
+            Request::Call {
+                module: target,
+                action,
+                args,
+                reply,
+            } => {
+                self.on_call(module, &target, &action, &args, reply);
+                return;
+            }
         };
         if let Err(error) = result {
             tracing::warn!(module, %error, "module request failed");

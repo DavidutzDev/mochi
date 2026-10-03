@@ -578,6 +578,19 @@ dependencies = [
  "mochi-core",
  "serde",
  "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "mochi-module-hub"
+version = "0.1.0"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -588,6 +601,8 @@ dependencies = [
  "mochi-core",
  "serde",
  "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -676,6 +691,7 @@ dependencies = [
  "libc",
  "mochi-core",
  "mochi-module-demo",
+ "mochi-module-hub",
  "mochi-module-idle",
  "mochi-module-launcher",
  "mochi-module-media",

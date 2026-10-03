@@ -1,15 +1,19 @@
 //! The idle island: a small clock that shows whenever nothing else does.
+//! Clicking it runs another module's action, the hub by default; nothing
+//! happens when that module isn't enabled.
 //!
 //! Settings in `config.toml`:
 //!
 //! ```toml
 //! [module.idle]
-//! format = "HH:mm"   # Qt time format
+//! format = "HH:mm"            # Qt time format
+//! click = ["hub", "toggle"]   # module, action, then its arguments; [] for nothing
 //! ```
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActivitySpec, Assets, BoxFuture, Module, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    ActivitySpec, Assets, BoxFuture, CallError, Module, ModuleCtx, ModuleError, ModuleEvent,
+    Priority,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -24,12 +28,15 @@ pub struct Idle;
 struct Settings {
     /// Qt time format, as used by `Qt.formatTime`.
     format: String,
+    /// What a click runs: a module, its action, then the arguments.
+    click: Vec<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             format: "HH:mm".into(),
+            click: vec!["hub".into(), "toggle".into()],
         }
     }
 }
@@ -65,7 +72,19 @@ impl Module for Idle {
                     ModuleEvent::Command(command) => {
                         command.reply(Err("idle has no actions".into()))
                     }
-                    ModuleEvent::Clicked(_) | ModuleEvent::BubbleClicked(_) => {}
+                    ModuleEvent::Clicked(_) => {
+                        if let [module, action, args @ ..] = settings.click.as_slice() {
+                            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+                            let call = ctx.call(module, action, &args);
+                            tokio::spawn(async move {
+                                match call.await {
+                                    Ok(()) | Err(CallError::NotEnabled(_)) => {}
+                                    Err(error) => tracing::warn!(%error, "the click action failed"),
+                                }
+                            });
+                        }
+                    }
+                    ModuleEvent::BubbleClicked(_) => {}
                 }
             }
             Ok(())

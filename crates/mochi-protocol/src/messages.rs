@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{Bubble, BubbleId, ModuleActions, Overflow, Theme};
+use crate::{Bubble, BubbleId, Contribution, ModuleActions, Overflow, Theme};
 
 /// Identifies one activity for its whole life, across the daemon and the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -67,6 +67,9 @@ pub enum DaemonMessage {
     /// The enabled modules. Sent to the UI after `hello` and when the list
     /// changes.
     Modules { modules: Vec<String> },
+    /// What modules offer each other, from every enabled module. Sent to the
+    /// UI after `hello`.
+    Contributions { contributions: Vec<Contribution> },
     /// The latest state a module published. Sent to the UI after `hello` for
     /// every module, then whenever it changes.
     State { module: String, state: Value },
@@ -245,6 +248,19 @@ mod tests {
             activity: Some(activity()),
         });
         round_trip_daemon(DaemonMessage::Present { activity: None });
+        round_trip_daemon(DaemonMessage::Contributions {
+            contributions: vec![Contribution {
+                module: "media".into(),
+                target: "hub".into(),
+                kind: "card".into(),
+                id: "now-playing".into(),
+                view: "Card".into(),
+                title: "Now playing".into(),
+                icon: None,
+                order: 10,
+                options: json!({ "span": 2 }),
+            }],
+        });
         round_trip_daemon(DaemonMessage::Bubbles {
             bubbles: vec![Bubble {
                 id: BubbleId(4),

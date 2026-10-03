@@ -11,6 +11,7 @@
 //! mochi ipc demo bubble bt right status  # joins the status pill there
 //! mochi ipc demo pop wifi                # removes that bubble
 //! mochi ipc demo clear                   # removes every demo activity and bubble
+//! mochi ipc demo call launcher open      # runs another module's action
 //! ```
 //!
 //! Clicking a demo bubble shows its name on the island.
@@ -85,6 +86,17 @@ impl Module for Demo {
             ActionSpec::new("pop", "Remove a bubble by name.")
                 .arg(ArgSpec::string("name", "The bubble's name")),
             ActionSpec::new("clear", "Remove every demo activity and bubble."),
+            ActionSpec::new(
+                "call",
+                "Run another module's action from this module, to try calls.",
+            )
+            .arg(ArgSpec::string("module", "The module to call"))
+            .arg(ArgSpec::string("action", "Its action"))
+            .arg(
+                ArgSpec::string("args", "The action's arguments")
+                    .optional()
+                    .rest(),
+            ),
         ]
     }
 
@@ -118,6 +130,21 @@ impl Module for Demo {
                     "alert" => Ok(view(&command.args).priority(Priority::HIGH)),
                     "stack" => Ok(view(&command.args).same_priority(SamePriority::Stack)),
                     "volume" => volume(&command.args),
+                    "call" => {
+                        let module = command.args.str("module").unwrap_or_default();
+                        let action = command.args.str("action").unwrap_or_default();
+                        let args: Vec<&str> = command
+                            .args
+                            .str("args")
+                            .map(|args| args.split_whitespace().collect())
+                            .unwrap_or_default();
+                        // Spawned: the called module may be slow, or call back.
+                        let call = ctx.call(module, action, &args);
+                        tokio::spawn(async move {
+                            command.reply(call.await.map_err(|error| error.to_string()));
+                        });
+                        continue;
+                    }
                     "bubble" => {
                         let name = command.args.str("name").unwrap_or_default().to_owned();
                         let id = ctx.show_bubble(bubble(&name, &command.args));

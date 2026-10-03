@@ -86,12 +86,13 @@ cargo test -p mochid --test record -- --ignored --nocapture
 
 | Module | What it does |
 |---|---|
-| `idle` | The clock shown when nothing else is. |
+| `idle` | The clock shown when nothing else is. Clicking it toggles the hub; `click = ["module", "action", ...]` under `[module.idle]` runs something else, `[]` nothing. |
 | `osd` | Shows volume, mute, output device switches, microphone mute, Caps Lock and Num Lock as they change, from any source. Needs pipewire-pulse or PulseAudio. |
 | `workspaces` | Shows a monitor's workspaces when you switch, when focus moves to it, when one asks for attention, or when they're created or removed. Click a dot to switch. Needs a compositor with `ext-workspace-v1`. |
 | `media` | Shows what's playing in any MPRIS player. A new track opens the island with the cover, progress and controls, then the music shrinks into a round bubble next to it: the cover with a progress ring. Click the bubble to bring the player back, use the buttons or click the bar to seek. `mochi ipc media play-pause`, `next`, `previous` and `seek <seconds>` do the same from a keybind. |
 | `notifications` | The notification daemon. Popups show a large app icon or picture, the app, the summary and the body; click one for the whole text and the app's buttons. A burst from one app shows only the latest (`same_app = "stack"` shows each in turn). Critical ones stay until closed. Missed ones go to a history behind a bell bubble next to the island. `mochi ipc notifications dnd toggle` turns do not disturb on and off, and `history`, `clear`, `dismiss` and `invoke` do the rest. If another notification daemon is running, Mochi waits and takes over when it stops. |
 | `launcher` | `mochi ipc launcher toggle` (bind it to a key) grows the island into a search over your apps: most used first, fuzzy search as you type, app actions like "New Private Window" when you search for them. Enter or a click starts the app through `uwsm app` or `systemd-run`; Escape or a click elsewhere closes it. |
+| `hub` | `mochi ipc hub toggle` grows the island into a wide panel: a home screen of cards, and pages in a navbar at the bottom. Other modules provide them: media a Now Playing card, notifications a card and a history page, the hub itself the date and time. |
 | `demo` | Test views and `mochi ipc demo` actions for trying the island. |
 
 ## Configuration

@@ -10,11 +10,13 @@
 
 mod actions;
 mod bubbles;
+mod contributions;
 mod messages;
 mod theme;
 
 pub use actions::{ActionSpec, ArgKind, ArgSpec, ModuleActions};
 pub use bubbles::{Area, Bubble, BubbleId, Overflow};
+pub use contributions::Contribution;
 pub use messages::{
     Activity, ActivityId, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode, EventKind,
     Role, Status,

@@ -9,6 +9,7 @@ pub mod arbiter;
 pub mod assets;
 pub mod bubbles;
 pub mod config;
+pub mod contributions;
 pub mod module;
 pub mod supervisor;
 
@@ -21,9 +22,10 @@ pub use actions::{ArgError, ArgValue, Args};
 pub use arbiter::{ActivitySpec, Arbiter, ArbiterError, Effect, EndReason, Priority, SamePriority};
 pub use bubbles::{BubbleError, BubbleSpec, Bubbles, Placement};
 pub use config::{BubblesConfig, Config, ConfigError, Paths};
+pub use contributions::ContributionSpec;
 pub use module::{
-    ActivityIds, Assets, BoxFuture, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent,
-    ModuleRequest, Request,
+    ActivityIds, Assets, BoxFuture, CallError, Module, ModuleCommand, ModuleCtx, ModuleError,
+    ModuleEvent, ModuleRequest, Request,
 };
 
 /// The core QML: `shell.qml` and the island. Modules add their views under

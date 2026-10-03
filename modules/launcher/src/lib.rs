@@ -26,8 +26,8 @@ use std::time::SystemTime;
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, Module, ModuleCommand,
-    ModuleCtx, ModuleError, ModuleEvent, Priority,
+    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, CallError, Module,
+    ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -164,6 +164,16 @@ impl State {
     }
 
     async fn open(&mut self, ctx: &ModuleCtx) {
+        // The hub also takes the keyboard; only one of them can be open. Not
+        // awaited: the hub closes the launcher the same way.
+        let close_hub = ctx.call("hub", "close", &[]);
+        tokio::spawn(async move {
+            match close_hub.await {
+                Ok(()) | Err(CallError::NotEnabled(_)) => {}
+                Err(error) => tracing::warn!(%error, "could not close the hub"),
+            }
+        });
+
         self.apps = read_apps().await;
         self.query.clear();
         let spec = ActivitySpec::new("Launcher")

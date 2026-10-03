@@ -84,6 +84,9 @@ Module API
 - [x] `Module` trait: `id`, `assets`, `actions`, `run(ctx)`. Each module runs as its own task and receives commands and activity events through its context, instead of `start` plus `handle_command` (an async `&mut self` method would make `Module` unusable as a trait object)
 - [x] `ModuleCtx`: `publish_state`, `present`, `update`, `withdraw`, typed `settings`, `next_event`
 - [x] `ModuleCtx::data_dir`: a per-module directory under the runtime directory, emptied at startup, for files views load
+- [x] Contributions: `Module::contributions()` declares what a module offers another (`target`, `kind`, `id`, `view`, `title`, `icon`, `order`, `options`); the daemon checks the views exist and sends them all to the UI in a `contributions` message. Unused when the target isn't enabled, which makes them soft dependencies
+- [x] `ModuleCtx::call(module, action, args)`: runs another module's action with the same checks as `mochi ipc`; `CallError::NotEnabled` when it isn't there, `Itself` for a module calling itself. The future doesn't borrow the context, so it can be spawned instead of awaited where two modules might call each other
+- [ ] Watching another module's published state from Rust, and module events, once a module needs them
 - [x] Action declarations with argument names and types (`string`, `int`, `float`, `bool`, `choice`, optional and rest arguments)
 - [x] Argument parsing and spec validation, with usage lines in errors
 - [x] Route `command` messages to modules (daemon, step 6)
@@ -249,6 +252,7 @@ wide = true         # the module's wide views with text, in pills
 
 - [x] Lowest-priority activity that never times out
 - [x] Clock or a simple pill as the first view
+- [x] A click runs another module's action through `ctx.call`: `click = ["hub", "toggle"]` by default, nothing when that module isn't enabled
 - [x] A `demo` module (Cargo feature, on by default) with test views and `show`, `alert`, `stack`, `volume`, `bubble`, `pop` and `clear` actions for trying the arbiter and bubbles
 
 ### Workspaces
@@ -326,6 +330,20 @@ Listens only: it shows changes made anywhere and has no actions.
 - [ ] Calculator and run-a-command results
 - [ ] Watch the application directories instead of reading them on every open, if opening ever feels slow
 
+### Hub
+
+- [x] A module, not part of the framework: `mochi ipc hub toggle|open [page]|close` grows the island into a modal panel, 880 px wide
+- [x] Home: cards from `target = "hub", kind = "card"` contributions in a three-column flow, `options.span` columns wide, with the title above each. Pages: `kind = "page"` contributions as tabs in the bottom navbar
+- [x] Contributed views get their module's published state as `payload`: media publishes the shown player, notifications its history and do not disturb
+- [x] Cards: date and time (the hub's own), Now Playing (media, two columns, with progress and controls), the latest missed notifications. Page: the notification history
+- [x] The hub and the launcher close each other on open through `ctx.call`, ignoring `NotEnabled`
+- [x] Look: a page title (and `options.subtitle`), cards with an icon and title, a divider, and a navbar of icon pills like the workspace dots, the current one stretched into a white pill with its name
+- [x] `Symbol`: a built-in icon set in the core (home, bell, music, clock, grid, moon, volume, power) so contribution icons look the same everywhere; other names come from the icon theme
+- [x] Tested in a private D-Bus session: the three cards, the notifications page opened with `open notifications/history`, and the launcher replacing the hub
+- [ ] Cards spanning two rows, like the tall Now Playing tile in the inspiration
+- [ ] More cards and pages: audio devices and volumes, network, Bluetooth, power, system load
+- [ ] Clicking a card opens its page
+
 ### Power
 
 - [ ] Shutdown, reboot and suspend through logind
@@ -375,8 +393,8 @@ Listens only: it shows changes made anywhere and has no actions.
 
 ## Suggested order
 
-Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, bubbles, and the OSD, workspaces, media, notifications and launcher modules.
+Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, bubbles, and the OSD, workspaces, media, notifications, launcher and hub modules.
 
-1. A Bluetooth module, the next bubble user
+1. Hub pages: audio, network, Bluetooth
 2. Power
 3. Plugins

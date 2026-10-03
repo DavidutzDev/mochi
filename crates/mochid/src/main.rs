@@ -81,6 +81,24 @@ fn init_logging() {
     }
 }
 
+/// What a module offers others, without the ones whose view it doesn't
+/// ship: those are bugs in the module, logged once here.
+fn contributions(module: &dyn Module) -> Vec<mochi_protocol::Contribution> {
+    let assets = module.assets();
+    module
+        .contributions()
+        .into_iter()
+        .filter(|spec| {
+            let found = assets.embedded.get_file(format!("{}.qml", spec.view)).is_some();
+            if !found {
+                tracing::error!(module = module.id(), view = %spec.view, "the module offers a view it doesn't have");
+            }
+            found
+        })
+        .map(|spec| spec.into_contribution(module.id()))
+        .collect()
+}
+
 /// Every module compiled into this binary.
 fn builtin_modules() -> Vec<Box<dyn Module>> {
     #[allow(unused_mut)]
@@ -91,6 +109,7 @@ fn builtin_modules() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_media::Media),
         Box::new(mochi_module_notifications::Notifications),
         Box::new(mochi_module_launcher::Launcher),
+        Box::new(mochi_module_hub::Hub),
     ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));
@@ -181,6 +200,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
         slots.push((
             id,
             ModuleSlot {
+                contributions: contributions(module.as_ref()),
                 assets: module.assets(),
                 actions: module.actions(),
                 events: Some(events),

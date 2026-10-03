@@ -29,6 +29,12 @@ fn ui_gets_the_full_state_after_hello() {
     );
     assert_eq!(
         ui.recv(),
+        DaemonMessage::Contributions {
+            contributions: Vec::new()
+        }
+    );
+    assert_eq!(
+        ui.recv(),
         DaemonMessage::Theme {
             theme: Theme::default()
         }
@@ -165,6 +171,77 @@ fn bubbles_reach_the_ui_and_clicks_reach_the_module() {
 }
 
 #[test]
+fn modules_offer_contributions_and_call_each_other() {
+    let daemon = Daemon::start("calls", "idle,demo,hub");
+    let mut ui = daemon.client(Role::Ui);
+    let mut ctl = daemon.client(Role::Ctl);
+
+    ui.recv();
+    let DaemonMessage::Contributions { contributions } = ui.recv() else {
+        panic!("expected contributions after the modules");
+    };
+    let offered: Vec<_> = contributions
+        .iter()
+        .map(|entry| {
+            (
+                entry.module.as_str(),
+                entry.target.as_str(),
+                entry.kind.as_str(),
+                entry.view.as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(offered, [("hub", "hub", "card", "Clock")]);
+    ui.next_present();
+
+    // The demo module calls the hub, which takes the keyboard.
+    assert_eq!(
+        ctl.command("demo", "call", &["hub", "open"]),
+        DaemonMessage::Ok
+    );
+    let hub = ui.next_present().unwrap();
+    assert_eq!(
+        (hub.module.as_str(), hub.view.as_str(), hub.modal),
+        ("hub", "Hub", true)
+    );
+
+    let failure = |message: DaemonMessage| match message {
+        DaemonMessage::Error { message, .. } => message,
+        other => panic!("expected an error, got {other:?}"),
+    };
+    assert!(failure(ctl.command("demo", "call", &["launcher", "open"])).contains("not enabled"));
+    assert!(failure(ctl.command("demo", "call", &["hub", "fly"])).contains("no action"));
+    assert!(failure(ctl.command("demo", "call", &["demo", "clear"])).contains("itself"));
+
+    assert_eq!(
+        ctl.command("demo", "call", &["hub", "close"]),
+        DaemonMessage::Ok
+    );
+    assert_eq!(shown(&ui.next_present()), Some(("idle", "Pill")));
+}
+
+#[test]
+fn clicking_the_idle_pill_toggles_the_hub() {
+    let daemon = Daemon::start("idle-click", "idle,hub");
+    let mut ui = daemon.client(Role::Ui);
+    let pill = ui.next_present().unwrap();
+
+    ui.send(&ClientMessage::Event {
+        activity: pill.id,
+        kind: EventKind::Click,
+    });
+    let hub = ui.next_present().unwrap();
+    assert_eq!((hub.module.as_str(), hub.view.as_str()), ("hub", "Hub"));
+
+    // A click outside closes it, and the pill is back.
+    ui.send(&ClientMessage::Event {
+        activity: hub.id,
+        kind: EventKind::Dismiss,
+    });
+    assert_eq!(shown(&ui.next_present()), Some(("idle", "Pill")));
+}
+
+#[test]
 fn bad_requests_get_specific_errors() {
     let daemon = Daemon::start("errors", "idle,demo");
     let mut ctl = daemon.client(Role::Ctl);
@@ -241,7 +318,9 @@ fn status_and_actions_describe_the_daemon() {
         .collect();
     assert_eq!(
         names,
-        ["show", "alert", "stack", "volume", "bubble", "pop", "clear"]
+        [
+            "show", "alert", "stack", "volume", "bubble", "pop", "clear", "call"
+        ]
     );
 }
 

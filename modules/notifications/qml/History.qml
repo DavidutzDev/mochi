@@ -8,7 +8,8 @@ Item {
 
     property var payload: ({})
     readonly property var notes: payload.notes ?? []
-    readonly property int shown: 5
+    // How many fit; the rest are counted.
+    property int shown: 5
 
     implicitWidth: 400
     implicitHeight: column.implicitHeight + Theme.padding * 2

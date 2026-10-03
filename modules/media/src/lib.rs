@@ -29,9 +29,10 @@ use std::time::{Duration, Instant};
 use include_dir::{Dir, include_dir};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Assets, BoxFuture, BubbleId, BubbleSpec,
-    Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    ContributionSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
+use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use zbus::Connection;
 
@@ -73,6 +74,15 @@ impl Module for Media {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn contributions(&self) -> Vec<ContributionSpec> {
+        vec![
+            ContributionSpec::new("hub", "card", "now-playing", "Card", "Now playing")
+                .icon("music")
+                .order(10)
+                .options(json!({ "span": 2 })),
+        ]
     }
 
     fn actions(&self) -> Vec<ActionSpec> {
@@ -120,9 +130,12 @@ impl Module for Media {
                         }
                     }
                     Some(update) = updates.recv() => {
-                        let Some(notice) = tracker.apply(update) else { continue };
-                        tracing::debug!(?notice, "media");
+                        let notice = tracker.apply(update);
                         let player = tracker.chosen().map(|(_, player)| player);
+                        // For views outside the island, like the hub's card.
+                        ctx.publish_state(player.map_or(Value::Null, notice::payload));
+                        let Some(notice) = notice else { continue };
+                        tracing::debug!(?notice, "media");
                         screen.apply(&ctx, &settings, notice, player);
                     }
                     () = sleep_until(screen.bubble_ends) => screen.hide_bubble(&ctx),

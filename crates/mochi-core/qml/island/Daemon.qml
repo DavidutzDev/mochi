@@ -18,6 +18,15 @@ Singleton {
     // Enabled module ids.
     property var modules: []
 
+    // What modules offer each other: [{module, target, kind, id, view,
+    // title, icon, order, options}].
+    property var contributions: []
+
+    // The contributions for one module, of one kind, in order.
+    function offered(target: string, kind: string): var {
+        return contributions.filter(entry => entry.target === target && entry.kind === kind).sort((a, b) => a.order - b.order);
+    }
+
     // Latest published state per module id. Replaced, never mutated, so
     // bindings on it update.
     property var states: ({})
@@ -77,6 +86,9 @@ Singleton {
             break;
         case "modules":
             modules = message.modules;
+            break;
+        case "contributions":
+            contributions = message.contributions;
             break;
         case "state": {
             const next = Object.assign({}, states);

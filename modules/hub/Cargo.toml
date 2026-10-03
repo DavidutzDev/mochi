@@ -1,6 +1,6 @@
 [package]
-name = "mochi-module-idle"
-description = "The idle island: a clock that shows whenever nothing else does"
+name = "mochi-module-hub"
+description = "A panel of cards and pages that other modules contribute"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

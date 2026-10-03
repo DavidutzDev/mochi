@@ -30,10 +30,11 @@ If the API versions differ, the daemon answers with an `unsupported_api` error a
 After the handshake, the daemon sends the UI everything it needs to draw, in this order:
 
 1. `modules`, the enabled modules.
-2. `theme`, the design tokens.
-3. One `state` per module that has published state.
-4. `present`, what the island shows now.
-5. `bubbles`, every bubble.
+2. `contributions`, what modules offer each other.
+3. `theme`, the design tokens.
+4. One `state` per module that has published state.
+5. `present`, what the island shows now.
+6. `bubbles`, every bubble.
 
 After that, the daemon pushes those messages again whenever they change. A reconnecting UI gets the full set again, so it never has to keep state across restarts.
 
@@ -86,6 +87,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 |---|---|---|
 | `hello` | `api`, `version` | everyone |
 | `modules` | `modules` | UI |
+| `contributions` | `contributions` | UI |
 | `state` | `module`, `state` (any JSON) | UI |
 | `present` | `activity` (object or `null`) | UI |
 | `bubbles` | `bubbles`, `overflow` (optional) | UI |
@@ -137,6 +139,21 @@ The UI loads `root:/modules/<module>/<view>.qml` and passes `payload` to it. `ac
 ```
 
 Consecutive bubbles in the same area with the same `group` share one pill. A bubble's view is small, about 26 pixels, and drawn in a circle, unless `wide` is `true`: then the user asked for the module's wide view, drawn in a pill. `key` and `group` are only present when set, and `wide` only when true. As with activities, a bubble with the same `module`, `key` and `view` as one already drawn continues it: the UI updates its payload in place. `overflow` names the areas that left bubbles out, and how many; it is left out when nothing was.
+
+### Contributions
+
+`contributions` lists what every enabled module offers other modules, like the hub's cards and pages. Modules declare them up front, so the list doesn't change while the daemon runs.
+
+```json
+{
+  "type": "contributions",
+  "contributions": [
+    {"module": "media", "target": "hub", "kind": "card", "id": "now-playing", "view": "Card", "title": "Now playing", "order": 10, "options": {"span": 2}}
+  ]
+}
+```
+
+`target` is the module meant to use it, and `kind` is one of the kinds that module takes. The target's view loads `root:/modules/<module>/<view>.qml` and passes it the offering module's latest `state` as `payload`. `icon` and `options` are only present when set. A contribution to a module that isn't enabled is simply unused.
 
 ### Action descriptions
 

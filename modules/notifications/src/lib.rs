@@ -39,7 +39,8 @@ use std::time::{Duration, SystemTime};
 use include_dir::{Dir, include_dir};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Assets, BoxFuture, BubbleId, BubbleSpec,
-    EndReason, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority, SamePriority,
+    ContributionSpec, EndReason, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent,
+    Priority, SamePriority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -93,6 +94,18 @@ impl Module for Notifications {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn contributions(&self) -> Vec<ContributionSpec> {
+        vec![
+            ContributionSpec::new("hub", "card", "missed", "Card", "Notifications")
+                .icon("bell")
+                .order(20)
+                .options(json!({ "span": 1 })),
+            ContributionSpec::new("hub", "page", "history", "Page", "Notifications")
+                .icon("bell")
+                .order(20),
+        ]
     }
 
     fn actions(&self) -> Vec<ActionSpec> {
@@ -168,6 +181,8 @@ struct Daemon {
     history_view: Option<ActivityId>,
     count_bubble: Option<(BubbleId, usize)>,
     dnd_bubble: Option<BubbleId>,
+    /// The state last published, so unchanged history isn't sent again.
+    published: Value,
 }
 
 impl Daemon {
@@ -183,6 +198,7 @@ impl Daemon {
             history_view: None,
             count_bubble: None,
             dnd_bubble: None,
+            published: Value::Null,
         }
     }
 
@@ -347,6 +363,14 @@ impl Daemon {
 
     /// Brings the bubbles and the history view in line with the center.
     fn sync(&mut self, ctx: &ModuleCtx) {
+        // The history and do not disturb, for views outside the island like
+        // the hub's card and page: the same shape the history view gets.
+        let state = self.history_payload();
+        if state != self.published {
+            ctx.publish_state(state.clone());
+            self.published = state;
+        }
+
         let count = self.center.history_len();
         match self.count_bubble {
             Some((_, shown)) if shown == count => {}

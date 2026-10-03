@@ -21,6 +21,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::actions::Args;
 use crate::arbiter::{ActivitySpec, EndReason};
 use crate::bubbles::BubbleSpec;
+use crate::contributions::ContributionSpec;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -36,6 +37,12 @@ pub trait Module: Send + 'static {
 
     /// The actions `mochi ipc <module> <action>` can run.
     fn actions(&self) -> Vec<ActionSpec> {
+        Vec::new()
+    }
+
+    /// What it offers other modules, like a page for the hub. Unused when
+    /// the module it's for isn't enabled.
+    fn contributions(&self) -> Vec<ContributionSpec> {
         Vec::new()
     }
 
@@ -87,12 +94,52 @@ pub struct ModuleRequest {
 #[derive(Debug)]
 pub enum Request {
     PublishState(Value),
-    Present { id: ActivityId, spec: ActivitySpec },
-    Update { id: ActivityId, payload: Value },
-    Withdraw { id: ActivityId },
-    ShowBubble { id: BubbleId, spec: BubbleSpec },
-    UpdateBubble { id: BubbleId, payload: Value },
-    HideBubble { id: BubbleId },
+    Present {
+        id: ActivityId,
+        spec: ActivitySpec,
+    },
+    Update {
+        id: ActivityId,
+        payload: Value,
+    },
+    Withdraw {
+        id: ActivityId,
+    },
+    ShowBubble {
+        id: BubbleId,
+        spec: BubbleSpec,
+    },
+    UpdateBubble {
+        id: BubbleId,
+        payload: Value,
+    },
+    HideBubble {
+        id: BubbleId,
+    },
+    /// Runs another module's action.
+    Call {
+        module: String,
+        action: String,
+        args: Vec<String>,
+        reply: oneshot::Sender<Result<(), CallError>>,
+    },
+}
+
+/// Why calling another module's action failed.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+pub enum CallError {
+    /// The module isn't enabled: the usual case for a soft dependency.
+    #[error("module {0:?} is not enabled")]
+    NotEnabled(String),
+    #[error("a module cannot call itself")]
+    Itself,
+    #[error("{module} has no action {action:?}")]
+    UnknownAction { module: String, action: String },
+    #[error("{0}")]
+    InvalidArgs(String),
+    /// The module ran the action and reported a failure, or isn't running.
+    #[error("{0}")]
+    Failed(String),
 }
 
 /// What the daemon tells a module.
@@ -237,6 +284,34 @@ impl ModuleCtx {
 
     pub fn hide_bubble(&self, id: BubbleId) {
         self.send(Request::HideBubble { id });
+    }
+
+    /// Runs another module's action, with the same checks as `mochi ipc`.
+    /// Fails with [`CallError::NotEnabled`] when that module isn't enabled,
+    /// so a module can use another one when it's there and carry on when it
+    /// isn't.
+    ///
+    /// The future doesn't borrow the context. Spawn it rather than awaiting
+    /// it inside the event loop when the other module might call back: each
+    /// would wait for the other.
+    pub fn call(
+        &self,
+        module: &str,
+        action: &str,
+        args: &[&str],
+    ) -> impl Future<Output = Result<(), CallError>> + Send + 'static {
+        let (reply, answer) = oneshot::channel();
+        self.send(Request::Call {
+            module: module.to_owned(),
+            action: action.to_owned(),
+            args: args.iter().map(|arg| (*arg).to_owned()).collect(),
+            reply,
+        });
+        async move {
+            answer
+                .await
+                .unwrap_or_else(|_| Err(CallError::Failed("the daemon stopped".into())))
+        }
     }
 
     /// The next command or activity event. `None` once the daemon is
