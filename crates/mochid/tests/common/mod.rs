@@ -12,7 +12,7 @@ use std::process::{Child, Command, ExitStatus, Stdio};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use mochi_protocol::{API, Activity, ClientMessage, DaemonMessage, Role};
+use mochi_protocol::{API, Activity, Bubble, ClientMessage, DaemonMessage, Role};
 
 const BINARY: &str = env!("CARGO_BIN_EXE_mochid");
 pub const TIMEOUT: Duration = Duration::from_secs(5);
@@ -206,6 +206,15 @@ impl Client {
         loop {
             if let DaemonMessage::Present { activity } = self.recv() {
                 return activity;
+            }
+        }
+    }
+
+    /// The next bubbles snapshot, skipping anything else.
+    pub fn next_bubbles(&mut self) -> Vec<Bubble> {
+        loop {
+            if let DaemonMessage::Bubbles { bubbles, .. } = self.recv() {
+                return bubbles;
             }
         }
     }

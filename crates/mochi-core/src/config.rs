@@ -11,6 +11,8 @@ use std::{env, fs, io};
 use mochi_protocol::Theme;
 use serde::Deserialize;
 
+use crate::bubbles::Placement;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
     #[error("{}: {source}", path.display())]
@@ -94,6 +96,38 @@ pub struct Config {
     /// Settings per module: `[module.<id>]`.
     #[serde(default)]
     pub module: BTreeMap<String, toml::Table>,
+    #[serde(default)]
+    pub bubbles: BubblesConfig,
+}
+
+/// `[bubbles]`: how many fit in an area, and where each module's bubbles go.
+///
+/// ```toml
+/// [bubbles]
+/// max_per_area = 4
+///
+/// [bubbles.media]     # any module id
+/// area = "left"
+/// group = "status"    # "" for a pill of its own
+/// order = 1
+/// wide = true         # the module's wide views with text, if it has them
+/// ```
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(default)]
+pub struct BubblesConfig {
+    /// Bubbles shown per area; the rest are counted instead.
+    pub max_per_area: usize,
+    #[serde(flatten)]
+    pub modules: BTreeMap<String, Placement>,
+}
+
+impl Default for BubblesConfig {
+    fn default() -> Self {
+        Self {
+            max_per_area: 4,
+            modules: BTreeMap::new(),
+        }
+    }
 }
 
 fn default_modules() -> Vec<String> {
@@ -105,6 +139,7 @@ impl Default for Config {
         Self {
             modules: default_modules(),
             module: BTreeMap::new(),
+            bubbles: BubblesConfig::default(),
         }
     }
 }
@@ -143,10 +178,16 @@ impl Config {
                 ));
             }
         }
-        for id in self.module.keys() {
+        for id in self.module.keys().chain(self.bubbles.modules.keys()) {
             if !available.contains(&id.as_str()) {
                 return Err(unknown(id));
             }
+        }
+        if self.bubbles.max_per_area == 0 {
+            return Err(ConfigError::invalid(
+                path,
+                "bubbles.max_per_area must be at least 1",
+            ));
         }
         Ok(())
     }
@@ -252,6 +293,43 @@ mod tests {
         );
         assert!(config.settings("idle").is_empty());
         config.check(AVAILABLE, path()).unwrap();
+    }
+
+    #[test]
+    fn bubble_placements_parse_and_name_known_modules() {
+        let config = Config::parse(
+            r#"
+            [bubbles]
+            max_per_area = 3
+
+            [bubbles.osd]
+            area = "left"
+            group = "status"
+            "#,
+            path(),
+        )
+        .unwrap();
+        assert_eq!(config.bubbles.max_per_area, 3);
+        assert_eq!(
+            config.bubbles.modules["osd"],
+            Placement {
+                area: Some(mochi_protocol::Area::Left),
+                group: Some("status".into()),
+                order: None,
+                wide: None,
+            }
+        );
+        config.check(AVAILABLE, path()).unwrap();
+
+        let unknown = Config::parse("[bubbles.radio]\narea = \"left\"", path()).unwrap();
+        let error = unknown.check(AVAILABLE, path()).unwrap_err().to_string();
+        assert!(error.contains("radio"), "{error}");
+
+        let typo = Config::parse("[bubbles.osd]\narae = \"left\"", path()).unwrap_err();
+        assert!(typo.to_string().contains("arae"), "{typo}");
+
+        let none = Config::parse("[bubbles]\nmax_per_area = 0", path()).unwrap();
+        assert!(none.check(AVAILABLE, path()).is_err());
     }
 
     #[test]

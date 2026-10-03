@@ -7,7 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 use common::{Client, Daemon, shown};
-use mochi_protocol::{ClientMessage, DaemonMessage, ErrorCode, EventKind, Role, Theme};
+use mochi_protocol::{Area, ClientMessage, DaemonMessage, ErrorCode, EventKind, Role, Theme};
 
 fn error_code(message: DaemonMessage) -> ErrorCode {
     match message {
@@ -104,6 +104,67 @@ fn keyed_activities_replace_and_time_out() {
 }
 
 #[test]
+fn bubbles_reach_the_ui_and_clicks_reach_the_module() {
+    let daemon = Daemon::start("bubbles", "idle,demo");
+    let mut ui = daemon.client(Role::Ui);
+    let mut ctl = daemon.client(Role::Ctl);
+    assert_eq!(ui.next_bubbles(), []);
+
+    ctl.command("demo", "bubble", &["wifi", "right"]);
+    ctl.command("demo", "bubble", &["bt", "left", "status"]);
+    // One snapshot per change, unless the daemon got both at once.
+    let bubbles = loop {
+        let bubbles = ui.next_bubbles();
+        if bubbles.len() == 2 {
+            break bubbles;
+        }
+    };
+    let placed: Vec<_> = bubbles
+        .iter()
+        .map(|bubble| {
+            (
+                bubble.payload["text"].as_str(),
+                bubble.area,
+                bubble.group.as_deref(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        placed,
+        [
+            (Some("bt"), Area::Left, Some("status")),
+            (Some("wifi"), Area::Right, None),
+        ]
+    );
+
+    // Showing a bubble again under the same name moves it, keeping its key.
+    ctl.command("demo", "bubble", &["wifi", "center-left"]);
+    let moved = ui.next_bubbles();
+    assert_eq!(
+        (moved[1].area, moved[1].key.as_deref()),
+        (Area::CenterLeft, Some("wifi"))
+    );
+
+    ui.send(&ClientMessage::BubbleClick {
+        bubble: moved[1].id,
+    });
+    let clicked = ui.next_present().unwrap();
+    assert_eq!(
+        clicked.payload,
+        serde_json::json!({ "text": "wifi clicked" })
+    );
+
+    ctl.command("demo", "pop", &["wifi"]);
+    assert_eq!(ui.next_bubbles().len(), 1);
+
+    // Only the UI clicks bubbles.
+    ctl.send(&ClientMessage::BubbleClick {
+        bubble: moved[0].id,
+    });
+    assert_eq!(error_code(ctl.recv()), ErrorCode::NotAllowed);
+}
+
+#[test]
 fn bad_requests_get_specific_errors() {
     let daemon = Daemon::start("errors", "idle,demo");
     let mut ctl = daemon.client(Role::Ctl);
@@ -178,7 +239,10 @@ fn status_and_actions_describe_the_daemon() {
         .iter()
         .map(|action| action.name.as_str())
         .collect();
-    assert_eq!(names, ["show", "alert", "stack", "volume", "clear"]);
+    assert_eq!(
+        names,
+        ["show", "alert", "stack", "volume", "bubble", "pop", "clear"]
+    );
 }
 
 #[test]

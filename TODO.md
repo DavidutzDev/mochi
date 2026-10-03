@@ -182,42 +182,65 @@ Settings in `theme.toml`, applied by `mochi reload`:
 ```toml
 [layout]
 mode = "island"     # or "notch"
-anchor = "top"      # top, bottom, top-left, top-right, bottom-left, bottom-right
-margin = 6          # gap to the edge in island mode; notch mode is always 0
-offset = 0          # pixels along the edge, away from the anchor's default position
+anchor = "top"      # or "bottom"
+island = "center"   # the area the island sits in, see Bubbles
+margin = 6          # gap to the edges in island mode; notch mode is always 0
+spacing = 8         # gap between the island and pills, and between areas
 
 [layout.notch]
 ear_radius = 10
 ```
 
-- [x] Theme: `mode`, `anchor`, `margin`, `offset` and `[layout.notch] ear_radius`; `top_margin` still reads as `margin`
+- [x] Theme: `mode`, `anchor`, `island`, `margin`, `spacing` and `[layout.notch] ear_radius`; `top_margin` still reads as `margin`
 - [x] Layer surface on the top or bottom edge; the island grows away from the edge it's attached to
 - [x] `IslandShape`, one SVG path instead of the rounded `Rectangle`: worked out for the top edge and the left side, mirrored for the other anchors. A pill in island mode; in notch mode square on the attached edges, ears where it meets them, rounded free corners
-- [x] Corner anchors in notch mode touch both edges, with an ear along each and only the corner facing the screen round; with an offset they leave the side edge and get two ears along the main one
+- [x] In notch mode, the outermost shape of the left and right areas touches both edges, with an ear along each and only the corner facing the screen round. The corner anchors and `offset` from the first version became `island = "left"` or `"right"` once the five areas existed
 - [x] Input mask and blur region follow the shape: per-corner radii, and for the blur each ear is a square with a circle subtracted (child regions use window coordinates, checked with a test shell)
 - [x] Exclusive zone on the attached edge: the idle island plus the margin, for every anchor, so the idle island never covers windows
 - [x] Switching mode on reload morphs: the island slides to the edge while its corners square off and the ears grow
 - [x] Views don't change, and the idle module still decides what idle shows
-- [x] Tested on Hyprland: top with an offset, bottom, both bottom corners, a corner with an offset, island and notch, the morph, expanding and collapsing by click
+- [x] Tested on Hyprland: top, bottom, both bottom corners, island and notch, the morph, expanding and collapsing by click
 - [ ] Switching the anchor jumps instead of moving, since the layer surface changes edge
 - [ ] Under another layer surface with an exclusive zone, like a bar, the notch attaches to that surface's edge, not the screen's. Matching the bar's color makes them look like one piece; a `[layout.notch] color` could help
 - [ ] Per-output layout once per-output islands exist
 
 ## Bubbles
 
-Small, long-lived status items beside the island, owned by modules: earbuds battery while they're connected, a microphone-in-use indicator, a running timer. Activities are short-lived and one at a time; bubbles last as long as their condition holds and several show side by side. Decided on 2026-10-03, to build after the workspaces module.
+Small, long-lived status items owned by modules: music while it plays, earbuds battery while they're connected, a microphone-in-use indicator, a running timer. Activities are short-lived and one at a time; bubbles last as long as their condition holds and several show at once. Built on 2026-10-03.
 
-- [ ] `ModuleCtx`: `show_bubble(spec)`, `update_bubble(id, payload)`, `hide_bubble(id)`; spec with `key`, view, payload, priority, optional side
-- [ ] Clicks reach the module as an event; the usual answer is presenting an expanded activity in the island
-- [ ] Bubble manager next to the arbiter, pure and unit-tested: order by priority then age; a module may ask for left or right, otherwise the side with fewer bubbles
-- [ ] Overflow past the per-side maximum: the lowest priorities hide behind a "+N" bubble that lists them all in the island when clicked
-- [ ] Protocol: a `bubbles` snapshot message on every change; clicks in `event`, aimed at a bubble (both additions, API 1)
-- [ ] Notch mode: bubbles fuse into the notch as segments of one outline instead of floating pills. Bubbles are shorter than the island, so the outline steps between them with concave fillets, and the whole shape stays attached to the edge with its ears at the outer ends
-- [ ] Island mode: a row on each side of the island in the same layer surface, sized from each view with the island's springs; bubbles slide outward as the island grows and only hide when the screen runs out of room; they appear out of and merge back into the island's edge
-- [ ] Input mask and blur region cover the island plus the bubbles, in both layout modes
-- [ ] Config: maximum per side, bubbles off per module, a module's side forced
+The edge has five areas, from left to right: `left`, `center-left`, `center`, `center-right` and `right`. The side areas sit against the screen's sides with the margin; the center ones hug whatever is in the center, or meet in the middle when it's empty. The island sits in one area (`[layout] island`, `center` by default): at the screen edge in `left` and `right`, next to the center in `center-left` and `center-right`.
+
+```toml
+# config.toml
+[bubbles]
+max_per_area = 4
+
+[bubbles.media]     # any module id: overrides what the module chose
+area = "left"
+group = "status"    # bubbles with the same group in an area share a pill; "" for its own
+order = 1           # lower goes further left
+wide = true         # the module's wide views with text, in pills
+```
+
+- [x] `ModuleCtx`: `show_bubble(spec)`, `update_bubble(id, payload)`, `hide_bubble(id)`; `BubbleSpec` with `key`, view, payload, area, group, order and priority. The module picks all of them
+- [x] Small by default: a bubble's view fits about 26 pixels and sits in a circle, and a group of them shares a capsule. A module can add a wide view with text, which the user turns on with `wide = true` and which shows in a pill. Media's small view is the cover with a progress ring; its wide one has the title and bars
+- [x] Clicks reach the module as `ModuleEvent::BubbleClicked`; media answers by putting the player back on the island
+- [x] `Bubbles` board next to the arbiter, pure and unit-tested: the user's `[bubbles.<module>]` placement wins over the module's, areas sort by order, then priority, then age, and a group takes the place of its first member with the rest following it
+- [x] Keyed bubbles replace in place and keep their spot; the UI keeps their view and updates the payload
+- [x] Overflow: past `max_per_area`, an area leaves out its lowest priorities and shows a "+N" pill
+- [x] Protocol: a `bubbles` snapshot after `hello` and on every change, `bubble_click` from the UI (both additions, API 1)
+- [x] UI: five rows in the island's layer surface. Pills have the island's shape, so notch mode attaches them to the edge with ears, and the outermost pill of a side area curves into the screen corner. The island's slot takes its animated size, so pills slide outward as it grows. New pills grow in
+- [x] Input mask and blur region cover the island and every pill
+- [x] Demo actions `bubble <name> <area> [group]` and `pop <name>`; clicking a demo bubble names it on the island
+- [x] Tested on Hyprland: every area, a group, a click through the input mask, the island pushing pills, notch mode, the island in the left area, overflow with a maximum of 2
+- [ ] Clicking "+N" lists the hidden bubbles in the island
+- [ ] Pills leave instantly; give them an exit animation, and slide the others instead of jumping when one comes or goes
+- [ ] Notch mode: fuse adjacent pills and the island into one outline instead of separate tabs whose ears overlap
+- [ ] Placement per bubble key, not only per module, for modules with several bubbles
+- [ ] Bubbles off per module
+- [ ] `mochi reload` applying `[bubbles]` changes
 - [ ] Plugin backends get the same calls through the protocol
-- [ ] First real user: a Bluetooth module (connected device battery from BlueZ over D-Bus)
+- [ ] First real user beyond media: a Bluetooth module (connected device battery from BlueZ over D-Bus)
 
 ## Modules
 
@@ -225,7 +248,7 @@ Small, long-lived status items beside the island, owned by modules: earbuds batt
 
 - [x] Lowest-priority activity that never times out
 - [x] Clock or a simple pill as the first view
-- [x] A `demo` module (Cargo feature, on by default) with test views and `show`, `alert`, `stack`, `volume` and `clear` actions for trying the arbiter
+- [x] A `demo` module (Cargo feature, on by default) with test views and `show`, `alert`, `stack`, `volume`, `bubble`, `pop` and `clear` actions for trying the arbiter and bubbles
 
 ### Workspaces
 
@@ -262,13 +285,12 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] MPRIS players over zbus: one task follows which players come and go, one task per player reads all its properties again after every change and every seek
 - [x] One player per process, so VLC's two bus names show once; playerctld is skipped because it mirrors other players
 - [x] The most recently active player wins (last to start playing or change track while playing), and a playing player always beats a paused one; `ignore` hides players by bus name or by the name they give themselves
-- [x] Compact view at low priority while playing: cover, title, bouncing bars. A pause dims it and leaves after `paused_ms`
+- [x] A new track takes the island: the expanded view for `expand_ms`, then the compact view for `island_ms`; then the island goes back to what it showed and the music becomes a bubble (cover, title, bars) in `center-left`. Clicking the bubble puts the player back on the island. A pause dims the bubble, which leaves after `paused_ms`
 - [x] A track change opens the expanded view for `expand_ms` (the `expand_for` arbiter option): cover, player, title, artist, progress, previous, play or pause, next
 - [x] Progress moves in QML from the position and the time it was read, so it stays right when the activity comes back after an interruption
 - [x] Click or drag the bar to seek (`SetPosition` with the track id, or a relative `Seek` without one)
 - [x] Actions: `play-pause`, `play`, `pause`, `next`, `previous`, `seek <seconds>`
 - [x] Tested live with VLC: track changes, pause and resume, seek from the CLI and the bar, the buttons, the player quitting
-- [ ] A media bubble once bubbles exist, so music stays visible beside other activities
 - [ ] Volume per player
 
 ### Notifications
@@ -337,9 +359,9 @@ Listens only: it shows changes made anywhere and has no actions.
 
 ## Suggested order
 
-Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, and the OSD, workspaces and media modules.
+Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, bubbles, and the OSD, workspaces and media modules.
 
-1. Bubbles, with a Bluetooth module as the first user
+1. A Bluetooth module, the next bubble user
 2. Notifications
 3. Launcher
 4. Power

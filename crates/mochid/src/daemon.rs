@@ -1,5 +1,5 @@
-//! The daemon loop. It owns the arbiter, the module slots and the
-//! connections, and is the only place any of them change.
+//! The daemon loop. It owns the arbiter, the bubbles, the module slots and
+//! the connections, and is the only place any of them change.
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -9,7 +9,8 @@ use mochi_core::actions;
 use mochi_core::compositor::Compositor;
 use mochi_core::supervisor::{Supervisor, UiEvent};
 use mochi_core::{
-    Arbiter, Assets, Effect, ModuleCommand, ModuleError, ModuleEvent, ModuleRequest, Request,
+    Arbiter, Assets, Bubbles, Effect, ModuleCommand, ModuleError, ModuleEvent, ModuleRequest,
+    Request,
 };
 use mochi_protocol::{
     API, ActionSpec, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode, EventKind,
@@ -59,6 +60,7 @@ pub struct Daemon {
     modules: BTreeMap<&'static str, ModuleSlot>,
     states: BTreeMap<String, Value>,
     arbiter: Arbiter,
+    bubbles: Bubbles,
     clients: HashMap<ConnectionId, Client>,
     theme: Theme,
     theme_file: PathBuf,
@@ -70,6 +72,7 @@ pub struct Daemon {
 impl Daemon {
     pub fn new(
         modules: Vec<(&'static str, ModuleSlot)>,
+        bubbles: Bubbles,
         theme: Theme,
         theme_file: PathBuf,
         supervisor: Supervisor,
@@ -80,6 +83,7 @@ impl Daemon {
             modules: modules.into_iter().collect(),
             states: BTreeMap::new(),
             arbiter: Arbiter::new(),
+            bubbles,
             clients: HashMap::new(),
             theme,
             theme_file,
@@ -191,7 +195,14 @@ impl Daemon {
                     EventKind::Dismiss => self.arbiter.dismiss(activity, now),
                 }
             }
-            (Some(_), ClientMessage::Event { .. }) => {
+            (Some(Role::Ui), ClientMessage::BubbleClick { bubble }) => {
+                // Clicks on a bubble that just went away are dropped.
+                if let Some(module) = self.bubbles.owner(bubble) {
+                    let module = module.to_owned();
+                    self.notify(&module, ModuleEvent::BubbleClicked(bubble));
+                }
+            }
+            (Some(_), ClientMessage::Event { .. } | ClientMessage::BubbleClick { .. }) => {
                 self.reply_error(id, ErrorCode::NotAllowed, "only the ui sends events");
             }
             (
@@ -249,6 +260,7 @@ impl Daemon {
             }
             let activity = self.arbiter.shown();
             self.reply(id, DaemonMessage::Present { activity });
+            self.reply(id, self.bubbles_message());
         }
     }
 
@@ -351,27 +363,54 @@ impl Daemon {
                 Ok(())
             }
             Request::Present { id, spec } => {
-                let assets = self.modules[module].assets;
                 let views = std::iter::once(&spec.compact).chain(spec.expanded.as_ref());
-                match views
-                    .into_iter()
-                    .find(|view| assets.embedded.get_file(format!("{view}.qml")).is_none())
-                {
-                    Some(missing) => {
-                        tracing::error!(module, view = %missing, "the module has no such view");
-                        return;
-                    }
-                    None => {
-                        self.arbiter.submit(id, module, spec, now);
-                        Ok(())
-                    }
+                if !self.has_views(module, views) {
+                    return;
                 }
+                self.arbiter.submit(id, module, spec, now);
+                Ok(())
             }
-            Request::Update { id, payload } => self.arbiter.update(module, id, payload),
-            Request::Withdraw { id } => self.arbiter.withdraw(module, id, now),
+            Request::Update { id, payload } => self
+                .arbiter
+                .update(module, id, payload)
+                .map_err(|error| error.to_string()),
+            Request::Withdraw { id } => self
+                .arbiter
+                .withdraw(module, id, now)
+                .map_err(|error| error.to_string()),
+            Request::ShowBubble { id, spec } => {
+                if self.has_views(module, std::iter::once(&spec.view).chain(&spec.wide)) {
+                    self.bubbles.show(id, module, spec);
+                }
+                return;
+            }
+            Request::UpdateBubble { id, payload } => self
+                .bubbles
+                .update(module, id, payload)
+                .map_err(|error| error.to_string()),
+            Request::HideBubble { id } => self
+                .bubbles
+                .hide(module, id)
+                .map_err(|error| error.to_string()),
         };
         if let Err(error) = result {
             tracing::warn!(module, %error, "module request failed");
+        }
+    }
+
+    /// Whether the module ships every view it names. A missing one is a bug
+    /// in the module, logged instead of shown.
+    fn has_views<'a>(&self, module: &str, views: impl IntoIterator<Item = &'a String>) -> bool {
+        let assets = self.modules[module].assets;
+        match views
+            .into_iter()
+            .find(|view| assets.embedded.get_file(format!("{view}.qml")).is_none())
+        {
+            Some(missing) => {
+                tracing::error!(module, view = %missing, "the module has no such view");
+                false
+            }
+            None => true,
         }
     }
 
@@ -389,6 +428,7 @@ impl Daemon {
             slot.events = None;
         }
         self.arbiter.withdraw_all(module, Instant::now());
+        self.bubbles.hide_all(module);
     }
 
     fn on_ui_process(&mut self, event: UiEvent) {
@@ -404,6 +444,9 @@ impl Daemon {
     }
 
     fn apply_effects(&mut self) {
+        if self.bubbles.take_changed() {
+            self.broadcast(&self.bubbles_message());
+        }
         for effect in self.arbiter.take_effects() {
             match effect {
                 Effect::Present(activity) => {
@@ -432,6 +475,11 @@ impl Daemon {
         {
             let _ = events.send(event);
         }
+    }
+
+    fn bubbles_message(&self) -> DaemonMessage {
+        let (bubbles, overflow) = self.bubbles.snapshot();
+        DaemonMessage::Bubbles { bubbles, overflow }
     }
 
     fn compositor_status(&self) -> CompositorStatus {

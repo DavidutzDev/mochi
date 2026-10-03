@@ -8,19 +8,8 @@ Item {
 
     property var payload: ({})
     readonly property bool playing: payload.status === "playing"
-    readonly property real length: payload.length_ms ?? 0
-
-    // The daemon sends the position as it was at `read_at_ms`; the view moves
-    // it on while playing.
-    property real now: Date.now()
-    readonly property real position: {
-        if (payload.position_ms == null)
-            return 0;
-        let position = payload.position_ms;
-        if (playing)
-            position += (now - payload.read_at_ms) * (payload.rate ?? 1);
-        return Math.max(0, length > 0 ? Math.min(position, length) : position);
-    }
+    readonly property real length: clock.length
+    readonly property real position: clock.position
 
     // Where the pointer seeks to, or -1. It holds until the player reports
     // the new position.
@@ -28,7 +17,6 @@ Item {
     readonly property real shownPosition: seeking >= 0 ? seeking : position
 
     onPayloadChanged: {
-        now = Date.now();
         if (!bar.pressed)
             seeking = -1;
     }
@@ -36,11 +24,10 @@ Item {
     implicitWidth: 380
     implicitHeight: column.implicitHeight + Theme.padding * 2
 
-    Timer {
-        interval: 500
-        repeat: true
-        running: root.playing
-        onTriggered: root.now = Date.now()
+    Position {
+        id: clock
+
+        payload: root.payload
     }
 
     function time(milliseconds: real): string {

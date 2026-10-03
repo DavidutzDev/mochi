@@ -10,7 +10,7 @@ publish.workspace = true
 [dependencies]
 serde_json.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["io-util", "net", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "sync", "time"] }
 tracing.workspace = true
 wayland-client.workspace = true
 wayland-protocols.workspace = true

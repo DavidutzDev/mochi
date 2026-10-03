@@ -7,6 +7,7 @@
 pub mod actions;
 pub mod arbiter;
 pub mod assets;
+pub mod bubbles;
 pub mod config;
 pub mod module;
 pub mod supervisor;
@@ -14,11 +15,12 @@ pub mod supervisor;
 // Protocol types modules need, so a module only depends on this crate.
 /// Compositor state and actions, from [`ModuleCtx::compositor`].
 pub use mochi_compositor as compositor;
-pub use mochi_protocol::{ActionSpec, ActivityId, ArgSpec};
+pub use mochi_protocol::{ActionSpec, ActivityId, Area, ArgSpec, BubbleId};
 
 pub use actions::{ArgError, ArgValue, Args};
 pub use arbiter::{ActivitySpec, Arbiter, ArbiterError, Effect, EndReason, Priority, SamePriority};
-pub use config::{Config, ConfigError, Paths};
+pub use bubbles::{BubbleError, BubbleSpec, Bubbles, Placement};
+pub use config::{BubblesConfig, Config, ConfigError, Paths};
 pub use module::{
     ActivityIds, Assets, BoxFuture, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent,
     ModuleRequest, Request,

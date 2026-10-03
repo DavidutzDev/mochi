@@ -25,6 +25,12 @@ Singleton {
     // {id, module, view, payload, expanded, expandable}, or null.
     property var activity: null
 
+    // Every bubble in drawing order: [{id, module, key, view, payload, area,
+    // group}]. Consecutive bubbles with the same area and group share a pill.
+    property var bubbles: []
+    // [{area, hidden}] for areas with more bubbles than fit.
+    property var overflow: []
+
     // Design tokens from theme.toml, or null until the daemon sends them.
     property var theme: null
 
@@ -36,6 +42,10 @@ Singleton {
     function event(kind: string): void {
         if (activity)
             send({ type: "event", activity: activity.id, kind: kind });
+    }
+
+    function bubbleClick(id: int): void {
+        send({ type: "bubble_click", bubble: id });
     }
 
     // Runs a module action, for example from a button in a view.
@@ -76,6 +86,10 @@ Singleton {
         }
         case "present":
             activity = message.activity;
+            break;
+        case "bubbles":
+            bubbles = message.bubbles;
+            overflow = message.overflow ?? [];
             break;
         case "theme":
             theme = message.theme;

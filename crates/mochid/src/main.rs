@@ -13,7 +13,7 @@ use anyhow::{Context, bail};
 use clap::Parser;
 use mochi_core::assets::{self, Mode};
 use mochi_core::supervisor::{self, Supervisor, UiCommand};
-use mochi_core::{ActivityIds, Config, Module, ModuleCtx, Paths, actions};
+use mochi_core::{ActivityIds, Bubbles, Config, Module, ModuleCtx, Paths, actions};
 use tokio::sync::mpsc;
 use tracing_subscriber::EnvFilter;
 
@@ -194,7 +194,11 @@ async fn run(args: Args) -> anyhow::Result<()> {
         ui_sender,
     )?;
 
-    let daemon = Daemon::new(slots, theme, theme_file, supervisor, compositor);
+    let bubbles = Bubbles::new(
+        config.bubbles.modules.clone(),
+        Some(config.bubbles.max_per_area),
+    );
+    let daemon = Daemon::new(slots, bubbles, theme, theme_file, supervisor, compositor);
     let result = daemon
         .run(Inputs {
             connections,

@@ -17,10 +17,13 @@ Singleton {
 
     // "island" or "notch".
     readonly property string mode: tokens?.layout.mode ?? "island"
-    // top, bottom, top-left, top-right, bottom-left or bottom-right.
+    // "top" or "bottom".
     readonly property string anchor: tokens?.layout.anchor ?? "top"
+    // The area the island sits in: left, center-left, center, center-right
+    // or right.
+    readonly property string islandArea: tokens?.layout.island ?? "center"
     readonly property int margin: tokens?.layout.margin ?? 6
-    readonly property int offset: tokens?.layout.offset ?? 0
+    readonly property int spacing: tokens?.layout.spacing ?? 8
     readonly property int earRadius: tokens?.layout.notch?.ear_radius ?? 10
     readonly property int idleHeight: tokens?.layout.idle_height ?? 34
     readonly property int padding: tokens?.layout.padding ?? 14

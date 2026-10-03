@@ -9,10 +9,12 @@
 //! Removing or renaming anything means a new [`API`] version.
 
 mod actions;
+mod bubbles;
 mod messages;
 mod theme;
 
 pub use actions::{ActionSpec, ArgKind, ArgSpec, ModuleActions};
+pub use bubbles::{Area, Bubble, BubbleId, Overflow};
 pub use messages::{
     Activity, ActivityId, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode, EventKind,
     Role, Status,

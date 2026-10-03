@@ -89,7 +89,7 @@ cargo test -p mochid --test record -- --ignored --nocapture
 | `idle` | The clock shown when nothing else is. |
 | `osd` | Shows volume, mute, output device switches, microphone mute, Caps Lock and Num Lock as they change, from any source. Needs pipewire-pulse or PulseAudio. |
 | `workspaces` | Shows a monitor's workspaces when you switch, when focus moves to it, when one asks for attention, or when they're created or removed. Click a dot to switch. Needs a compositor with `ext-workspace-v1`. |
-| `media` | Shows what's playing in any MPRIS player. It stays compact while music plays, opens with the cover, progress and controls when the track changes, and shows a pause briefly. Click to expand, use the buttons or click the bar to seek. `mochi ipc media play-pause`, `next`, `previous` and `seek <seconds>` do the same from a keybind. |
+| `media` | Shows what's playing in any MPRIS player. A new track opens the island with the cover, progress and controls, then the music shrinks into a round bubble next to it: the cover with a progress ring. Click the bubble to bring the player back, use the buttons or click the bar to seek. `mochi ipc media play-pause`, `next`, `previous` and `seek <seconds>` do the same from a keybind. |
 | `demo` | Test views and `mochi ipc demo` actions for trying the island. |
 
 ## Configuration
@@ -109,6 +109,11 @@ microphone = false   # volume, device, microphone and locks can each be turned o
 
 [module.media]
 ignore = ["firefox"]   # players never shown
+
+[bubbles.media]        # move any module's bubbles
+area = "left"          # left, center-left, center, center-right or right
+group = "status"       # bubbles with the same group share a pill
+wide = true            # text pills instead of small round bubbles
 ```
 
 ```toml
@@ -118,9 +123,10 @@ accent = "#30d158"
 
 [layout]
 mode = "notch"     # "island" floats; "notch" attaches to the edge with curved corners
-anchor = "top"     # top, bottom, top-left, top-right, bottom-left, bottom-right
-margin = 6         # gap to the edge in island mode
-offset = 0         # shift along the edge
+anchor = "top"     # or "bottom"
+island = "center"  # left, center-left, center, center-right or right
+margin = 6         # gap to the edges in island mode
+spacing = 8        # gap between the island and bubbles
 
 [layout.notch]
 ear_radius = 10    # size of the curves that flare into the edge

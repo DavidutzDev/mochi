@@ -1,8 +1,8 @@
 //! The interface every module implements, builtin or plugin.
 //!
 //! A module runs as its own task. It talks to the daemon only through its
-//! [`ModuleCtx`]: it publishes state and activities, and receives commands and
-//! activity events. Every `ModuleCtx` call maps to one protocol message, which
+//! [`ModuleCtx`]: it publishes state, activities and bubbles, and receives
+//! commands and events about its activities and bubbles. Every `ModuleCtx` call maps to one protocol message, which
 //! is what lets an external plugin process stand in for a builtin module.
 
 use std::future::Future;
@@ -12,13 +12,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use include_dir::Dir;
 use mochi_compositor::Compositor;
-use mochi_protocol::{ActionSpec, ActivityId};
+use mochi_protocol::{ActionSpec, ActivityId, BubbleId};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
 
 use crate::actions::Args;
 use crate::arbiter::{ActivitySpec, EndReason};
+use crate::bubbles::BubbleSpec;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -65,7 +66,7 @@ impl Assets {
     }
 }
 
-/// Hands out activity ids that are unique across all modules.
+/// Hands out activity and bubble ids that are unique across all modules.
 #[derive(Debug, Clone, Default)]
 pub struct ActivityIds(Arc<AtomicU64>);
 
@@ -88,6 +89,9 @@ pub enum Request {
     Present { id: ActivityId, spec: ActivitySpec },
     Update { id: ActivityId, payload: Value },
     Withdraw { id: ActivityId },
+    ShowBubble { id: BubbleId, spec: BubbleSpec },
+    UpdateBubble { id: BubbleId, payload: Value },
+    HideBubble { id: BubbleId },
 }
 
 /// What the daemon tells a module.
@@ -101,6 +105,8 @@ pub enum ModuleEvent {
         activity: ActivityId,
         reason: EndReason,
     },
+    /// A click on one of its bubbles.
+    BubbleClicked(BubbleId),
 }
 
 /// A validated `mochi ipc` command. Answer it with [`ModuleCommand::reply`].
@@ -202,6 +208,23 @@ impl ModuleCtx {
     /// Removes one of the module's activities, shown or waiting.
     pub fn withdraw(&self, id: ActivityId) {
         self.send(Request::Withdraw { id });
+    }
+
+    /// Shows a bubble, or replaces the module's bubble with the same key in
+    /// place. Returns its id at once.
+    pub fn show_bubble(&self, spec: BubbleSpec) -> BubbleId {
+        let id = BubbleId(self.ids.next().0);
+        self.send(Request::ShowBubble { id, spec });
+        id
+    }
+
+    /// Replaces the payload of one of the module's bubbles.
+    pub fn update_bubble(&self, id: BubbleId, payload: Value) {
+        self.send(Request::UpdateBubble { id, payload });
+    }
+
+    pub fn hide_bubble(&self, id: BubbleId) {
+        self.send(Request::HideBubble { id });
     }
 
     /// The next command or activity event. `None` once the daemon is

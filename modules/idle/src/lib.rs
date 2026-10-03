@@ -65,7 +65,7 @@ impl Module for Idle {
                     ModuleEvent::Command(command) => {
                         command.reply(Err("idle has no actions".into()))
                     }
-                    ModuleEvent::Clicked(_) => {}
+                    ModuleEvent::Clicked(_) | ModuleEvent::BubbleClicked(_) => {}
                 }
             }
             Ok(())

@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{ModuleActions, Theme};
+use crate::{Bubble, BubbleId, ModuleActions, Overflow, Theme};
 
 /// Identifies one activity for its whole life, across the daemon and the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -45,6 +45,8 @@ pub enum ClientMessage {
         activity: ActivityId,
         kind: EventKind,
     },
+    /// A click on a bubble. UI only, never answered.
+    BubbleClick { bubble: BubbleId },
     /// Answered with `status`.
     Status,
     /// Reloads config and theme. Answered with `ok` or `error`.
@@ -70,6 +72,13 @@ pub enum DaemonMessage {
     State { module: String, state: Value },
     /// What the island shows now. `None` when no activity exists at all.
     Present { activity: Option<Activity> },
+    /// Every bubble, in drawing order. Sent to the UI after `hello` and on
+    /// every change.
+    Bubbles {
+        bubbles: Vec<Bubble>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        overflow: Vec<Overflow>,
+    },
     /// Design tokens. Sent to the UI after `hello` and on reload.
     Theme { theme: Theme },
     /// A request succeeded.
@@ -162,7 +171,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::{ActionSpec, ArgSpec, decode, encode};
+    use crate::{ActionSpec, Area, ArgSpec, decode, encode};
 
     fn round_trip_client(message: ClientMessage) {
         let line = encode(&message).unwrap();
@@ -203,6 +212,9 @@ mod tests {
             activity: ActivityId(3),
             kind: EventKind::HoverLeave,
         });
+        round_trip_client(ClientMessage::BubbleClick {
+            bubble: BubbleId(3),
+        });
         round_trip_client(ClientMessage::Status);
         round_trip_client(ClientMessage::Reload);
         round_trip_client(ClientMessage::ListActions { module: None });
@@ -228,6 +240,22 @@ mod tests {
             activity: Some(activity()),
         });
         round_trip_daemon(DaemonMessage::Present { activity: None });
+        round_trip_daemon(DaemonMessage::Bubbles {
+            bubbles: vec![Bubble {
+                id: BubbleId(4),
+                module: "media".into(),
+                key: Some("now".into()),
+                view: "Bubble".into(),
+                wide: true,
+                payload: json!({ "title": "Song" }),
+                area: Area::CenterLeft,
+                group: Some("status".into()),
+            }],
+            overflow: vec![Overflow {
+                area: Area::Right,
+                hidden: 2,
+            }],
+        });
         round_trip_daemon(DaemonMessage::Theme {
             theme: Theme::default(),
         });

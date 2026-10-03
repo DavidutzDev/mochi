@@ -19,29 +19,15 @@ Item {
     // Radius of the corners away from any edge.
     readonly property real radius: Math.min(height / 2, width / 2, Theme.maxRadius)
 
-    // In notch mode the island touches the edge its anchor names, and the
-    // side edge too when it sits in a corner with no offset. Both animate, so
-    // switching modes morphs the shape.
-    readonly property bool atBottom: Theme.anchor.startsWith("bottom")
-    readonly property bool atRight: Theme.anchor.endsWith("right")
-    readonly property bool inCorner: Theme.anchor.includes("-")
-    property real attached: Theme.mode === "notch" ? 1 : 0
-    property real sideAttached: Theme.mode === "notch" && inCorner && Theme.offset === 0 ? 1 : 0
+    // How the island meets the screen edge, set by the window. In notch mode
+    // it touches the edge, and also the side edge when it is the outermost
+    // thing in the left or right area. Both animate, so switching modes
+    // morphs the shape.
+    property real attached: 0
+    property real sideAttached: 0
+    property bool atBottom: false
+    property bool atRight: false
     readonly property alias shape: shape
-
-    Behavior on attached {
-        NumberAnimation {
-            duration: 350
-            easing.type: Easing.OutCubic
-        }
-    }
-
-    Behavior on sideAttached {
-        NumberAnimation {
-            duration: 350
-            easing.type: Easing.OutCubic
-        }
-    }
 
     property int front: 0
     readonly property Loader frontLoader: front === 0 ? first : second
