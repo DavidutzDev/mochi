@@ -37,7 +37,7 @@ static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 #[derive(Debug, Default)]
 pub struct Power;
 
-#[derive(Debug, Default, Deserialize)]
+#[derive(Debug, Default, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     lock: Vec<String>,
@@ -121,6 +121,16 @@ impl Module for Power {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn settings_example(&self) -> &'static str {
+        include_str!("../settings.toml")
+    }
+
+    fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {
+        mochi_core::settings::<Settings>(table)
+            .map(drop)
+            .map_err(|error| error.to_string())
     }
 
     fn actions(&self) -> Vec<ActionSpec> {
@@ -370,5 +380,16 @@ mod tests {
 
     fn state_without_profiles() -> Value {
         state(&BUTTONS, None, None)
+    }
+}
+
+#[cfg(test)]
+mod settings_example {
+    #[test]
+    fn shows_the_defaults() {
+        mochi_core::examples::check_module::<super::Settings>(
+            "power",
+            include_str!("../settings.toml"),
+        );
     }
 }

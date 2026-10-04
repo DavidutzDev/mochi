@@ -38,7 +38,7 @@ const KEY: &str = "osd";
 #[derive(Debug, Default)]
 pub struct Osd;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     timeout_ms: u64,
@@ -82,6 +82,16 @@ impl Module for Osd {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn settings_example(&self) -> &'static str {
+        include_str!("../settings.toml")
+    }
+
+    fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {
+        mochi_core::settings::<Settings>(table)
+            .map(drop)
+            .map_err(|error| error.to_string())
     }
 
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {
@@ -128,4 +138,15 @@ fn spec(notice: &Notice, timeout: Duration) -> ActivitySpec {
         .priority(Priority::HIGH)
         .timeout(timeout)
         .payload(notice.payload())
+}
+
+#[cfg(test)]
+mod settings_example {
+    #[test]
+    fn shows_the_defaults() {
+        mochi_core::examples::check_module::<super::Settings>(
+            "osd",
+            include_str!("../settings.toml"),
+        );
+    }
 }

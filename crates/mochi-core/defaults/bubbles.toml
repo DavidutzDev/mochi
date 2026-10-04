@@ -1,0 +1,15 @@
+# Bubbles: small round status items next to the island, like the music
+# playing or missed notifications. The edge has five areas, from left to
+# right: left, center-left, center, center-right and right.
+[bubbles]
+# How many bubbles fit in one area; the rest hide behind a "+N".
+# max_per_area = 4
+
+# Each module puts its bubbles where it thinks best. A [bubbles.<module>]
+# section moves them, for example:
+#
+#   [bubbles.media]
+#   area = "left"       # one of the five areas
+#   group = "status"    # same group, same pill; "" for a pill of its own
+#   order = 1           # lower goes further left
+#   wide = true         # a pill with text, for modules that have one

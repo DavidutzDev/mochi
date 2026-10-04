@@ -1,0 +1,7 @@
+# Launcher: `mochi ipc launcher toggle` searches your apps. Bind it to a key.
+[module.launcher]
+# The command that runs terminal apps when uwsm doesn't, like ["foot", "-e"].
+# [] picks xdg-terminal-exec when installed, otherwise $TERMINAL -e.
+# terminal = []
+# The most results to list.
+# max_results = 50

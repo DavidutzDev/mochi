@@ -1,0 +1,15 @@
+# Workspaces: shows a monitor's workspaces when you switch, when focus moves
+# to it, when one asks for attention, or when they're created or removed.
+# Click a dot to switch.
+[module.workspaces]
+# How long the indicator stays, in milliseconds.
+# timeout_ms = 1200
+# Show a monitor when focus moves to it.
+# focus = true
+# Show workspaces that ask for attention.
+# urgent = true
+# Show workspaces being created or removed.
+# changes = true
+# Names for the monitors, shown when two or more are connected; without one
+# the connector name shows. Like: labels = { DP-3 = "Main", HDMI-A-1 = "Side" }
+# labels = {}

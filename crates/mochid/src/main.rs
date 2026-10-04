@@ -3,21 +3,23 @@
 
 mod daemon;
 mod ipc;
+mod modules;
 
 use std::ffi::OsString;
 use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-use anyhow::{Context, bail};
-use clap::Parser;
-use mochi_core::assets::{self, Mode};
+use anyhow::Context;
+use clap::{Parser, Subcommand};
+use mochi_core::assets::Mode;
 use mochi_core::supervisor::{self, Supervisor, UiCommand};
-use mochi_core::{ActivityIds, Bubbles, Config, Module, ModuleCtx, Paths, actions};
+use mochi_core::{Paths, examples};
 use tokio::sync::mpsc;
 use tracing_subscriber::EnvFilter;
 
-use crate::daemon::{Daemon, Inputs, ModuleSlot};
+use crate::daemon::{Daemon, Files, Inputs};
+use crate::modules::Runner;
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -29,7 +31,7 @@ struct Args {
 
     /// Read this config.toml instead of ~/.config/mochi/config.toml. The
     /// theme.toml next to it is used too.
-    #[arg(long, value_name = "FILE")]
+    #[arg(long, value_name = "FILE", global = true)]
     config: Option<PathBuf>,
 
     /// Enable these modules instead of the list in config.toml.
@@ -44,12 +46,42 @@ struct Args {
     /// The Quickshell executable.
     #[arg(long, value_name = "PATH", default_value = "quickshell")]
     quickshell: OsString,
+
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Debug, Subcommand)]
+enum Command {
+    /// Work with config.toml and theme.toml without running the daemon.
+    Config {
+        #[command(subcommand)]
+        action: ConfigAction,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum ConfigAction {
+    /// Write the commented example files where they're missing. Never
+    /// overwrites.
+    Init {
+        /// Print them instead of writing.
+        #[arg(long)]
+        print: bool,
+    },
+    /// Check both files, with the errors mochid would give.
+    Check,
+    /// Print where the files are.
+    Path,
 }
 
 fn main() -> ExitCode {
     init_logging();
 
     let args = Args::parse();
+    if let Some(Command::Config { action }) = &args.command {
+        return config_main(action, args.config.clone());
+    }
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
         Err(error) => {
@@ -81,40 +113,62 @@ fn init_logging() {
     }
 }
 
-/// What a module offers others, without the ones whose view it doesn't
-/// ship: those are bugs in the module, logged once here.
-fn contributions(module: &dyn Module) -> Vec<mochi_protocol::Contribution> {
-    let assets = module.assets();
-    module
-        .contributions()
-        .into_iter()
-        .filter(|spec| {
-            let found = assets.embedded.get_file(format!("{}.qml", spec.view)).is_some();
-            if !found {
-                tracing::error!(module = module.id(), view = %spec.view, "the module offers a view it doesn't have");
-            }
-            found
-        })
-        .map(|spec| spec.into_contribution(module.id()))
-        .collect()
+/// The default config.toml, or the one `--config` names.
+fn config_file(config: Option<PathBuf>) -> anyhow::Result<PathBuf> {
+    match config {
+        Some(file) => Ok(file),
+        None => Ok(Paths::from_env()?.config_file()),
+    }
 }
 
-/// Every module compiled into this binary.
-fn builtin_modules() -> Vec<Box<dyn Module>> {
-    #[allow(unused_mut)]
-    let mut modules: Vec<Box<dyn Module>> = vec![
-        Box::new(mochi_module_idle::Idle),
-        Box::new(mochi_module_osd::Osd),
-        Box::new(mochi_module_workspaces::Workspaces),
-        Box::new(mochi_module_media::Media),
-        Box::new(mochi_module_notifications::Notifications),
-        Box::new(mochi_module_launcher::Launcher),
-        Box::new(mochi_module_hub::Hub),
-        Box::new(mochi_module_power::Power),
-    ];
-    #[cfg(feature = "demo")]
-    modules.push(Box::new(mochi_module_demo::Demo));
-    modules
+/// `mochid config`, which answers on the terminal like any command-line
+/// tool.
+#[allow(clippy::print_stderr)]
+fn config_main(action: &ConfigAction, config: Option<PathBuf>) -> ExitCode {
+    match config_command(action, config) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("mochid: {error:#}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[allow(clippy::print_stdout)]
+fn config_command(action: &ConfigAction, config: Option<PathBuf>) -> anyhow::Result<()> {
+    let config_file = config_file(config)?;
+    let theme_file = config_file.with_file_name("theme.toml");
+    match action {
+        ConfigAction::Init { print: true } => {
+            println!("# {}\n", config_file.display());
+            print!("{}", modules::example_config());
+            println!("\n# {}\n", theme_file.display());
+            print!("{}", examples::THEME);
+        }
+        ConfigAction::Init { print: false } => {
+            let written = modules::write_examples(&config_file)
+                .with_context(|| format!("cannot write next to {}", config_file.display()))?;
+            for file in [&config_file, &theme_file] {
+                let verb = if written.contains(file) {
+                    "wrote"
+                } else {
+                    "kept"
+                };
+                println!("{verb} {}", file.display());
+            }
+        }
+        ConfigAction::Check => {
+            modules::load_config(&config_file, None)?;
+            mochi_core::config::load_theme(&theme_file)?;
+            println!("{} is fine", config_file.display());
+            println!("{} is fine", theme_file.display());
+        }
+        ConfigAction::Path => {
+            println!("{}", config_file.display());
+            println!("{}", theme_file.display());
+        }
+    }
+    Ok(())
 }
 
 async fn run(args: Args) -> anyhow::Result<()> {
@@ -122,16 +176,18 @@ async fn run(args: Args) -> anyhow::Result<()> {
     if let Some(dir) = args.runtime_dir {
         paths.runtime_dir = dir;
     }
+    // A new user gets commented examples to start from. A file named with
+    // --config is the caller's business.
+    if args.config.is_none() {
+        let written = modules::write_examples(&paths.config_file())
+            .with_context(|| format!("cannot write {}", paths.config_file().display()))?;
+        for file in written {
+            tracing::info!(file = %file.display(), "wrote an example to start from");
+        }
+    }
     let config_file = args.config.unwrap_or_else(|| paths.config_file());
     let theme_file = config_file.with_file_name("theme.toml");
-
-    let mut config = Config::load(&config_file)?;
-    if let Some(modules) = args.modules {
-        config.modules = modules;
-    }
-    let mut builtin = builtin_modules();
-    let available: Vec<&str> = builtin.iter().map(|module| module.id()).collect();
-    config.check(&available, &config_file)?;
+    let config = modules::load_config(&config_file, args.modules.as_deref())?;
     let theme = mochi_core::config::load_theme(&theme_file)?;
 
     // Claim the socket before touching anything a running daemon uses.
@@ -143,32 +199,6 @@ async fn run(args: Args) -> anyhow::Result<()> {
 
     supervisor::check_version(&args.quickshell)?;
 
-    // Keep the enabled modules, in config order.
-    let mut enabled = Vec::new();
-    for id in &config.modules {
-        let index = builtin
-            .iter()
-            .position(|module| module.id() == id)
-            .expect("checked against the available modules");
-        enabled.push(builtin.swap_remove(index));
-    }
-    for module in &enabled {
-        for spec in module.actions() {
-            if let Err(error) = actions::validate(&spec) {
-                bail!("module {} declares an invalid action: {error}", module.id());
-            }
-        }
-    }
-
-    let mode = if args.dev { Mode::Link } else { Mode::Copy };
-    let views: Vec<(&str, mochi_core::Assets)> = enabled
-        .iter()
-        .map(|module| (module.id(), module.assets()))
-        .collect();
-    let written = assets::write_shell(&paths.shell_dir(), mochi_core::QML, &views, mode)
-        .with_context(|| format!("cannot write {}", paths.shell_dir().display()))?;
-    tracing::info!(?mode, written, dir = %paths.shell_dir().display(), "wrote the shell");
-
     let (connection_sender, connections) = mpsc::unbounded_channel();
     let (request_sender, requests) = mpsc::unbounded_channel();
     let (exit_sender, exits) = mpsc::unbounded_channel();
@@ -177,60 +207,30 @@ async fn run(args: Args) -> anyhow::Result<()> {
     // Without a supported compositor this logs why and returns a handle whose
     // state says so; modules that need it stay idle.
     let compositor = mochi_core::compositor::connect();
+    let mode = if args.dev { Mode::Link } else { Mode::Copy };
+    let socket = paths.socket();
+    let shell_dir = paths.shell_dir();
+    let runner = Runner::new(paths, mode, compositor, request_sender, exit_sender);
 
-    let ids = ActivityIds::default();
-    let mut slots = Vec::new();
-    for module in enabled {
-        let id = module.id();
-        // Whatever a previous run left there is stale.
-        let data_dir = paths.data_dir(id);
-        if data_dir.exists() {
-            std::fs::remove_dir_all(&data_dir)
-                .with_context(|| format!("cannot empty {}", data_dir.display()))?;
-        }
-        std::fs::create_dir_all(&data_dir)
-            .with_context(|| format!("cannot create {}", data_dir.display()))?;
-        let (ctx, events) = ModuleCtx::new(
-            id,
-            config.settings(id),
-            compositor.clone(),
-            ids.clone(),
-            data_dir,
-            request_sender.clone(),
-        );
-        slots.push((
-            id,
-            ModuleSlot {
-                contributions: contributions(module.as_ref()),
-                assets: module.assets(),
-                actions: module.actions(),
-                events: Some(events),
-            },
-        ));
-
-        let task = tokio::spawn(module.run(ctx));
-        let exits = exit_sender.clone();
-        tokio::spawn(async move {
-            let _ = exits.send((id, task.await));
-        });
-    }
+    let files = Files {
+        config: config_file,
+        theme: theme_file,
+        modules: args.modules,
+    };
+    let mut daemon = Daemon::new(runner, files, theme);
+    daemon.apply(&config)?;
     tracing::info!(modules = ?config.modules, "started modules");
 
     ipc::accept_all(listener, connection_sender);
-    let supervisor = Supervisor::spawn(
+    daemon.attach(Supervisor::spawn(
         UiCommand {
             program: args.quickshell,
-            shell_dir: paths.shell_dir(),
-            socket: paths.socket(),
+            shell_dir,
+            socket: socket.clone(),
         },
         ui_sender,
-    )?;
+    )?);
 
-    let bubbles = Bubbles::new(
-        config.bubbles.modules.clone(),
-        Some(config.bubbles.max_per_area),
-    );
-    let daemon = Daemon::new(slots, bubbles, theme, theme_file, supervisor, compositor);
     let result = daemon
         .run(Inputs {
             connections,
@@ -240,6 +240,6 @@ async fn run(args: Args) -> anyhow::Result<()> {
         })
         .await;
 
-    let _ = std::fs::remove_file(paths.socket());
+    let _ = std::fs::remove_file(socket);
     result
 }

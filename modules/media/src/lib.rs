@@ -47,7 +47,7 @@ const KEY: &str = "media";
 #[derive(Debug, Default)]
 pub struct Media;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     expand_ms: u64,
@@ -74,6 +74,16 @@ impl Module for Media {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn settings_example(&self) -> &'static str {
+        include_str!("../settings.toml")
+    }
+
+    fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {
+        mochi_core::settings::<Settings>(table)
+            .map(drop)
+            .map_err(|error| error.to_string())
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
@@ -281,4 +291,15 @@ fn control(connection: &Connection, tracker: &Tracker, command: ModuleCommand) {
             .map_err(|error| format!("{}: {error}", player.identity));
         command.reply(result);
     });
+}
+
+#[cfg(test)]
+mod settings_example {
+    #[test]
+    fn shows_the_defaults() {
+        mochi_core::examples::check_module::<super::Settings>(
+            "media",
+            include_str!("../settings.toml"),
+        );
+    }
 }

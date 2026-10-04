@@ -210,6 +210,20 @@ impl Client {
         }
     }
 
+    /// Waits until the island shows `view` of `module`, skipping whatever
+    /// comes before: right after `hello` the island may still be empty,
+    /// with the module's first activity on its way.
+    pub fn wait_for_view(&mut self, module: &str, view: &str) -> Activity {
+        loop {
+            if let Some(activity) = self.next_present()
+                && activity.module == module
+                && activity.view == view
+            {
+                return activity;
+            }
+        }
+    }
+
     /// The next bubbles snapshot, skipping anything else.
     pub fn next_bubbles(&mut self) -> Vec<Bubble> {
         loop {

@@ -155,6 +155,20 @@ impl Bubbles {
         }
     }
 
+    /// Replaces the user's placements and the per-area maximum, for a
+    /// reloaded `config.toml`.
+    pub fn configure(
+        &mut self,
+        placements: BTreeMap<String, Placement>,
+        max_per_area: Option<usize>,
+    ) {
+        if self.placements != placements || self.max_per_area != max_per_area {
+            self.placements = placements;
+            self.max_per_area = max_per_area;
+            self.changed = true;
+        }
+    }
+
     pub fn show(&mut self, id: BubbleId, module: &str, spec: BubbleSpec) {
         self.changed = true;
         if let Some(key) = &spec.key

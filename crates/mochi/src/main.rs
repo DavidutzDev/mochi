@@ -34,8 +34,20 @@ enum Command {
     },
     /// Show whether the daemon and the UI are running.
     Status,
-    /// Reload theme.toml.
+    /// Apply changes to config.toml and theme.toml without a restart.
     Reload,
+    /// Work with config.toml and theme.toml: `init`, `check`, `path`.
+    ///
+    /// Runs `mochid config`, which knows every module's settings, so it
+    /// works without a running daemon.
+    Config {
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            value_name = "ARGS"
+        )]
+        args: Vec<String>,
+    },
 }
 
 fn main() -> ExitCode {
@@ -96,10 +108,28 @@ fn run(command: Command) -> Result<(), String> {
         },
         Command::Reload => {
             request(ClientMessage::Reload)?;
-            println!("reloaded theme.toml");
+            println!("reloaded config.toml and theme.toml");
             Ok(())
         }
+        Command::Config { args } => config(&args),
     }
+}
+
+/// Hands over to `mochid config`: the one next to this binary when there
+/// is one, so both come from the same build, otherwise the one in `PATH`.
+fn config(args: &[String]) -> Result<(), String> {
+    use std::os::unix::process::CommandExt;
+
+    let sibling = std::env::current_exe()
+        .ok()
+        .and_then(|exe| exe.parent().map(|dir| dir.join("mochid")))
+        .filter(|path| path.is_file());
+    let program = sibling.map_or_else(|| "mochid".into(), PathBuf::into_os_string);
+    let error = std::process::Command::new(&program)
+        .arg("config")
+        .args(args)
+        .exec();
+    Err(format!("cannot run {}: {error}", program.to_string_lossy()))
 }
 
 fn list(module: Option<String>) -> Result<(), String> {

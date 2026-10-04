@@ -20,7 +20,7 @@ The first message on every connection is the client's `hello`:
 `role` is `ui` for Quickshell and `ctl` for the CLI and other control clients. The daemon answers with its own `hello`:
 
 ```json
-{"type":"hello","api":1,"version":"0.1.0"}
+{"type":"hello","api":1,"version":"0.0.1"}
 ```
 
 If the API versions differ, the daemon answers with an `unsupported_api` error and closes the connection. Any other message before `hello` gets a `hello_first` error and the connection closes.

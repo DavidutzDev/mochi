@@ -1,0 +1,33 @@
+/* Mochi's Obsidian palette on mdBook's dark theme. */
+.coal {
+    --bg: #0b0b0c;
+    --fg: #e5e5ea;
+    --sidebar-bg: #000000;
+    --sidebar-fg: #aeaeb2;
+    --sidebar-active: #ff9f0a;
+    --sidebar-spacer: #1c1c1e;
+    --links: #ff9f0a;
+    --inline-code-color: #ffd60a;
+    --theme-hover: #2c2c2e;
+    --quote-bg: #1c1c1e;
+    --quote-border: #2c2c2e;
+    --table-border-color: #2c2c2e;
+    --table-header-bg: #1c1c1e;
+    --table-alternate-bg: #121214;
+    --searchbar-bg: #1c1c1e;
+    --searchbar-border-color: #2c2c2e;
+}
+
+.coal pre,
+.coal .hljs {
+    background: #1c1c1e;
+}
+
+pre {
+    border-radius: 14px;
+}
+
+table {
+    border-radius: 14px;
+    overflow: hidden;
+}

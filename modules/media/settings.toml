@@ -1,0 +1,11 @@
+# Media: what's playing in any MPRIS player. A new track shows on the island,
+# then the music becomes a bubble next to it.
+[module.media]
+# How long a new track shows the full player, in milliseconds.
+# expand_ms = 4000
+# Then how long the compact view stays before the music becomes a bubble.
+# island_ms = 3000
+# How long a paused player's bubble stays.
+# paused_ms = 3000
+# Players never shown, by name, like ["firefox"].
+# ignore = []

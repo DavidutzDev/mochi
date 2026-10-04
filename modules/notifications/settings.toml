@@ -1,0 +1,11 @@
+# Notifications: the notification daemon. If another one runs, Mochi waits
+# and takes over when it stops.
+[module.notifications]
+# How long a popup stays unless the app asks for another time, in
+# milliseconds.
+# timeout_ms = 5000
+# How many missed notifications to keep.
+# history = 50
+# "replace": a new popup from an app replaces the one shown, so a burst
+# shows only the latest. "stack": each shows in turn.
+# same_app = "replace"

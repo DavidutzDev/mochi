@@ -2,7 +2,7 @@
 
 A desktop shell built around a central island, like a dynamic island. `mochid`, a Rust daemon, owns state and system integration and supervises a Quickshell UI. `mochi` is its command-line client.
 
-Early work in progress: the island, the idle clock and a demo module work today. `TODO.md` has the plan, `docs/protocol.md` the daemon's protocol, `docs/views.md` how to write views with the built-in controls and `docs/spike.md` the results of the first prototype.
+Early work in progress, at version 0.0.1: the island, bubbles, the notch layout, and the idle, OSD, workspaces, media, notifications, launcher, hub and power modules work today. `CHANGELOG.md` lists what each release has. `TODO.md` has the plan, the documentation site in `docs/book` how to install and configure it, `docs/protocol.md` the daemon's protocol, `docs/views.md` how to write views with the built-in controls and `docs/spike.md` the results of the first prototype.
 
 ## Running it
 
@@ -32,22 +32,22 @@ Logs go to stderr. `MOCHI_LOG=debug` shows every activity change.
 
 ### Nix
 
-The flake's `mochi` package has both binaries, the systemd unit, and the pinned Quickshell `mochid` expects. On NixOS:
+The flake has the `mochi` package, a home-manager module, a NixOS module and an overlay. With home-manager:
 
 ```nix
 # flake inputs
-mochi.url = "path:/path/to/mochi-shell";
+mochi.url = "github:<owner>/mochi-shell/v0.0.1";
 
-# configuration
-environment.systemPackages = [ inputs.mochi.packages.${pkgs.system}.default ];
-systemd.packages = [ inputs.mochi.packages.${pkgs.system}.default ];
+# home configuration
+imports = [ inputs.mochi.homeModules.default ];
+programs.mochi = {
+  enable = true;
+  settings.module.idle.format = "HH:mm:ss";   # config.toml, as Nix
+  theme.layout.mode = "notch";                 # theme.toml
+};
 ```
 
-Then enable it for your user:
-
-```sh
-systemctl --user enable --now mochid
-```
+This installs `mochid` and `mochi`, starts the shell with the graphical session, and checks the config at build time. The modules live in `packaging/nix`, and the documentation site's installing page covers every option.
 
 ### Other systems
 
@@ -98,49 +98,16 @@ cargo test -p mochid --test record -- --ignored --nocapture
 
 ## Configuration
 
-Both files are optional and live in `~/.config/mochi/`. Without a `config.toml`, only `idle` runs.
+The first start writes `~/.config/mochi/config.toml` and `theme.toml`, with every option commented and set to its default; Mochi never overwrites them. Remove the `# ` in front of an option to change it.
 
-```toml
-# config.toml
-modules = ["idle", "osd", "workspaces", "media"]
-
-[module.idle]
-format = "HH:mm:ss"
-
-[module.osd]
-timeout_ms = 1500
-microphone = false   # volume, device, microphone and locks can each be turned off
-
-[module.media]
-ignore = ["firefox"]   # players never shown
-
-[bubbles.media]        # move any module's bubbles
-area = "left"          # left, center-left, center, center-right or right
-group = "status"       # bubbles with the same group share a pill
-wide = true            # text pills instead of small round bubbles
+```sh
+mochi config path     # where the files are
+mochi config check    # check them, with the errors mochid would give
+mochi reload          # apply changes without a restart
 ```
 
-```toml
-# theme.toml: any token left out keeps its default
-[colors]
-accent = "#30d158"      # also background, surface, raised, highlight, foreground,
-                        # muted, on_accent, danger, success
+`mochi reload` starts modules you added, stops the ones you removed and restarts the ones whose settings changed. A file with an error changes nothing.
 
-[text]
-family = "Inter"        # empty keeps the system font"
+## Documentation
 
-[layout]
-mode = "notch"     # "island" floats; "notch" attaches to the edge with curved corners
-anchor = "top"     # or "bottom"
-island = "center"  # left, center-left, center, center-right or right
-margin = 6         # gap to the edges in island mode
-spacing = 8        # gap between the island and bubbles
-
-[layout.notch]
-ear_radius = 10    # size of the curves that flare into the edge
-
-[motion]
-damping = 0.5
-```
-
-`mochi reload` applies `theme.toml` changes without a restart.
+The documentation site lives in `docs/book` and uses mdBook. `mdbook serve docs/book` previews it from the dev shell, and `nix build .#docs` builds it. Its configuration pages include each module's `settings.toml`, the same files the generated config is made of, so the two always agree. `.github/workflows/docs.yml` publishes it to GitHub Pages once the repository is on GitHub.

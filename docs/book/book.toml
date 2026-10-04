@@ -1,0 +1,15 @@
+[book]
+title = "Mochi"
+description = "A desktop shell for Wayland built around a central island"
+language = "en"
+src = "src"
+
+[build]
+# Inside the repository's target directory, which git ignores.
+build-dir = "../../target/book"
+
+[output.html]
+default-theme = "coal"
+preferred-dark-theme = "coal"
+additional-css = ["mochi.css"]
+no-section-label = true

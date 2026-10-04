@@ -1,0 +1,7 @@
+# Power: lock, log out, suspend, reboot and shut down, as a page in the hub.
+[module.power]
+# Commands that replace the defaults. Lock asks logind to lock the session,
+# which your locker answers; log out is `uwsm stop` under uwsm, otherwise
+# logind ends the session. Like: lock = ["hyprlock"]
+# lock = []
+# logout = []

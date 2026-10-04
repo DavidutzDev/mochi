@@ -108,12 +108,15 @@ Config and theme
 - [x] XDG paths for config, socket and the generated shell
 - [ ] Fonts in the theme
 - [x] `mochi reload` reloads `theme.toml` without restarting Quickshell
-- [ ] Apply `config.toml` changes on reload (enabling and disabling modules at runtime)
+- [x] Apply `config.toml` changes on reload: new modules start, removed ones stop, changed ones restart, the rest keep running; a broken file changes nothing. Each start has a generation, so a replaced module's exit is ignored
+- [x] Generated examples: the first start writes commented `config.toml` and `theme.toml`. Each module's section is its own `settings.toml` (`Module::settings_example`), the theme and bubbles are in `crates/mochi-core/defaults`; tests uncomment the `# key = value` lines and check they parse to the real defaults
+- [x] `Module::check_settings`: every module's settings are checked at startup, on reload and by `mochi config check`, with the file, section and key in the error
+- [x] `mochi config init [--print] | check | path`, through `mochid config` so the CLI stays free of module code
 
 Asset writer
 - [x] Write the core QML and each enabled module's QML into `$XDG_RUNTIME_DIR/mochi/shell/`
 - [x] Rewrite a file only when its content hash changed, so restarts don't force a UI reload
-- [ ] Add and remove module directories at runtime when modules are enabled or disabled
+- [x] Add and remove module directories at runtime when modules are enabled or disabled
 - [x] Dev mode: symlink to the source `qml/` directories instead of copying
 - [x] Generate `Modules.qml` at the shell root importing every enabled module, so Quickshell watches module files (see `docs/spike.md`)
 - [x] Write through a temporary file and a rename, so Quickshell never reads a half-written file
@@ -142,7 +145,7 @@ Supervisor
 - [x] `mochi ipc list` lists every module and its actions
 - [x] `mochi ipc <module>` lists one module's actions with argument help
 - [x] `mochi status` shows daemon and UI health (plugins later)
-- [x] `mochi reload` reloads the theme (config changes still need a restart)
+- [x] `mochi reload` reloads the theme and the config
 - [ ] `mochi plugins list|enable|disable`
 - [x] Clear error when `mochid` isn't running
 - [ ] `--json` output for scripts
@@ -395,7 +398,10 @@ Lives only in the hub: no island view, a page and the CLI.
 - [x] `nix flake check` builds the package and runs the test suite
 - [x] End-to-end daemon tests with a fake Quickshell (run in the Nix build)
 - [x] Recording test against the real binaries (`cargo test -p mochid --test record -- --ignored`), writing outside the repository
-- [ ] NixOS or home-manager module
+- [x] NixOS and home-manager modules and an overlay in `packaging/nix`. The home-manager module writes `config.toml` and `theme.toml` from Nix, checks them with `mochid config check` at build time, and reloads instead of restarting when they change
+- [x] Release 0.0.1 and `CHANGELOG.md`
+- [x] Documentation site with mdBook in `docs/book`: installing, getting started, configuration, bubbles, theme, a page per module that includes its `settings.toml`, writing views and the protocol. `nix build .#docs`, part of `nix flake check`; `.github/workflows/docs.yml` publishes it to GitHub Pages
+- [ ] Publish the site once the repository is on GitHub
 - [ ] `docs/architecture.md`
 
 ## Later

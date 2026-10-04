@@ -45,7 +45,7 @@ const KEY: &str = "workspaces";
 #[derive(Debug, Default)]
 pub struct Workspaces;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     timeout_ms: u64,
@@ -85,6 +85,16 @@ impl Module for Workspaces {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn settings_example(&self) -> &'static str {
+        include_str!("../settings.toml")
+    }
+
+    fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {
+        mochi_core::settings::<Settings>(table)
+            .map(drop)
+            .map_err(|error| error.to_string())
     }
 
     fn actions(&self) -> Vec<ActionSpec> {
@@ -191,4 +201,15 @@ fn switch(compositor: &Compositor, args: &Args) -> Result<(), String> {
     compositor
         .activate_workspace(workspace.id)
         .map_err(|error| error.to_string())
+}
+
+#[cfg(test)]
+mod settings_example {
+    #[test]
+    fn shows_the_defaults() {
+        mochi_core::examples::check_module::<super::Settings>(
+            "workspaces",
+            include_str!("../settings.toml"),
+        );
+    }
 }

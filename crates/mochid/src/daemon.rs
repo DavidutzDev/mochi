@@ -9,8 +9,8 @@ use mochi_core::actions;
 use mochi_core::compositor::Compositor;
 use mochi_core::supervisor::{Supervisor, UiEvent};
 use mochi_core::{
-    Arbiter, Assets, Bubbles, CallError, Effect, ModuleCommand, ModuleError, ModuleEvent,
-    ModuleRequest, Request,
+    Arbiter, Assets, Bubbles, CallError, Config, Effect, Module, ModuleCommand, ModuleError,
+    ModuleEvent, ModuleRequest, Request,
 };
 use mochi_protocol::{
     API, ActionSpec, ClientMessage, CompositorStatus, Contribution, DaemonMessage, ErrorCode,
@@ -22,6 +22,7 @@ use tokio::sync::oneshot;
 use tokio::task::JoinError;
 
 use crate::ipc::{ConnectionEvent, ConnectionId};
+use crate::modules::{self, Runner};
 
 /// How long a new Quickshell process gets to say hello.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -34,6 +35,9 @@ pub struct ModuleSlot {
     pub assets: Assets,
     pub actions: Vec<ActionSpec>,
     pub contributions: Vec<Contribution>,
+    /// Which start of the module this is, to tell its exit from an earlier
+    /// run's after a reload.
+    pub generation: u64,
     /// `None` once the module's task has ended.
     pub events: Option<UnboundedSender<ModuleEvent>>,
 }
@@ -47,7 +51,12 @@ enum Undelivered {
     NotRunning,
 }
 
-pub type ModuleExit = (&'static str, Result<Result<(), ModuleError>, JoinError>);
+/// A module's task ended: its id, its generation, and how it ended.
+pub type ModuleExit = (
+    &'static str,
+    u64,
+    Result<Result<(), ModuleError>, JoinError>,
+);
 
 /// Everything the loop listens to.
 #[derive(Debug)]
@@ -69,39 +78,127 @@ pub struct Daemon {
     /// Enabled module ids, in config order.
     order: Vec<&'static str>,
     modules: BTreeMap<&'static str, ModuleSlot>,
+    /// The settings each running module started with, to tell on reload
+    /// which ones changed.
+    settings: BTreeMap<&'static str, mochi_core::toml::Table>,
     states: BTreeMap<String, Value>,
     arbiter: Arbiter,
     bubbles: Bubbles,
     clients: HashMap<ConnectionId, Client>,
     theme: Theme,
-    theme_file: PathBuf,
-    supervisor: Supervisor,
+    files: Files,
+    runner: Runner,
+    /// Attached once the shell is written; `None` only during startup.
+    supervisor: Option<Supervisor>,
     compositor: Compositor,
     handshake_deadline: Option<Instant>,
 }
 
+/// Where the daemon reads its configuration from.
+#[derive(Debug)]
+pub struct Files {
+    pub config: PathBuf,
+    pub theme: PathBuf,
+    /// `--modules`, which keeps replacing the file's list on reload.
+    pub modules: Option<Vec<String>>,
+}
+
 impl Daemon {
-    pub fn new(
-        modules: Vec<(&'static str, ModuleSlot)>,
-        bubbles: Bubbles,
-        theme: Theme,
-        theme_file: PathBuf,
-        supervisor: Supervisor,
-        compositor: Compositor,
-    ) -> Self {
+    pub fn new(runner: Runner, files: Files, theme: Theme) -> Self {
+        let compositor = runner.compositor.clone();
         Self {
-            order: modules.iter().map(|(id, _)| *id).collect(),
-            modules: modules.into_iter().collect(),
+            order: Vec::new(),
+            modules: BTreeMap::new(),
+            settings: BTreeMap::new(),
             states: BTreeMap::new(),
             arbiter: Arbiter::new(),
-            bubbles,
+            bubbles: Bubbles::default(),
             clients: HashMap::new(),
             theme,
-            theme_file,
-            supervisor,
+            files,
+            runner,
+            supervisor: None,
             compositor,
             handshake_deadline: None,
         }
+    }
+
+    pub fn attach(&mut self, supervisor: Supervisor) {
+        self.supervisor = Some(supervisor);
+    }
+
+    /// Makes the running modules match `config`: starts new ones, stops
+    /// removed ones, restarts the ones whose settings changed, and rewrites
+    /// the shell's views. Modules that didn't change keep running.
+    pub fn apply(&mut self, config: &Config) -> anyhow::Result<()> {
+        let mut builtin = modules::builtin();
+        let wanted: Vec<&'static str> = config
+            .modules
+            .iter()
+            .filter_map(|id| {
+                builtin
+                    .iter()
+                    .find(|module| module.id() == id)
+                    .map(|module| module.id())
+            })
+            .collect();
+
+        for id in self.order.clone() {
+            let changed = self.settings.get(id) != Some(&config.settings(id));
+            if !wanted.contains(&id) || changed {
+                self.stop(id);
+            }
+        }
+
+        let views: Vec<&dyn Module> = wanted
+            .iter()
+            .filter_map(|id| builtin.iter().find(|module| module.id() == *id))
+            .map(|module| module.as_ref())
+            .collect();
+        self.runner.write_shell(&views)?;
+
+        for id in &wanted {
+            if self.modules.contains_key(id) {
+                continue;
+            }
+            let index = builtin
+                .iter()
+                .position(|module| module.id() == *id)
+                .expect("found above");
+            let settings = config.settings(id);
+            let slot = self
+                .runner
+                .start(builtin.swap_remove(index), settings.clone())?;
+            self.modules.insert(id, slot);
+            self.settings.insert(id, settings);
+            tracing::info!(module = id, "started");
+        }
+        self.order = wanted;
+        self.bubbles.configure(
+            config.bubbles.modules.clone(),
+            Some(config.bubbles.max_per_area),
+        );
+        Ok(())
+    }
+
+    /// Stops a module: its events end, which ends its task, and everything
+    /// it showed goes away now.
+    fn stop(&mut self, module: &'static str) {
+        if self.modules.remove(module).is_none() {
+            return;
+        }
+        self.settings.remove(module);
+        self.order.retain(|id| *id != module);
+        let now = Instant::now();
+        self.arbiter.withdraw_all(module, now);
+        self.bubbles.hide_all(module);
+        if self.states.remove(module).is_some() {
+            self.broadcast(&DaemonMessage::State {
+                module: module.to_owned(),
+                state: Value::Null,
+            });
+        }
+        tracing::info!(module, "stopped");
     }
 
     /// Runs until SIGINT or SIGTERM.
@@ -134,7 +231,9 @@ impl Daemon {
                         self.on_request(request);
                     }
                 }
-                Some((module, result)) = inputs.exits.recv() => self.on_exit(module, result),
+                Some((module, generation, result)) = inputs.exits.recv() => {
+                    self.on_exit(module, generation, result);
+                }
                 Some(event) = inputs.ui.recv() => self.on_ui_process(event),
                 () = sleep => {}
                 _ = tokio::signal::ctrl_c() => break,
@@ -149,13 +248,17 @@ impl Daemon {
             {
                 tracing::warn!("quickshell never said hello, restarting it");
                 self.handshake_deadline = None;
-                self.supervisor.restart();
+                if let Some(supervisor) = &self.supervisor {
+                    supervisor.restart();
+                }
             }
             self.apply_effects();
         }
 
         tracing::info!("shutting down");
-        self.supervisor.stop();
+        if let Some(supervisor) = &self.supervisor {
+            supervisor.stop();
+        }
         // Closing the event channels ends every module's `next_event`.
         self.modules.clear();
         Ok(())
@@ -264,11 +367,7 @@ impl Daemon {
             self.handshake_deadline = None;
             let modules = self.order.iter().map(|id| (*id).to_owned()).collect();
             self.reply(id, DaemonMessage::Modules { modules });
-            let contributions = self
-                .order
-                .iter()
-                .flat_map(|module| self.modules[module].contributions.clone())
-                .collect();
+            let contributions = self.contributions();
             self.reply(id, DaemonMessage::Contributions { contributions });
             let theme = self.theme.clone();
             self.reply(
@@ -424,19 +523,43 @@ impl Daemon {
         self.reply(id, DaemonMessage::Actions { modules });
     }
 
-    /// Reloads `theme.toml`. Changes to `config.toml` need a restart for now.
+    /// Reloads `theme.toml` and `config.toml`. A file with an error changes
+    /// nothing: the daemon keeps running as it was.
     fn on_reload(&mut self, id: ConnectionId) {
-        match mochi_core::config::load_theme(&self.theme_file) {
-            Ok(theme) => {
-                self.theme = theme.clone();
-                self.broadcast(&DaemonMessage::Theme {
-                    theme: Box::new(theme),
-                });
-                tracing::info!(file = %self.theme_file.display(), "reloaded the theme");
-                self.reply(id, DaemonMessage::Ok);
+        let loaded = mochi_core::config::load_theme(&self.files.theme).and_then(|theme| {
+            modules::load_config(&self.files.config, self.files.modules.as_deref())
+                .map(|config| (theme, config))
+        });
+        let (theme, config) = match loaded {
+            Ok(loaded) => loaded,
+            Err(error) => {
+                self.reply_error(id, ErrorCode::InvalidConfig, error.to_string());
+                return;
             }
-            Err(error) => self.reply_error(id, ErrorCode::InvalidConfig, error.to_string()),
+        };
+        if let Err(error) = self.apply(&config) {
+            self.reply_error(id, ErrorCode::Internal, format!("{error:#}"));
+            return;
         }
+
+        self.theme = theme.clone();
+        self.broadcast(&DaemonMessage::Theme {
+            theme: Box::new(theme),
+        });
+        let modules = self.order.iter().map(|id| (*id).to_owned()).collect();
+        self.broadcast(&DaemonMessage::Modules { modules });
+        self.broadcast(&DaemonMessage::Contributions {
+            contributions: self.contributions(),
+        });
+        tracing::info!(modules = ?self.order, "reloaded config.toml and theme.toml");
+        self.reply(id, DaemonMessage::Ok);
+    }
+
+    fn contributions(&self) -> Vec<Contribution> {
+        self.order
+            .iter()
+            .flat_map(|module| self.modules[module].contributions.clone())
+            .collect()
     }
 
     fn on_request(&mut self, ModuleRequest { module, request }: ModuleRequest) {
@@ -515,8 +638,20 @@ impl Daemon {
     fn on_exit(
         &mut self,
         module: &'static str,
+        generation: u64,
         result: Result<Result<(), ModuleError>, JoinError>,
     ) {
+        // A run that a reload already stopped or replaced.
+        if self
+            .modules
+            .get(module)
+            .is_none_or(|slot| slot.generation != generation)
+        {
+            if let Ok(Err(error)) = &result {
+                tracing::warn!(module, %error, "a stopped module ended with an error");
+            }
+            return;
+        }
         match result {
             Ok(Ok(())) => tracing::info!(module, "module stopped"),
             Ok(Err(error)) => tracing::error!(module, %error, "module failed"),

@@ -8,24 +8,24 @@
 }:
 
 let
-  workspace = (lib.importTOML ../Cargo.toml).workspace.package;
+  workspace = (lib.importTOML ../../Cargo.toml).workspace.package;
 in
 rustPlatform.buildRustPackage {
   pname = "mochi";
   inherit (workspace) version;
 
   src = lib.fileset.toSource {
-    root = ../.;
+    root = ../../.;
     fileset = lib.fileset.unions [
-      ../Cargo.toml
-      ../Cargo.lock
-      ../crates
-      ../modules
-      ../systemd
+      ../../Cargo.toml
+      ../../Cargo.lock
+      ../../crates
+      ../../modules
+      ../../systemd
     ];
   };
 
-  cargoLock.lockFile = ../Cargo.lock;
+  cargoLock.lockFile = ../../Cargo.lock;
 
   nativeBuildInputs = [
     makeWrapper

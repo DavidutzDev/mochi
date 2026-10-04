@@ -39,12 +39,8 @@ fn ui_gets_the_full_state_after_hello() {
             theme: Box::default()
         }
     );
-    let present = ui.next_present();
-    assert_eq!(shown(&present), Some(("idle", "Pill")));
-    assert_eq!(
-        present.unwrap().payload,
-        serde_json::json!({ "format": "HH:mm" })
-    );
+    let pill = ui.wait_for_view("idle", "Pill");
+    assert_eq!(pill.payload, serde_json::json!({ "format": "HH:mm" }));
 }
 
 #[test]
@@ -52,7 +48,7 @@ fn commands_and_events_drive_the_island() {
     let daemon = Daemon::start("island", "idle,demo");
     let mut ui = daemon.client(Role::Ui);
     let mut ctl = daemon.client(Role::Ctl);
-    ui.next_present();
+    ui.wait_for_view("idle", "Pill");
 
     assert_eq!(
         ctl.command("demo", "show", &["Card", "hello"]),
@@ -95,7 +91,7 @@ fn keyed_activities_replace_and_time_out() {
     let daemon = Daemon::start("volume", "idle,demo");
     let mut ui = daemon.client(Role::Ui);
     let mut ctl = daemon.client(Role::Ctl);
-    ui.next_present();
+    ui.wait_for_view("idle", "Pill");
 
     ctl.command("demo", "volume", &["40"]);
     let first = ui.next_present().unwrap();
@@ -154,7 +150,7 @@ fn bubbles_reach_the_ui_and_clicks_reach_the_module() {
     ui.send(&ClientMessage::BubbleClick {
         bubble: moved[1].id,
     });
-    let clicked = ui.next_present().unwrap();
+    let clicked = ui.wait_for_view("demo", "Small");
     assert_eq!(
         clicked.payload,
         serde_json::json!({ "text": "wifi clicked" })
@@ -192,7 +188,7 @@ fn modules_offer_contributions_and_call_each_other() {
         })
         .collect();
     assert_eq!(offered, [("hub", "hub", "card", "Clock")]);
-    ui.next_present();
+    ui.wait_for_view("idle", "Pill");
 
     // The demo module calls the hub, which takes the keyboard.
     assert_eq!(
@@ -224,7 +220,7 @@ fn modules_offer_contributions_and_call_each_other() {
 fn clicking_the_idle_pill_toggles_the_hub() {
     let daemon = Daemon::start("idle-click", "idle,hub");
     let mut ui = daemon.client(Role::Ui);
-    let pill = ui.next_present().unwrap();
+    let pill = ui.wait_for_view("idle", "Pill");
 
     ui.send(&ClientMessage::Event {
         activity: pill.id,
@@ -239,6 +235,53 @@ fn clicking_the_idle_pill_toggles_the_hub() {
         kind: EventKind::Dismiss,
     });
     assert_eq!(shown(&ui.next_present()), Some(("idle", "Pill")));
+}
+
+#[test]
+fn first_start_writes_examples_and_reload_applies_them() {
+    let daemon = Daemon::start("reload", "idle");
+    let mut ui = daemon.client(Role::Ui);
+    let mut ctl = daemon.client(Role::Ctl);
+    assert_eq!(
+        ui.wait_for_view("idle", "Pill").payload,
+        serde_json::json!({ "format": "HH:mm" })
+    );
+
+    // No config existed, so the daemon wrote commented examples.
+    let config = daemon.dir.join("config/mochi/config.toml");
+    let text = std::fs::read_to_string(&config).unwrap();
+    assert!(text.contains("# format = \"HH:mm\""), "{text}");
+    assert!(daemon.dir.join("config/mochi/theme.toml").is_file());
+
+    // A changed setting restarts the module with it.
+    std::fs::write(
+        &config,
+        text.replace("# format = \"HH:mm\"", "format = \"HH:mm:ss\""),
+    )
+    .unwrap();
+    ctl.send(&ClientMessage::Reload);
+    assert_eq!(ctl.recv(), DaemonMessage::Ok);
+    let pill = loop {
+        if let Some(activity) = ui.next_present()
+            && activity.payload["format"] == "HH:mm:ss"
+        {
+            break activity;
+        }
+    };
+    assert_eq!(pill.view, "Pill");
+
+    // A typo changes nothing and says what's wrong.
+    std::fs::write(
+        &config,
+        text.replace("# format = \"HH:mm\"", "fromat = \"HH\""),
+    )
+    .unwrap();
+    ctl.send(&ClientMessage::Reload);
+    let DaemonMessage::Error { code, message } = ctl.recv() else {
+        panic!("a broken config must be refused");
+    };
+    assert_eq!(code, ErrorCode::InvalidConfig);
+    assert!(message.contains("fromat"), "{message}");
 }
 
 #[test]

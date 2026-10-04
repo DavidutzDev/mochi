@@ -40,6 +40,24 @@ pub trait Module: Send + 'static {
         Vec::new()
     }
 
+    /// Its commented `[module.<id>]` section for the generated `config.toml`
+    /// and the documentation: usually `include_str!("../settings.toml")`.
+    /// Defaults go on lines like `# timeout_ms = 1500`; check them with
+    /// [`crate::examples::check_module`] in a test.
+    fn settings_example(&self) -> &'static str {
+        ""
+    }
+
+    /// Checks its `[module.<id>]` table the way `run` will read it, so a typo
+    /// fails at startup or reload with the file and the key, not later.
+    /// Usually `settings::<Settings>(table).map(drop)`.
+    fn check_settings(&self, table: &toml::Table) -> Result<(), String> {
+        match table.keys().next() {
+            None => Ok(()),
+            Some(key) => Err(format!("unknown setting `{key}`: this module has none")),
+        }
+    }
+
     /// What it offers other modules, like a page for the hub. Unused when
     /// the module it's for isn't enabled.
     fn contributions(&self) -> Vec<ContributionSpec> {
@@ -50,6 +68,11 @@ pub trait Module: Send + 'static {
     /// [`ModuleCtx::next_event`]. Returning early stops the module and
     /// withdraws its activities.
     fn run(self: Box<Self>, ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>>;
+}
+
+/// Reads a `[module.<id>]` table into a module's settings type.
+pub fn settings<T: DeserializeOwned>(table: &toml::Table) -> Result<T, toml::de::Error> {
+    toml::Value::Table(table.clone()).try_into()
 }
 
 /// A directory of QML files, embedded in the binary and also known by its
@@ -228,7 +251,7 @@ impl ModuleCtx {
     /// The module's `[module.<id>]` table from `config.toml`. Fields missing
     /// there take their `Default` values when `T` uses `#[serde(default)]`.
     pub fn settings<T: DeserializeOwned>(&self) -> Result<T, toml::de::Error> {
-        toml::Value::Table(self.settings.clone()).try_into()
+        settings(&self.settings)
     }
 
     /// Workspaces and outputs, the same for every compositor. Check

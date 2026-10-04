@@ -60,7 +60,7 @@ const HISTORY_TIMEOUT: Duration = Duration::from_secs(10);
 #[derive(Debug, Default)]
 pub struct Notifications;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, PartialEq)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     timeout_ms: u64,
@@ -94,6 +94,16 @@ impl Module for Notifications {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn settings_example(&self) -> &'static str {
+        include_str!("../settings.toml")
+    }
+
+    fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {
+        mochi_core::settings::<Settings>(table)
+            .map(drop)
+            .map_err(|error| error.to_string())
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
@@ -449,4 +459,15 @@ fn write_png(path: &std::path::Path, width: u32, height: u32, rgba: &[u8]) -> st
         .write_image_data(rgba)
         .map_err(std::io::Error::other)?;
     writer.finish().map_err(std::io::Error::other)
+}
+
+#[cfg(test)]
+mod settings_example {
+    #[test]
+    fn shows_the_defaults() {
+        mochi_core::examples::check_module::<super::Settings>(
+            "notifications",
+            include_str!("../settings.toml"),
+        );
+    }
 }

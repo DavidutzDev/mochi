@@ -24,7 +24,7 @@ pub enum ConfigError {
 }
 
 impl ConfigError {
-    fn invalid(path: &Path, message: impl Into<String>) -> Self {
+    pub fn invalid(path: &Path, message: impl Into<String>) -> Self {
         Self::Invalid {
             path: path.to_owned(),
             message: message.into(),

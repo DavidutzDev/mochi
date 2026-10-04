@@ -1,0 +1,7 @@
+# Idle: the clock shown when nothing else is.
+[module.idle]
+# The time format, in Qt's notation: HH:mm, hh:mm AP, HH:mm:ss.
+# format = "HH:mm"
+# What a click runs: a module, its action, then the action's arguments.
+# [] does nothing.
+# click = ["hub", "toggle"]

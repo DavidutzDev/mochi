@@ -1,0 +1,80 @@
+# Mochi's look. mochid wrote this file because there was none, and it never
+# overwrites it. A line like "# accent = ..." shows a default: remove the
+# "# " to change it. `mochi reload` applies changes at once.
+#
+# Colors are #rrggbb or #aarrggbb (aa is the opacity, ff for opaque).
+
+[colors]
+# The island and the hub panel.
+# background = "#f5000000"
+# Cards and tiles on the background.
+# surface = "#1c1c1e"
+# Buttons, tracks and dividers, one step above surface.
+# raised = "#2c2c2e"
+# Hovered buttons, one step above raised.
+# highlight = "#3a3a3c"
+# Text and icons.
+# foreground = "#ffffff"
+# Secondary text and icons.
+# muted = "#8e8e93"
+# What is active or important, and nothing else.
+# accent = "#ff9f0a"
+# Text and icons on the accent color.
+# on_accent = "#000000"
+# Destructive actions, like a shut down waiting for its second click.
+# danger = "#ff453a"
+# success = "#30d158"
+
+[layout]
+# "island" floats apart from the screen edge; "notch" attaches to it with
+# curved corners.
+# mode = "island"
+# "top" or "bottom".
+# anchor = "top"
+# The area the island sits in: left, center-left, center, center-right or right.
+# island = "center"
+# Gap to the screen edges in island mode, in pixels.
+# margin = 6
+# Gap between the island and bubbles.
+# spacing = 8
+# Height of the idle island and of bubbles. Windows make room for this much.
+# idle_height = 34
+# padding = 14
+# The island's largest corner radius; short islands become round pills.
+# max_radius = 34
+# Corners of small controls, of rows and buttons, and of cards and tiles.
+# radius_small = 8
+# radius_medium = 14
+# radius_large = 20
+# The tallest the island can grow, in pixels.
+# surface_height = 640
+
+[layout.notch]
+# Size of the curves where the notch meets the edge.
+# ear_radius = 10
+
+[motion]
+# The island's resize spring: stiffness, and damping between 0 and 1
+# (lower bounces more).
+# spring = 4.0
+# damping = 0.32
+# How views fade when the island changes, in milliseconds.
+# fade_in_ms = 220
+# fade_out_ms = 120
+# fade_delay_ms = 90
+# Color and hover changes.
+# fast_ms = 150
+# Things moving inside a view, with a slight overshoot.
+# move_ms = 350
+
+[text]
+# A font family name; empty keeps the system font.
+# family = ""
+# Sizes in pixels, from fine print to a big clock.
+# caption = 11
+# label = 12
+# body = 13
+# subtitle = 14
+# title = 16
+# headline = 20
+# display = 42
