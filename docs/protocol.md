@@ -120,6 +120,8 @@ The UI loads `root:/modules/<module>/<view>.qml` and passes `payload` to it. `ac
 
 `modal` is only present when `true`. A modal activity takes the keyboard while it's shown, for views you type into like the launcher, and the UI dismisses it on a click outside the island.
 
+`overlay` is only present when the module set one, and implies `modal`. It names a second view, `root:/modules/<module>/<overlay>.qml`, which the UI draws full-screen on every monitor, under the island, while the activity shows. The overlay gets the same `payload` and a `screen` property with its monitor. If it has a `ready` property, the island waits for it to turn `true` before showing the activity, so an overlay can freeze the screen before the island changes. Overlays are for picking something on screen, like the capture module's region.
+
 `key` is only present when the module set one. A module uses it to replace its own activity, for example a volume OSD on every volume step. When the next `present` has the same `module`, `key` and `view` as the shown activity, the UI updates the view's `payload` in place instead of switching views, even though the `id` is new.
 
 ### Bubbles

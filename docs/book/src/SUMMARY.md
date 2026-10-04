@@ -20,6 +20,7 @@
 - [Launcher](modules/launcher.md)
 - [Hub](modules/hub.md)
 - [Power](modules/power.md)
+- [Capture](modules/capture.md)
 
 # Building on Mochi
 

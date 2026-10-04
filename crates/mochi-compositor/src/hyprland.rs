@@ -1,7 +1,7 @@
 //! Hyprland's IPC, used only for what the standard protocols don't say: which
-//! output has focus. Focusing an empty workspace on another monitor moves no
-//! window, so the standard window-based guess can't see it; Hyprland's event
-//! socket can.
+//! output has focus, and where windows are. Focusing an empty workspace on
+//! another monitor moves no window, so the standard window-based guess can't
+//! see it; Hyprland's event socket can.
 //!
 //! The focused output name goes to the Wayland task, which owns the model.
 
@@ -11,6 +11,8 @@ use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::sync::mpsc::UnboundedSender;
+
+use crate::Window;
 
 const FIRST_RETRY: Duration = Duration::from_secs(1);
 const MAX_RETRY: Duration = Duration::from_secs(30);
@@ -65,11 +67,84 @@ async fn session(dir: &Path, focus: &UnboundedSender<String>) -> std::io::Result
 }
 
 async fn query_focused(dir: &Path) -> std::io::Result<Option<String>> {
-    let mut request = UnixStream::connect(dir.join(".socket.sock")).await?;
-    request.write_all(b"j/monitors").await?;
+    Ok(focused_from_monitors(&query(dir, "j/monitors").await?))
+}
+
+/// One request on the command socket, like `j/clients`.
+async fn query(dir: &Path, request: &str) -> std::io::Result<String> {
+    let mut socket = UnixStream::connect(dir.join(".socket.sock")).await?;
+    socket.write_all(request.as_bytes()).await?;
     let mut reply = String::new();
-    request.read_to_string(&mut reply).await?;
-    Ok(focused_from_monitors(&reply))
+    socket.read_to_string(&mut reply).await?;
+    Ok(reply)
+}
+
+/// The windows on visible workspaces, topmost first.
+pub(crate) async fn windows(dir: &Path) -> std::io::Result<Vec<Window>> {
+    let monitors = query(dir, "j/monitors").await?;
+    let clients = query(dir, "j/clients").await?;
+    windows_from(&clients, &monitors)
+        .ok_or_else(|| std::io::Error::other("Hyprland sent unexpected JSON"))
+}
+
+/// Picks the visible windows from `hyprctl -j clients` and orders them
+/// topmost first: fullscreen, then floating, then tiled, each by how
+/// recently it had focus. Hyprland doesn't report its stacking order, and
+/// this matches it for everything but overlapping floating windows that
+/// were raised without focus.
+fn windows_from(clients: &str, monitors: &str) -> Option<Vec<Window>> {
+    let clients: serde_json::Value = serde_json::from_str(clients).ok()?;
+    let monitors: serde_json::Value = serde_json::from_str(monitors).ok()?;
+    // Older Hyprland has no `visible`; then a window is visible when its
+    // workspace is active or special on some monitor.
+    let shown: Vec<i64> = monitors
+        .as_array()?
+        .iter()
+        .flat_map(|monitor| {
+            [
+                monitor["activeWorkspace"]["id"].as_i64(),
+                monitor["specialWorkspace"]["id"]
+                    .as_i64()
+                    .filter(|id| *id != 0),
+            ]
+        })
+        .flatten()
+        .collect();
+
+    let mut windows: Vec<(i64, i64, Window)> = clients
+        .as_array()?
+        .iter()
+        .filter(|client| client["mapped"] != false && client["hidden"] != true)
+        .filter(|client| match client["visible"].as_bool() {
+            Some(visible) => visible,
+            None => client["workspace"]["id"]
+                .as_i64()
+                .is_some_and(|id| shown.contains(&id)),
+        })
+        .filter_map(|client| {
+            let number = |value: &serde_json::Value| value.as_i64().map(|n| n as i32);
+            let window = Window {
+                title: client["title"].as_str().unwrap_or_default().to_owned(),
+                app_id: client["class"].as_str().unwrap_or_default().to_owned(),
+                x: number(&client["at"][0])?,
+                y: number(&client["at"][1])?,
+                width: number(&client["size"][0])?,
+                height: number(&client["size"][1])?,
+                floating: client["floating"] == true,
+            };
+            let layer = if client["fullscreen"].as_i64().unwrap_or(0) > 0 {
+                0
+            } else if window.floating {
+                1
+            } else {
+                2
+            };
+            let recency = client["focusHistoryID"].as_i64().unwrap_or(i64::MAX);
+            Some((layer, recency, window))
+        })
+        .collect();
+    windows.sort_by_key(|(layer, recency, _)| (*layer, *recency));
+    Some(windows.into_iter().map(|(_, _, window)| window).collect())
 }
 
 /// `focusedmon>>DP-3,2` names the newly focused output.
@@ -104,6 +179,54 @@ mod tests {
         assert_eq!(focused_from_event("focusedmonv2>>HDMI-A-1,10"), None);
         assert_eq!(focused_from_event("workspace>>3"), None);
         assert_eq!(focused_from_event("focusedmon>>,3"), None);
+    }
+
+    #[test]
+    fn lists_visible_windows_topmost_first() {
+        let monitors = r#"[
+            {"name":"DP-3","activeWorkspace":{"id":2},"specialWorkspace":{"id":0}},
+            {"name":"HDMI-A-1","activeWorkspace":{"id":10},"specialWorkspace":{"id":0}}
+        ]"#;
+        let clients = r#"[
+            {"mapped":true,"hidden":false,"at":[1942,62],"size":[1876,996],
+             "workspace":{"id":2},"floating":false,"fullscreen":0,
+             "class":"codium","title":"Editor","focusHistoryID":1},
+            {"mapped":true,"hidden":false,"at":[2100,200],"size":[600,400],
+             "workspace":{"id":2},"floating":true,"fullscreen":0,
+             "class":"pavucontrol","title":"Volume","focusHistoryID":3},
+            {"mapped":true,"hidden":false,"at":[0,0],"size":[1920,1080],
+             "workspace":{"id":3},"floating":false,"fullscreen":0,
+             "class":"firefox","title":"Hidden away","focusHistoryID":0},
+            {"mapped":true,"hidden":false,"at":[10,62],"size":[931,996],
+             "workspace":{"id":10},"floating":false,"fullscreen":0,
+             "class":"spotify","title":"Music","focusHistoryID":2}
+        ]"#;
+        let windows = windows_from(clients, monitors).unwrap();
+        let titles: Vec<&str> = windows.iter().map(|window| window.title.as_str()).collect();
+        assert_eq!(titles, ["Volume", "Editor", "Music"]);
+        assert_eq!(
+            (
+                windows[0].x,
+                windows[0].y,
+                windows[0].width,
+                windows[0].height
+            ),
+            (2100, 200, 600, 400)
+        );
+        assert_eq!(windows[0].app_id, "pavucontrol");
+    }
+
+    #[test]
+    fn trusts_the_visible_flag_when_present() {
+        let monitors = r#"[{"activeWorkspace":{"id":1},"specialWorkspace":{"id":0}}]"#;
+        let clients = r#"[
+            {"at":[0,0],"size":[10,10],"workspace":{"id":1},"visible":false,"title":"a"},
+            {"at":[0,0],"size":[10,10],"workspace":{"id":5},"visible":true,"title":"b"}
+        ]"#;
+        let windows = windows_from(clients, monitors).unwrap();
+        assert_eq!(windows.len(), 1);
+        assert_eq!(windows[0].title, "b");
+        assert_eq!(windows_from("nope", monitors), None);
     }
 
     #[test]

@@ -16,6 +16,7 @@ demo = ["dep:mochi-module-demo"]
 anyhow.workspace = true
 clap.workspace = true
 mochi-core.workspace = true
+mochi-module-capture.workspace = true
 mochi-module-demo = { workspace = true, optional = true }
 mochi-module-hub.workspace = true
 mochi-module-idle.workspace = true

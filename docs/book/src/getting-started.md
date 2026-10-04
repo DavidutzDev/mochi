@@ -7,7 +7,7 @@ The first time `mochid` starts, it writes two files to `~/.config/mochi/`:
 - `config.toml`: which modules run, and their settings.
 - `theme.toml`: colors, sizes and motion.
 
-Every option is in them, commented, with its default. They turn on the whole shell: the clock, the on-screen display, workspaces, media, notifications, the launcher, the hub and the power page. Mochi never overwrites these files.
+Every option is in them, commented, with its default. They turn on the whole shell: the clock, the on-screen display, workspaces, media, notifications, the launcher, the hub, the power page and screenshots. Mochi never overwrites these files.
 
 ```sh
 mochi config path     # where the files are
@@ -26,6 +26,8 @@ Mochi doesn't grab keys itself. Bind these in your compositor:
 | Play or pause the music | `mochi ipc media play-pause` |
 | Do not disturb | `mochi ipc notifications dnd toggle` |
 | Lock the screen | `mochi ipc power lock` |
+| Take a screenshot | `mochi ipc capture screenshot` |
+| Start or stop recording | `mochi ipc capture record` |
 
 `mochi ipc` lists every action of every module, and `mochi ipc <module>` one module's.
 

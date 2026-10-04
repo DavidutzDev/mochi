@@ -38,18 +38,25 @@ PanelWindow {
     // for the keyboard would fight over it.
     readonly property var activity: Daemon.activity
     readonly property bool modal: (activity?.modal ?? false) && (activity.payload?.output == null || activity.payload.output === screen?.name)
+    // An activity with an overlay covers every monitor and asks for the
+    // keyboard on each: Hyprland only sends the pointer to surfaces holding
+    // the keyboard, so an overlay without it couldn't be clicked.
+    readonly property bool overlaid: activity?.overlay != null
+    readonly property bool covering: modal || overlaid
 
-    implicitHeight: modal ? (screen?.height ?? Theme.surfaceHeight) : Theme.surfaceHeight
+    implicitHeight: covering ? (screen?.height ?? Theme.surfaceHeight) : Theme.surfaceHeight
     color: "transparent"
 
     // Windows only make room for the idle island and the bubbles, so they
-    // don't move when the island grows. Setting this switches the exclusion
-    // mode to Normal.
-    exclusiveZone: Math.round(margin) + Theme.idleHeight
+    // don't move when the island grows. EdgeReserve keeps that room; this
+    // window ignores reserved space, so it starts at the screen edge even
+    // under another bar, and covers the whole screen for an overlay.
+    readonly property int zone: Math.round(margin) + Theme.idleHeight
+    exclusionMode: ExclusionMode.Ignore
 
     WlrLayershell.namespace: "mochi-island"
-    WlrLayershell.layer: modal ? WlrLayer.Overlay : WlrLayer.Top
-    WlrLayershell.keyboardFocus: modal ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
+    WlrLayershell.layer: covering ? WlrLayer.Overlay : WlrLayer.Top
+    WlrLayershell.keyboardFocus: modal || overlaid ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     // Every pill on screen, for the regions below.
     property list<Item> pills
@@ -60,7 +67,7 @@ PanelWindow {
         pills = pills.filter(other => other !== pill);
     }
 
-    mask: modal ? everywhere : shapes
+    mask: covering ? everywhere : shapes
 
     property Region shapes: Region {
         regions: [root.islandMask, ...pillMasks.instances]
@@ -75,8 +82,32 @@ PanelWindow {
     // activity shows closes it.
     MouseArea {
         anchors.fill: parent
-        enabled: root.modal
+        enabled: root.covering
         onClicked: Daemon.event("dismiss")
+    }
+
+    // The activity's overlay, under the bubbles and the island. It stays
+    // loaded while activities with the same overlay follow each other, and
+    // gets each one's payload.
+    Loader {
+        id: overlay
+
+        anchors.fill: parent
+        source: root.overlaid ? `root:/modules/${root.activity.module}/${root.activity.overlay}.qml` : ""
+    }
+
+    Binding {
+        target: overlay.item
+        property: "payload"
+        value: root.activity?.payload
+        when: overlay.item !== null && root.overlaid
+    }
+
+    Binding {
+        target: overlay.item
+        property: "screen"
+        value: root.screen
+        when: overlay.item !== null
     }
 
     // Blur through ext-background-effect-v1. Compositors without the protocol
@@ -175,5 +206,6 @@ PanelWindow {
         sideAttached: root.host.onSide ? root.attached : 0
         atBottom: root.atBottom
         atRight: Theme.islandArea === "right"
+        overlay: overlay
     }
 }

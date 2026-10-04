@@ -80,6 +80,8 @@ pub struct ActivitySpec {
     /// Takes the keyboard while shown; a click outside the island dismisses
     /// it.
     pub modal: bool,
+    /// A full-screen view under the island on every monitor.
+    pub overlay: Option<String>,
 }
 
 impl ActivitySpec {
@@ -96,6 +98,7 @@ impl ActivitySpec {
             interruptible: true,
             same_priority: SamePriority::Queue,
             modal: false,
+            overlay: None,
         }
     }
 
@@ -139,6 +142,17 @@ impl ActivitySpec {
 
     /// For views that take typing, like a launcher.
     pub fn modal(mut self) -> Self {
+        self.modal = true;
+        self
+    }
+
+    /// Draws `view` over every monitor, under the island, while the activity
+    /// shows: `modules/<module>/<view>.qml`, which gets the payload and its
+    /// `screen`. Makes the activity modal. The island waits to show the
+    /// activity until the overlay's `ready` property is true, so an overlay
+    /// can capture the screen before the island changes.
+    pub fn overlay(mut self, view: impl Into<String>) -> Self {
+        self.overlay = Some(view.into());
         self.modal = true;
         self
     }
@@ -590,6 +604,7 @@ impl Entry {
             expanded: self.expanded,
             expandable: self.expandable(),
             modal: self.spec.modal,
+            overlay: self.spec.overlay.clone(),
             key: self.spec.key.clone(),
         }
     }

@@ -29,6 +29,22 @@ Item {
     property bool atRight: false
     readonly property alias shape: shape
 
+    // The window's overlay loader. An activity with an overlay waits until
+    // the overlay is loaded and its `ready` isn't false, so the overlay can
+    // capture the screen before the island changes. An overlay that fails
+    // to load doesn't hold it.
+    property Loader overlay: null
+    readonly property bool overlayReady: overlay !== null && (overlay.status === Loader.Error || (overlay.item !== null && overlay.item.ready !== false))
+
+    function waiting(next: var): bool {
+        return next?.overlay != null && !overlayReady;
+    }
+
+    onOverlayReadyChanged: {
+        if (overlayReady && Daemon.activity?.overlay != null)
+            present(Daemon.activity);
+    }
+
     property int front: 0
     readonly property Loader frontLoader: front === 0 ? first : second
     readonly property Loader backLoader: front === 0 ? second : first
@@ -112,7 +128,8 @@ Item {
         target: Daemon
 
         function onActivityChanged(): void {
-            root.present(Daemon.activity);
+            if (!root.waiting(Daemon.activity))
+                root.present(Daemon.activity);
         }
     }
 

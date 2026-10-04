@@ -13,6 +13,7 @@ publish = false
 mochi-protocol = { path = "crates/mochi-protocol" }
 mochi-compositor = { path = "crates/mochi-compositor" }
 mochi-core = { path = "crates/mochi-core" }
+mochi-module-capture = { path = "modules/capture" }
 mochi-module-demo = { path = "modules/demo" }
 mochi-module-hub = { path = "modules/hub" }
 mochi-module-idle = { path = "modules/idle" }
@@ -56,3 +57,11 @@ undocumented_unsafe_blocks = "deny"
 # Libraries log through tracing. Binaries opt back in where they print.
 print_stdout = "warn"
 print_stderr = "warn"
+
+# Screenshots compress PNGs: unoptimized, that takes seconds in `cargo run`.
+[profile.dev.package.png]
+opt-level = 3
+[profile.dev.package.fdeflate]
+opt-level = 3
+[profile.dev.package.crc32fast]
+opt-level = 3

@@ -1,0 +1,29 @@
+# Capture: screenshots and recordings. `mochi ipc capture screenshot` and
+# `mochi ipc capture record` ask what to capture; bind them to keys.
+[module.capture]
+# The mode the picker opens in: "region", "window" or "screen". The island
+# switches it while picking.
+# mode = "region"
+# Where screenshots go. "" is $XDG_PICTURES_DIR/Screenshots.
+# screenshots = ""
+# Where recordings go. "" is $XDG_VIDEOS_DIR/Recordings.
+# recordings = ""
+# File names, with strftime fields for the time.
+# screenshot_name = "Screenshot from %Y-%m-%d %H-%M-%S"
+# recording_name = "Recording from %Y-%m-%d %H-%M-%S"
+# What Edit runs; the screenshot's path goes last. [] hides the button.
+# editor = ["satty", "--filename"]
+# The recorder, with any options of your own. It needs to speak
+# gpu-screen-recorder's options.
+# recorder = ["gpu-screen-recorder"]
+# framerate = 60
+# The sound to record, and the microphone the picker can add. "" for none.
+# audio = "default_output"
+# microphone = "default_input"
+# Whether the picker starts with the microphone on.
+# record_microphone = false
+# Copy every capture to the clipboard: screenshots as images, recordings
+# as files.
+# copy = true
+# How long the island shows a capture, in milliseconds.
+# preview_ms = 6000

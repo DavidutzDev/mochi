@@ -374,6 +374,34 @@ Lives only in the hub: no island view, a page and the CLI.
 - [ ] A lock screen of its own, if hyprlock and the others ever fall short (see open question 3)
 - [ ] Reboot into another OS, only once it can work with any bootloader and distro. Today no single way does: logind's one-shot boot loader entry only covers loaders that follow the Boot Loader Interface (systemd-boot), GRUB needs root to run `grub-reboot`, and the firmware's `BootNext` needs root too. Decided on 2026-10-03 to wait
 
+### Capture
+
+Screenshots and recordings from the island. Decided on 2026-10-04: our own frozen overlay instead of slurp, gpu-screen-recorder for recording, and a preview card on the island afterwards.
+
+- [x] Prototype: a frozen `ScreencopyView` frame per monitor on Hyprland with NVIDIA, saved at full resolution with `grabToImage` in under a second. No grim fallback needed
+- [x] Framework: `ActivitySpec::overlay(view)` draws a view over every monitor under the island; the island waits for the overlay's `ready`, so a frozen frame never shows the picker. The island window now ignores reserved space and `EdgeReserve` keeps windows away, so an overlay covers the real screen even under another bar
+- [x] Actions: `screenshot [region|window|screen]`, `record [region|window|screen]`, `mode`, `stop`, `cancel`, and `copy`, `edit`, `delete`, `open` for the last capture. The picker opens in the `mode` setting (region by default) so a drag works right away; the island is a bar with the three modes, the current one highlighted, to switch with a click, Tab or 1 to 3, M for the microphone, Escape to cancel
+- [x] Overlay: a region drawn by dragging, moved by dragging inside, resized by its corners, with its size and a Capture button; the window under the pointer outlined with its title; a whole screen by a click. Right click cancels
+- [x] Only the picked monitor's frame is saved, after the pick and as raw PPM (about 25 ms), so the opening animation never stalls; the module compresses the PNG off the event loop with `png`'s fast level (a full 1080p screen in about 0.2 s, a region in 60 ms)
+- [x] The module cuts the picked area out of the saved frame, mapping logical coordinates to buffer pixels per monitor with edges rounded outwards; unit-tested for scales 1, 1.25 and 1.5 and for outputs to the right
+- [x] Window geometry from `mochi-compositor`'s `windows()`, from Hyprland's `clients` (its `visible` flag, or the monitors' active workspaces on older versions), topmost first; Window is hidden for screenshots elsewhere
+- [x] Recording through `gpu-screen-recorder`: a region, a monitor by name, or a window through the portal; desktop audio, and the microphone mixed in when asked. A breathing red dot bubble (a timer with `wide = true`); clicking it, `stop` or `record` sends SIGINT so the file is finished. Its usual failures are explained on the island
+- [x] After a capture: saved to `$XDG_PICTURES_DIR/Screenshots` or `$XDG_VIDEOS_DIR/Recordings`, copied with `wl-copy` (recordings as a file), and a card with a thumbnail and Copy, Edit (`satty --filename`), Open folder and Delete
+- [x] Settings in a checked `settings.toml`; docs page with the NixOS note for gpu-screen-recorder
+- [x] Tested on Hyprland with two monitors: a full screen, a region on the left monitor and a window on the right one cropped to the exact sizes, a real hover outlining a window and a real click taking it, the recording bubble stopped by a real click, and the failure card when gpu-screen-recorder lacks its capture helper. Recording itself ran with a stand-in recorder, since this machine doesn't enable the helper
+- [x] Picking on another monitor than the one the picker opened on: every overlay asks for the keyboard, because Hyprland only sends the pointer to the surface holding it; tested with a real click on HDMI-A-1 after opening on DP-3
+- [ ] Try keyboard use in the picker (arrows, Enter, Escape, M) on a real session; the tests here only used the pointer and the CLI
+- [ ] Record a real video once `programs.gpu-screen-recorder.enable` is on
+- [ ] Window positions on other compositors: niri and Sway IPC
+- [ ] A thumbnail for recordings
+
+### Share
+
+After capture, reusing its pickers.
+
+- [ ] `mochi share-pick` for the portal's picker: `custom_picker_binary` in xdg-desktop-portal-hyprland, `chooser_cmd` in xdg-desktop-portal-wlr. The island shows screens and windows with live thumbnails and prints the choice in the portal's format; the home-manager module can write the xdph line
+- [ ] A bubble while something shares or records the screen, from the portal or the PipeWire streams
+
 ## Plugins
 
 - [ ] `mochi-plugin.toml`: `id`, `api`, `overrides`, `backend`, `actions`
@@ -421,5 +449,7 @@ Lives only in the hub: no island view, a page and the CLI.
 
 Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, bubbles, and the OSD, workspaces, media, notifications, launcher, hub and power modules.
 
-1. Hub pages: audio, network, Bluetooth
-2. Plugins
+1. Capture: screenshots and recordings
+2. Share: the portal picker and a sharing bubble
+3. Hub pages: audio, network, Bluetooth
+4. Plugins

@@ -576,3 +576,17 @@ fn the_last_activity_ending_presents_nothing() {
     let effects = bench.arbiter.take_effects();
     assert!(effects.contains(&Effect::Present(None)));
 }
+
+#[test]
+fn an_overlay_makes_the_activity_modal() {
+    let mut bench = Bench::new();
+    bench.submit("capture", ActivitySpec::new("Choose").overlay("Overlay"));
+    let shown = bench.arbiter.shown().unwrap();
+    assert!(shown.modal);
+    assert_eq!(shown.overlay.as_deref(), Some("Overlay"));
+
+    let mut bench = Bench::new();
+    bench.submit("launcher", ActivitySpec::new("Launcher").modal());
+    let shown = bench.arbiter.shown().unwrap();
+    assert_eq!(shown.overlay, None);
+}

@@ -9,6 +9,10 @@ A module's views are QML files in its `qml/` directory. They import the core lib
 - Colors, sizes and timings come from `Theme`, never from literals: `Theme.surface` for a card, `Theme.textBody` for text, `Theme.move` for movement. A change to `theme.toml` then restyles every module.
 - Actions go through `Daemon.command(module, action, args)`; arguments are strings.
 
+## Overlays
+
+An activity can bring an overlay: `ActivitySpec::overlay("Overlay")` draws `qml/Overlay.qml` over every monitor, under the island and the bubbles, while the activity shows. It's for picking something on screen, like the capture module's region. The overlay gets the activity's `payload` and a `screen` property with its monitor, and takes the clicks. Every monitor's overlay asks for the keyboard, since Hyprland only sends the pointer to surfaces that hold it; the compositor gives it to one of them, so handle keys in each. If it declares `property bool ready`, the island waits for it to turn true before it changes, so an overlay can freeze the screen first.
+
 ## Theme roles
 
 | Role | For |

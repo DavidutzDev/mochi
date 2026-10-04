@@ -44,7 +44,7 @@ rustPlatform.buildRustPackage {
   '';
 
   meta = {
-    description = "A desktop shell built around a central island";
+    description = "\";
     license = lib.licenses.mit;
     mainProgram = "mochid";
     platforms = lib.platforms.linux;

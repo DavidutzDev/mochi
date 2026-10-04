@@ -88,7 +88,8 @@ pub(crate) fn start() -> Result<Compositor, String> {
     }
 
     // Compositor IPC fills in what the protocols can't say.
-    let focus = hyprland::socket_dir().map(|dir| {
+    let hyprland = hyprland::socket_dir();
+    let focus = hyprland.clone().map(|dir| {
         let (sender, receiver) = mpsc::unbounded_channel();
         tokio::spawn(hyprland::watch_focus(dir, sender));
         receiver
@@ -112,7 +113,11 @@ pub(crate) fn start() -> Result<Compositor, String> {
         action_receiver,
         focus,
     ));
-    Ok(Compositor { state, actions })
+    Ok(Compositor {
+        state,
+        actions,
+        hyprland,
+    })
 }
 
 async fn run(

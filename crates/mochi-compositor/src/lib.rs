@@ -112,6 +112,24 @@ pub enum CompositorError {
     UnknownWorkspace(WorkspaceId),
     #[error("the compositor doesn't allow switching to workspace {0:?}")]
     NotAllowed(WorkspaceId),
+    #[error("this compositor doesn't say where its windows are")]
+    NoWindowGeometry,
+    #[error("the compositor's IPC failed: {0}")]
+    Ipc(String),
+}
+
+/// A window on a visible workspace, for picking one on screen.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Window {
+    pub title: String,
+    pub app_id: String,
+    /// Position and size in the compositor's global layout, in logical
+    /// pixels: the same space as the outputs' positions.
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
+    pub floating: bool,
 }
 
 /// Wakes on every new snapshot; see [`Compositor::subscribe`].
@@ -127,6 +145,8 @@ pub(crate) enum Action {
 pub struct Compositor {
     state: watch::Receiver<State>,
     actions: mpsc::UnboundedSender<Action>,
+    /// Hyprland's socket directory, under Hyprland.
+    hyprland: Option<std::path::PathBuf>,
 }
 
 impl Compositor {
@@ -134,7 +154,11 @@ impl Compositor {
     pub fn unsupported() -> Self {
         let (_, state) = watch::channel(State::default());
         let (actions, _) = mpsc::unbounded_channel();
-        Self { state, actions }
+        Self {
+            state,
+            actions,
+            hyprland: None,
+        }
     }
 
     /// The latest snapshot.
@@ -163,6 +187,27 @@ impl Compositor {
         self.actions
             .send(Action::ActivateWorkspace(id))
             .map_err(|_| CompositorError::Unsupported)
+    }
+}
+
+impl Compositor {
+    /// The windows on visible workspaces, topmost first. No standard
+    /// protocol says where windows are, so this needs compositor IPC:
+    /// Hyprland's for now. Elsewhere it fails with
+    /// [`CompositorError::NoWindowGeometry`].
+    pub async fn windows(&self) -> Result<Vec<Window>, CompositorError> {
+        let dir = self
+            .hyprland
+            .as_deref()
+            .ok_or(CompositorError::NoWindowGeometry)?;
+        hyprland::windows(dir)
+            .await
+            .map_err(|error| CompositorError::Ipc(error.to_string()))
+    }
+
+    /// Whether [`Compositor::windows`] can work here.
+    pub fn knows_windows(&self) -> bool {
+        self.hyprland.is_some()
     }
 }
 
@@ -212,7 +257,11 @@ mod tests {
             focused_output: None,
         });
         let (actions, mut received) = mpsc::unbounded_channel();
-        let compositor = Compositor { state, actions };
+        let compositor = Compositor {
+            state,
+            actions,
+            hyprland: None,
+        };
 
         assert_eq!(compositor.activate_workspace(WorkspaceId(1)), Ok(()));
         assert!(matches!(

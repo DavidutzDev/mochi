@@ -115,6 +115,11 @@ pub struct Activity {
     /// dismisses it. For views you type into, like a launcher.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub modal: bool,
+    /// A full-screen view, `modules/<module>/<overlay>.qml`, drawn under the
+    /// island on every monitor while the activity shows. For picking
+    /// something on screen, like a region to capture. Implies `modal`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub overlay: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -201,6 +206,7 @@ mod tests {
             expanded: false,
             expandable: true,
             modal: false,
+            overlay: None,
             key: None,
         }
     }
@@ -246,6 +252,13 @@ mod tests {
         });
         round_trip_daemon(DaemonMessage::Present {
             activity: Some(activity()),
+        });
+        round_trip_daemon(DaemonMessage::Present {
+            activity: Some(Activity {
+                modal: true,
+                overlay: Some("Overlay".into()),
+                ..activity()
+            }),
         });
         round_trip_daemon(DaemonMessage::Present { activity: None });
         round_trip_daemon(DaemonMessage::Contributions {
