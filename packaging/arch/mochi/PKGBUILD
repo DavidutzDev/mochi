@@ -1,7 +1,7 @@
 # Maintainer: David Gheghea
 
 pkgname=mochi
-pkgver=0.0.3
+pkgver=0.0.4
 pkgrel=1
 pkgdesc='A desktop shell built around a central island'
 arch=('x86_64')
@@ -9,15 +9,16 @@ url='https://github.com/DavidutzDev/mochi'
 license=('MIT')
 # mochid refuses to start with another Quickshell than the one it's tested
 # against; see QUICKSHELL_VERSION in crates/mochi-core/src/supervisor.rs.
-depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder')
+depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder' 'sh')
 makedepends=('cargo')
 optdepends=(
   'wl-clipboard: copy screenshots'
   'satty: edit screenshots'
   'uwsm: start apps from the launcher as units of their own'
+  'xdg-desktop-portal-hyprland: pick what to share with the share module'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('42e9c7eae5dfc00d045e74519a461f73379305d0466fc44e4507d3b2c2eea700')
+sha256sums=('ffce8a2fc02a6d50332be641ff7894ba1e3d0110c34d40c76027d287eab0237d')
 
 prepare() {
   cd "$pkgname-$pkgver"
@@ -44,4 +45,10 @@ package() {
   install -Dm755 target/release/mochid target/release/mochi -t "$pkgdir/usr/bin/"
   install -Dm644 systemd/mochid.service -t "$pkgdir/usr/lib/systemd/user/"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
+  # xdg-desktop-portal-hyprland runs one program, without arguments of our
+  # choosing, as its screen-share picker.
+  install -Dm755 /dev/stdin "$pkgdir/usr/bin/mochi-share-picker" <<'SH'
+#!/bin/sh
+exec /usr/bin/mochi share-pick "$@"
+SH
 }

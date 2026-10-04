@@ -2,7 +2,7 @@
 
 pkgname=mochi-git
 _pkgname=mochi
-pkgver=0.0.3.r4.g181f886
+pkgver=0.0.4.r0.gce12bca
 pkgrel=1
 pkgdesc='A desktop shell built around a central island (latest commit)'
 arch=('x86_64')
