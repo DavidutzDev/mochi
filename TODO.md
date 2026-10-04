@@ -411,6 +411,7 @@ After capture, reusing its pickers.
 - [x] In `$XDG_RUNTIME_DIR` by default, through the new `ModuleCtx::session_dir`; `storage = "disk"` falls back to memory without a key
 - [x] The picker on the island, like the launcher, with image thumbnails; Enter pastes through `zwp-virtual-keyboard-v1` with a keymap of its own, Ctrl+Shift+V for terminals from the compositor's `focused_app`
 - [x] A hub card: count, pause, clear
+- [x] A hub page: the history with search, paste, copy, delete, pause and clear
 - [x] Tested end to end: copies, secrets skipped, a restart, disk mode against a private gnome-keyring, and pasting into `wev` in a headless Sway
 - [ ] `wlr-data-control` for compositors without the ext protocol
 - [ ] Pinned entries

@@ -117,6 +117,9 @@ impl Module for Clipboard {
                 .icon("clipboard")
                 .order(30)
                 .options(json!({ "span": 1 })),
+            ContributionSpec::new("hub", "page", "history", "Page", "Clipboard")
+                .icon("clipboard")
+                .order(30),
         ]
     }
 
@@ -212,8 +215,6 @@ struct State {
     written: HashSet<u64>,
     query: String,
     shown: Option<ActivityId>,
-    /// The window that had focus when the picker opened, by app id.
-    app: Option<String>,
 }
 
 impl State {
@@ -267,7 +268,6 @@ impl State {
             written: HashSet::new(),
             query: String::new(),
             shown: None,
-            app: None,
         }
     }
 
@@ -345,7 +345,6 @@ impl State {
                 }
             });
         }
-        self.app = ctx.compositor().state().focused_app;
         self.query.clear();
         let spec = ActivitySpec::new("Picker")
             .key("clipboard")
@@ -376,9 +375,20 @@ impl State {
             .map_err(|error| error.to_string())?;
         self.close(ctx);
         self.publish(ctx);
+        // Picked from the hub's page: the hub holds the keyboard.
+        let close = ctx.call("hub", "close", &[]);
+        tokio::spawn(async move {
+            match close.await {
+                Ok(()) | Err(CallError::NotEnabled(_)) => {}
+                Err(error) => tracing::warn!(%error, "could not close the hub"),
+            }
+        });
 
         if paste {
-            let shift = self.app.as_ref().is_some_and(|app| {
+            // While the island holds the keyboard, this is still the window
+            // that had it before.
+            let app = ctx.compositor().state().focused_app;
+            let shift = app.as_ref().is_some_and(|app| {
                 self.settings
                     .terminals
                     .iter()
@@ -480,9 +490,11 @@ impl State {
         }
     }
 
-    /// The hub card's state.
-    fn publish(&self, ctx: &ModuleCtx) {
+    /// The hub's state: the card's numbers and the page's entries.
+    fn publish(&mut self, ctx: &ModuleCtx) {
+        let entries = self.results("");
         ctx.publish_state(json!({
+            "entries": entries,
             "count": self.store.entries().len(),
             "paused": !self.listening.load(Ordering::Relaxed),
             "storage": match self.storage {
@@ -494,8 +506,22 @@ impl State {
     }
 
     fn payload(&mut self, ctx: &ModuleCtx) -> Value {
+        let query = self.query.clone();
+        let results = self.results(&query);
+        json!({
+            // Only the island on this monitor takes the keyboard.
+            "output": ctx.compositor().state().focused_output,
+            "query": self.query,
+            "paused": !self.listening.load(Ordering::Relaxed),
+            "now": now(),
+            "results": results,
+        })
+    }
+
+    /// The entries matching `query`, as the views show them.
+    fn results(&mut self, query: &str) -> Vec<Value> {
         let hits: Vec<(u64, Kind)> =
-            search::rank(self.store.entries(), &self.query, self.settings.max_results)
+            search::rank(self.store.entries(), query, self.settings.max_results)
                 .iter()
                 .map(|entry| (entry.id, entry.kind))
                 .collect();
@@ -524,14 +550,7 @@ impl State {
                 "image": picture.map(|path| format!("file://{}", path.display())),
             }));
         }
-        json!({
-            // Only the island on this monitor takes the keyboard.
-            "output": ctx.compositor().state().focused_output,
-            "query": self.query,
-            "paused": !self.listening.load(Ordering::Relaxed),
-            "now": now(),
-            "results": results,
-        })
+        results
     }
 }
 

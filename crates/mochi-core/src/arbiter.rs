@@ -7,8 +7,10 @@
 //! - One activity is shown at a time.
 //! - A new activity **interrupts** the shown one when the shown one is
 //!   interruptible and the new one has a higher priority, or the same priority
-//!   with [`SamePriority::Stack`]. The interrupted activity is suspended with
-//!   its timer paused, and comes back when the new one ends.
+//!   with [`SamePriority::Stack`]. An activity at [`Priority::TOP`]
+//!   interrupts anything below it, interruptible or not. The interrupted
+//!   activity is suspended with its timer paused, and comes back when the new
+//!   one ends.
 //! - Otherwise the new activity **waits** in a queue ordered by priority, then
 //!   arrival.
 //! - When the shown activity ends, the next one is the most recently
@@ -23,6 +25,9 @@
 //!   the next time it comes on screen, and collapses on its own once that time
 //!   ran out with the pointer away. A click collapses it at once, and a view
 //!   the user expanded stays expanded.
+//! - While the user has an activity expanded, it is modal: the island takes
+//!   the keyboard, and Escape or a click outside dismisses it. Views that
+//!   open on their own never take the keyboard.
 //!
 //! The arbiter never reads the clock: every call takes `now`. Changes are
 //! reported as [`Effect`]s for the daemon to act on.
@@ -48,6 +53,10 @@ impl Priority {
     pub const NORMAL: Self = Self(50);
     pub const HIGH: Self = Self(75);
     pub const URGENT: Self = Self(100);
+    /// Interrupts anything, even uninterruptible activities, and nothing
+    /// interrupts it. For capturing the screen as it is: a screenshot of the
+    /// open launcher has to open over it.
+    pub const TOP: Self = Self(u8::MAX);
 }
 
 /// What a new activity does when the shown one has the same priority.
@@ -540,6 +549,9 @@ impl Entry {
     }
 
     fn interrupts(&self, current: &Entry) -> bool {
+        if self.spec.priority == Priority::TOP {
+            return current.spec.priority < Priority::TOP;
+        }
         current.spec.interruptible
             && (self.spec.priority > current.spec.priority
                 || (self.spec.priority == current.spec.priority
@@ -565,6 +577,11 @@ impl Entry {
         }
         self.expanded = true;
         self.collapse = Some(Timer::new(Some(duration)));
+    }
+
+    /// Expanded by the user, rather than on its own for a while.
+    fn engaged(&self) -> bool {
+        self.expanded && self.collapse.is_none()
     }
 
     fn expandable(&self) -> bool {
@@ -603,7 +620,7 @@ impl Entry {
             payload: self.spec.payload.clone(),
             expanded: self.expanded,
             expandable: self.expandable(),
-            modal: self.spec.modal,
+            modal: self.spec.modal || self.engaged(),
             overlay: self.spec.overlay.clone(),
             key: self.spec.key.clone(),
         }

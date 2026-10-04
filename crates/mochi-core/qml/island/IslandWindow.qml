@@ -89,6 +89,14 @@ PanelWindow {
         onClicked: Daemon.event("dismiss")
     }
 
+    // Escape closes a modal activity whose view doesn't take keys itself,
+    // like a notification the user expanded. Views that do, like the
+    // launcher's search box, take the focus from it.
+    Item {
+        focus: root.modal && !root.overlaid
+        Keys.onEscapePressed: Daemon.event("dismiss")
+    }
+
     // The activity's overlay, under the bubbles and the island. It stays
     // loaded while activities with the same overlay follow each other, and
     // gets each one's payload.

@@ -1,6 +1,6 @@
 # Notifications
 
-The notification daemon. Popups show the app's icon or picture, the app, the summary and the body; click one for the whole text and the app's buttons. A burst from one app shows only the latest. Critical notifications, like a low battery, stay until you close them.
+The notification daemon. Popups show the app's icon or picture, the app, the summary and the body; click one for the whole text and the app's buttons, then Escape or a click outside closes it. A burst from one app shows only the latest. Critical notifications, like a low battery, stay until you close them.
 
 Popups that time out go to the history, behind a bell bubble that counts them. Do not disturb sends everything but critical notifications straight to the history.
 

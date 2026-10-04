@@ -503,7 +503,9 @@ impl State {
     fn spec(&self, session: &Session) -> ActivitySpec {
         ActivitySpec::new("Picker")
             .key("picker")
-            .priority(Priority::URGENT)
+            // Over anything, even the launcher or the hub, which the frozen
+            // screen still shows, so they can be captured too.
+            .priority(Priority::TOP)
             .uninterruptible()
             .overlay("Overlay")
             .payload(session.payload(&self.frames))

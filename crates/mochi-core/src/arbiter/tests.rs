@@ -165,6 +165,37 @@ fn uninterruptible_activities_make_everyone_wait() {
 }
 
 #[test]
+fn the_top_priority_interrupts_even_uninterruptible_activities() {
+    let mut bench = Bench::new();
+    let launcher = bench.submit(
+        "launcher",
+        ActivitySpec::new("Launcher")
+            .priority(Priority::URGENT)
+            .uninterruptible()
+            .modal(),
+    );
+    let picker = bench.submit(
+        "capture",
+        ActivitySpec::new("Picker")
+            .priority(Priority::TOP)
+            .uninterruptible(),
+    );
+    assert_eq!(bench.shown(), Some(picker));
+    // Nothing gets past it, not even another one at the top.
+    let other = bench.submit("share", ActivitySpec::new("Picker").priority(Priority::TOP));
+    assert_eq!(bench.shown(), Some(picker));
+
+    bench
+        .arbiter
+        .withdraw("capture", picker, bench.now)
+        .unwrap();
+    assert_eq!(bench.shown(), Some(other));
+    bench.arbiter.withdraw("share", other, bench.now).unwrap();
+    // The launcher comes back as it was.
+    assert_eq!(bench.shown(), Some(launcher));
+}
+
+#[test]
 fn suspended_activities_win_ties_against_queued_ones() {
     let mut bench = Bench::new();
     let card = bench.submit("notifications", timed(4));
@@ -589,4 +620,39 @@ fn an_overlay_makes_the_activity_modal() {
     bench.submit("launcher", ActivitySpec::new("Launcher").modal());
     let shown = bench.arbiter.shown().unwrap();
     assert_eq!(shown.overlay, None);
+}
+
+#[test]
+fn an_activity_the_user_expanded_is_modal_until_it_collapses() {
+    let mut bench = Bench::new();
+    let note = bench.submit("notifications", timed(4).expanded("Expanded"));
+    let modal = |bench: &Bench| bench.arbiter.shown().unwrap().modal;
+    assert!(!modal(&bench));
+
+    bench.arbiter.click(note, bench.now);
+    assert!(modal(&bench));
+    bench.arbiter.click(note, bench.now);
+    assert!(!modal(&bench));
+
+    // Escape or a click outside, once expanded, ends it.
+    bench.arbiter.click(note, bench.now);
+    bench.arbiter.dismiss(note, bench.now);
+    assert_eq!(bench.ended(), [(note, EndReason::Dismissed)]);
+}
+
+#[test]
+fn views_that_open_on_their_own_never_take_the_keyboard() {
+    let mut bench = Bench::new();
+    let media = bench.submit(
+        "media",
+        timed(10).expanded("Expanded").expand_for(3 * SECOND),
+    );
+    let shown = bench.arbiter.shown().unwrap();
+    assert!(shown.expanded && !shown.modal);
+
+    // A click while it's open on its own makes it the user's.
+    bench.arbiter.click(media, bench.now);
+    bench.arbiter.click(media, bench.now);
+    let shown = bench.arbiter.shown().unwrap();
+    assert!(shown.expanded && shown.modal);
 }
