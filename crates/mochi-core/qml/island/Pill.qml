@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 import "Lists.js" as Lists
 
 // One bubble on the edge, or a group of them sharing one background. Small
@@ -68,6 +69,17 @@ Item {
         }
     }
 
+    // A soft shadow under the shape. Theme.shadow sets its strength, and
+    // transparent turns it off.
+    RectangularShadow {
+        anchors.fill: shape
+        visible: Theme.shadow.a > 0
+        radius: shape.radius
+        blur: 16
+        offset.y: 2
+        color: Theme.shadow
+    }
+
     IslandShape {
         id: shape
 
@@ -79,6 +91,7 @@ Item {
         flipX: root.atRight
         flipY: root.atBottom
         color: Theme.background
+        border: Theme.border
     }
 
     Item {
@@ -130,7 +143,9 @@ Item {
                         onUrlChanged: {
                             if (url === "")
                                 return;
-                            setSource(url, { payload: slot.bubble.payload });
+                            setSource(url, {
+                                payload: slot.bubble.payload
+                            });
                             if (status !== Loader.Ready)
                                 console.warn(`mochi: could not load ${url}`);
                         }

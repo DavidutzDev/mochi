@@ -126,6 +126,7 @@ PanelWindow {
     property IslandRegion islandBlur: IslandRegion {
         island: island
         ears: true
+        inset: 1
     }
 
     Variants {
@@ -139,7 +140,9 @@ PanelWindow {
         id: pillBlurs
 
         model: root.pills
-        PillRegion {}
+        PillRegion {
+            inset: 1
+        }
     }
 
     readonly property real edgeY: atBottom ? height - margin : margin

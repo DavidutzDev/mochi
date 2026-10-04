@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Effects
 
 // The island takes the implicit size of whatever view it shows. Views never
 // tell the island a size; they size themselves and the island follows with a
@@ -138,6 +139,17 @@ Item {
 
     Component.onCompleted: present(Daemon.activity)
 
+    // A soft shadow under the shape. Theme.shadow sets its strength, and
+    // transparent turns it off.
+    RectangularShadow {
+        anchors.fill: shape
+        visible: Theme.shadow.a > 0
+        radius: shape.radius
+        blur: 16
+        offset.y: 2
+        color: Theme.shadow
+    }
+
     IslandShape {
         id: shape
 
@@ -149,6 +161,7 @@ Item {
         flipX: root.atRight
         flipY: root.atBottom
         color: Theme.background
+        border: Theme.border
     }
 
     Item {

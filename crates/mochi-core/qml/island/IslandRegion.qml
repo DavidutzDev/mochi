@@ -9,18 +9,22 @@ Region {
     required property Island island
     // Include the ears: worth it for the blur, not for clicks.
     property bool ears: false
+    // Pixels to stay inside the outline. The blur uses 1: the shape is drawn
+    // at fractional positions with soft edges, and a blur reaching past it
+    // would show as a light line around the island.
+    property int inset: 0
 
     readonly property var outline: island.shape
     readonly property bool shown: island.shown
 
-    x: Math.round(island.x)
-    y: Math.round(island.y)
-    width: shown ? Math.round(island.width) : 0
-    height: shown ? Math.round(island.height) : 0
-    topLeftRadius: outline.corners.topLeft
-    topRightRadius: outline.corners.topRight
-    bottomRightRadius: outline.corners.bottomRight
-    bottomLeftRadius: outline.corners.bottomLeft
+    x: Math.round(island.x) + inset
+    y: Math.round(island.y) + inset
+    width: shown ? Math.max(0, Math.round(island.width) - inset * 2) : 0
+    height: shown ? Math.max(0, Math.round(island.height) - inset * 2) : 0
+    topLeftRadius: Math.max(0, outline.corners.topLeft - inset)
+    topRightRadius: Math.max(0, outline.corners.topRight - inset)
+    bottomRightRadius: Math.max(0, outline.corners.bottomRight - inset)
+    bottomLeftRadius: Math.max(0, outline.corners.bottomLeft - inset)
 
     // At most three ears. Each is a square with a circle cut out of it.
     EarRegion {

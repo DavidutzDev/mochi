@@ -21,6 +21,8 @@ Shape {
     property bool flipX: false
     property bool flipY: false
     property color color: "black"
+    // A hairline along the outline, except where it touches the screen edge.
+    property color border: "transparent"
 
     readonly property real w: width
     readonly property real h: height
@@ -57,11 +59,7 @@ Shape {
 
     // Each ear as the square it fills, with the circle cut out of it, in item
     // coordinates.
-    readonly property var ears: [
-        ear(-leftEar, 0, leftEar, -leftEar, leftEar),
-        ear(w, 0, rightEar, w + rightEar, rightEar),
-        ear(0, h, downEar, downEar, h + downEar)
-    ].filter(ear => ear.size > 0.5)
+    readonly property var ears: [ear(-leftEar, 0, leftEar, -leftEar, leftEar), ear(w, 0, rightEar, w + rightEar, rightEar), ear(0, h, downEar, downEar, h + downEar)].filter(ear => ear.size > 0.5)
 
     function ear(x: real, y: real, size: real, cx: real, cy: real): var {
         return {
@@ -107,6 +105,34 @@ Shape {
         return path + " Z";
     }
 
+    // The outline again, for the border, with the edges that touch the screen
+    // skipped: a hairline along the screen edge would only show as a stray
+    // line there.
+    readonly property string borderPath: {
+        const alongTop = edgeEar > 0 ? " M " : " L ";
+        const alongSide = sideEar > 0 ? " M " : " L ";
+        let path = leftEar > 0 ? `M ${point(-leftEar, 0)}` : `M ${point(topLeft, 0)}`;
+
+        if (rightEar > 0)
+            path += alongTop + point(w + rightEar, 0) + arc(rightEar, false, w, rightEar);
+        else
+            path += ` L ${point(w - topRight, 0)}` + arc(topRight, true, w, topRight);
+
+        path += ` L ${point(w, h - bottomRight)}` + arc(bottomRight, true, w - bottomRight, h);
+
+        if (downEar > 0)
+            path += ` L ${point(downEar, h)}` + arc(downEar, false, 0, h + downEar);
+        else
+            path += ` L ${point(bottomLeft, h)}` + arc(bottomLeft, true, 0, h - bottomLeft);
+
+        if (leftEar > 0)
+            path += alongSide + point(0, leftEar) + arc(leftEar, false, -leftEar, 0);
+        else
+            path += alongSide + point(0, topLeft) + arc(topLeft, true, topLeft, 0);
+
+        return edgeEar > 0 || sideEar > 0 ? path : path + " Z";
+    }
+
     preferredRendererType: Shape.CurveRenderer
 
     ShapePath {
@@ -115,6 +141,18 @@ Shape {
 
         PathSvg {
             path: root.path
+        }
+    }
+
+    ShapePath {
+        fillColor: "transparent"
+        strokeColor: root.border
+        strokeWidth: 1
+        capStyle: ShapePath.FlatCap
+        joinStyle: ShapePath.RoundJoin
+
+        PathSvg {
+            path: root.borderPath
         }
     }
 }

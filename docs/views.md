@@ -24,6 +24,7 @@ An activity can bring an overlay: `ActivitySpec::overlay("Overlay")` draws `qml/
 | `foreground`, `muted` | main and secondary text and icons |
 | `accent`, `onAccent` | what is active or important, and text on it |
 | `danger`, `success` | destructive actions, good news |
+| `border`, `shadow` | the hairline around the island and bubbles, and the shadow under them; the core draws both |
 
 Text sizes: `textCaption`, `textLabel`, `textBody`, `textSubtitle`, `textTitle`, `textHeadline`, `textDisplay`, with `fontFamily`. Corners: `radiusSmall`, `radiusMedium`, `radiusLarge`. Motion: `fast` for colors and hovers, `move` with the `overshoot` curve for things that move.
 

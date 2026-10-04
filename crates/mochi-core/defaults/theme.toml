@@ -24,6 +24,10 @@
 # Destructive actions, like a shut down waiting for its second click.
 # danger = "#ff453a"
 # success = "#30d158"
+# The hairline around the island and the bubbles; transparent for none.
+# border = "#14ffffff"
+# The soft shadow under them; transparent for none.
+# shadow = "#59000000"
 
 [layout]
 # "island" floats apart from the screen edge; "notch" attaches to it with

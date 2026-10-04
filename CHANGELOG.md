@@ -7,6 +7,11 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 ### Added
 
 - Recording can leave out the desktop audio: a speaker toggle next to the microphone one in the picker, the A key, the `audio` action, and `record_audio` for the default.
+- A hairline border and a soft shadow around the island and the bubbles, as the theme colors `border` and `shadow`; transparent turns either off. The border skips any edge the island is attached to in notch mode.
+
+### Fixed
+
+- A light 1px line around the island and the bubbles: their blur reached past the drawn outline. It now stays a pixel inside.
 
 ## 0.0.3 - 2026-10-04
 

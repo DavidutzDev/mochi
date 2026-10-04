@@ -39,6 +39,10 @@ pub struct Colors {
     /// Destructive actions, like a shut down waiting for its second click.
     pub danger: Color,
     pub success: Color,
+    /// The hairline around the island and the bubbles.
+    pub border: Color,
+    /// The shadow under them. Transparent turns it off.
+    pub shadow: Color,
 }
 
 impl Default for Colors {
@@ -54,6 +58,8 @@ impl Default for Colors {
             on_accent: Color::fixed("#000000"),
             danger: Color::fixed("#ff453a"),
             success: Color::fixed("#30d158"),
+            border: Color::fixed("#14ffffff"),
+            shadow: Color::fixed("#59000000"),
         }
     }
 }
