@@ -37,12 +37,17 @@ PanelWindow {
     // on the activity's monitor does, when it names one: two surfaces asking
     // for the keyboard would fight over it.
     readonly property var activity: Daemon.activity
-    readonly property bool modal: (activity?.modal ?? false) && (activity.payload?.output == null || activity.payload.output === screen?.name)
+    readonly property var panelOutput: activity?.output ?? activity?.payload?.output ?? null
+    readonly property bool modal: (activity?.modal ?? false) && (panelOutput == null || panelOutput === screen?.name)
     // An activity with an overlay covers every monitor and asks for the
     // keyboard on each: Hyprland only sends the pointer to surfaces holding
     // the keyboard, so an overlay without it couldn't be clicked.
     readonly property bool overlaid: activity?.overlay != null
-    readonly property bool covering: modal || overlaid
+    // Any other activity that closes on a click outside catches every click
+    // too, without the keyboard: the click closes it instead of reaching
+    // the window underneath. Not on a monitor that isn't showing it.
+    readonly property bool catching: (activity?.outside ?? false) && !island.elsewhere(activity)
+    readonly property bool covering: modal || overlaid || catching
 
     // Always the whole screen: a layer surface that changes size is animated by
     // the compositor (Hyprland's `layers` animation), which would stretch a
@@ -58,7 +63,7 @@ PanelWindow {
     exclusionMode: ExclusionMode.Ignore
 
     WlrLayershell.namespace: "mochi-island"
-    WlrLayershell.layer: covering ? WlrLayer.Overlay : WlrLayer.Top
+    WlrLayershell.layer: modal || overlaid ? WlrLayer.Overlay : WlrLayer.Top
     WlrLayershell.keyboardFocus: modal || overlaid ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     // Every pill on screen, for the regions below.
@@ -81,12 +86,14 @@ PanelWindow {
         height: root.height
     }
 
-    // Under everything: a click that misses the island while a modal
-    // activity shows closes it.
+    // Under everything: a click that misses the island closes what it
+    // shows. The daemon decides how: dismissed when the user opened it or
+    // it takes the keyboard, ended early otherwise.
     MouseArea {
         anchors.fill: parent
         enabled: root.covering
-        onClicked: Daemon.event("dismiss")
+        acceptedButtons: Qt.AllButtons
+        onClicked: Daemon.event(root.overlaid ? "dismiss" : "outside")
     }
 
     // Escape closes a modal activity whose view doesn't take keys itself,
@@ -221,5 +228,6 @@ PanelWindow {
         atBottom: root.atBottom
         atRight: Theme.islandArea === "right"
         overlay: overlay
+        output: root.screen?.name ?? ""
     }
 }

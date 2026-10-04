@@ -13,6 +13,9 @@ use serde::de::DeserializeOwned;
 /// `theme.toml`, every token at its default.
 pub const THEME: &str = include_str!("../defaults/theme.toml");
 
+/// The `[island]` section of `config.toml`.
+pub const ISLAND: &str = include_str!("../defaults/island.toml");
+
 /// The `[bubbles]` section of `config.toml`.
 pub const BUBBLES: &str = include_str!("../defaults/bubbles.toml");
 
@@ -64,6 +67,8 @@ pub fn config(enabled: &[&str], modules: &[(&str, &str)]) -> String {
         text.push_str(&format!("    \"{id}\",\n"));
     }
     text.push_str("]\n\n");
+    text.push_str(ISLAND.trim_end());
+    text.push_str("\n\n");
     text.push_str(BUBBLES.trim_end());
     for (_, example) in modules {
         if !example.is_empty() {
@@ -123,7 +128,7 @@ mod tests {
     use mochi_protocol::Theme;
 
     use super::*;
-    use crate::config::{BubblesConfig, Config};
+    use crate::config::{BubblesConfig, Config, IslandConfig};
 
     #[test]
     fn uncomments_defaults_only() {
@@ -138,6 +143,12 @@ mod tests {
     fn the_theme_example_shows_the_defaults() {
         let theme: Theme = toml::from_str(&uncommented(THEME)).unwrap();
         assert_eq!(theme, Theme::default());
+    }
+
+    #[test]
+    fn the_island_example_shows_the_defaults() {
+        let config: Config = toml::from_str(&uncommented(ISLAND)).unwrap();
+        assert_eq!(config.island, IslandConfig::default());
     }
 
     #[test]

@@ -16,6 +16,13 @@ Item {
     // The activity on screen, or null when the daemon has nothing to show.
     property var activity: null
     readonly property bool shown: activity !== null
+    // This island's monitor. A panel meant for another one doesn't show
+    // here; this island keeps what it showed.
+    property string output: ""
+
+    function elsewhere(next: var): bool {
+        return next?.output != null && output !== "" && next.output !== output;
+    }
 
     // Radius of the corners away from any edge.
     readonly property real radius: Math.min(height / 2, width / 2, Theme.maxRadius)
@@ -42,7 +49,7 @@ Item {
     }
 
     onOverlayReadyChanged: {
-        if (overlayReady && Daemon.activity?.overlay != null)
+        if (overlayReady && Daemon.activity?.overlay != null && !elsewhere(Daemon.activity))
             present(Daemon.activity);
     }
 
@@ -99,7 +106,7 @@ Item {
         // one (a keyed replacement too) has to hear that the pointer is
         // already over the island.
         if (hover.hovered && (!previous || previous.id !== next.id))
-            Daemon.event("hover_enter");
+            Daemon.eventFor(next, "hover_enter");
     }
 
     // Loads the next view into the hidden slot and swaps the slots.
@@ -132,12 +139,15 @@ Item {
         target: Daemon
 
         function onActivityChanged(): void {
-            if (!root.waiting(Daemon.activity))
+            if (!root.waiting(Daemon.activity) && !root.elsewhere(Daemon.activity))
                 root.present(Daemon.activity);
         }
     }
 
-    Component.onCompleted: present(Daemon.activity)
+    Component.onCompleted: {
+        if (!elsewhere(Daemon.activity))
+            present(Daemon.activity);
+    }
 
     // A soft shadow under the shape. Theme.shadow sets its strength, and
     // transparent turns it off.
@@ -181,18 +191,18 @@ Item {
 
     HoverHandler {
         id: hover
-        onHoveredChanged: Daemon.event(hovered ? "hover_enter" : "hover_leave")
+        onHoveredChanged: Daemon.eventFor(root.activity, hovered ? "hover_enter" : "hover_leave")
     }
 
     // Left click expands or collapses, or goes to the module.
     TapHandler {
         acceptedButtons: Qt.LeftButton
-        onTapped: Daemon.event("click")
+        onTapped: Daemon.eventFor(root.activity, "click")
     }
 
     // Right click closes the activity.
     TapHandler {
         acceptedButtons: Qt.RightButton
-        onTapped: Daemon.event("dismiss")
+        onTapped: Daemon.eventFor(root.activity, "dismiss")
     }
 }

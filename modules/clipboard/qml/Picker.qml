@@ -4,7 +4,8 @@ import qs.island
 // The history: a search box and the entries, newest first. Each keystroke
 // goes to the module, which answers with the matches. Arrows or Tab move
 // the selection, Enter pastes it, Shift+Enter only copies it, Shift+Delete
-// removes it, Escape closes.
+// removes it, Escape closes. A click on an image opens it in the preview
+// card a screenshot gets.
 Item {
     id: root
 
@@ -196,7 +197,8 @@ Item {
                     if (hovered)
                         list.currentIndex = index;
                 }
-                onClicked: root.send("pick", index)
+                // An image opens in the preview card; Enter still pastes it.
+                onClicked: root.send(image ? "show" : "pick", index)
 
                 leading: Item {
                     anchors.fill: parent

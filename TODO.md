@@ -161,6 +161,7 @@ Supervisor
 - [x] Theme singleton fed by the `theme` message
 - [x] Forward hover, click and dismiss events to the daemon
 - [x] Re-send `hover_enter` for the new activity when the island changes while the pointer is still over it (the arbiter ignores events for activities that are no longer shown)
+- [x] A click outside closes whatever the island shows, except the idle island and passive notices (the volume and workspace OSDs, `ActivitySpec::passive`): one the user opened, or a modal one, is dismissed; others end with `EndReason::Outside`, so a notification goes to the missed ones. The island catches every click while such a view shows, without the keyboard. `[island] click_outside = "expanded"` limits it to views the user opened
 
 ## Compositor support
 
@@ -223,6 +224,7 @@ ear_radius = 10
 - [ ] Switching the anchor jumps instead of moving, since the layer surface changes edge
 - [ ] Under another layer surface with an exclusive zone, like a bar, the notch attaches to that surface's edge, not the screen's. Matching the bar's color makes them look like one piece; a `[layout.notch] color` could help
 - [ ] Per-output layout once per-output islands exist
+- [x] `[island] panels = "focus" | "pointer" | "all"`: the daemon gives a panel (a modal activity without an overlay) an `output`, the focused monitor or the one under the pointer (Hyprland's `cursorpos`), and the islands on other monitors keep what they showed. Each island reports events for the activity it shows
 
 ## Bubbles
 
@@ -394,6 +396,11 @@ Screenshots and recordings from the island. Decided on 2026-10-04: our own froze
 - [ ] Record a real video once `programs.gpu-screen-recorder.enable` is on
 - [ ] Window positions on other compositors: niri and Sway IPC
 - [ ] A thumbnail for recordings
+- [x] A region across several monitors: regions are global, the first overlay sends the layout, a drag keeps going into the next screen and the other screens draw their part as it moves; each screen it touches saves its frame and `crop::join` puts them together at the finest scale, transparent where no screen is. Tested on Hyprland through IPC; a real drag across still needs trying by hand. Recordings stay on one screen
+- [ ] Recording a region across screens, if gpu-screen-recorder can
+- [x] Capture every screen at once: the All screens mode, `mochi ipc capture screenshot all`
+- [ ] A hub page for captures: the latest screenshots and recordings as a history, with thumbnails, and the preview card's copy, edit, open folder and delete on each
+- [ ] Pick the quality of a recording and of a screen share: frame rate presets (15, 30, 60, 90, 120 fps) and resolution presets (480p, 720p, 1080p, 1440p), in the picker and as settings. gpu-screen-recorder takes `-f` and `-s`; a screen share's quality is the app's to choose, so check what the portal lets the picker say
 
 ### Share
 
@@ -401,6 +408,7 @@ After capture, reusing its pickers.
 
 - [x] `mochi share-pick` is xdg-desktop-portal-hyprland's `custom_picker_binary` (packaged as `mochi-share-picker`, which the home-manager module writes into `xdph.conf`). The island panel shows screens and the portal's windows with live thumbnails, Hyprland toplevels matched by address, plus Region over a live overlay and a Remember switch; the answer goes back as the command's new `output` reply. Without Mochi or the module it runs `hyprland-share-picker`
 - [x] A bubble while the screen is shared, from Hyprland's `screencast` events counted per capture session; it waits 1.5 s and ignores the picker's own thumbnails, since Hyprland reports every capture, screenshots included
+- [ ] Clicking the sharing bubble asks again what to share, for the app sharing now. The portal has no way to change a running share, so this means stopping it and the app asking again, or a choice that Mochi serves itself
 - [ ] `chooser_cmd` for xdg-desktop-portal-wlr
 - [ ] Screencast state on compositors other than Hyprland (PipeWire streams)
 
@@ -417,7 +425,26 @@ After capture, reusing its pickers.
 - [ ] Pinned entries
 - [ ] Ignored apps, by the focused window's class
 - [ ] A larger preview of the selected image or long text
+- [x] Clicking an image entry, in the picker or the hub page, opens it in the capture module's preview card through its new `show` action: copy and edit as for a screenshot, no folder, and delete removes the entry
 - [ ] Check the paste on Hyprland with a non-QWERTY layout
+
+### Audio
+
+A new module: what plays sound, on the island.
+
+- [ ] Switch which app the center shows when several play at once, like Spotify and a browser video
+- [ ] Volume mixer: a volume slider and mute per app (PulseAudio sink inputs, served by pipewire-pulse), next to the output volume
+- [ ] Output and input device switch
+- [ ] Decide what moves here from the media and OSD modules, and whether the mixer is a hub page, an island view, or both
+
+### Tray
+
+A new module: the apps' tray icons.
+
+- [ ] StatusNotifierItem over D-Bus: register as the watcher and host, follow items as they come and go
+- [ ] Icons, tooltips and attention state, from the icon theme or the pixmaps the app sends
+- [ ] Click to activate, right click for the app's menu (DBusMenu), scroll
+- [ ] Where it lives: bubbles next to the island, a hub card, or both
 
 ## Plugins
 

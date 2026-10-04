@@ -4,7 +4,7 @@ import qs.island
 // The island while picking: the modes, the current one highlighted, and
 // what to do next, and for a recording the desktop audio and microphone
 // toggles. A click on another mode switches to it; the overlay handles the
-// keys (Tab or 1 to 3 switch, A the desktop audio, M the microphone, Escape
+// keys (Tab or a number switch, A the desktop audio, M the microphone, Escape
 // cancels).
 Item {
     id: root
@@ -25,6 +25,10 @@ Item {
             "screen": {
                 "label": "Screen",
                 "icon": "display"
+            },
+            "all": {
+                "label": "All screens",
+                "icon": "grid"
             }
         })
 
@@ -37,6 +41,8 @@ Item {
             return `Click a window to ${verb}`;
         case "screen":
             return `Click a screen to ${verb}`;
+        case "all":
+            return `Click to ${verb} every screen`;
         default:
             return payload.region ? `Enter to ${verb}` : `Drag to ${verb}`;
         }

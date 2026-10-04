@@ -1,8 +1,9 @@
 # Capture: screenshots and recordings. `mochi ipc capture screenshot` and
 # `mochi ipc capture record` ask what to capture; bind them to keys.
 [module.capture]
-# The mode the picker opens in: "region", "window" or "screen". The island
-# switches it while picking.
+# The mode the picker opens in: "region", "window", "screen" or "all",
+# every screen as one image (screenshots only; recordings open on "region"
+# instead). The island switches it while picking.
 # mode = "region"
 # Where screenshots go. "" is $XDG_PICTURES_DIR/Screenshots.
 # screenshots = ""

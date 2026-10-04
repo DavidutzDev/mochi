@@ -9,8 +9,8 @@ use mochi_core::actions;
 use mochi_core::compositor::Compositor;
 use mochi_core::supervisor::{Supervisor, UiEvent};
 use mochi_core::{
-    Arbiter, Assets, Bubbles, CallError, Config, Effect, Module, ModuleCommand, ModuleError,
-    ModuleEvent, ModuleRequest, Reply, Request,
+    Arbiter, Assets, Bubbles, CallError, ClickOutside, Config, Effect, Module, ModuleCommand,
+    ModuleError, ModuleEvent, ModuleRequest, Panels, Reply, Request,
 };
 use mochi_protocol::{
     API, ActionSpec, ClientMessage, CompositorStatus, Contribution, DaemonMessage, ErrorCode,
@@ -91,6 +91,8 @@ pub struct Daemon {
     /// Attached once the shell is written; `None` only during startup.
     supervisor: Option<Supervisor>,
     compositor: Compositor,
+    /// `[island] panels`: which monitor panels open on.
+    panels: Panels,
     handshake_deadline: Option<Instant>,
 }
 
@@ -119,6 +121,7 @@ impl Daemon {
             runner,
             supervisor: None,
             compositor,
+            panels: Panels::default(),
             handshake_deadline: None,
         }
     }
@@ -174,6 +177,9 @@ impl Daemon {
             tracing::info!(module = id, "started");
         }
         self.order = wanted;
+        self.panels = config.island.panels;
+        self.arbiter
+            .set_outside_expanded_only(config.island.click_outside == ClickOutside::Expanded);
         self.bubbles.configure(
             config.bubbles.modules.clone(),
             Some(config.bubbles.max_per_area),
@@ -307,6 +313,7 @@ impl Daemon {
                     EventKind::HoverEnter => self.arbiter.hover(activity, true, now),
                     EventKind::HoverLeave => self.arbiter.hover(activity, false, now),
                     EventKind::Dismiss => self.arbiter.dismiss(activity, now),
+                    EventKind::Outside => self.arbiter.outside(activity, now),
                 }
             }
             (Some(Role::Ui), ClientMessage::BubbleClick { bubble }) => {
@@ -575,10 +582,13 @@ impl Daemon {
                 self.broadcast(&message);
                 Ok(())
             }
-            Request::Present { id, spec } => {
+            Request::Present { id, mut spec } => {
                 let views = std::iter::once(&spec.compact).chain(spec.expanded.as_ref());
                 if !self.has_views(module, views) {
                     return;
+                }
+                if spec.output.is_none() && spec.modal && spec.overlay.is_none() {
+                    spec.output = self.panel_output();
                 }
                 self.arbiter.submit(id, module, spec, now);
                 Ok(())
@@ -674,6 +684,17 @@ impl Daemon {
                 self.handshake_deadline = None;
                 tracing::error!("the UI is not running; fix the error above and restart mochid");
             }
+        }
+    }
+
+    /// The monitor a panel opens on, from `[island] panels`; `None` for every
+    /// monitor.
+    fn panel_output(&self) -> Option<String> {
+        let focused = || self.compositor.state().focused_output;
+        match self.panels {
+            Panels::All => None,
+            Panels::Focus => focused(),
+            Panels::Pointer => self.compositor.pointer_output().or_else(focused),
         }
     }
 

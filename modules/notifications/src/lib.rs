@@ -303,7 +303,9 @@ impl Daemon {
             return;
         };
         let end = match reason {
-            EndReason::Expired => PopupEnd::TimedOut,
+            // A click elsewhere only moves it to the missed ones, as a timeout
+            // would.
+            EndReason::Expired | EndReason::Outside => PopupEnd::TimedOut,
             EndReason::Dismissed => PopupEnd::Dismissed,
             // Taken down or replaced on purpose: nothing to do.
             EndReason::Withdrawn | EndReason::Replaced => return,

@@ -16,6 +16,8 @@ use crate::Window;
 
 const FIRST_RETRY: Duration = Duration::from_secs(1);
 const MAX_RETRY: Duration = Duration::from_secs(30);
+/// The longest a blocking request may take.
+const BLOCKING_TIMEOUT: Duration = Duration::from_millis(100);
 
 /// Hyprland's socket directory, when running under Hyprland.
 pub(crate) fn socket_dir() -> Option<PathBuf> {
@@ -162,6 +164,48 @@ fn windows_from(clients: &str, monitors: &str) -> Option<Vec<Window>> {
     Some(windows.into_iter().map(|(_, _, window)| window).collect())
 }
 
+/// The monitor under the pointer. Blocking, but bounded: the daemon asks
+/// this while it decides where a panel opens, and Hyprland answers in about
+/// a millisecond.
+pub(crate) fn pointer_output(dir: &Path) -> Option<String> {
+    let cursor = query_blocking(dir, "j/cursorpos").ok()?;
+    let monitors = query_blocking(dir, "j/monitors").ok()?;
+    output_at(&cursor, &monitors)
+}
+
+fn query_blocking(dir: &Path, request: &str) -> std::io::Result<String> {
+    use std::io::{Read, Write};
+    let mut socket = std::os::unix::net::UnixStream::connect(dir.join(".socket.sock"))?;
+    socket.set_read_timeout(Some(BLOCKING_TIMEOUT))?;
+    socket.set_write_timeout(Some(BLOCKING_TIMEOUT))?;
+    socket.write_all(request.as_bytes())?;
+    let mut reply = String::new();
+    socket.read_to_string(&mut reply)?;
+    Ok(reply)
+}
+
+/// The monitor holding the point in `hyprctl -j cursorpos`, in the global
+/// layout, where a monitor covers its pixel size divided by its scale, with
+/// width and height swapped when it's rotated a quarter turn.
+fn output_at(cursor: &str, monitors: &str) -> Option<String> {
+    let cursor: serde_json::Value = serde_json::from_str(cursor).ok()?;
+    let (x, y) = (cursor["x"].as_f64()?, cursor["y"].as_f64()?);
+    let monitors: serde_json::Value = serde_json::from_str(monitors).ok()?;
+    monitors.as_array()?.iter().find_map(|monitor| {
+        let scale = monitor["scale"].as_f64().filter(|scale| *scale > 0.0)?;
+        let (mut width, mut height) = (
+            monitor["width"].as_f64()? / scale,
+            monitor["height"].as_f64()? / scale,
+        );
+        if monitor["transform"].as_i64().unwrap_or(0) % 2 == 1 {
+            std::mem::swap(&mut width, &mut height);
+        }
+        let (left, top) = (monitor["x"].as_f64()?, monitor["y"].as_f64()?);
+        let inside = x >= left && x < left + width && y >= top && y < top + height;
+        inside.then(|| monitor["name"].as_str().map(str::to_owned))?
+    })
+}
+
 /// The events worth passing on.
 fn event(line: &str) -> Option<Event> {
     if let Some(output) = focused_from_event(line) {
@@ -203,6 +247,22 @@ fn focused_from_monitors(json: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_the_monitor_under_the_pointer() {
+        let monitors = r#"[
+            {"name": "HDMI-A-1", "x": 0, "y": 0, "width": 1920, "height": 1080, "scale": 1, "transform": 0},
+            {"name": "DP-3", "x": 1920, "y": 0, "width": 3840, "height": 2160, "scale": 2, "transform": 0},
+            {"name": "eDP-1", "x": 3840, "y": 0, "width": 1920, "height": 1080, "scale": 1, "transform": 1}
+        ]"#;
+        let at = |x: i32, y: i32| output_at(&format!(r#"{{"x": {x}, "y": {y}}}"#), monitors);
+        assert_eq!(at(10, 10).as_deref(), Some("HDMI-A-1"));
+        // Scaled: 3840 pixels at 2 cover 1920 in the layout.
+        assert_eq!(at(3839, 1079).as_deref(), Some("DP-3"));
+        // Rotated: 1080 wide, 1920 tall.
+        assert_eq!(at(3900, 1500).as_deref(), Some("eDP-1"));
+        assert_eq!(at(5000, 10), None);
+    }
 
     #[test]
     fn reads_focus_events_only() {

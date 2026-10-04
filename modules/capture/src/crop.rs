@@ -7,7 +7,7 @@
 
 use std::fs::File;
 use std::io::BufWriter;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// An area in logical pixels, in the global layout.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -26,6 +26,28 @@ impl Rect {
             width,
             height,
         }
+    }
+
+    /// The smallest area holding both.
+    pub fn union(self, other: Self) -> Self {
+        let left = self.x.min(other.x);
+        let top = self.y.min(other.y);
+        let right = (self.x + self.width).max(other.x + other.width);
+        let bottom = (self.y + self.height).max(other.y + other.height);
+        Self::new(left, top, right - left, bottom - top)
+    }
+
+    /// The area both cover, when they overlap.
+    pub fn intersection(self, other: Self) -> Option<Self> {
+        let left = self.x.max(other.x);
+        let top = self.y.max(other.y);
+        let right = (self.x + self.width).min(other.x + other.width);
+        let bottom = (self.y + self.height).min(other.y + other.height);
+        (right > left && bottom > top).then(|| Self::new(left, top, right - left, bottom - top))
+    }
+
+    pub fn intersects(&self, other: &Self) -> bool {
+        self.intersection(*other).is_some()
     }
 }
 
@@ -80,10 +102,107 @@ pub fn crop(frame: &Path, output: Rect, area: Rect, target: &Path) -> Result<Pix
         rows.extend_from_slice(&pixels[start..start + cut.width as usize * 3]);
     }
 
+    write_png(target, cut.width, cut.height, png::ColorType::Rgb, &rows)?;
+    Ok(cut)
+}
+
+/// Saves `area` as one PNG at `target`, from the frames of every screen it
+/// touches, each with its place in the global layout. The image takes the
+/// finest scale among them, so no screen loses detail; a coarser screen's
+/// part is scaled up to match. Where no screen is, as beside a shorter
+/// monitor, the image is transparent. Returns its size in pixels.
+pub fn join(frames: &[(PathBuf, Rect)], area: Rect, target: &Path) -> Result<(u32, u32), String> {
+    let files = frames
+        .iter()
+        .map(|(path, place)| {
+            std::fs::read(path)
+                .map(|bytes| (bytes, *place))
+                .map_err(|error| format!("cannot read the frame: {error}"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut screens = Vec::with_capacity(files.len());
+    for (bytes, place) in &files {
+        let (width, height, pixels) = parse_ppm(bytes).ok_or("a frame isn't a binary PPM")?;
+        screens.push((width, height, pixels, *place));
+    }
+    let scale = screens
+        .iter()
+        .map(|(width, _, _, place)| f64::from(*width) / place.width)
+        .fold(0.0, f64::max);
+    if scale <= 0.0 {
+        return Err("no frame to take the screenshot from".into());
+    }
+    let size = |logical: f64| (logical * scale).round().max(1.0) as u32;
+    let (width, height) = (size(area.width), size(area.height));
+    let mut canvas = vec![0u8; width as usize * height as usize * 4];
+
+    for (frame_width, frame_height, pixels, place) in screens {
+        let Some(part) = area.intersection(place) else {
+            continue;
+        };
+        let Some(source) = to_pixels(part, place, (frame_width, frame_height)) else {
+            continue;
+        };
+        // Where the part lands, in the image's pixels.
+        let edge =
+            |logical: f64, limit: u32| ((logical * scale).round().max(0.0) as u32).min(limit);
+        let (left, right) = (
+            edge(part.x - area.x, width),
+            edge(part.x + part.width - area.x, width),
+        );
+        let (top, bottom) = (
+            edge(part.y - area.y, height),
+            edge(part.y + part.height - area.y, height),
+        );
+        if right <= left || bottom <= top {
+            continue;
+        }
+        let line = frame_width as usize * 3;
+        for y in top..bottom {
+            let from_y = source.y
+                + (u64::from(y - top) * u64::from(source.height) / u64::from(bottom - top)) as u32;
+            for x in left..right {
+                let from_x = source.x
+                    + (u64::from(x - left) * u64::from(source.width) / u64::from(right - left))
+                        as u32;
+                let from = from_y as usize * line + from_x as usize * 3;
+                let to = (y as usize * width as usize + x as usize) * 4;
+                canvas[to..to + 3].copy_from_slice(&pixels[from..from + 3]);
+                canvas[to + 3] = 255;
+            }
+        }
+    }
+
+    if canvas
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .all(|pixel| pixel[3] == 255)
+    {
+        let rgb: Vec<u8> = canvas
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .flat_map(|pixel| [pixel[0], pixel[1], pixel[2]])
+            .collect();
+        write_png(target, width, height, png::ColorType::Rgb, &rgb)?;
+    } else {
+        write_png(target, width, height, png::ColorType::Rgba, &canvas)?;
+    }
+    Ok((width, height))
+}
+
+fn write_png(
+    target: &Path,
+    width: u32,
+    height: u32,
+    color: png::ColorType,
+    data: &[u8],
+) -> Result<(), String> {
     let file = File::create(target)
         .map_err(|error| format!("cannot write {}: {error}", target.display()))?;
-    let mut encoder = png::Encoder::new(BufWriter::new(file), cut.width, cut.height);
-    encoder.set_color(png::ColorType::Rgb);
+    let mut encoder = png::Encoder::new(BufWriter::new(file), width, height);
+    encoder.set_color(color);
     encoder.set_depth(png::BitDepth::Eight);
     // Screenshots are mostly flat areas, which the fast level squeezes
     // nearly as well, in a fraction of the time.
@@ -92,10 +211,9 @@ pub fn crop(frame: &Path, output: Rect, area: Rect, target: &Path) -> Result<Pix
         .write_header()
         .map_err(|error| format!("cannot write the screenshot: {error}"))?;
     writer
-        .write_image_data(&rows)
+        .write_image_data(data)
         .and_then(|()| writer.finish())
-        .map_err(|error| format!("cannot write the screenshot: {error}"))?;
-    Ok(cut)
+        .map_err(|error| format!("cannot write the screenshot: {error}"))
 }
 
 /// Reads a binary PPM (`P6`, 8 bits per channel): its size and RGB pixels.
@@ -218,6 +336,49 @@ mod tests {
         assert_eq!(parse_ppm(b"P6 2 1 255\n\x01"), None);
         assert_eq!(parse_ppm(b"P3 1 1 255\n1 2 3"), None);
         assert_eq!(parse_ppm(b"P6 1 1 65535\n\x00\x00\x00\x00\x00\x00"), None);
+    }
+
+    #[test]
+    fn joins_screens_at_the_finest_scale() {
+        let dir = std::env::temp_dir().join(format!("mochi-join-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // Left: 2 × 1 logical at scale 1, pixels red 10 and 20. Right: 1 × 2
+        // logical at scale 2, so 2 × 4 pixels, all red 30.
+        let left = dir.join("left.ppm");
+        let mut ppm = b"P6\n2 1\n255\n".to_vec();
+        ppm.extend([10, 0, 0, 20, 0, 0]);
+        std::fs::write(&left, ppm).unwrap();
+        let right = dir.join("right.ppm");
+        let mut ppm = b"P6\n2 4\n255\n".to_vec();
+        ppm.extend([30u8, 0, 0].repeat(8));
+        std::fs::write(&right, ppm).unwrap();
+
+        let target = dir.join("joined.png");
+        let frames = [
+            (left, Rect::new(0.0, 0.0, 2.0, 1.0)),
+            (right, Rect::new(2.0, 0.0, 1.0, 2.0)),
+        ];
+        let size = join(&frames, Rect::new(0.0, 0.0, 3.0, 2.0), &target).unwrap();
+        assert_eq!(size, (6, 4));
+
+        let file = std::io::BufReader::new(File::open(&target).unwrap());
+        let mut reader = png::Decoder::new(file).read_info().unwrap();
+        let mut pixels = vec![0; reader.output_buffer_size().unwrap()];
+        let info = reader.next_frame(&mut pixels).unwrap();
+        assert_eq!(info.color_type, png::ColorType::Rgba);
+        let pixel = |x: usize, y: usize| {
+            let at = (y * 6 + x) * 4;
+            (pixels[at], pixels[at + 3])
+        };
+        // The left screen doubled, then the right one.
+        assert_eq!(pixel(0, 0), (10, 255));
+        assert_eq!(pixel(1, 1), (10, 255));
+        assert_eq!(pixel(2, 0), (20, 255));
+        assert_eq!(pixel(4, 3), (30, 255));
+        // Under the shorter left screen: nothing.
+        assert_eq!(pixel(0, 3).1, 0);
+
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

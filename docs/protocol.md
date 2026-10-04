@@ -45,7 +45,7 @@ The UI sends `event` messages, which the daemon never answers:
 {"type":"event","activity":7,"kind":"click"}
 ```
 
-`kind` is `click`, `hover_enter`, `hover_leave` or `dismiss`. Events name the activity they happened on. The daemon ignores events for an activity that is no longer shown, because they arrive while the island switches views.
+`kind` is `click`, `hover_enter`, `hover_leave`, `dismiss` or `outside`, a click outside the island. Events name the activity they happened on. The daemon ignores events for an activity that is no longer shown, because they arrive while the island switches views.
 
 A click on a bubble is a `bubble_click`, also never answered. The daemon passes it to the bubble's module and drops clicks on bubbles that are gone:
 
@@ -123,6 +123,9 @@ The UI loads `root:/modules/<module>/<view>.qml` and passes `payload` to it. `ac
 
 `overlay` is only present when the module set one, and implies `modal`. It names a second view, `root:/modules/<module>/<overlay>.qml`, which the UI draws full-screen on every monitor, under the island, while the activity shows. The overlay gets the same `payload` and a `screen` property with its monitor. If it has a `ready` property, the island waits for it to turn `true` before showing the activity, so an overlay can freeze the screen before the island changes. Overlays are for picking something on screen, like the capture module's region.
 
+`output` is only present for a modal activity shown on one monitor, by name, from `[island] panels`. The islands on other monitors keep what they showed.
+
+`outside` is only present when `true`: a click outside the island closes the activity, so the UI catches every click while it shows and sends an `outside` event. `modal` implies it.
 `key` is only present when the module set one. A module uses it to replace its own activity, for example a volume OSD on every volume step. When the next `present` has the same `module`, `key` and `view` as the shown activity, the UI updates the view's `payload` in place instead of switching views, even though the `id` is new.
 
 ### Bubbles

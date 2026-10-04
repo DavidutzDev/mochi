@@ -28,6 +28,9 @@
 //! - While the user has an activity expanded, it is modal: the island takes
 //!   the keyboard, and Escape or a click outside dismisses it. Views that
 //!   open on their own never take the keyboard.
+//! - A click outside the island closes the shown activity, unless it is the
+//!   idle one or [passive](ActivitySpec::passive). One the user opened, or a
+//!   modal one, is dismissed; others end with [`EndReason::Outside`].
 //!
 //! The arbiter never reads the clock: every call takes `now`. Changes are
 //! reported as [`Effect`]s for the daemon to act on.
@@ -91,6 +94,12 @@ pub struct ActivitySpec {
     pub modal: bool,
     /// A full-screen view under the island on every monitor.
     pub overlay: Option<String>,
+    /// Never closes on a click outside, for feedback like the volume OSD
+    /// that shows while the user is busy elsewhere.
+    pub passive: bool,
+    /// The monitor a modal activity shows on. The daemon picks one from
+    /// `[island] panels` when the module leaves it out.
+    pub output: Option<String>,
 }
 
 impl ActivitySpec {
@@ -108,6 +117,8 @@ impl ActivitySpec {
             same_priority: SamePriority::Queue,
             modal: false,
             overlay: None,
+            output: None,
+            passive: false,
         }
     }
 
@@ -166,6 +177,19 @@ impl ActivitySpec {
         self
     }
 
+    /// Never closes on a click outside: see [`ActivitySpec::passive`].
+    pub fn passive(mut self) -> Self {
+        self.passive = true;
+        self
+    }
+
+    /// Shows a modal activity on this monitor only, whatever `[island]
+    /// panels` says.
+    pub fn output(mut self, output: impl Into<String>) -> Self {
+        self.output = Some(output.into());
+        self
+    }
+
     pub fn same_priority(mut self, rule: SamePriority) -> Self {
         self.same_priority = rule;
         self
@@ -199,6 +223,9 @@ pub enum EndReason {
     Withdrawn,
     /// A newer activity with the same key took its place.
     Replaced,
+    /// The user clicked outside the island, without having opened it: less
+    /// than a dismissal, more like its time running out early.
+    Outside,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -220,6 +247,9 @@ pub struct Arbiter {
     effects: Vec<Effect>,
     /// The shown activity changed since the last `take_effects`.
     dirty: bool,
+    /// Only activities the user opened, and modal ones, close on a click
+    /// outside: `[island] click_outside = "expanded"`.
+    outside_expanded_only: bool,
 }
 
 impl Arbiter {
@@ -229,7 +259,23 @@ impl Arbiter {
 
     /// What the island shows now.
     pub fn shown(&self) -> Option<Activity> {
-        self.current.as_ref().map(Entry::activity)
+        self.current.as_ref().map(|entry| {
+            let mut activity = entry.activity();
+            activity.outside = activity.modal
+                || (!self.outside_expanded_only
+                    && !entry.spec.passive
+                    && entry.spec.priority > Priority::IDLE);
+            activity
+        })
+    }
+
+    /// Whether a click outside closes every activity, or only the ones the
+    /// user opened and modal ones.
+    pub fn set_outside_expanded_only(&mut self, only: bool) {
+        if self.outside_expanded_only != only {
+            self.outside_expanded_only = only;
+            self.dirty |= self.current.is_some();
+        }
     }
 
     /// When the shown activity collapses or its timeout runs out, whichever
@@ -336,6 +382,21 @@ impl Arbiter {
                 activity: id,
             };
             self.effects.push(effect);
+        }
+    }
+
+    /// The user clicked outside the island. An activity the user opened, or
+    /// a modal one, is dismissed; any other that catches such clicks ends
+    /// with [`EndReason::Outside`].
+    pub fn outside(&mut self, id: ActivityId, now: Instant) {
+        let Some(current) = self.current.as_ref().filter(|entry| entry.id == id) else {
+            return;
+        };
+        let activity = self.shown().expect("an activity is shown");
+        if current.spec.modal || current.engaged() {
+            self.end_current(EndReason::Dismissed, now);
+        } else if activity.outside {
+            self.end_current(EndReason::Outside, now);
         }
     }
 
@@ -622,6 +683,8 @@ impl Entry {
             expandable: self.expandable(),
             modal: self.spec.modal || self.engaged(),
             overlay: self.spec.overlay.clone(),
+            output: self.spec.output.clone(),
+            outside: false,
             key: self.spec.key.clone(),
         }
     }

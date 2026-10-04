@@ -28,14 +28,59 @@ Item {
     readonly property bool covering: screen !== null && height >= screen.height
     // The island waits for the frozen frame, so the frame shows the screen
     // as it was, not the picker.
-    readonly property bool ready: covering && (!screenshot || frozen.hasContent)
+    // Not before it knows its screen and its picker either: until then it
+    // can't tell whether it has a frame to freeze.
+    readonly property bool ready: covering && output !== "" && payload.session !== undefined && (!screenshot || frozen.hasContent)
 
-    // The region drawn on this screen, in local coordinates, or null.
+    // The region drawn, in this screen's coordinates, or null. It's global:
+    // it may lie partly or wholly on another screen.
     readonly property var region: {
         const region = payload.region;
-        if (!region || region.output !== output)
+        if (!region)
             return null;
         return Qt.rect(region.x - originX, region.y - originY, region.width, region.height);
+    }
+    // Where a drag may go, in this screen's coordinates: every screen for a
+    // screenshot, which can join them, only this one for a recording.
+    readonly property rect bounds: {
+        if (!screenshot)
+            return Qt.rect(0, 0, width, height);
+        const screens = Quickshell.screens;
+        let left = 0, top = 0, right = width, bottom = height;
+        for (const other of screens) {
+            left = Math.min(left, other.x - originX);
+            top = Math.min(top, other.y - originY);
+            right = Math.max(right, other.x - originX + other.width);
+            bottom = Math.max(bottom, other.y - originY + other.height);
+        }
+        return Qt.rect(left, top, right - left, bottom - top);
+    }
+    // Whether the region's middle is on this screen: its size and button
+    // show there only.
+    readonly property bool holdsRegion: {
+        const area = shownRegion;
+        if (!area)
+            return false;
+        const x = area.x + area.width / 2;
+        const y = area.y + area.height / 2;
+        return x >= 0 && x < width && y >= 0 && y < height;
+    }
+
+    // The first screen's overlay tells the module where every screen is,
+    // once per picker.
+    property int layoutSent: -1
+    onPayloadChanged: sendLayout()
+    onOutputChanged: sendLayout()
+    Component.onCompleted: sendLayout()
+    function sendLayout(): void {
+        const session = payload.session;
+        if (session === undefined || layoutSent === session || Quickshell.screens[0]?.name !== output)
+            return;
+        layoutSent = session;
+        const words = [String(session)];
+        for (const screen of Quickshell.screens)
+            words.push(screen.name, String(screen.x), String(screen.y), String(screen.width), String(screen.height));
+        Daemon.command("capture", "layout", words);
     }
     // While dragging: the region being drawn or moved, before the module
     // hears of it.
@@ -66,12 +111,30 @@ Item {
             return hoveredWindow ? Qt.rect(hoveredWindow.x, hoveredWindow.y, hoveredWindow.width, hoveredWindow.height) : null;
         case "screen":
             return pointer.containsMouse ? Qt.rect(0, 0, width, height) : null;
+        case "all":
+            return Qt.rect(0, 0, width, height);
         }
         return null;
     }
 
     function send(action: string, rect: rect): void {
         Daemon.command("capture", action, [output, String(rect.x + originX), String(rect.y + originY), String(rect.width), String(rect.height)]);
+    }
+
+    // While dragging, the region goes to the module every 30 ms, so the
+    // other screens draw their part of it too.
+    property real lastSent: 0
+    function share(region: rect): void {
+        const now = Date.now();
+        if (now - lastSent < 30 || region.width < 4 || region.height < 4)
+            return;
+        lastSent = now;
+        send("region", region);
+    }
+
+    // `value` kept between `low` and `high`.
+    function clamp(value: real, low: real, high: real): real {
+        return Math.max(low, Math.min(value, high));
     }
 
     function cancel(): void {
@@ -105,7 +168,7 @@ Item {
 
         // Nothing is saved while the picker opens, so its animation runs
         // smoothly: only the picked monitor's frame, once it's picked.
-        readonly property bool wanted: hasContent && root.stage === "saving" && root.payload.picked === root.output
+        readonly property bool wanted: hasContent && root.stage === "saving" && (root.payload.picked ?? []).includes(root.output)
         property int saved: -1
 
         onWantedChanged: {
@@ -204,18 +267,22 @@ Item {
             root.dragged = inside ? region : Qt.rect(mouse.x, mouse.y, 0, 0);
         }
 
+        // The pointer stays with this screen while the button is down, even
+        // over the next one, so a drag can cross into it.
         onPositionChanged: mouse => {
             if (!pressed || root.dragged === null)
                 return;
+            const bounds = root.bounds;
             if (moving) {
-                const x = Math.max(0, Math.min(root.width - moving.width, moving.x + mouse.x - start.x));
-                const y = Math.max(0, Math.min(root.height - moving.height, moving.y + mouse.y - start.y));
+                const x = root.clamp(moving.x + mouse.x - start.x, bounds.x, bounds.x + bounds.width - moving.width);
+                const y = root.clamp(moving.y + mouse.y - start.y, bounds.y, bounds.y + bounds.height - moving.height);
                 root.dragged = Qt.rect(x, y, moving.width, moving.height);
             } else {
-                const x = Math.max(0, Math.min(mouse.x, root.width));
-                const y = Math.max(0, Math.min(mouse.y, root.height));
+                const x = root.clamp(mouse.x, bounds.x, bounds.x + bounds.width);
+                const y = root.clamp(mouse.y, bounds.y, bounds.y + bounds.height);
                 root.dragged = Qt.rect(Math.min(start.x, x), Math.min(start.y, y), Math.abs(x - start.x), Math.abs(y - start.y));
             }
+            root.share(root.dragged);
         }
 
         onReleased: mouse => {
@@ -236,7 +303,7 @@ Item {
                 return;
             if (root.mode === "window" && root.hoveredWindow)
                 root.send("select", Qt.rect(root.hoveredWindow.x, root.hoveredWindow.y, root.hoveredWindow.width, root.hoveredWindow.height));
-            else if (root.mode === "screen")
+            else if (root.mode === "screen" || root.mode === "all")
                 root.send("select", Qt.rect(0, 0, root.width, root.height));
         }
 
@@ -285,9 +352,11 @@ Item {
                     if (!pressed)
                         return;
                     const point = mapToItem(root, mouse.x, mouse.y);
-                    const x = Math.max(0, Math.min(point.x, root.width));
-                    const y = Math.max(0, Math.min(point.y, root.height));
+                    const bounds = root.bounds;
+                    const x = root.clamp(point.x, bounds.x, bounds.x + bounds.width);
+                    const y = root.clamp(point.y, bounds.y, bounds.y + bounds.height);
                     root.dragged = Qt.rect(Math.min(anchor.x, x), Math.min(anchor.y, y), Math.abs(x - anchor.x), Math.abs(y - anchor.y));
+                    root.share(root.dragged);
                 }
 
                 onReleased: {
@@ -303,7 +372,7 @@ Item {
     Row {
         readonly property rect area: root.shownRegion ?? Qt.rect(0, 0, 0, 0)
 
-        visible: root.mode === "region" && root.picking && root.shownRegion !== null
+        visible: root.mode === "region" && root.picking && root.holdsRegion
         spacing: 8
         x: Math.max(8, Math.min(root.width - width - 8, area.x + (area.width - width) / 2))
         y: area.y + area.height + 12 + height > root.height ? area.y - height - 12 : area.y + area.height + 12
@@ -369,7 +438,7 @@ Item {
     }
 
     // Keys, on whichever monitor has the keyboard: Enter takes the region,
-    // Tab or 1 to 3 switch modes, A the desktop audio, M the microphone, Escape
+    // Tab or a number switch modes, A the desktop audio, M the microphone, Escape
     // cancels.
     Item {
         id: keys
@@ -382,7 +451,7 @@ Item {
         Keys.onTabPressed: root.switchMode(modes[(modes.indexOf(root.mode) + 1) % modes.length])
         Keys.onBacktabPressed: root.switchMode(modes[(modes.indexOf(root.mode) - 1 + modes.length) % modes.length])
         Keys.onPressed: event => {
-            if (event.key >= Qt.Key_1 && event.key <= Qt.Key_3) {
+            if (event.key >= Qt.Key_1 && event.key < Qt.Key_1 + modes.length) {
                 root.switchMode(modes[event.key - Qt.Key_1]);
                 event.accepted = true;
             } else if (event.key === Qt.Key_A && !root.screenshot) {

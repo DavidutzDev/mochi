@@ -151,6 +151,9 @@ impl Module for Workspaces {
                                     .key(KEY)
                                     .priority(Priority::HIGH)
                                     .same_priority(SamePriority::Stack)
+                                    // Feedback for a switch you just made:
+                                    // clicks go on to your windows.
+                                    .passive()
                                     .timeout(timeout)
                                     .payload(payload),
                             );

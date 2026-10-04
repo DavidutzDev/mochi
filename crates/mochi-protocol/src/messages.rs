@@ -123,6 +123,14 @@ pub struct Activity {
     /// something on screen, like a region to capture. Implies `modal`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub overlay: Option<String>,
+    /// The monitor a modal activity shows on, by name. The islands on other
+    /// monitors keep what they showed. Without one, every island shows it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
+    /// A click outside the island closes it, which means the UI catches
+    /// every click while it shows. Implied by `modal`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub outside: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -134,6 +142,8 @@ pub enum EventKind {
     /// The user closed the activity, for example with a swipe or a close
     /// button.
     Dismiss,
+    /// The user clicked outside the island while the activity was shown.
+    Outside,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -210,6 +220,8 @@ mod tests {
             expandable: true,
             modal: false,
             overlay: None,
+            output: None,
+            outside: false,
             key: None,
         }
     }
@@ -260,6 +272,13 @@ mod tests {
             activity: Some(Activity {
                 modal: true,
                 overlay: Some("Overlay".into()),
+                ..activity()
+            }),
+        });
+        round_trip_daemon(DaemonMessage::Present {
+            activity: Some(Activity {
+                modal: true,
+                output: Some("DP-3".into()),
                 ..activity()
             }),
         });

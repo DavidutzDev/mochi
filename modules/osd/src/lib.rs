@@ -136,6 +136,8 @@ fn spec(notice: &Notice, timeout: Duration) -> ActivitySpec {
     ActivitySpec::new(notice.view())
         .key(KEY)
         .priority(Priority::HIGH)
+        // Feedback for a key you just pressed: clicks go on to your windows.
+        .passive()
         .timeout(timeout)
         .payload(notice.payload())
 }

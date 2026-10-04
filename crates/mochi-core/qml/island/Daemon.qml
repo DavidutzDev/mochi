@@ -53,6 +53,13 @@ Singleton {
             send({ type: "event", activity: activity.id, kind: kind });
     }
 
+    // Reports something that happened to one activity, which the daemon
+    // ignores unless it's still the shown one.
+    function eventFor(activity: var, kind: string): void {
+        if (activity)
+            send({ type: "event", activity: activity.id, kind: kind });
+    }
+
     function bubbleClick(id: int): void {
         send({ type: "bubble_click", bubble: id });
     }

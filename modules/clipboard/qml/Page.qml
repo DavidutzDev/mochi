@@ -147,7 +147,8 @@ Item {
                 parts.push(root.ago(modelData.time));
                 return parts.join(" · ");
             }
-            onClicked: Daemon.command("clipboard", "pick", [`${row.modelData.id}`])
+            // An image opens in the preview card, with copy, edit and delete.
+            onClicked: Daemon.command("clipboard", row.image ? "show" : "pick", [`${row.modelData.id}`])
 
             leading: Item {
                 anchors.fill: parent

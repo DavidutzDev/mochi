@@ -214,6 +214,12 @@ impl Compositor {
             .map_err(|error| CompositorError::Ipc(error.to_string()))
     }
 
+    /// The monitor under the pointer, when the compositor says: Hyprland
+    /// does. Blocks for at most a tenth of a second.
+    pub fn pointer_output(&self) -> Option<String> {
+        hyprland::pointer_output(self.hyprland.as_deref()?)
+    }
+
     /// Whether [`Compositor::windows`] can work here.
     pub fn knows_windows(&self) -> bool {
         self.hyprland.is_some()

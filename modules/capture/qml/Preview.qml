@@ -4,7 +4,8 @@ import qs.island
 
 // A capture just saved: the screenshot, or a film icon for a recording,
 // with buttons to copy, edit, open the folder or delete. Or what went
-// wrong.
+// wrong. The clipboard shows its images here too, with a title of its own
+// and no folder.
 Item {
     id: root
 
@@ -59,6 +60,8 @@ Item {
             Text {
                 width: parent.width
                 text: {
+                    if (root.payload.title)
+                        return root.payload.title;
                     const what = root.screenshot ? "Screenshot" : "Recording";
                     return root.failed ? `${what} failed` : `${what} saved`;
                 }
@@ -106,6 +109,8 @@ Item {
                 }
 
                 IconButton {
+                    // An image from the clipboard has no folder.
+                    visible: root.payload.folder != null
                     icon: "folder"
                     tone: "neutral"
                     onClicked: {

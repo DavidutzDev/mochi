@@ -17,7 +17,7 @@ Either way:
 - Removing an entry, or clearing the history, rewrites the file at once, so nothing of it stays behind.
 - The file is readable by you only, and text is compressed with zstd.
 
-The hub has a card with the number of entries, a button to pause the history and one to clear it, and a Clipboard page with the history itself: search it, click an entry to paste it, or copy or remove it from its row. `mochi ipc hub open clipboard/history` opens the page.
+The hub has a card with the number of entries, a button to pause the history and one to clear it, and a Clipboard page with the history itself: search it, click an entry to paste it, or copy or remove it from its row. Clicking an image, here or in the picker, opens it in the card a screenshot gets, with copy, edit and delete; Enter still pastes it. `mochi ipc hub open clipboard/history` opens the page.
 
 ```toml
 {{#include ../../../../modules/clipboard/settings.toml}}
@@ -30,6 +30,7 @@ The hub has a card with the number of entries, a button to pause the history and
 | `toggle`, `open`, `close` | Shows or hides the history |
 | `pick <id>` | Copies an entry and pastes it into the window you were in |
 | `copy <id>` | Copies an entry without pasting it |
+| `show <id>` | Opens an image entry in the capture module's preview card |
 | `delete <id>` | Removes an entry |
 | `clear` | Removes everything |
 | `pause on\|off\|toggle` | Stops keeping what you copy, or starts again |

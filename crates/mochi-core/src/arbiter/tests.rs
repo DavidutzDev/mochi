@@ -656,3 +656,51 @@ fn views_that_open_on_their_own_never_take_the_keyboard() {
     let shown = bench.arbiter.shown().unwrap();
     assert!(shown.expanded && shown.modal);
 }
+
+#[test]
+fn a_click_outside_closes_what_the_island_shows() {
+    let mut bench = Bench::new();
+    let pill = bench.submit("idle", idle());
+    let outside = |bench: &Bench| bench.arbiter.shown().unwrap().outside;
+    // The idle island stays.
+    assert!(!outside(&bench));
+    bench.arbiter.outside(pill, bench.now);
+    assert_eq!(bench.shown(), Some(pill));
+
+    // A popup that opened on its own ends early, not dismissed.
+    let note = bench.submit("notifications", timed(4).expanded("Expanded"));
+    assert!(outside(&bench));
+    bench.ended();
+    bench.arbiter.outside(note, bench.now);
+    assert_eq!(bench.ended(), [(note, EndReason::Outside)]);
+    assert_eq!(bench.shown(), Some(pill));
+
+    // One the user opened is dismissed.
+    let note = bench.submit("notifications", timed(4).expanded("Expanded"));
+    bench.arbiter.click(note, bench.now);
+    bench.ended();
+    bench.arbiter.outside(note, bench.now);
+    assert_eq!(bench.ended(), [(note, EndReason::Dismissed)]);
+}
+
+#[test]
+fn passive_activities_let_clicks_through() {
+    let mut bench = Bench::new();
+    let volume = bench.submit("osd", timed(2).priority(Priority::HIGH).passive());
+    assert!(!bench.arbiter.shown().unwrap().outside);
+    bench.arbiter.outside(volume, bench.now);
+    assert_eq!(bench.shown(), Some(volume));
+}
+
+#[test]
+fn clicks_outside_can_close_only_what_the_user_opened() {
+    let mut bench = Bench::new();
+    bench.arbiter.set_outside_expanded_only(true);
+    let note = bench.submit("notifications", timed(4).expanded("Expanded"));
+    assert!(!bench.arbiter.shown().unwrap().outside);
+    bench.arbiter.outside(note, bench.now);
+    assert_eq!(bench.shown(), Some(note));
+
+    bench.arbiter.click(note, bench.now);
+    assert!(bench.arbiter.shown().unwrap().outside);
+}

@@ -108,7 +108,44 @@ pub struct Config {
     #[serde(default)]
     pub module: BTreeMap<String, toml::Table>,
     #[serde(default)]
+    pub island: IslandConfig,
+    #[serde(default)]
     pub bubbles: BubblesConfig,
+}
+
+/// `[island]`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct IslandConfig {
+    pub panels: Panels,
+    pub click_outside: ClickOutside,
+}
+
+/// What a click outside the island closes.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClickOutside {
+    /// Whatever the island shows, except the idle island and quick notices
+    /// like the volume.
+    #[default]
+    All,
+    /// Only views the user opened with a click, and the ones that take the
+    /// keyboard.
+    Expanded,
+}
+
+/// Which monitor a panel, a view that takes the keyboard, opens on.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Panels {
+    /// The monitor with keyboard focus.
+    #[default]
+    Focus,
+    /// The monitor under the pointer, where the compositor says; otherwise
+    /// the focused one.
+    Pointer,
+    /// Every monitor.
+    All,
 }
 
 /// `[bubbles]`: how many fit in an area, and where each module's bubbles go.
@@ -150,6 +187,7 @@ impl Default for Config {
         Self {
             modules: default_modules(),
             module: BTreeMap::new(),
+            island: IslandConfig::default(),
             bubbles: BubblesConfig::default(),
         }
     }

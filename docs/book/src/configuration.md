@@ -28,3 +28,13 @@ modules = ["idle", "osd", "workspaces", "media", "notifications", "launcher", "h
 The modules to run, in this order. Each module's settings live in a `[module.<id>]` section; the [module pages](modules/idle.md) list them. A module left out of the list doesn't run, and its section is ignored.
 
 `mochid --modules idle,osd` overrides the list for one run, which helps when trying things.
+
+## The island
+
+```toml
+{{#include ../../../crates/mochi-core/defaults/island.toml}}
+```
+
+`panels` decides where the views you type into open. On Hyprland, `"pointer"` asks the compositor where the mouse is; elsewhere it opens them where the keyboard is.
+
+`click_outside` decides what a click outside the island closes. With `"all"`, a notification you never opened goes to the missed ones, as if its time had run out, and the media card goes back to its bubble. The volume and workspace notices never catch clicks, since they show while you're busy elsewhere. A view you opened with a click, or one you type into, is closed for good, and takes the keyboard while it's open so Escape closes it too.

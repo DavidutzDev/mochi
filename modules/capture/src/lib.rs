@@ -42,7 +42,7 @@ use crate::record::{Options, Recording, Target};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
-const MODES: [&str; 3] = ["region", "window", "screen"];
+const MODES: [&str; 4] = ["region", "window", "screen", "all"];
 
 #[derive(Debug, Default)]
 pub struct Capture;
@@ -110,6 +110,8 @@ enum Mode {
     Region,
     Window,
     Screen,
+    /// Every screen as one image. Screenshots only.
+    All,
 }
 
 impl Mode {
@@ -118,6 +120,7 @@ impl Mode {
             "region" => Some(Self::Region),
             "window" => Some(Self::Window),
             "screen" => Some(Self::Screen),
+            "all" => Some(Self::All),
             _ => None,
         }
     }
@@ -127,8 +130,20 @@ impl Mode {
             Self::Region => "region",
             Self::Window => "window",
             Self::Screen => "screen",
+            Self::All => "all",
         }
     }
+}
+
+/// What a screenshot takes, once the overlay has said where the screens are.
+#[derive(Debug, Clone, PartialEq)]
+enum Pick {
+    /// One whole screen.
+    Output(String),
+    /// An area in the global layout, on one screen or across several.
+    Area(Rect),
+    /// Every screen.
+    All,
 }
 
 impl Module for Capture {
@@ -178,6 +193,9 @@ impl Module for Capture {
             )),
             ActionSpec::new("audio", "Turn recording the desktop audio on or off"),
             ActionSpec::new("microphone", "Turn recording the microphone on or off"),
+            ActionSpec::new("layout", "Where the screens are; the overlay sends this")
+                .arg(ArgSpec::int("session", "The picker it belongs to"))
+                .arg(ArgSpec::string("screens", "Each screen as name x y width height").rest()),
             area(
                 ActionSpec::new("frame", "A frozen screen is saved; the overlay sends this")
                     .arg(ArgSpec::int("session", "The picker it belongs to")),
@@ -195,6 +213,17 @@ impl Module for Capture {
             ActionSpec::new("edit", "Open the last screenshot in the editor"),
             ActionSpec::new("delete", "Delete the last capture"),
             ActionSpec::new("open", "Open the last capture's folder"),
+            ActionSpec::new(
+                "show",
+                "Show an image in the preview card; the clipboard sends this for its images",
+            )
+            .arg(ArgSpec::string("path", "The image file"))
+            .arg(ArgSpec::int("entry", "The clipboard entry it came from"))
+            .arg(
+                ArgSpec::string("label", "What the card says under the title")
+                    .optional()
+                    .rest(),
+            ),
         ]
     }
 
@@ -263,13 +292,16 @@ struct Session {
     /// For the window picker. `None` when the compositor doesn't say where
     /// windows are.
     windows: Option<Vec<Window>>,
-    /// Each output's place in the global layout, once its frame is saved.
+    /// Every screen's place in the global layout, as the overlay reports
+    /// it once it opens.
+    layout: Vec<(String, Rect)>,
+    /// Each output's place, once its frame is saved.
     frames: HashMap<String, Rect>,
-    /// A region drawn and not taken yet, with its output.
-    region: Option<(String, Rect)>,
-    /// What to capture, waiting for its output's frame: an area, or the
-    /// whole output.
-    picked: Option<(String, Option<Rect>)>,
+    /// A region drawn and not taken yet, in the global layout. It may cross
+    /// from one screen into the next.
+    region: Option<Rect>,
+    /// What to capture, waiting for the frames of the screens it touches.
+    picked: Option<Pick>,
     /// When it was picked, to log how long the screenshot took.
     picked_at: Option<Instant>,
     activity: ActivityId,
@@ -285,17 +317,20 @@ impl Session {
         let rect = |area: &Rect| json!({ "x": area.x, "y": area.y, "width": area.width, "height": area.height });
         // Window recordings go through the portal, so only screenshots need
         // to know where windows are.
+        // Every screen at once is for screenshots, with more than one screen.
         let modes: Vec<&str> = MODES
             .into_iter()
-            .filter(|mode| {
-                *mode != "window" || self.kind == Kind::Recording || self.windows.is_some()
+            .filter(|mode| match *mode {
+                "window" => self.kind == Kind::Recording || self.windows.is_some(),
+                "all" => self.kind == Kind::Screenshot && self.layout.len() != 1,
+                _ => true,
             })
             .collect();
         json!({
             "session": self.number,
             "stage": stage,
-            // The overlay saves only this output's frame, once it's picked.
-            "picked": self.picked.as_ref().map(|(output, _)| output),
+            // The overlays of these screens save their frames, once picked.
+            "picked": self.targets().map(|(outputs, _)| outputs),
             "kind": self.kind.as_str(),
             "mode": self.mode.as_str(),
             "modes": modes,
@@ -314,12 +349,32 @@ impl Session {
                     "height": window.height,
                 }))
                 .collect::<Vec<_>>()),
-            "region": self.region.as_ref().map(|(output, area)| {
-                let mut region = rect(area);
-                region["output"] = json!(output);
-                region
-            }),
+            "region": self.region.as_ref().map(rect),
         })
+    }
+
+    /// The screens a pick touches and the area it takes, once the layout is
+    /// known: `None` before that, or when the area misses every screen.
+    fn targets(&self) -> Option<(Vec<String>, Rect)> {
+        let area = match self.picked.as_ref()? {
+            Pick::Output(output) => {
+                let (_, place) = self.layout.iter().find(|(name, _)| name == output)?;
+                *place
+            }
+            Pick::Area(area) => *area,
+            Pick::All => self
+                .layout
+                .iter()
+                .map(|(_, place)| *place)
+                .reduce(|union, place| union.union(place))?,
+        };
+        let outputs: Vec<String> = self
+            .layout
+            .iter()
+            .filter(|(_, place)| place.intersects(&area))
+            .map(|(name, _)| name.clone())
+            .collect();
+        (!outputs.is_empty()).then_some((outputs, area))
     }
 }
 
@@ -336,6 +391,9 @@ struct Sound {
 struct Saved {
     kind: Kind,
     path: PathBuf,
+    /// The clipboard entry it shows, for an image from the clipboard: its
+    /// file is the clipboard's, and deleting removes the entry instead.
+    clipboard: Option<i64>,
 }
 
 #[derive(Debug)]
@@ -409,18 +467,15 @@ impl State {
             },
             "audio" => self.toggle_sound(ctx, |sound| sound.desktop = !sound.desktop),
             "microphone" => self.toggle_sound(ctx, |sound| sound.microphone = !sound.microphone),
+            "layout" => self.layout(ctx, args).await,
             "frame" => self.frame(ctx, args).await,
             "region" => self.region(ctx, args),
             "select" => match area(args) {
-                Some((output, area)) => self.pick(ctx, output, Some(area)).await,
+                Some((output, area)) => self.select(ctx, output, area).await,
                 None => Err("bad area".into()),
             },
-            "confirm" => match self
-                .session
-                .as_mut()
-                .and_then(|session| session.region.take())
-            {
-                Some((output, area)) => self.pick(ctx, output, Some(area)).await,
+            "confirm" => match self.session.as_ref().and_then(|session| session.region) {
+                Some(area) => self.select(ctx, String::new(), area).await,
                 None => Err("draw a region first".into()),
             },
             "copy" => match &self.last {
@@ -430,12 +485,16 @@ impl State {
             "edit" => self.edit(),
             "delete" => self.delete(ctx),
             "open" => match &self.last {
+                Some(saved) if saved.clipboard.is_some() => {
+                    Err("a clipboard image has no folder".into())
+                }
                 Some(saved) => spawn(&[
                     "xdg-open".into(),
                     folder_of(&saved.path).display().to_string(),
                 ]),
                 None => Err("nothing captured yet".into()),
             },
+            "show" => self.show(ctx, &command.args),
             other => Err(format!("capture has no action {other}")),
         };
         if let Err(message) = &result {
@@ -484,16 +543,34 @@ impl State {
             sound: self.default_sound(),
             output: output.clone(),
             windows,
+            layout: Vec::new(),
             frames: HashMap::new(),
             region: None,
             picked: None,
             picked_at: None,
             activity: ActivityId(0),
         };
-        if kind == Kind::Screenshot && asked == Some(Mode::Screen) {
-            let output = output.ok_or("no monitor has focus")?;
-            session.picked = Some((output, None));
-            session.picked_at = Some(Instant::now());
+        if kind == Kind::Recording && mode == Mode::All {
+            // Recordings take one screen at a time; a default of every
+            // screen falls back to a region.
+            if asked.is_some() {
+                return Err("recordings take one screen at a time".into());
+            }
+            session.mode = Mode::Region;
+        }
+        // Asked for outright, these skip the picking.
+        if kind == Kind::Screenshot {
+            match asked {
+                Some(Mode::Screen) => {
+                    let output = output.ok_or("no monitor has focus")?;
+                    session.picked = Some(Pick::Output(output));
+                }
+                Some(Mode::All) => session.picked = Some(Pick::All),
+                _ => {}
+            }
+            if session.picked.is_some() {
+                session.picked_at = Some(Instant::now());
+            }
         }
         session.activity = ctx.present(self.spec(&session));
         self.session = Some(session);
@@ -593,19 +670,33 @@ impl State {
     }
 
     fn region(&mut self, ctx: &ModuleCtx, args: &Args) -> Result<(), String> {
-        let region = area(args).ok_or("bad region")?;
+        let (_, region) = area(args).ok_or("bad region")?;
         let session = self.session.as_mut().ok_or("the picker isn't open")?;
         session.region = Some(region);
         self.refresh(ctx);
         Ok(())
     }
 
-    async fn pick(
-        &mut self,
-        ctx: &ModuleCtx,
-        output: String,
-        area: Option<Rect>,
-    ) -> Result<(), String> {
+    /// Where the screens are, from the overlay: `name x y width height` for
+    /// each.
+    async fn layout(&mut self, ctx: &ModuleCtx, args: &Args) -> Result<(), String> {
+        let number = args.int("session").unwrap_or_default();
+        let layout = parse_layout(args.str("screens").unwrap_or_default()).ok_or("bad layout")?;
+        match &mut self.session {
+            Some(session) if u64::try_from(number) == Ok(session.number) => {
+                tracing::debug!(screens = layout.len(), "the overlay sent the layout");
+                session.layout = layout;
+            }
+            _ => return Ok(()),
+        }
+        self.refresh(ctx);
+        self.finish(ctx).await;
+        Ok(())
+    }
+
+    /// The overlay picked `area` on `output`: a region, a window or a whole
+    /// screen, depending on the mode.
+    async fn select(&mut self, ctx: &ModuleCtx, output: String, area: Rect) -> Result<(), String> {
         let session = self.session.as_mut().ok_or("the picker isn't open")?;
         if session.picked.is_some() {
             return Ok(());
@@ -614,36 +705,47 @@ impl State {
             let sound = session.sound;
             // A whole screen records the output itself, which follows a
             // change of resolution.
-            let target = match area {
-                Some(area) if session.mode != Mode::Screen => Target::Region(area),
-                _ => Target::Output(output),
+            let target = match session.mode {
+                Mode::Screen => Target::Output(output),
+                _ => Target::Region(area),
             };
             self.close(ctx);
             // Lets the shade leave the screen before the first frame.
             tokio::time::sleep(Duration::from_millis(150)).await;
             return self.start_recording(ctx, target, sound);
         }
-        session.picked = Some((output, area));
+        let pick = match session.mode {
+            Mode::Screen => Pick::Output(output),
+            Mode::All => Pick::All,
+            Mode::Region | Mode::Window => Pick::Area(area),
+        };
+        tracing::debug!(?pick, "picked");
+        session.picked = Some(pick);
         session.picked_at = Some(Instant::now());
-        tracing::debug!(output = %session.picked.as_ref().map_or("", |(output, _)| output.as_str()), "picked");
         session.region = None;
         self.refresh(ctx);
         self.finish(ctx).await;
         Ok(())
     }
 
-    /// Takes the screenshot once its output's frame is saved.
+    /// Takes the screenshot once every screen it touches has saved its
+    /// frame.
     async fn finish(&mut self, ctx: &ModuleCtx) {
         let Some(session) = &self.session else { return };
-        let Some((output, area)) = &session.picked else {
+        let Some((outputs, area)) = session.targets() else {
             return;
         };
-        let Some(place) = session.frames.get(output).copied() else {
+        let Some(frames) = outputs
+            .iter()
+            .map(|output| {
+                let place = session.frames.get(output).copied()?;
+                Some((self.frames.join(format!("frame-{output}.ppm")), place))
+            })
+            .collect::<Option<Vec<_>>>()
+        else {
             return;
         };
         let picked_at = session.picked_at;
-        let frame = self.frames.join(format!("frame-{output}.ppm"));
-        let area = area.unwrap_or(place);
         self.close(ctx);
 
         let name = files::timestamp(&self.settings.screenshot_name, SystemTime::now());
@@ -652,7 +754,10 @@ impl State {
             std::fs::create_dir_all(&folder)
                 .map_err(|error| format!("cannot create {}: {error}", folder.display()))?;
             let path = files::unused(&folder, &name, "png");
-            crop::crop(&frame, place, area, &path).map(|_| path)
+            match frames.as_slice() {
+                [(frame, place)] => crop::crop(frame, *place, area, &path).map(|_| path),
+                _ => crop::join(&frames, area, &path).map(|_| path),
+            }
         })
         .await
         .unwrap_or_else(|error| Err(error.to_string()));
@@ -668,6 +773,7 @@ impl State {
                     Saved {
                         kind: Kind::Screenshot,
                         path,
+                        clipboard: None,
                     },
                 );
             }
@@ -759,6 +865,7 @@ impl State {
                     Saved {
                         kind: Kind::Recording,
                         path: recording.file,
+                        clipboard: None,
                     },
                 );
             }
@@ -774,6 +881,7 @@ impl State {
             let copied = Saved {
                 kind: saved.kind,
                 path: saved.path.clone(),
+                clipboard: None,
             };
             tokio::spawn(async move {
                 if let Err(message) = copy(&copied).await {
@@ -791,6 +899,31 @@ impl State {
         });
         self.preview = Some(ctx.present(self.preview_spec(payload)));
         self.last = Some(saved);
+    }
+
+    /// Shows an image from the clipboard in the card a screenshot gets.
+    fn show(&mut self, ctx: &ModuleCtx, args: &Args) -> Result<(), String> {
+        let path = PathBuf::from(args.str("path").ok_or("no image")?);
+        if !path.is_file() {
+            return Err(format!("no image at {}", path.display()));
+        }
+        let entry = args.int("entry").ok_or("no clipboard entry")?;
+        let payload = json!({
+            "kind": Kind::Screenshot.as_str(),
+            "title": "From the clipboard",
+            "path": path.display().to_string(),
+            "name": args.str("label").unwrap_or_default(),
+            "copied": false,
+            "editable": !self.settings.editor.is_empty(),
+            "folder": null,
+        });
+        self.preview = Some(ctx.present(self.preview_spec(payload)));
+        self.last = Some(Saved {
+            kind: Kind::Screenshot,
+            path,
+            clipboard: Some(entry),
+        });
+        Ok(())
     }
 
     fn failed(&mut self, ctx: &ModuleCtx, kind: Kind, message: &str) {
@@ -819,6 +952,19 @@ impl State {
 
     fn delete(&mut self, ctx: &ModuleCtx) -> Result<(), String> {
         let saved = self.last.take().ok_or("nothing captured yet")?;
+        if let Some(entry) = saved.clipboard {
+            let id = entry.to_string();
+            let remove = ctx.call("clipboard", "delete", &[&id]);
+            tokio::spawn(async move {
+                if let Err(error) = remove.await {
+                    tracing::warn!(%error, "could not remove the clipboard entry");
+                }
+            });
+            if let Some(preview) = self.preview.take() {
+                ctx.withdraw(preview);
+            }
+            return Ok(());
+        }
         std::fs::remove_file(&saved.path)
             .map_err(|error| format!("cannot delete {}: {error}", saved.path.display()))?;
         if let Some(preview) = self.preview.take() {
@@ -847,6 +993,22 @@ fn area(args: &Args) -> Option<(String, Rect)> {
         args.float("height")?,
     );
     (area.width > 0.0 && area.height > 0.0).then_some((output, area))
+}
+
+/// `name x y width height` for each screen, one after another.
+fn parse_layout(text: &str) -> Option<Vec<(String, Rect)>> {
+    let words: Vec<&str> = text.split_whitespace().collect();
+    if words.is_empty() || !words.len().is_multiple_of(5) {
+        return None;
+    }
+    words
+        .chunks(5)
+        .map(|screen| {
+            let number = |index: usize| screen[index].parse::<f64>().ok();
+            let place = Rect::new(number(1)?, number(2)?, number(3)?, number(4)?);
+            (place.width > 0.0 && place.height > 0.0).then(|| (screen[0].to_owned(), place))
+        })
+        .collect()
 }
 
 fn folder_of(path: &Path) -> &Path {
@@ -908,6 +1070,7 @@ mod tests {
             },
             output: Some("DP-3".into()),
             windows,
+            layout: Vec::new(),
             frames: HashMap::new(),
             region: None,
             picked: None,
@@ -923,30 +1086,62 @@ mod tests {
         let payload = picker.payload(frames);
         assert_eq!(payload["stage"], "select");
         assert_eq!(payload["mode"], "region");
-        assert_eq!(payload["modes"], json!(["region", "window", "screen"]));
+        assert_eq!(
+            payload["modes"],
+            json!(["region", "window", "screen", "all"])
+        );
         assert_eq!(payload["frames"], "/run/mochi/capture");
 
-        picker.region = Some(("DP-3".into(), Rect::new(1.0, 2.0, 3.0, 4.0)));
+        picker.region = Some(Rect::new(1.0, 2.0, 3.0, 4.0));
         assert_eq!(
             picker.payload(frames)["region"],
-            json!({ "output": "DP-3", "x": 1.0, "y": 2.0, "width": 3.0, "height": 4.0 })
+            json!({ "x": 1.0, "y": 2.0, "width": 3.0, "height": 4.0 })
         );
 
-        picker.picked = Some(("DP-3".into(), None));
+        picker.layout = vec![("DP-3".into(), Rect::new(0.0, 0.0, 1920.0, 1080.0))];
+        picker.picked = Some(Pick::Output("DP-3".into()));
         let payload = picker.payload(frames);
         assert_eq!(payload["stage"], "saving");
-        assert_eq!(payload["picked"], "DP-3");
+        assert_eq!(payload["picked"], json!(["DP-3"]));
+        // One screen: nothing to join.
+        assert_eq!(payload["modes"], json!(["region", "window", "screen"]));
     }
 
     #[test]
     fn windows_only_show_where_the_compositor_says_where_they_are() {
         let frames = Path::new("/tmp");
         let screenshot = session(Kind::Screenshot, None).payload(frames);
-        assert_eq!(screenshot["modes"], json!(["region", "screen"]));
+        assert_eq!(screenshot["modes"], json!(["region", "screen", "all"]));
         assert_eq!(screenshot["windows"], Value::Null);
         // Recordings pick windows through the portal.
         let recording = session(Kind::Recording, None).payload(frames);
         assert_eq!(recording["modes"], json!(["region", "window", "screen"]));
+    }
+
+    #[test]
+    fn picks_take_the_screens_they_touch() {
+        let mut picker = session(Kind::Screenshot, None);
+        picker.picked = Some(Pick::Area(Rect::new(1800.0, 100.0, 300.0, 200.0)));
+        // Not before the overlay says where the screens are.
+        assert_eq!(picker.targets(), None);
+
+        picker.layout = parse_layout("HDMI-A-1 0 0 1920 1080 DP-3 1920 0 2560 1440").unwrap();
+        let (outputs, area) = picker.targets().unwrap();
+        assert_eq!(outputs, ["HDMI-A-1", "DP-3"]);
+        assert_eq!(area, Rect::new(1800.0, 100.0, 300.0, 200.0));
+
+        picker.picked = Some(Pick::All);
+        assert_eq!(
+            picker.targets().unwrap().1,
+            Rect::new(0.0, 0.0, 4480.0, 1440.0)
+        );
+        picker.picked = Some(Pick::Output("DP-3".into()));
+        assert_eq!(picker.targets().unwrap().0, ["DP-3"]);
+        picker.picked = Some(Pick::Area(Rect::new(9000.0, 0.0, 10.0, 10.0)));
+        assert_eq!(picker.targets(), None);
+
+        assert_eq!(parse_layout("DP-3 0 0 1920"), None);
+        assert_eq!(parse_layout(""), None);
     }
 
     #[test]

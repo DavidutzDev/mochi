@@ -2,6 +2,20 @@
 
 Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor release may change the config format, the protocol or the module interface; the changelog says when.
 
+## Unreleased
+
+### Added
+
+- Screenshots across monitors: a region can run from one screen into the next, and the screenshot joins their parts at the sharpest screen's scale, transparent where no screen is. A new All screens mode, `mochi ipc capture screenshot all`, takes every screen as one image.
+- `[island] panels` in `config.toml`: the launcher, the hub, the clipboard and other views you type into open on the monitor with keyboard focus (the default), the one under the pointer, or all of them. The protocol's activity has a new `output` field.
+- `[island] click_outside`: a click outside the island now closes whatever it shows, a notification popup, the media card, a screenshot's preview, instead of only views you opened. A popup you never opened goes to the missed ones. The volume and workspace notices let clicks through (`ActivitySpec::passive`). `"expanded"` goes back to closing only views you opened. The protocol has a new `outside` field and event.
+- Clicking a clipboard image opens it in the screenshot preview card, with copy, edit and delete. The capture module has a `show` action for it.
+
+### Fixed
+
+- Each monitor's island sends events for the activity it shows, not the daemon's current one.
+- The capture overlay no longer reports itself ready before it knows its screen, which could let the island change before the screen froze.
+
 ## 0.0.4 - 2026-10-05
 
 ### Added

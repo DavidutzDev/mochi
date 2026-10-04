@@ -144,6 +144,11 @@ impl Module for Clipboard {
             )
             .arg(id()),
             ActionSpec::new("copy", "Copy an entry without pasting it").arg(id()),
+            ActionSpec::new(
+                "show",
+                "Open an image entry in the preview card a screenshot gets",
+            )
+            .arg(id()),
             ActionSpec::new("delete", "Remove an entry from the history").arg(id()),
             ActionSpec::new("clear", "Remove everything from the history"),
             ActionSpec::new("pause", "Stop keeping what you copy, or start again").arg(
@@ -299,6 +304,10 @@ impl State {
             }
             "pick" => id().and_then(|id| self.pick(ctx, id, self.settings.paste)),
             "copy" => id().and_then(|id| self.pick(ctx, id, false)),
+            "show" => match id() {
+                Ok(id) => self.show(ctx, id).await,
+                Err(error) => Err(error),
+            },
             "delete" => id().and_then(|id| {
                 self.store.remove(id).map_err(|error| error.to_string())?;
                 self.forget(id);
@@ -400,6 +409,36 @@ impl State {
             });
         }
         Ok(())
+    }
+
+    /// Opens an image entry in the capture module's preview card, with its
+    /// copy, edit and delete buttons, and closes the picker and the hub.
+    async fn show(&mut self, ctx: &ModuleCtx, id: u64) -> Result<(), String> {
+        let entry = self.store.get(id).ok_or("no such entry")?;
+        if entry.kind != Kind::Image {
+            return Err("only images open in the preview".into());
+        }
+        let label = if entry.width > 0 {
+            format!("{} × {}", entry.width, entry.height)
+        } else {
+            String::from("Image")
+        };
+        let path = self
+            .show_picture(id)
+            .ok_or("cannot write the image to show it")?;
+        self.close(ctx);
+        let close = ctx.call("hub", "close", &[]);
+        tokio::spawn(async move {
+            let _ = close.await;
+        });
+        let path = path.display().to_string();
+        let id = id.to_string();
+        ctx.call("capture", "show", &[&path, &id, &label])
+            .await
+            .map_err(|error| match error {
+                CallError::NotEnabled(_) => "the capture module isn't enabled".to_owned(),
+                other => other.to_string(),
+            })
     }
 
     /// What to serve for an entry: text under every text format, and the
