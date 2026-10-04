@@ -535,7 +535,7 @@ dependencies = [
 
 [[package]]
 name = "mochi"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "clap",
  "mochi-protocol",
@@ -543,7 +543,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-compositor"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "serde_json",
  "thiserror",
@@ -556,7 +556,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-core"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "include_dir",
  "libc",
@@ -572,7 +572,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-capture"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "include_dir",
  "libc",
@@ -586,7 +586,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-demo"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -597,7 +597,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-hub"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -609,7 +609,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-idle"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -621,7 +621,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-launcher"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -634,7 +634,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-media"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-notifications"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "enumflags2",
  "futures-util",
@@ -664,7 +664,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-osd"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "include_dir",
  "libpulse-binding",
@@ -677,7 +677,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-power"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -691,7 +691,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-workspaces"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -703,7 +703,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-protocol"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "serde",
  "serde_json",
@@ -712,7 +712,7 @@ dependencies = [
 
 [[package]]
 name = "mochid"
-version = "0.0.2"
+version = "0.0.3"
 dependencies = [
  "anyhow",
  "clap",

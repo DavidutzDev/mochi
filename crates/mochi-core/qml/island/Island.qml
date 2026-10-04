@@ -50,7 +50,8 @@ Item {
     readonly property Loader backLoader: front === 0 ? second : first
 
     width: frontLoader.item ? frontLoader.item.implicitWidth : Theme.idleHeight
-    height: frontLoader.item ? frontLoader.item.implicitHeight : Theme.idleHeight
+    // No taller than `layout.surface_height`; the content clips.
+    height: Math.min(frontLoader.item ? frontLoader.item.implicitHeight : Theme.idleHeight, Theme.surfaceHeight)
     opacity: shown ? 1 : 0
 
     Behavior on width {
@@ -106,7 +107,9 @@ Item {
         // path would break singletons like Theme and hot reload.
         const url = `root:/modules/${next.module}/${next.view}.qml`;
         backLoader.source = "";
-        backLoader.setSource(url, { payload: next.payload });
+        backLoader.setSource(url, {
+            payload: next.payload
+        });
         if (backLoader.status !== Loader.Ready) {
             console.warn(`mochi: could not load ${url}, keeping the current view`);
             backLoader.source = "";

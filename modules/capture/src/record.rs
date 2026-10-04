@@ -33,6 +33,8 @@ pub struct Options<'a> {
     pub framerate: u32,
     /// Audio sources, mixed into one track.
     pub audio: Vec<&'a str>,
+    /// The video codec, or gpu-screen-recorder's own choice.
+    pub codec: Option<&'a str>,
 }
 
 /// The recorder's command line.
@@ -43,8 +45,6 @@ pub fn command(options: &Options<'_>, target: &Target, file: &Path) -> Vec<Strin
             let round = |value: f64| value.round() as i64;
             argv.extend([
                 "-w".into(),
-                "region".into(),
-                "-region".into(),
                 format!(
                     "{}x{}+{}+{}",
                     round(area.width),
@@ -58,6 +58,11 @@ pub fn command(options: &Options<'_>, target: &Target, file: &Path) -> Vec<Strin
         Target::Portal => argv.extend(["-w".into(), "portal".into()]),
     }
     argv.extend(["-f".into(), options.framerate.to_string()]);
+    if let Some(codec) = options.codec {
+        argv.extend(["-k".into(), codec.to_owned()]);
+    }
+    // Encoding on the CPU is slow, but better than no recording.
+    argv.extend(["-fallback-cpu-encoding".into(), "yes".into()]);
     let sources: Vec<&str> = options
         .audio
         .iter()
@@ -150,6 +155,45 @@ impl Recording {
     }
 }
 
+/// The codec to ask for, from `gpu-screen-recorder --info`: none when a
+/// hardware encoder is listed, so gpu-screen-recorder picks its best, or else
+/// a Vulkan one. NVENC drops out when the driver is older than FFmpeg wants,
+/// as on cards whose last driver is 580, while Vulkan encoding still works.
+pub fn video_codec(info: &str) -> Option<&'static str> {
+    let codecs: Vec<&str> = info
+        .lines()
+        .skip_while(|line| line.trim() != "section=video_codecs")
+        .skip(1)
+        .take_while(|line| !line.starts_with("section="))
+        .map(str::trim)
+        .collect();
+    let hardware = ["h264", "hevc", "av1", "vp8", "vp9"];
+    if codecs.iter().any(|codec| hardware.contains(codec)) {
+        return None;
+    }
+    ["h264_vulkan", "hevc_vulkan"]
+        .into_iter()
+        .find(|codec| codecs.contains(codec))
+}
+
+/// Asks the recorder which codecs work here.
+pub async fn probe(program: &str) -> Option<&'static str> {
+    let output = tokio::time::timeout(
+        Duration::from_secs(10),
+        Command::new(program)
+            .arg("--info")
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .output(),
+    )
+    .await
+    .ok()?
+    .ok()?;
+    let codec = video_codec(&String::from_utf8_lossy(&output.stdout));
+    tracing::info!(codec = codec.unwrap_or("auto"), "picked the video codec");
+    codec
+}
+
 /// gpu-screen-recorder's usual failures, said short enough for the island
 /// and with what to do.
 pub fn explain(message: &str) -> String {
@@ -189,6 +233,7 @@ mod tests {
             recorder: &RECORDER,
             framerate: 60,
             audio,
+            codec: None,
         }
     }
 
@@ -202,7 +247,7 @@ mod tests {
         );
         assert_eq!(
             argv.join(" "),
-            "gpu-screen-recorder -w region -region 640x360+1942+62 -f 60 -a default_output -o /tmp/a.mp4"
+            "gpu-screen-recorder -w 640x360+1942+62 -f 60 -fallback-cpu-encoding yes -a default_output -o /tmp/a.mp4"
         );
     }
 
@@ -215,13 +260,43 @@ mod tests {
         );
         assert_eq!(
             argv.join(" "),
-            "gpu-screen-recorder -w DP-3 -f 60 -a default_output|default_input -o /tmp/a.mp4"
+            "gpu-screen-recorder -w DP-3 -f 60 -fallback-cpu-encoding yes -a default_output|default_input -o /tmp/a.mp4"
         );
 
         let argv = command(&options(vec![""]), &Target::Portal, Path::new("/tmp/a.mp4"));
         assert_eq!(
             argv.join(" "),
-            "gpu-screen-recorder -w portal -f 60 -o /tmp/a.mp4"
+            "gpu-screen-recorder -w portal -f 60 -fallback-cpu-encoding yes -o /tmp/a.mp4"
+        );
+    }
+
+    #[test]
+    fn asks_for_vulkan_only_without_hardware_codecs() {
+        // A GTX 1060 on driver 580, whose NVENC is too old for FFmpeg.
+        let pascal = "section=gpu_info\nvendor|nvidia\nsection=video_codecs\nh264_software\n\
+                      h264_vulkan\nhevc_vulkan\nsection=image_formats\npng\n";
+        assert_eq!(video_codec(pascal), Some("h264_vulkan"));
+        let nvenc = "section=video_codecs\nh264\nhevc\nh264_vulkan\nsection=containers\n";
+        assert_eq!(video_codec(nvenc), None);
+        let software = "section=video_codecs\nh264_software\n";
+        assert_eq!(video_codec(software), None);
+        assert_eq!(video_codec(""), None);
+    }
+
+    #[test]
+    fn uses_the_codec_asked_for() {
+        let options = Options {
+            codec: Some("h264_vulkan"),
+            ..options(vec![])
+        };
+        let argv = command(
+            &options,
+            &Target::Output("DP-3".into()),
+            Path::new("/a.mp4"),
+        );
+        assert_eq!(
+            argv.join(" "),
+            "gpu-screen-recorder -w DP-3 -f 60 -k h264_vulkan -fallback-cpu-encoding yes -o /a.mp4"
         );
     }
 

@@ -2,8 +2,8 @@ import QtQuick
 import Quickshell
 import Quickshell.Wayland
 
-// A fixed, transparent layer surface along the top or bottom of the screen,
-// holding five areas from left to right: left, center-left, center,
+// A fixed, transparent layer surface as tall as the screen, anchored to its
+// top or bottom edge, holding five areas from left to right: left, center-left, center,
 // center-right and right. The island sits in one of them and bubbles fill
 // them. The surface never resizes: everything animates inside it, and the
 // input mask follows the island and the pills so clicks anywhere else reach
@@ -44,7 +44,10 @@ PanelWindow {
     readonly property bool overlaid: activity?.overlay != null
     readonly property bool covering: modal || overlaid
 
-    implicitHeight: covering ? (screen?.height ?? Theme.surfaceHeight) : Theme.surfaceHeight
+    // Always the whole screen: a layer surface that changes size is animated by
+    // the compositor (Hyprland's `layers` animation), which would stretch a
+    // frozen screenshot. Only the input mask, the layer and the keyboard change.
+    implicitHeight: screen?.height ?? Theme.surfaceHeight
     color: "transparent"
 
     // Windows only make room for the idle island and the bubbles, so they

@@ -35,6 +35,7 @@ use mochi_core::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::process::Command;
+use tokio::task::JoinHandle;
 
 use crate::crop::Rect;
 use crate::record::{Options, Recording, Target};
@@ -62,6 +63,7 @@ struct Settings {
     copy: bool,
     preview_ms: u64,
     mode: Mode,
+    codec: String,
 }
 
 impl Default for Settings {
@@ -80,6 +82,7 @@ impl Default for Settings {
             copy: true,
             preview_ms: 6000,
             mode: Mode::Region,
+            codec: String::new(),
         }
     }
 }
@@ -195,9 +198,19 @@ impl Module for Capture {
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {
         Box::pin(async move {
             let settings: Settings = ctx.settings()?;
+            // Which video codec works here, asked once in the background:
+            // gpu-screen-recorder takes a quarter of a second to answer.
+            let mut probe = settings.codec.is_empty().then(|| {
+                let program = settings.recorder.first().cloned().unwrap_or_default();
+                tokio::spawn(async move { record::probe(&program).await })
+            });
             let mut state = State::new(settings, ctx.data_dir().to_owned());
             loop {
                 tokio::select! {
+                    codec = probed(&mut probe) => {
+                        state.codec = codec;
+                        probe = None;
+                    }
                     event = ctx.next_event() => match event {
                         None => {
                             state.shut_down().await;
@@ -214,6 +227,14 @@ impl Module for Capture {
                 }
             }
         })
+    }
+}
+
+/// Waits for the codec probe, or forever once it answered.
+async fn probed(probe: &mut Option<JoinHandle<Option<&'static str>>>) -> Option<&'static str> {
+    match probe {
+        Some(probe) => probe.await.ok().flatten(),
+        None => std::future::pending().await,
     }
 }
 
@@ -318,6 +339,8 @@ struct State {
     bubble: Option<BubbleId>,
     last: Option<Saved>,
     preview: Option<ActivityId>,
+    /// The video codec the probe picked, when it picked one.
+    codec: Option<&'static str>,
 }
 
 impl State {
@@ -343,6 +366,7 @@ impl State {
             bubble: None,
             last: None,
             preview: None,
+            codec: None,
         }
     }
 
@@ -672,6 +696,11 @@ impl State {
             recorder: &self.settings.recorder,
             framerate: self.settings.framerate,
             audio,
+            codec: if self.settings.codec.is_empty() {
+                self.codec
+            } else {
+                Some(self.settings.codec.as_str())
+            },
         };
         let argv = record::command(&options, target, &file);
         tracing::info!(command = %argv.join(" "), "recording");

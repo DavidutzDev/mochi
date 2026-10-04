@@ -23,9 +23,12 @@ Item {
     readonly property string stage: payload.stage ?? ""
     readonly property string mode: payload.mode ?? ""
     readonly property bool picking: stage === "select"
+    // The window grows to cover the screen when the picker opens; nothing is
+    // drawn before it does, or the frozen frame would stretch with it.
+    readonly property bool covering: screen !== null && height >= screen.height
     // The island waits for the frozen frame, so the frame shows the screen
     // as it was, not the picker.
-    readonly property bool ready: !screenshot || frozen.hasContent
+    readonly property bool ready: covering && (!screenshot || frozen.hasContent)
 
     // The region drawn on this screen, in local coordinates, or null.
     readonly property var region: {
@@ -93,8 +96,10 @@ Item {
     ScreencopyView {
         id: frozen
 
-        anchors.fill: parent
-        visible: root.screenshot
+        // The monitor's size, never the window's, so it can't stretch.
+        width: root.screen?.width ?? 0
+        height: root.screen?.height ?? 0
+        visible: root.screenshot && root.covering
         captureSource: root.screenshot ? root.screen : null
         live: false
 
@@ -113,7 +118,7 @@ Item {
             grabToImage(result => {
                 // PPM is raw pixels: quick to write. The module compresses.
                 if (result.saveToFile(path))
-                    Daemon.command("capture", "frame", [String(session), root.output, String(root.originX), String(root.originY), String(root.width), String(root.height)]);
+                    Daemon.command("capture", "frame", [String(session), root.output, String(root.originX), String(root.originY), String(width), String(height)]);
                 else
                     console.warn(`capture: could not save ${path}`);
                 console.debug(`capture: saved the frame in ${Date.now() - started} ms`);

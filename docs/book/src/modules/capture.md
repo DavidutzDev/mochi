@@ -20,6 +20,8 @@ Recordings go through [gpu-screen-recorder](https://git.dec05eba.com/gpu-screen-
 programs.gpu-screen-recorder.enable = true;
 ```
 
+The module asks gpu-screen-recorder which video codecs work on your GPU and picks one: a hardware encoder when there is one, otherwise Vulkan encoding, which works on cards whose driver is too old for NVENC, and the CPU as a last resort. Set `codec` to force one.
+
 A window recording goes through the screen-cast portal, so it records that window alone, even behind others. The portal's picker chooses the window.
 
 ## Windows

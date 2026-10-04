@@ -85,8 +85,7 @@ pub struct Layout {
     pub radius_medium: u32,
     /// Corners of cards and tiles.
     pub radius_large: u32,
-    /// Height of the transparent surface the island grows inside. Nothing
-    /// can be taller than this.
+    /// The tallest the island can grow, in pixels.
     pub surface_height: u32,
     pub notch: Notch,
 }

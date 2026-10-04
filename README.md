@@ -2,7 +2,7 @@
 
 A desktop shell built around a central island, like a dynamic island. `mochid`, a Rust daemon, owns state and system integration and supervises a Quickshell UI. `mochi` is its command-line client.
 
-Early work in progress, at version 0.0.2: the island, bubbles, the notch layout, and the idle, OSD, workspaces, media, notifications, launcher, hub, power and capture modules work today. `CHANGELOG.md` lists what each release has. `TODO.md` has the plan, the documentation site in `docs/book` how to install and configure it, `docs/protocol.md` the daemon's protocol, `docs/views.md` how to write views with the built-in controls and `docs/spike.md` the results of the first prototype.
+Early work in progress, at version 0.0.3: the island, bubbles, the notch layout, and the idle, OSD, workspaces, media, notifications, launcher, hub, power and capture modules work today. `CHANGELOG.md` lists what each release has. `TODO.md` has the plan, the documentation site in `docs/book` how to install and configure it, `docs/protocol.md` the daemon's protocol, `docs/views.md` how to write views with the built-in controls and `docs/spike.md` the results of the first prototype.
 
 ## Running it
 
@@ -36,7 +36,7 @@ The flake has the `mochi` package, a home-manager module, a NixOS module and an 
 
 ```nix
 # flake inputs
-mochi.url = "github:DavidutzDev/mochi/v0.0.2";
+mochi.url = "github:DavidutzDev/mochi/v0.0.3";
 
 # home configuration
 imports = [ inputs.mochi.homeModules.default ];
