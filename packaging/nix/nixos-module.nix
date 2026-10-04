@@ -16,6 +16,16 @@ in
       description = "The Mochi package, with `mochid` and `mochi`.";
     };
 
+    recording.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Enable `programs.gpu-screen-recorder`, which the capture module
+        records with: the program and the helper it needs to capture a
+        region or a screen.
+      '';
+    };
+
     systemd.enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -29,6 +39,7 @@ in
 
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
+    programs.gpu-screen-recorder.enable = lib.mkIf cfg.recording.enable (lib.mkDefault true);
     # The package's user unit, mochid.service.
     systemd.packages = [ cfg.package ];
     # Through the target rather than `systemd.user.services.mochid`: NixOS

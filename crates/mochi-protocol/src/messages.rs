@@ -241,7 +241,7 @@ mod tests {
     fn every_daemon_message_round_trips() {
         round_trip_daemon(DaemonMessage::Hello {
             api: 1,
-            version: "0.0.1".into(),
+            version: "0.0.2".into(),
         });
         round_trip_daemon(DaemonMessage::Modules {
             modules: vec!["idle".into()],
@@ -296,7 +296,7 @@ mod tests {
         round_trip_daemon(DaemonMessage::Ok);
         round_trip_daemon(DaemonMessage::Status {
             status: Status {
-                version: "0.0.1".into(),
+                version: "0.0.2".into(),
                 api: 1,
                 ui_connected: true,
                 modules: vec!["idle".into()],

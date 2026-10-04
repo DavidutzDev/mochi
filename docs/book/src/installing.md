@@ -6,7 +6,7 @@ The flake has the `mochi` package, with both binaries, the systemd unit and the 
 
 ```nix
 mochi = {
-  url = "github:<owner>/mochi-shell/v0.0.1";
+  url = "github:DavidutzDev/mochi/v0.0.2";
   inputs.nixpkgs.follows = "nixpkgs";
 };
 ```
@@ -55,6 +55,14 @@ programs.mochi.enable = true;
 ```
 
 This installs Mochi for every user and starts it with each user's `graphical-session.target`. Each user's settings stay in `~/.config/mochi`, or in the home-manager module. Use one module or the other, not both.
+
+### Recording
+
+The package brings gpu-screen-recorder, which the capture module records with. With home-manager, setting `module.capture.recorder` in `settings` leaves it out. To record a region or a whole screen, gpu-screen-recorder also needs a helper with extra permissions, which only the system can install. The NixOS module enables it; set `programs.mochi.recording.enable = false` to skip it. With home-manager alone, add this to your NixOS configuration:
+
+```nix
+programs.gpu-screen-recorder.enable = true;
+```
 
 ### The overlay
 

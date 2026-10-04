@@ -5,6 +5,10 @@
   pkg-config,
   libpulseaudio,
   quickshell,
+  gpu-screen-recorder,
+  # The capture module records through gpu-screen-recorder. Turn this off
+  # when `recorder` in [module.capture] names another one.
+  withGpuScreenRecorder ? true,
 }:
 
 let
@@ -35,16 +39,21 @@ rustPlatform.buildRustPackage {
   buildInputs = [ libpulseaudio ];
 
   # The unit ships with /usr/bin paths; point them at this package. mochid
-  # gets the Quickshell it was tested against, whatever is in the user's PATH.
+  # gets the Quickshell it was tested against, whatever is in the user's PATH,
+  # and gpu-screen-recorder after it, so one installed system-wide wins.
   postInstall = ''
     install -Dm644 systemd/mochid.service $out/lib/systemd/user/mochid.service
     substituteInPlace $out/lib/systemd/user/mochid.service \
       --replace-fail /usr/bin/ $out/bin/
-    wrapProgram $out/bin/mochid --prefix PATH : ${lib.makeBinPath [ quickshell ]}
+    wrapProgram $out/bin/mochid \
+      --prefix PATH : ${lib.makeBinPath [ quickshell ]} \
+      ${lib.optionalString withGpuScreenRecorder "--suffix PATH : ${
+        lib.makeBinPath [ gpu-screen-recorder ]
+      }"}
   '';
 
   meta = {
-    description = "\";
+    description = "A desktop shell built around a central island";
     license = lib.licenses.mit;
     mainProgram = "mochid";
     platforms = lib.platforms.linux;

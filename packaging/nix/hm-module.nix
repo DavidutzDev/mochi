@@ -21,11 +21,20 @@ let
     ${lib.optionalString (cfg.theme != { }) ''
       cp ${toml.generate "theme.toml" cfg.theme} $out/theme.toml
     ''}
-    ${lib.getExe' cfg.package "mochid"} config check --config $out/config.toml
+    ${lib.getExe' package "mochid"} config check --config $out/config.toml
   '';
 
   written =
     lib.optional (cfg.settings != { }) "config.toml" ++ lib.optional (cfg.theme != { }) "theme.toml";
+
+  # gpu-screen-recorder comes with the package unless the settings name
+  # another recorder.
+  ownRecorder = lib.hasAttrByPath [ "module" "capture" "recorder" ] cfg.settings;
+  package =
+    if ownRecorder then
+      (cfg.package.override or (_: cfg.package)) { withGpuScreenRecorder = false; }
+    else
+      cfg.package;
 in
 {
   options.programs.mochi = {
@@ -33,7 +42,13 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      description = "The Mochi package, with `mochid` and `mochi`.";
+      description = ''
+        The Mochi package, with `mochid` and `mochi`. It brings
+        gpu-screen-recorder for recordings, unless `settings` sets
+        `module.capture.recorder`. Recording a region or a screen also needs
+        gpu-screen-recorder's capture helper, which only the system can
+        install: on NixOS, `programs.gpu-screen-recorder.enable = true`.
+      '';
     };
 
     settings = lib.mkOption {
@@ -98,7 +113,7 @@ in
       (lib.hm.assertions.assertPlatform "programs.mochi" pkgs lib.platforms.linux)
     ];
 
-    home.packages = [ cfg.package ];
+    home.packages = [ package ];
 
     xdg.configFile = lib.genAttrs (map (name: "mochi/${name}") written) (name: {
       source = "${files}/${baseNameOf name}";
@@ -114,8 +129,8 @@ in
       };
 
       Service = {
-        ExecStart = lib.getExe' cfg.package "mochid";
-        ExecReload = "${lib.getExe' cfg.package "mochi"} reload";
+        ExecStart = lib.getExe' package "mochid";
+        ExecReload = "${lib.getExe' package "mochi"} reload";
         Restart = "on-failure";
         RestartSec = 1;
         Slice = "app-graphical.slice";

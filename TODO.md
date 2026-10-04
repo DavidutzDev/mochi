@@ -428,6 +428,7 @@ After capture, reusing its pickers.
 - [x] Recording test against the real binaries (`cargo test -p mochid --test record -- --ignored`), writing outside the repository
 - [x] NixOS and home-manager modules and an overlay in `packaging/nix`. The home-manager module writes `config.toml` and `theme.toml` from Nix, checks them with `mochid config check` at build time, and reloads instead of restarting when they change
 - [x] Release 0.0.1 and `CHANGELOG.md`
+- [x] Release 0.0.2: capture, overlays, gpu-screen-recorder in the Nix package and modules
 - [x] Documentation site with mdBook in `docs/book`: installing, getting started, configuration, bubbles, theme, a page per module that includes its `settings.toml`, writing views and the protocol. `nix build .#docs`, part of `nix flake check`; `.github/workflows/docs.yml` publishes it to GitHub Pages
 - [ ] Publish the site once the repository is on GitHub
 - [ ] `docs/architecture.md`
