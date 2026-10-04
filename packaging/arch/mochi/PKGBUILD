@@ -11,6 +11,9 @@ license=('MIT')
 # against; see QUICKSHELL_VERSION in crates/mochi-core/src/supervisor.rs.
 depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder' 'sh')
 makedepends=('cargo')
+# makepkg builds C with GCC's LTO by default, which leaves zstd's objects
+# as GCC bitcode the Rust linker can't read.
+options=('!lto')
 optdepends=(
   'wl-clipboard: copy screenshots'
   'satty: edit screenshots'

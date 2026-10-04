@@ -2,7 +2,7 @@
 
 pkgname=mochi-git
 _pkgname=mochi
-pkgver=0.0.4.r0.gce12bca
+pkgver=0.0.4.r1.g9994656
 pkgrel=1
 pkgdesc='A desktop shell built around a central island (latest commit)'
 arch=('x86_64')
@@ -12,6 +12,9 @@ license=('MIT')
 # against; see QUICKSHELL_VERSION in crates/mochi-core/src/supervisor.rs.
 depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder' 'sh')
 makedepends=('cargo' 'git')
+# makepkg builds C with GCC's LTO by default, which leaves zstd's objects
+# as GCC bitcode the Rust linker can't read.
+options=('!lto')
 optdepends=(
   'wl-clipboard: copy screenshots'
   'satty: edit screenshots'
