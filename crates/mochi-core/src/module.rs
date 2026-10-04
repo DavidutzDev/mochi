@@ -230,6 +230,7 @@ pub struct ModuleCtx {
     compositor: Compositor,
     ids: ActivityIds,
     data_dir: PathBuf,
+    session_dir: PathBuf,
     requests: mpsc::UnboundedSender<ModuleRequest>,
     events: mpsc::UnboundedReceiver<ModuleEvent>,
 }
@@ -243,6 +244,7 @@ impl ModuleCtx {
         compositor: Compositor,
         ids: ActivityIds,
         data_dir: PathBuf,
+        session_dir: PathBuf,
         requests: mpsc::UnboundedSender<ModuleRequest>,
     ) -> (Self, mpsc::UnboundedSender<ModuleEvent>) {
         let (sender, events) = mpsc::unbounded_channel();
@@ -252,6 +254,7 @@ impl ModuleCtx {
             compositor,
             ids,
             data_dir,
+            session_dir,
             requests,
             events,
         };
@@ -281,6 +284,14 @@ impl ModuleCtx {
     /// session.
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
+    }
+
+    /// A directory only this module writes to that, unlike
+    /// [`data_dir`](Self::data_dir), keeps its files when the daemon
+    /// restarts. It lives in the runtime directory too, so they still go at
+    /// logout. Created on first use.
+    pub fn session_dir(&self) -> &Path {
+        &self.session_dir
     }
 
     /// Replaces the module's state, which the UI can read from any view.
@@ -383,6 +394,7 @@ mod tests {
             Compositor::unsupported(),
             ActivityIds::default(),
             PathBuf::from("/nonexistent"),
+            PathBuf::from("/nonexistent"),
             requests,
         );
         (ctx, received)
@@ -446,6 +458,7 @@ mod tests {
             Compositor::unsupported(),
             ActivityIds::default(),
             PathBuf::from("/nonexistent"),
+            PathBuf::from("/nonexistent"),
             requests,
         );
 
@@ -475,6 +488,7 @@ mod tests {
             toml::Table::new(),
             Compositor::unsupported(),
             ActivityIds::default(),
+            PathBuf::from("/nonexistent"),
             PathBuf::from("/nonexistent"),
             requests,
         );

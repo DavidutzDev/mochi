@@ -54,6 +54,10 @@ pub struct State {
     pub workspaces: Vec<Workspace>,
     /// The output with keyboard focus, by name, when the compositor says.
     pub focused_output: Option<String>,
+    /// The app id of the window that had keyboard focus last, like
+    /// `firefox` or `kitty`, when the compositor says. It stays while a
+    /// layer surface such as the island holds the keyboard.
+    pub focused_app: Option<String>,
     /// Something is capturing the screen, when the compositor says: Hyprland
     /// does, through its event socket. That includes any capture, even a
     /// one-frame screenshot or a live thumbnail, so a module that shows it
@@ -260,6 +264,7 @@ mod tests {
             outputs: Vec::new(),
             workspaces: vec![workspace(1, true), workspace(2, false)],
             focused_output: None,
+            focused_app: None,
             screencast: false,
         });
         let (actions, mut received) = mpsc::unbounded_channel();

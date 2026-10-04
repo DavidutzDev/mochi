@@ -187,6 +187,7 @@ mod tests {
                 })
                 .collect(),
             focused_output: None,
+            focused_app: None,
             screencast: false,
         }
     }

@@ -90,15 +90,17 @@ fn command(ctx: &ModuleCtx, shown: &mut Option<ActivityId>, command: ModuleComma
 }
 
 fn open(ctx: &ModuleCtx, shown: &mut Option<ActivityId>, page: &str) {
-    // The launcher also takes the keyboard; only one of them can be open.
-    // Not awaited: the launcher closes the hub the same way.
-    let close_launcher = ctx.call("launcher", "close", &[]);
-    tokio::spawn(async move {
-        match close_launcher.await {
-            Ok(()) | Err(CallError::NotEnabled(_)) => {}
-            Err(error) => tracing::warn!(%error, "could not close the launcher"),
-        }
-    });
+    // The launcher and the clipboard take the keyboard too; only one can be
+    // open. Not awaited: they close the hub the same way.
+    for module in ["launcher", "clipboard"] {
+        let close = ctx.call(module, "close", &[]);
+        tokio::spawn(async move {
+            match close.await {
+                Ok(()) | Err(CallError::NotEnabled(_)) => {}
+                Err(error) => tracing::warn!(%error, module, "could not close it"),
+            }
+        });
+    }
 
     let spec = ActivitySpec::new("Hub")
         .key("hub")

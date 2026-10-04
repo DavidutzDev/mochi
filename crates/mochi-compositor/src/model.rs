@@ -21,6 +21,8 @@ pub(crate) struct Model {
     toplevels: BTreeMap<u32, Toplevel>,
     /// The output of the window that was focused last.
     window_focus: Option<u32>,
+    /// The window that was focused last, by protocol id.
+    focused_window: Option<u32>,
     /// The focused output from compositor IPC, by name. Exact, so it wins
     /// over the window guess.
     ipc_focus: Option<String>,
@@ -32,6 +34,7 @@ pub(crate) struct Model {
 struct Toplevel {
     outputs: Vec<u32>,
     activated: bool,
+    app_id: String,
 }
 
 #[derive(Debug, Default)]
@@ -129,6 +132,10 @@ impl Model {
         }
     }
 
+    pub fn toplevel_app_id(&mut self, toplevel: u32, app_id: String) {
+        self.toplevels.entry(toplevel).or_default().app_id = app_id;
+    }
+
     pub fn toplevel_activated(&mut self, toplevel: u32, activated: bool) {
         self.toplevels.entry(toplevel).or_default().activated = activated;
     }
@@ -137,16 +144,22 @@ impl Model {
     /// its output. A window losing focus doesn't: focus went somewhere else,
     /// which that window's own `done` reports.
     pub fn toplevel_done(&mut self, toplevel: u32) {
-        if let Some(window) = self.toplevels.get(&toplevel)
-            && window.activated
-            && let Some(output) = window.outputs.first()
-        {
-            self.window_focus = Some(*output);
+        let Some(window) = self.toplevels.get(&toplevel) else {
+            return;
+        };
+        if window.activated {
+            self.focused_window = Some(toplevel);
+            if let Some(output) = window.outputs.first() {
+                self.window_focus = Some(*output);
+            }
         }
     }
 
     pub fn toplevel_closed(&mut self, toplevel: u32) {
         self.toplevels.remove(&toplevel);
+        if self.focused_window == Some(toplevel) {
+            self.focused_window = None;
+        }
     }
 
     pub fn ipc_focus(&mut self, output: String) {
@@ -222,6 +235,11 @@ impl Model {
             outputs,
             workspaces,
             focused_output: self.focused_output(),
+            focused_app: self
+                .focused_window
+                .and_then(|id| self.toplevels.get(&id))
+                .map(|window| window.app_id.clone())
+                .filter(|app_id| !app_id.is_empty()),
             screencast: self.screencasts > 0,
         }
     }
@@ -378,6 +396,28 @@ mod tests {
         model.toplevel_activated(31, true);
         model.toplevel_done(31);
         assert_eq!(model.snapshot().focused_output.as_deref(), Some("DP-3"));
+    }
+
+    #[test]
+    fn the_focused_app_stays_until_another_window_takes_focus() {
+        let mut model = dual_monitor();
+        model.toplevel_app_id(30, "kitty".into());
+        model.toplevel_app_id(31, "firefox".into());
+        model.toplevel_activated(30, true);
+        model.toplevel_done(30);
+        assert_eq!(model.snapshot().focused_app.as_deref(), Some("kitty"));
+
+        // The island taking the keyboard deactivates the window, and nothing
+        // else gets focus.
+        model.toplevel_activated(30, false);
+        model.toplevel_done(30);
+        assert_eq!(model.snapshot().focused_app.as_deref(), Some("kitty"));
+
+        model.toplevel_activated(31, true);
+        model.toplevel_done(31);
+        assert_eq!(model.snapshot().focused_app.as_deref(), Some("firefox"));
+        model.toplevel_closed(31);
+        assert_eq!(model.snapshot().focused_app, None);
     }
 
     #[test]

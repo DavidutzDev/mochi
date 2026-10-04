@@ -2,7 +2,7 @@
 
 A desktop shell built around a central island, like a dynamic island. `mochid`, a Rust daemon, owns state and system integration and supervises a Quickshell UI. `mochi` is its command-line client.
 
-Early work in progress, at version 0.0.3: the island, bubbles, the notch layout, and the idle, OSD, workspaces, media, notifications, launcher, hub, power, capture and share modules work today. `CHANGELOG.md` lists what each release has. `TODO.md` has the plan, the documentation site in `docs/book` how to install and configure it, `docs/protocol.md` the daemon's protocol, `docs/views.md` how to write views with the built-in controls and `docs/spike.md` the results of the first prototype.
+Early work in progress, at version 0.0.3: the island, bubbles, the notch layout, and the idle, OSD, workspaces, media, notifications, launcher, hub, power, capture, share and clipboard modules work today. `CHANGELOG.md` lists what each release has. `TODO.md` has the plan, the documentation site in `docs/book` how to install and configure it, `docs/protocol.md` the daemon's protocol, `docs/views.md` how to write views with the built-in controls and `docs/spike.md` the results of the first prototype.
 
 ## Running it
 
@@ -109,6 +109,7 @@ cargo test -p mochid --test record -- --ignored --nocapture
 | `power` | A hub page with lock, log out, suspend, hibernate, reboot, reboot to firmware and shut down, showing only what logind allows; ending the session takes a second click. Power profiles when power-profiles-daemon runs. `mochi ipc power <action>` does the same without asking. |
 | `capture` | Screenshots and recordings: `mochi ipc capture screenshot` freezes the screens so you drag a region right away, or switch to a window or a screen on the island, then shows the capture with copy, edit and delete buttons. `record` does the same through gpu-screen-recorder, with a red dot while it records. |
 | `share` | The screen-share picker for xdg-desktop-portal-hyprland: screens and windows with live pictures, or a region, on the island, and a bubble while something shares the screen. The home-manager module sets the portal up. |
+| `clipboard` | A clipboard history: `mochi ipc clipboard toggle` (bind it to SUPER+V) searches what you copied, text and images, and pastes the entry you pick. It stays in memory until you log out, or encrypted on disk with a key from the Secret Service. Copies password managers mark as secret are skipped. |
 | `demo` | Test views and `mochi ipc demo` actions for trying the island. |
 
 ## Configuration

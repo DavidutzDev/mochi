@@ -174,15 +174,17 @@ impl State {
     }
 
     async fn open(&mut self, ctx: &ModuleCtx) {
-        // The hub also takes the keyboard; only one of them can be open. Not
-        // awaited: the hub closes the launcher the same way.
-        let close_hub = ctx.call("hub", "close", &[]);
-        tokio::spawn(async move {
-            match close_hub.await {
-                Ok(()) | Err(CallError::NotEnabled(_)) => {}
-                Err(error) => tracing::warn!(%error, "could not close the hub"),
-            }
-        });
+        // The hub and the clipboard take the keyboard too; only one can be
+        // open. Not awaited: they close the launcher the same way.
+        for module in ["hub", "clipboard"] {
+            let close = ctx.call(module, "close", &[]);
+            tokio::spawn(async move {
+                match close.await {
+                    Ok(()) | Err(CallError::NotEnabled(_)) => {}
+                    Err(error) => tracing::warn!(%error, module, "could not close it"),
+                }
+            });
+        }
 
         self.apps = read_apps().await;
         self.query.clear();

@@ -22,6 +22,7 @@
 - [Power](modules/power.md)
 - [Capture](modules/capture.md)
 - [Share](modules/share.md)
+- [Clipboard](modules/clipboard.md)
 
 # Building on Mochi
 

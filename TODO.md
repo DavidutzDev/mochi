@@ -404,6 +404,20 @@ After capture, reusing its pickers.
 - [ ] `chooser_cmd` for xdg-desktop-portal-wlr
 - [ ] Screencast state on compositors other than Hyprland (PipeWire streams)
 
+### Clipboard
+
+- [x] Watch the clipboard through `ext-data-control-v1` on a Wayland connection of the module's own: the best text format with HTML alongside, or an image, PNG first. Skip `x-kde-passwordManagerHint` and Mochi's own selection, marked with `application/x-mochi-clipboard`
+- [x] An append-only log with sealed info and content parts, read into an index at startup without the content; XChaCha20-Poly1305 with a key from the Secret Service on disk, a BLAKE3 checksum in memory; zstd for text; dedup by hash; a rewrite on removal
+- [x] In `$XDG_RUNTIME_DIR` by default, through the new `ModuleCtx::session_dir`; `storage = "disk"` falls back to memory without a key
+- [x] The picker on the island, like the launcher, with image thumbnails; Enter pastes through `zwp-virtual-keyboard-v1` with a keymap of its own, Ctrl+Shift+V for terminals from the compositor's `focused_app`
+- [x] A hub card: count, pause, clear
+- [x] Tested end to end: copies, secrets skipped, a restart, disk mode against a private gnome-keyring, and pasting into `wev` in a headless Sway
+- [ ] `wlr-data-control` for compositors without the ext protocol
+- [ ] Pinned entries
+- [ ] Ignored apps, by the focused window's class
+- [ ] A larger preview of the selected image or long text
+- [ ] Check the paste on Hyprland with a non-QWERTY layout
+
 ## Plugins
 
 - [ ] `mochi-plugin.toml`: `id`, `api`, `overrides`, `backend`, `actions`

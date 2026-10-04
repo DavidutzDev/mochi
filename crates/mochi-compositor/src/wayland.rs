@@ -474,6 +474,9 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for Client {
                     .model
                     .toplevel_output(id, output.id().protocol_id(), false);
             }
+            zwlr_foreign_toplevel_handle_v1::Event::AppId { app_id } => {
+                client.model.toplevel_app_id(id, app_id);
+            }
             zwlr_foreign_toplevel_handle_v1::Event::State { state } => {
                 // An array of native-endian u32 values.
                 let activated = state

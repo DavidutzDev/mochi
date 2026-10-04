@@ -1,0 +1,22 @@
+# Clipboard: keeps what you copy. `mochi ipc clipboard toggle`, bound to
+# SUPER+V, opens the history; picking an entry pastes it.
+[module.clipboard]
+# Where the history lives. "memory" keeps it in $XDG_RUNTIME_DIR, a tmpfs
+# only you can read, so it goes when you log out. "disk" keeps it in
+# $XDG_STATE_HOME/mochi, encrypted with a key Mochi stores in the Secret
+# Service (gnome-keyring, KeePassXC); without one it stays in memory.
+# storage = "memory"
+# The most entries to keep; the oldest go first.
+# max_entries = 500
+# Remove entries last copied more than this many hours ago. 0 keeps them
+# until max_entries pushes them out.
+# max_age_hours = 0
+# Copies larger than this many megabytes aren't kept.
+# max_item_mb = 16
+# The most entries the picker lists.
+# max_results = 50
+# Paste a picked entry into the window you were in, by typing Ctrl+V for
+# you. false only copies it.
+# paste = true
+# Window classes that paste with Ctrl+Shift+V instead: terminals.
+# terminals = ["kitty", "foot", "footclient", "Alacritty", "com.mitchellh.ghostty", "org.wezfurlong.wezterm", "org.kde.konsole", "org.gnome.Console", "org.gnome.Ptyxis", "xterm"]

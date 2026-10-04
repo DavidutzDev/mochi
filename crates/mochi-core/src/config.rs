@@ -85,6 +85,12 @@ impl Paths {
         self.runtime_dir.join("data").join(module)
     }
 
+    /// A module's files that outlive a daemon restart:
+    /// [`crate::ModuleCtx::session_dir`].
+    pub fn session_dir(&self, module: &str) -> PathBuf {
+        self.runtime_dir.join("session").join(module)
+    }
+
     /// The generated QML tree Quickshell loads.
     pub fn shell_dir(&self) -> PathBuf {
         self.runtime_dir.join("shell")
