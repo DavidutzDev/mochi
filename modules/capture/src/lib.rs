@@ -59,6 +59,7 @@ struct Settings {
     framerate: u32,
     audio: String,
     microphone: String,
+    record_audio: bool,
     record_microphone: bool,
     copy: bool,
     preview_ms: u64,
@@ -78,6 +79,7 @@ impl Default for Settings {
             framerate: 60,
             audio: "default_output".into(),
             microphone: "default_input".into(),
+            record_audio: true,
             record_microphone: false,
             copy: true,
             preview_ms: 6000,
@@ -174,6 +176,7 @@ impl Module for Capture {
                 "What to capture",
                 MODES,
             )),
+            ActionSpec::new("audio", "Turn recording the desktop audio on or off"),
             ActionSpec::new("microphone", "Turn recording the microphone on or off"),
             area(
                 ActionSpec::new("frame", "A frozen screen is saved; the overlay sends this")
@@ -254,7 +257,7 @@ struct Session {
     number: u64,
     kind: Kind,
     mode: Mode,
-    microphone: bool,
+    sound: Sound,
     /// The monitor with the keyboard.
     output: Option<String>,
     /// For the window picker. `None` when the compositor doesn't say where
@@ -296,7 +299,8 @@ impl Session {
             "kind": self.kind.as_str(),
             "mode": self.mode.as_str(),
             "modes": modes,
-            "microphone": self.microphone,
+            "audio": self.sound.desktop,
+            "microphone": self.sound.microphone,
             "output": self.output,
             "frames": frames.display().to_string(),
             "windows": self.windows.as_ref().map(|windows| windows
@@ -317,6 +321,14 @@ impl Session {
             }),
         })
     }
+}
+
+/// What a recording hears.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct Sound {
+    /// The desktop audio, `audio` in the settings.
+    desktop: bool,
+    microphone: bool,
 }
 
 /// A file the island shows after a capture.
@@ -395,7 +407,8 @@ impl State {
                 Some(mode) => self.choose(ctx, mode).await,
                 None => Err("no such mode".into()),
             },
-            "microphone" => self.toggle_microphone(ctx),
+            "audio" => self.toggle_sound(ctx, |sound| sound.desktop = !sound.desktop),
+            "microphone" => self.toggle_sound(ctx, |sound| sound.microphone = !sound.microphone),
             "frame" => self.frame(ctx, args).await,
             "region" => self.region(ctx, args),
             "select" => match area(args) {
@@ -459,7 +472,7 @@ impl State {
             mode = Mode::Region;
         }
         if kind == Kind::Recording && mode == Mode::Window {
-            return self.start_recording(ctx, Target::Portal, self.settings.record_microphone);
+            return self.start_recording(ctx, Target::Portal, self.default_sound());
         }
 
         let output = compositor.state().focused_output;
@@ -468,7 +481,7 @@ impl State {
             number: self.sessions,
             kind,
             mode,
-            microphone: self.settings.record_microphone,
+            sound: self.default_sound(),
             output: output.clone(),
             windows,
             frames: HashMap::new(),
@@ -531,9 +544,9 @@ impl State {
             return Err(format!("can't pick a {} here", mode.as_str()));
         }
         if session.kind == Kind::Recording && mode == Mode::Window {
-            let microphone = session.microphone;
+            let sound = session.sound;
             self.close(ctx);
-            return self.start_recording(ctx, Target::Portal, microphone);
+            return self.start_recording(ctx, Target::Portal, sound);
         }
         session.mode = mode;
         session.region = None;
@@ -541,9 +554,20 @@ impl State {
         Ok(())
     }
 
-    fn toggle_microphone(&mut self, ctx: &ModuleCtx) -> Result<(), String> {
+    fn default_sound(&self) -> Sound {
+        Sound {
+            desktop: self.settings.record_audio,
+            microphone: self.settings.record_microphone,
+        }
+    }
+
+    fn toggle_sound(
+        &mut self,
+        ctx: &ModuleCtx,
+        toggle: impl FnOnce(&mut Sound),
+    ) -> Result<(), String> {
         let session = self.session.as_mut().ok_or("the picker isn't open")?;
-        session.microphone = !session.microphone;
+        toggle(&mut session.sound);
         self.refresh(ctx);
         Ok(())
     }
@@ -585,7 +609,7 @@ impl State {
             return Ok(());
         }
         if session.kind == Kind::Recording {
-            let microphone = session.microphone;
+            let sound = session.sound;
             // A whole screen records the output itself, which follows a
             // change of resolution.
             let target = match area {
@@ -595,7 +619,7 @@ impl State {
             self.close(ctx);
             // Lets the shade leave the screen before the first frame.
             tokio::time::sleep(Duration::from_millis(150)).await;
-            return self.start_recording(ctx, target, microphone);
+            return self.start_recording(ctx, target, sound);
         }
         session.picked = Some((output, area));
         session.picked_at = Some(Instant::now());
@@ -656,9 +680,9 @@ impl State {
         &mut self,
         ctx: &ModuleCtx,
         target: Target,
-        microphone: bool,
+        sound: Sound,
     ) -> Result<(), String> {
-        let recording = match self.spawn_recorder(&target, microphone) {
+        let recording = match self.spawn_recorder(&target, sound) {
             Ok(recording) => recording,
             Err(message) => {
                 self.failed(ctx, Kind::Recording, &message);
@@ -683,13 +707,16 @@ impl State {
         Ok(())
     }
 
-    fn spawn_recorder(&self, target: &Target, microphone: bool) -> Result<Recording, String> {
+    fn spawn_recorder(&self, target: &Target, sound: Sound) -> Result<Recording, String> {
         std::fs::create_dir_all(&self.recordings)
             .map_err(|error| format!("cannot create {}: {error}", self.recordings.display()))?;
         let name = files::timestamp(&self.settings.recording_name, SystemTime::now());
         let file = files::unused(&self.recordings, &name, "mp4");
-        let mut audio = vec![self.settings.audio.as_str()];
-        if microphone {
+        let mut audio = Vec::new();
+        if sound.desktop {
+            audio.push(self.settings.audio.as_str());
+        }
+        if sound.microphone {
             audio.push(self.settings.microphone.as_str());
         }
         let options = Options {
@@ -884,7 +911,10 @@ mod tests {
             number: 3,
             kind,
             mode: Mode::Region,
-            microphone: false,
+            sound: Sound {
+                desktop: true,
+                microphone: false,
+            },
             output: Some("DP-3".into()),
             windows,
             frames: HashMap::new(),

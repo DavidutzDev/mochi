@@ -369,7 +369,8 @@ Item {
     }
 
     // Keys, on whichever monitor has the keyboard: Enter takes the region,
-    // Tab or 1 to 3 switch modes, M the microphone, Escape cancels.
+    // Tab or 1 to 3 switch modes, A the desktop audio, M the microphone, Escape
+    // cancels.
     Item {
         id: keys
 
@@ -383,6 +384,9 @@ Item {
         Keys.onPressed: event => {
             if (event.key >= Qt.Key_1 && event.key <= Qt.Key_3) {
                 root.switchMode(modes[event.key - Qt.Key_1]);
+                event.accepted = true;
+            } else if (event.key === Qt.Key_A && !root.screenshot) {
+                Daemon.command("capture", "audio", []);
                 event.accepted = true;
             } else if (event.key === Qt.Key_M && !root.screenshot) {
                 Daemon.command("capture", "microphone", []);

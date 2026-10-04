@@ -2,8 +2,10 @@ import QtQuick
 import qs.island
 
 // The island while picking: the modes, the current one highlighted, and
-// what to do next. A click on another mode switches to it; the overlay
-// handles the keys (Tab or 1 to 3 switch, M the microphone, Escape cancels).
+// what to do next, and for a recording the desktop audio and microphone
+// toggles. A click on another mode switches to it; the overlay handles the
+// keys (Tab or 1 to 3 switch, A the desktop audio, M the microphone, Escape
+// cancels).
 Item {
     id: root
 
@@ -90,6 +92,15 @@ Item {
         Item {
             width: 4
             height: 1
+        }
+
+        IconButton {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: !root.screenshot
+            icon: root.payload.audio ? "volume" : "volume-muted"
+            tone: root.payload.audio ? "accent" : "ghost"
+            size: 15
+            onClicked: Daemon.command("capture", "audio", [])
         }
 
         IconButton {

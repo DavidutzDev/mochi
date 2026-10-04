@@ -2,6 +2,12 @@
 
 Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor release may change the config format, the protocol or the module interface; the changelog says when.
 
+## Unreleased
+
+### Added
+
+- Recording can leave out the desktop audio: a speaker toggle next to the microphone one in the picker, the A key, the `audio` action, and `record_audio` for the default.
+
 ## 0.0.3 - 2026-10-04
 
 ### Fixed

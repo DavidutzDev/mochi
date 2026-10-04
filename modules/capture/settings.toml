@@ -23,7 +23,9 @@
 # The sound to record, and the microphone the picker can add. "" for none.
 # audio = "default_output"
 # microphone = "default_input"
-# Whether the picker starts with the microphone on.
+# Whether the picker starts with the desktop audio and the microphone on.
+# Its bar switches either for one recording.
+# record_audio = true
 # record_microphone = false
 # Copy every capture to the clipboard: screenshots as images, recordings
 # as files.
