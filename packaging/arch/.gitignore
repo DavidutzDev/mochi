@@ -1,0 +1,6 @@
+# What makepkg leaves behind when a package is built in place.
+src/
+pkg/
+*.pkg.tar.*
+*.log
+/mochi-git/mochi/

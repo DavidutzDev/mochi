@@ -1,0 +1,47 @@
+# Maintainer: David Gheghea
+
+pkgname=mochi
+pkgver=0.0.3
+pkgrel=1
+pkgdesc='A desktop shell built around a central island'
+arch=('x86_64')
+url='https://github.com/DavidutzDev/mochi'
+license=('MIT')
+# mochid refuses to start with another Quickshell than the one it's tested
+# against; see QUICKSHELL_VERSION in crates/mochi-core/src/supervisor.rs.
+depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder')
+makedepends=('cargo')
+optdepends=(
+  'wl-clipboard: copy screenshots'
+  'satty: edit screenshots'
+  'uwsm: start apps from the launcher as units of their own'
+)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('42e9c7eae5dfc00d045e74519a461f73379305d0466fc44e4507d3b2c2eea700')
+
+prepare() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+check() {
+  cd "$pkgname-$pkgver"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo test --frozen --release
+}
+
+package() {
+  cd "$pkgname-$pkgver"
+  install -Dm755 target/release/mochid target/release/mochi -t "$pkgdir/usr/bin/"
+  install -Dm644 systemd/mochid.service -t "$pkgdir/usr/lib/systemd/user/"
+  install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
+}

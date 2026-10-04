@@ -10,6 +10,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 - Commands can answer with output, a new `output` message, which `mochi ipc` prints.
 - The compositor state says when the screen is captured, from Hyprland's `screencast` events.
 - Recording can leave out the desktop audio: a speaker toggle next to the microphone one in the picker, the A key, the `audio` action, and `record_audio` for the default.
+- Arch Linux packages in `packaging/arch`: `mochi` builds the latest release, `mochi-git` the latest commit. Until they are on the AUR, the installing page shows how to build them from a clone with `makepkg -si`.
 - A hairline border and a soft shadow around the island and the bubbles, as the theme colors `border` and `shadow`; transparent turns either off. The border skips any edge the island is attached to in notch mode.
 
 ### Fixed

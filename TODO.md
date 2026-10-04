@@ -429,6 +429,8 @@ After capture, reusing its pickers.
 - [x] End-to-end daemon tests with a fake Quickshell (run in the Nix build)
 - [x] Recording test against the real binaries (`cargo test -p mochid --test record -- --ignored`), writing outside the repository
 - [x] NixOS and home-manager modules and an overlay in `packaging/nix`. The home-manager module writes `config.toml` and `theme.toml` from Nix, checks them with `mochid config check` at build time, and reloads instead of restarting when they change
+- [x] Arch packages in `packaging/arch`: `mochi` from the release tarball and `mochi-git` from `main`, both built and installed in an Arch container
+- [ ] Publish `mochi` and `mochi-git` to the AUR; bump `pkgver` and `sha256sums` in `mochi` with each release
 - [x] Release 0.0.1 and `CHANGELOG.md`
 - [x] Release 0.0.2: capture, overlays, gpu-screen-recorder in the Nix package and modules
 - [x] Release 0.0.3: the frozen screen no longer stretches when a screenshot opens

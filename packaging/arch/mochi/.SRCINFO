@@ -1,0 +1,20 @@
+pkgbase = mochi
+	pkgdesc = A desktop shell built around a central island
+	pkgver = 0.0.3
+	pkgrel = 1
+	url = https://github.com/DavidutzDev/mochi
+	arch = x86_64
+	license = MIT
+	makedepends = cargo
+	depends = glibc
+	depends = libgcc
+	depends = libpulse
+	depends = quickshell
+	depends = gpu-screen-recorder
+	optdepends = wl-clipboard: copy screenshots
+	optdepends = satty: edit screenshots
+	optdepends = uwsm: start apps from the launcher as units of their own
+	source = mochi-0.0.3.tar.gz::https://github.com/DavidutzDev/mochi/archive/refs/tags/v0.0.3.tar.gz
+	sha256sums = 42e9c7eae5dfc00d045e74519a461f73379305d0466fc44e4507d3b2c2eea700
+
+pkgname = mochi

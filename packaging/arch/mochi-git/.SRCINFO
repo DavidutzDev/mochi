@@ -1,0 +1,25 @@
+pkgbase = mochi-git
+	pkgdesc = A desktop shell built around a central island (latest commit)
+	pkgver = 0.0.3.r4.g181f886
+	pkgrel = 1
+	url = https://github.com/DavidutzDev/mochi
+	arch = x86_64
+	license = MIT
+	makedepends = cargo
+	makedepends = git
+	depends = glibc
+	depends = libgcc
+	depends = libpulse
+	depends = quickshell
+	depends = gpu-screen-recorder
+	depends = sh
+	optdepends = wl-clipboard: copy screenshots
+	optdepends = satty: edit screenshots
+	optdepends = uwsm: start apps from the launcher as units of their own
+	optdepends = xdg-desktop-portal-hyprland: pick what to share with the share module
+	provides = mochi=0.0.3
+	conflicts = mochi
+	source = mochi::git+https://github.com/DavidutzDev/mochi.git
+	sha256sums = SKIP
+
+pkgname = mochi-git

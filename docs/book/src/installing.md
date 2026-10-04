@@ -68,6 +68,52 @@ programs.gpu-screen-recorder.enable = true;
 
 `inputs.mochi.overlays.default` adds `pkgs.mochi`, for setups that list packages themselves.
 
+## Arch Linux
+
+The repository has two packages in `packaging/arch`, with the same files:
+
+- `mochi` builds the latest release.
+- `mochi-git` builds the latest commit on `main`, and conflicts with `mochi`.
+
+They aren't on the AUR yet. Until they are, build one from the repository with `makepkg`, which needs `base-devel` and `git`:
+
+```sh
+git clone https://github.com/DavidutzDev/mochi.git
+cd mochi/packaging/arch/mochi-git    # or mochi, for the latest release
+makepkg -si
+```
+
+`makepkg -si` installs the missing dependencies, builds the package and installs it with pacman. To update `mochi-git`, run `makepkg -si` again in the same folder: it fetches the latest commit itself. For `mochi`, `git pull` first, to get the `PKGBUILD` of the newest release.
+
+Once they're on the AUR, `paru -S mochi` or `yay -S mochi` does the same.
+
+Both depend on `quickshell` and `gpu-screen-recorder` from the official repositories. The build runs the test suite. They install `mochid`, `mochi`, the systemd user unit, and from `mochi-git`, `mochi-share-picker`. Optional dependencies:
+
+- `wl-clipboard`, to copy screenshots.
+- `satty`, the default screenshot editor.
+- `uwsm`, to start apps from the launcher as units of their own. Without it, the launcher uses `systemd-run`.
+- `xdg-desktop-portal-hyprland`, for the [share](modules/share.md) module.
+
+Then start the shell with your session:
+
+```sh
+systemctl --user enable --now mochid
+```
+
+The unit needs a session manager such as uwsm; see [the session](#the-session). On the first start, Mochi writes a commented `~/.config/mochi/config.toml`. `mochi config init --print` shows every option with its default.
+
+Arch's `gpu-screen-recorder` package already gives its helper the permissions it needs to record a region or a whole screen, so recording needs no more setup.
+
+To use the share module's picker, point the portal at it in `~/.config/hypr/xdph.conf`, then restart the portal with `systemctl --user restart xdg-desktop-portal-hyprland`:
+
+```
+screencopy {
+    custom_picker_binary = /usr/bin/mochi-share-picker
+}
+```
+
+The `PKGBUILD`s live in `packaging/arch`. When Quickshell in the official repositories moves past the version `mochid` expects, `mochid` refuses to start until a Mochi release follows it.
+
 ## Other systems
 
 ```sh

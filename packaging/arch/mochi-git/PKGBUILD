@@ -1,0 +1,62 @@
+# Maintainer: David Gheghea
+
+pkgname=mochi-git
+_pkgname=mochi
+pkgver=0.0.3.r4.g181f886
+pkgrel=1
+pkgdesc='A desktop shell built around a central island (latest commit)'
+arch=('x86_64')
+url='https://github.com/DavidutzDev/mochi'
+license=('MIT')
+# mochid refuses to start with another Quickshell than the one it's tested
+# against; see QUICKSHELL_VERSION in crates/mochi-core/src/supervisor.rs.
+depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder' 'sh')
+makedepends=('cargo' 'git')
+optdepends=(
+  'wl-clipboard: copy screenshots'
+  'satty: edit screenshots'
+  'uwsm: start apps from the launcher as units of their own'
+  'xdg-desktop-portal-hyprland: pick what to share with the share module'
+)
+provides=("$_pkgname=${pkgver%%.r*}")
+conflicts=("$_pkgname")
+source=("$_pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$_pkgname"
+  git describe --long --tags --abbrev=7 | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g'
+}
+
+prepare() {
+  cd "$_pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$_pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo build --frozen --release
+}
+
+check() {
+  cd "$_pkgname"
+  export RUSTUP_TOOLCHAIN=stable
+  export CARGO_TARGET_DIR=target
+  cargo test --frozen --release
+}
+
+package() {
+  cd "$_pkgname"
+  install -Dm755 target/release/mochid target/release/mochi -t "$pkgdir/usr/bin/"
+  install -Dm644 systemd/mochid.service -t "$pkgdir/usr/lib/systemd/user/"
+  install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
+  # xdg-desktop-portal-hyprland runs one program, without arguments of our
+  # choosing, as its screen-share picker.
+  install -Dm755 /dev/stdin "$pkgdir/usr/bin/mochi-share-picker" <<'SH'
+#!/bin/sh
+exec /usr/bin/mochi share-pick "$@"
+SH
+}

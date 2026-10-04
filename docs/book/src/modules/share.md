@@ -8,7 +8,7 @@ While the screen is shared, a screen icon breathes next to the island. It shows 
 
 ## Setup
 
-The portal runs one program as its picker. The Nix package has it as `mochi-share-picker`, and the home-manager module points the portal at it in `~/.config/hypr/xdph.conf` (`programs.mochi.portalPicker.enable`, on by default). Elsewhere, write that file yourself, with a small script that runs `mochi share-pick "$@"`:
+The portal runs one program as its picker. The Nix package has it as `mochi-share-picker`, and the home-manager module points the portal at it in `~/.config/hypr/xdph.conf` (`programs.mochi.portalPicker.enable`, on by default). The Arch packages install it as `/usr/bin/mochi-share-picker`. Elsewhere, write that file yourself, with a small script that runs `mochi share-pick "$@"`:
 
 ```
 screencopy {
