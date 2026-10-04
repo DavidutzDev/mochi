@@ -298,21 +298,10 @@ fn describe(error: zbus::Error) -> String {
     }
 }
 
-/// Starts a command and lets it run on its own.
+/// Starts a program on its own, in its own scope and adopted by systemd,
+/// so stopping Mochi leaves it running.
 fn spawn(argv: &[String]) -> Result<(), String> {
-    let (program, args) = argv.split_first().ok_or("empty command")?;
-    let mut child = Command::new(program)
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .process_group(0)
-        .spawn()
-        .map_err(|error| format!("cannot start {program}: {error}"))?;
-    tokio::spawn(async move {
-        let _ = child.wait().await;
-    });
-    Ok(())
+    mochi_core::process::spawn_detached(&mochi_core::process::in_app_scope(argv), None)
 }
 
 async fn succeeds(command: &mut Command) -> bool {

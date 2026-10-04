@@ -3,6 +3,7 @@
 
 use std::process::Stdio;
 
+use mochi_core::process;
 use tokio::process::Command;
 
 use crate::entries::{App, AppAction, installed};
@@ -68,45 +69,15 @@ pub fn launch(
                 argv.splice(0..0, terminal.iter().cloned());
             }
             if method == Method::SystemdRun {
-                let prefix = [
-                    "systemd-run",
-                    "--user",
-                    "--scope",
-                    "--slice=app.slice",
-                    "--quiet",
-                    "--",
-                ];
-                argv.splice(0..0, prefix.map(String::from));
+                argv = process::in_app_scope(&argv);
             }
             argv
         }
     };
-    spawn(&argv, app)
-}
-
-fn spawn(argv: &[String], app: &App) -> Result<(), String> {
-    let (program, args) = argv.split_first().ok_or("empty command")?;
-    let mut command = Command::new(program);
-    command
-        .args(args)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        // Its own process group, so signals meant for mochid miss it.
-        .process_group(0);
-    if let Some(dir) = app.path.as_ref().filter(|dir| dir.is_dir()) {
-        command.current_dir(dir);
-    } else if let Some(home) = std::env::var_os("HOME") {
-        command.current_dir(home);
-    }
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("cannot start {program}: {error}"))?;
-    // Reap it whenever it exits, so it never lingers as a zombie.
-    tokio::spawn(async move {
-        let _ = child.wait().await;
-    });
-    Ok(())
+    // Detached, so the app's parent is systemd, not mochid: an app that
+    // ends with its parent, like Discord in bubblewrap, would otherwise close
+    // when Mochi stops.
+    process::spawn_detached(&argv, app.path.as_deref())
 }
 
 /// Turns `Exec=` into arguments: the spec's quoting, and its field codes.

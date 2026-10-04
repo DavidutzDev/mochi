@@ -14,6 +14,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- Apps started from the launcher no longer close when Mochi stops. uwsm gave them a scope of their own, but they stayed children of mochid, and an app that ends with its parent, like Discord in bubblewrap with `--die-with-parent`, closed with it. Apps, the screenshot editor, the folder opener and the power commands now start through a double fork, adopted by systemd.
 - A light 1px line around the island and the bubbles: their blur reached past the drawn outline. It now stays a pixel inside.
 
 ## 0.0.3 - 2026-10-04
