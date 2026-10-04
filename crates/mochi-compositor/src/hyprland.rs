@@ -25,9 +25,21 @@ pub(crate) fn socket_dir() -> Option<PathBuf> {
     dir.join(".socket2.sock").exists().then_some(dir)
 }
 
-/// Sends the focused output now, then every time it changes. Reconnects with
-/// backoff if the socket closes. Ends when nobody listens any more.
-pub(crate) async fn watch_focus(dir: PathBuf, focus: UnboundedSender<String>) {
+/// What Hyprland's events tell the Wayland task.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Event {
+    /// The output with focus.
+    Focus(String),
+    /// A screencast started (true) or stopped.
+    Screencast(bool),
+    /// The event socket (re)connected: counts kept so far may be stale.
+    Connected,
+}
+
+/// Sends the focused output now, then every focus or screencast change.
+/// Reconnects with backoff if the socket closes. Ends when nobody listens
+/// any more.
+pub(crate) async fn watch(dir: PathBuf, focus: UnboundedSender<Event>) {
     let mut retry = FIRST_RETRY;
     loop {
         match session(&dir, &focus).await {
@@ -42,20 +54,23 @@ pub(crate) async fn watch_focus(dir: PathBuf, focus: UnboundedSender<String>) {
 }
 
 /// One connection. `Ok` means the receiver is gone.
-async fn session(dir: &Path, focus: &UnboundedSender<String>) -> std::io::Result<()> {
+async fn session(dir: &Path, focus: &UnboundedSender<Event>) -> std::io::Result<()> {
     // Connect to the events first, so no change slips in between the query
     // and the subscription.
     let events = UnixStream::connect(dir.join(".socket2.sock")).await?;
+    if focus.send(Event::Connected).is_err() {
+        return Ok(());
+    }
     if let Some(output) = query_focused(dir).await?
-        && focus.send(output).is_err()
+        && focus.send(Event::Focus(output)).is_err()
     {
         return Ok(());
     }
 
     let mut lines = BufReader::new(events).lines();
     while let Some(line) = lines.next_line().await? {
-        if let Some(output) = focused_from_event(&line)
-            && focus.send(output.to_owned()).is_err()
+        if let Some(event) = event(&line)
+            && focus.send(event).is_err()
         {
             return Ok(());
         }
@@ -147,6 +162,26 @@ fn windows_from(clients: &str, monitors: &str) -> Option<Vec<Window>> {
     Some(windows.into_iter().map(|(_, _, window)| window).collect())
 }
 
+/// The events worth passing on.
+fn event(line: &str) -> Option<Event> {
+    if let Some(output) = focused_from_event(line) {
+        return Some(Event::Focus(output.to_owned()));
+    }
+    screencast_from_event(line).map(Event::Screencast)
+}
+
+/// `screencast>>1,monitor`: a capture started (1) or stopped (0), of a
+/// monitor or a window. Older Hyprland writes the owner as 0 or 1. The
+/// `screencastv2` event repeats it with the output; one is enough.
+fn screencast_from_event(line: &str) -> Option<bool> {
+    let rest = line.strip_prefix("screencast>>")?;
+    match rest.split_once(',').map_or(rest, |(state, _)| state) {
+        "1" => Some(true),
+        "0" => Some(false),
+        _ => None,
+    }
+}
+
 /// `focusedmon>>DP-3,2` names the newly focused output.
 fn focused_from_event(line: &str) -> Option<&str> {
     let rest = line.strip_prefix("focusedmon>>")?;
@@ -179,6 +214,26 @@ mod tests {
         assert_eq!(focused_from_event("focusedmonv2>>HDMI-A-1,10"), None);
         assert_eq!(focused_from_event("workspace>>3"), None);
         assert_eq!(focused_from_event("focusedmon>>,3"), None);
+    }
+
+    #[test]
+    fn reads_screencast_events() {
+        assert_eq!(
+            event("screencast>>1,monitor"),
+            Some(Event::Screencast(true))
+        );
+        assert_eq!(
+            event("screencast>>0,window"),
+            Some(Event::Screencast(false))
+        );
+        assert_eq!(event("screencast>>1,0"), Some(Event::Screencast(true)));
+        assert_eq!(event("screencastv2>>1,monitor,DP-3"), None);
+        assert_eq!(event("screencast>>maybe"), None);
+        assert_eq!(
+            event("focusedmon>>DP-3,2"),
+            Some(Event::Focus("DP-3".into()))
+        );
+        assert_eq!(event("openwindow>>abc"), None);
     }
 
     #[test]

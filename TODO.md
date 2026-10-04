@@ -399,8 +399,10 @@ Screenshots and recordings from the island. Decided on 2026-10-04: our own froze
 
 After capture, reusing its pickers.
 
-- [ ] `mochi share-pick` for the portal's picker: `custom_picker_binary` in xdg-desktop-portal-hyprland, `chooser_cmd` in xdg-desktop-portal-wlr. The island shows screens and windows with live thumbnails and prints the choice in the portal's format; the home-manager module can write the xdph line
-- [ ] A bubble while something shares or records the screen, from the portal or the PipeWire streams
+- [x] `mochi share-pick` is xdg-desktop-portal-hyprland's `custom_picker_binary` (packaged as `mochi-share-picker`, which the home-manager module writes into `xdph.conf`). The island panel shows screens and the portal's windows with live thumbnails, Hyprland toplevels matched by address, plus Region over a live overlay and a Remember switch; the answer goes back as the command's new `output` reply. Without Mochi or the module it runs `hyprland-share-picker`
+- [x] A bubble while the screen is shared, from Hyprland's `screencast` events counted per capture session; it waits 1.5 s and ignores the picker's own thumbnails, since Hyprland reports every capture, screenshots included
+- [ ] `chooser_cmd` for xdg-desktop-portal-wlr
+- [ ] Screencast state on compositors other than Hyprland (PipeWire streams)
 
 ## Plugins
 

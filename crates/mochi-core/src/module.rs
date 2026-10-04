@@ -180,18 +180,23 @@ pub enum ModuleEvent {
     BubbleClicked(BubbleId),
 }
 
-/// A validated `mochi ipc` command. Answer it with [`ModuleCommand::reply`].
-/// Dropping it unanswered reports a failure to the caller.
+/// What a module answers a command with: some output to hand back, or none.
+pub type Reply = Result<Option<String>, String>;
+
+/// A validated `mochi ipc` command. Answer it with [`ModuleCommand::reply`],
+/// or [`ModuleCommand::answer`] to hand something back. A module may hold it
+/// until the user decides; dropping it unanswered reports a failure to the
+/// caller.
 #[derive(Debug)]
 pub struct ModuleCommand {
     pub action: String,
     pub args: Args,
-    reply: oneshot::Sender<Result<(), String>>,
+    reply: oneshot::Sender<Reply>,
 }
 
 impl ModuleCommand {
     /// Returns the command and the receiver its reply arrives on.
-    pub fn new(action: String, args: Args) -> (Self, oneshot::Receiver<Result<(), String>>) {
+    pub fn new(action: String, args: Args) -> (Self, oneshot::Receiver<Reply>) {
         let (reply, receiver) = oneshot::channel();
         (
             Self {
@@ -204,8 +209,17 @@ impl ModuleCommand {
     }
 
     pub fn reply(self, result: Result<(), String>) {
+        self.send(result.map(|()| None));
+    }
+
+    /// Replies with output, which `mochi ipc` prints.
+    pub fn answer(self, result: Result<String, String>) {
+        self.send(result.map(Some));
+    }
+
+    fn send(self, reply: Reply) {
         // The caller may have disconnected; there is nobody left to tell.
-        let _ = self.reply.send(result);
+        let _ = self.reply.send(reply);
     }
 }
 

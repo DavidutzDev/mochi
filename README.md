@@ -1,3 +1,4 @@
+| `share` | The screen-share picker for xdg-desktop-portal-hyprland: screens and windows with live pictures, or a region, on the island, and a bubble while something shares the screen. The home-manager module sets the portal up. |
 # Mochi
 
 A desktop shell built around a central island, like a dynamic island. `mochid`, a Rust daemon, owns state and system integration and supervises a Quickshell UI. `mochi` is its command-line client.

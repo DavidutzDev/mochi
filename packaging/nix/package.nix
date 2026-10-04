@@ -45,6 +45,9 @@ rustPlatform.buildRustPackage {
     install -Dm644 systemd/mochid.service $out/lib/systemd/user/mochid.service
     substituteInPlace $out/lib/systemd/user/mochid.service \
       --replace-fail /usr/bin/ $out/bin/
+    # xdg-desktop-portal-hyprland runs one program, without arguments of
+    # our choosing, as its screen-share picker.
+    makeWrapper $out/bin/mochi $out/bin/mochi-share-picker --add-flags share-pick
     wrapProgram $out/bin/mochid \
       --prefix PATH : ${lib.makeBinPath [ quickshell ]} \
       ${lib.optionalString withGpuScreenRecorder "--suffix PATH : ${

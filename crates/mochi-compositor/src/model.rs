@@ -24,6 +24,8 @@ pub(crate) struct Model {
     /// The focused output from compositor IPC, by name. Exact, so it wins
     /// over the window guess.
     ipc_focus: Option<String>,
+    /// Screencasts IPC reported started and not yet stopped.
+    screencasts: u32,
 }
 
 #[derive(Debug, Default)]
@@ -151,6 +153,21 @@ impl Model {
         self.ipc_focus = Some(output);
     }
 
+    /// One screencast started or stopped. Hyprland reports each capture
+    /// session, so several can run at once.
+    pub fn ipc_screencast(&mut self, started: bool) {
+        self.screencasts = if started {
+            self.screencasts.saturating_add(1)
+        } else {
+            self.screencasts.saturating_sub(1)
+        };
+    }
+
+    /// After reconnecting to IPC: whatever was counted may be stale.
+    pub fn reset_screencasts(&mut self) {
+        self.screencasts = 0;
+    }
+
     fn focused_output(&self) -> Option<String> {
         self.ipc_focus.clone().or_else(|| {
             self.window_focus
@@ -205,6 +222,7 @@ impl Model {
             outputs,
             workspaces,
             focused_output: self.focused_output(),
+            screencast: self.screencasts > 0,
         }
     }
 
@@ -321,6 +339,25 @@ mod tests {
         let mut model = Model::default();
         model.output_description(1, "Not named yet".into());
         assert!(model.snapshot().outputs.is_empty());
+    }
+
+    #[test]
+    fn counts_screencasts_until_each_stops() {
+        let mut model = Model::default();
+        assert!(!model.snapshot().screencast);
+        // Two thumbnails start capturing, one stops: still capturing.
+        model.ipc_screencast(true);
+        model.ipc_screencast(true);
+        model.ipc_screencast(false);
+        assert!(model.snapshot().screencast);
+        model.ipc_screencast(false);
+        assert!(!model.snapshot().screencast);
+        // A stop without a start never goes below zero.
+        model.ipc_screencast(false);
+        model.ipc_screencast(true);
+        assert!(model.snapshot().screencast);
+        model.reset_screencasts();
+        assert!(!model.snapshot().screencast);
     }
 
     #[test]

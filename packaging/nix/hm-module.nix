@@ -87,6 +87,18 @@ in
       '';
     };
 
+    portalPicker.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Use Mochi's share module as the screen-share picker of
+        xdg-desktop-portal-hyprland: writes {file}`$XDG_CONFIG_HOME/hypr/xdph.conf`
+        with `screencopy:custom_picker_binary`. Without Mochi running, or
+        without the share module, the portal's own picker opens instead.
+        The portal reads the file when it starts.
+      '';
+    };
+
     systemd = {
       enable = lib.mkOption {
         type = lib.types.bool;
@@ -115,9 +127,17 @@ in
 
     home.packages = [ package ];
 
-    xdg.configFile = lib.genAttrs (map (name: "mochi/${name}") written) (name: {
-      source = "${files}/${baseNameOf name}";
-    });
+    xdg.configFile =
+      lib.genAttrs (map (name: "mochi/${name}") written) (name: {
+        source = "${files}/${baseNameOf name}";
+      })
+      // lib.optionalAttrs cfg.portalPicker.enable {
+        "hypr/xdph.conf".text = ''
+          screencopy {
+            custom_picker_binary = ${package}/bin/mochi-share-picker
+          }
+        '';
+      };
 
     systemd.user.services.mochid = lib.mkIf cfg.systemd.enable {
       Unit = {

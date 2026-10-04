@@ -10,7 +10,7 @@ use mochi_core::compositor::Compositor;
 use mochi_core::supervisor::{Supervisor, UiEvent};
 use mochi_core::{
     Arbiter, Assets, Bubbles, CallError, Config, Effect, Module, ModuleCommand, ModuleError,
-    ModuleEvent, ModuleRequest, Request,
+    ModuleEvent, ModuleRequest, Reply, Request,
 };
 use mochi_protocol::{
     API, ActionSpec, ClientMessage, CompositorStatus, Contribution, DaemonMessage, ErrorCode,
@@ -417,7 +417,8 @@ impl Daemon {
         };
         tokio::spawn(async move {
             let answer = match reply.await {
-                Ok(Ok(())) => DaemonMessage::Ok,
+                Ok(Ok(None)) => DaemonMessage::Ok,
+                Ok(Ok(Some(output))) => DaemonMessage::Output { output },
                 Ok(Err(message)) => DaemonMessage::Error {
                     code: ErrorCode::ModuleFailed,
                     message,
@@ -464,7 +465,7 @@ impl Daemon {
         };
         tokio::spawn(async move {
             let result = match answer.await {
-                Ok(result) => result.map_err(CallError::Failed),
+                Ok(result) => result.map(drop).map_err(CallError::Failed),
                 Err(_) => Err(CallError::Failed(
                     "the module dropped the command without answering".into(),
                 )),
@@ -480,7 +481,7 @@ impl Daemon {
         module: &str,
         action: &str,
         args: &[String],
-    ) -> Result<oneshot::Receiver<Result<(), String>>, Undelivered> {
+    ) -> Result<oneshot::Receiver<Reply>, Undelivered> {
         let slot = self.modules.get(module).ok_or(Undelivered::UnknownModule)?;
         let spec = slot
             .actions

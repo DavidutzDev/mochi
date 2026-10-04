@@ -36,6 +36,17 @@ enum Command {
     Status,
     /// Apply changes to config.toml and theme.toml without a restart.
     Reload,
+    /// Pick what to share, for xdg-desktop-portal-hyprland.
+    ///
+    /// Set `custom_picker_binary` in `~/.config/hypr/xdph.conf` to a program
+    /// that runs this. It asks the share module and prints the portal's
+    /// answer; when Mochi can't answer, it runs `hyprland-share-picker`
+    /// instead, so sharing still works.
+    SharePick {
+        /// Let the app keep the choice by default.
+        #[arg(long)]
+        allow_token: bool,
+    },
     /// Work with config.toml and theme.toml: `init`, `check`, `path`.
     ///
     /// Runs `mochid config`, which knows every module's settings, so it
@@ -68,11 +79,14 @@ fn run(command: Command) -> Result<(), String> {
             [only] if only == "list" => list(None),
             [module] => list(Some(module.clone())),
             [module, action, args @ ..] => {
-                request(ClientMessage::Command {
+                let answer = request(ClientMessage::Command {
                     module: module.clone(),
                     action: action.clone(),
                     args: args.to_vec(),
                 })?;
+                if let DaemonMessage::Output { output } = answer {
+                    println!("{output}");
+                }
                 Ok(())
             }
         },
@@ -112,6 +126,45 @@ fn run(command: Command) -> Result<(), String> {
             Ok(())
         }
         Command::Config { args } => config(&args),
+        Command::SharePick { allow_token } => share_pick(allow_token),
+    }
+}
+
+/// Asks the share module what to share and prints its answer for the
+/// portal. Falls back to Hyprland's own picker on any failure.
+fn share_pick(allow_token: bool) -> Result<(), String> {
+    let windows = std::env::var("XDPH_WINDOW_SHARING_LIST").unwrap_or_default();
+    let mut args = vec![if allow_token { "on" } else { "off" }.to_owned()];
+    if !windows.is_empty() {
+        args.push(windows);
+    }
+    let answer = request(ClientMessage::Command {
+        module: "share".into(),
+        action: "pick".into(),
+        args,
+    });
+    match answer {
+        Ok(DaemonMessage::Output { output }) => {
+            if !output.is_empty() {
+                print!("{output}");
+                if !output.ends_with('\n') {
+                    println!();
+                }
+            }
+            Ok(())
+        }
+        Ok(DaemonMessage::Ok) => Ok(()),
+        Ok(other) => Err(unexpected(&other)),
+        Err(message) => {
+            eprintln!("mochi: {message}; using hyprland-share-picker");
+            let mut picker = std::process::Command::new("hyprland-share-picker");
+            if allow_token {
+                picker.arg("--allow-token");
+            }
+            // Replaces this process, so the portal reads the picker's answer.
+            let error = std::os::unix::process::CommandExt::exec(&mut picker);
+            Err(format!("cannot start hyprland-share-picker: {error}"))
+        }
     }
 }
 

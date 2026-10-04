@@ -28,7 +28,7 @@ pub use config::{BubblesConfig, Config, ConfigError, Paths};
 pub use contributions::ContributionSpec;
 pub use module::{
     ActivityIds, Assets, BoxFuture, CallError, Module, ModuleCommand, ModuleCtx, ModuleError,
-    ModuleEvent, ModuleRequest, Request, settings,
+    ModuleEvent, ModuleRequest, Reply, Request, settings,
 };
 
 /// The core QML: `shell.qml` and the island. Modules add their views under

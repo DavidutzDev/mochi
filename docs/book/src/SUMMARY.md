@@ -21,6 +21,7 @@
 - [Hub](modules/hub.md)
 - [Power](modules/power.md)
 - [Capture](modules/capture.md)
+- [Share](modules/share.md)
 
 # Building on Mochi
 

@@ -1,3 +1,4 @@
+| `output` | `output`: what the command says, like the share picker's choice | whoever sent `command` |
 # Mochi protocol
 
 `mochid` talks to the Quickshell UI and to the `mochi` CLI over one Unix socket. The Rust definitions live in `crates/mochi-protocol`, and this page describes the conversation they implement.

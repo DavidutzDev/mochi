@@ -54,6 +54,11 @@ pub struct State {
     pub workspaces: Vec<Workspace>,
     /// The output with keyboard focus, by name, when the compositor says.
     pub focused_output: Option<String>,
+    /// Something is capturing the screen, when the compositor says: Hyprland
+    /// does, through its event socket. That includes any capture, even a
+    /// one-frame screenshot or a live thumbnail, so a module that shows it
+    /// should wait a moment before believing it.
+    pub screencast: bool,
 }
 
 impl State {
@@ -255,6 +260,7 @@ mod tests {
             outputs: Vec::new(),
             workspaces: vec![workspace(1, true), workspace(2, false)],
             focused_output: None,
+            screencast: false,
         });
         let (actions, mut received) = mpsc::unbounded_channel();
         let compositor = Compositor {

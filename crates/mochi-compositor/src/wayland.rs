@@ -91,7 +91,7 @@ pub(crate) fn start() -> Result<Compositor, String> {
     let hyprland = hyprland::socket_dir();
     let focus = hyprland.clone().map(|dir| {
         let (sender, receiver) = mpsc::unbounded_channel();
-        tokio::spawn(hyprland::watch_focus(dir, sender));
+        tokio::spawn(hyprland::watch(dir, sender));
         receiver
     });
 
@@ -126,7 +126,7 @@ async fn run(
     mut client: Client,
     state: watch::Sender<State>,
     mut actions: mpsc::UnboundedReceiver<Action>,
-    mut focus: Option<mpsc::UnboundedReceiver<String>>,
+    mut focus: Option<mpsc::UnboundedReceiver<hyprland::Event>>,
 ) {
     let socket = match AsyncFd::new(Socket(connection.backend().poll_fd().as_raw_fd())) {
         Ok(socket) => socket,
@@ -184,11 +184,19 @@ async fn run(
                     None => return,
                 }
             }
-            output = next_focus(&mut focus) => {
+            event = next_ipc(&mut focus) => {
                 drop(guard);
-                match output {
-                    Some(output) => {
+                match event {
+                    Some(hyprland::Event::Focus(output)) => {
                         client.model.ipc_focus(output);
+                        client.done = true;
+                    }
+                    Some(hyprland::Event::Screencast(active)) => {
+                        client.model.ipc_screencast(active);
+                        client.done = true;
+                    }
+                    Some(hyprland::Event::Connected) => {
+                        client.model.reset_screencasts();
                         client.done = true;
                     }
                     None => focus = None,
@@ -201,8 +209,10 @@ async fn run(
     state.send_replace(State::default());
 }
 
-/// The next focus report from IPC. Never returns when there is no IPC.
-async fn next_focus(focus: &mut Option<mpsc::UnboundedReceiver<String>>) -> Option<String> {
+/// The next report from IPC. Never returns when there is no IPC.
+async fn next_ipc(
+    focus: &mut Option<mpsc::UnboundedReceiver<hyprland::Event>>,
+) -> Option<hyprland::Event> {
     match focus {
         Some(receiver) => receiver.recv().await,
         None => std::future::pending().await,

@@ -86,6 +86,9 @@ pub enum DaemonMessage {
     Theme { theme: Box<Theme> },
     /// A request succeeded.
     Ok,
+    /// A command succeeded with something to say: a choice the user made,
+    /// for example. `mochi ipc` prints it.
+    Output { output: String },
     /// Answer to `status`.
     Status { status: Status },
     /// Answer to `list_actions`.
@@ -261,6 +264,9 @@ mod tests {
             }),
         });
         round_trip_daemon(DaemonMessage::Present { activity: None });
+        round_trip_daemon(DaemonMessage::Output {
+            output: "[SELECTION]/screen:DP-3".into(),
+        });
         round_trip_daemon(DaemonMessage::Contributions {
             contributions: vec![Contribution {
                 module: "media".into(),
