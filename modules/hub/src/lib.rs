@@ -10,19 +10,59 @@
 //! fill the space the hub gives them. The hub knows nothing about them: a
 //! module that isn't enabled simply contributes nothing.
 //!
-//! `mochi ipc hub toggle`, bound to a key, opens and closes it.
+//! `mochi ipc hub toggle`, bound to a key, opens and closes it. Every page
+//! gets the same size, `width` and `height` in the settings, so the panel
+//! doesn't jump when switching; a page that doesn't fit scrolls.
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, CallError, ContributionSpec,
     Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
+use serde::Deserialize;
 use serde_json::json;
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
 #[derive(Debug, Default)]
 pub struct Hub;
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+struct Settings {
+    /// The panel's width, in logical pixels.
+    width: u32,
+    /// The room for the cards or a page, above the navbar.
+    height: u32,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            width: 860,
+            height: 480,
+        }
+    }
+}
+
+impl Settings {
+    fn load(table: &mochi_core::toml::Table) -> Result<Self, String> {
+        let settings: Self = mochi_core::settings(table).map_err(|error| error.to_string())?;
+        if !(480..=2400).contains(&settings.width) {
+            return Err(format!(
+                "width is {}; it goes from 480 to 2400",
+                settings.width
+            ));
+        }
+        if !(240..=1600).contains(&settings.height) {
+            return Err(format!(
+                "height is {}; it goes from 240 to 1600",
+                settings.height
+            ));
+        }
+        Ok(settings)
+    }
+}
 
 impl Module for Hub {
     fn id(&self) -> &'static str {
@@ -31,6 +71,14 @@ impl Module for Hub {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn settings_example(&self) -> &'static str {
+        include_str!("../settings.toml")
+    }
+
+    fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {
+        Settings::load(table).map(drop)
     }
 
     fn actions(&self) -> Vec<ActionSpec> {
@@ -55,10 +103,12 @@ impl Module for Hub {
 
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {
         Box::pin(async move {
+            // check_settings refused sizes out of range.
+            let settings: Settings = ctx.settings()?;
             let mut shown: Option<ActivityId> = None;
             while let Some(event) = ctx.next_event().await {
                 match event {
-                    ModuleEvent::Command(incoming) => command(&ctx, &mut shown, incoming),
+                    ModuleEvent::Command(incoming) => command(&ctx, settings, &mut shown, incoming),
                     ModuleEvent::Ended { activity, .. } if shown == Some(activity) => {
                         shown = None;
                     }
@@ -70,14 +120,24 @@ impl Module for Hub {
     }
 }
 
-fn command(ctx: &ModuleCtx, shown: &mut Option<ActivityId>, command: ModuleCommand) {
+fn command(
+    ctx: &ModuleCtx,
+    settings: Settings,
+    shown: &mut Option<ActivityId>,
+    command: ModuleCommand,
+) {
     let result = match command.action.as_str() {
         "toggle" if shown.is_some() => {
             close(ctx, shown);
             Ok(())
         }
         "toggle" | "open" => {
-            open(ctx, shown, command.args.str("page").unwrap_or("home"));
+            open(
+                ctx,
+                settings,
+                shown,
+                command.args.str("page").unwrap_or("home"),
+            );
             Ok(())
         }
         "close" => {
@@ -89,7 +149,7 @@ fn command(ctx: &ModuleCtx, shown: &mut Option<ActivityId>, command: ModuleComma
     command.reply(result);
 }
 
-fn open(ctx: &ModuleCtx, shown: &mut Option<ActivityId>, page: &str) {
+fn open(ctx: &ModuleCtx, settings: Settings, shown: &mut Option<ActivityId>, page: &str) {
     // The other panels take the keyboard too; only one can be
     // open. Not awaited: they close the hub the same way.
     for module in ["launcher", "clipboard", "audio", "tray"] {
@@ -111,6 +171,8 @@ fn open(ctx: &ModuleCtx, shown: &mut Option<ActivityId>, page: &str) {
             // Only the island on this monitor takes the keyboard.
             "output": ctx.compositor().state().focused_output,
             "page": page,
+            "width": settings.width,
+            "height": settings.height,
         }));
     *shown = Some(ctx.present(spec));
 }
@@ -118,5 +180,24 @@ fn open(ctx: &ModuleCtx, shown: &mut Option<ActivityId>, page: &str) {
 fn close(ctx: &ModuleCtx, shown: &mut Option<ActivityId>) {
     if let Some(id) = shown.take() {
         ctx.withdraw(id);
+    }
+}
+
+#[cfg(test)]
+mod settings_example {
+    #[test]
+    fn shows_the_defaults() {
+        mochi_core::examples::check_module::<super::Settings>(
+            "hub",
+            include_str!("../settings.toml"),
+        );
+    }
+
+    #[test]
+    fn sizes_stay_in_range() {
+        let table = |text: &str| mochi_core::toml::from_str(text).unwrap();
+        assert!(super::Settings::load(&table("height = 600")).is_ok());
+        assert!(super::Settings::load(&table("height = 100")).is_err());
+        assert!(super::Settings::load(&table("width = 5000")).is_err());
     }
 }
