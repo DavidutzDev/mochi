@@ -9,6 +9,8 @@ Item {
     property var payload: null
     readonly property bool available: payload?.available ?? false
     readonly property var connected: payload?.connected ?? []
+    // No adapter: nothing worth a card.
+    readonly property bool hidden: !available
 
     implicitHeight: 64
 

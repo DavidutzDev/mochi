@@ -8,6 +8,8 @@ Item {
 
     property var payload: null
     readonly property bool present: payload?.present ?? false
+    // A desktop: nothing worth a card.
+    readonly property bool hidden: !present
     readonly property color tint: payload?.critical ? Theme.danger : payload?.low ? Theme.accent : Theme.foreground
 
     implicitHeight: 64
