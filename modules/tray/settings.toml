@@ -1,0 +1,8 @@
+# Tray: apps' tray icons, like Discord, Steam or nm-applet. A bubble opens
+# the drawer with every app; a right click shows an app's menu.
+[module.tray]
+# Apps with a bubble of their own next to the drawer's, by id or title, like
+# ["discord", "steam"]. `mochi ipc tray list` shows the ids.
+# pinned = []
+# Apps never shown.
+# hidden = []

@@ -37,8 +37,15 @@ No standard Wayland protocol says where windows are, so picking a window needs t
 | `mode <region\|window\|screen>` | Switches what the open picker captures |
 | `stop` | Stops recording |
 | `cancel` | Closes the picker |
-| `copy`, `edit`, `delete`, `open` | Act on the last capture: copy it, open it in the editor, delete it, open its folder |
+| `copy`, `edit`, `delete`, `open` `[path]` | Act on the last capture, or on a file from the history: copy it, open it in the editor, delete it, open its folder |
+| `preview <path>` | Shows a file from the history in the preview card |
 
-The picker sends `audio`, `microphone`, `framerate`, `resolution`, `frame`, `region`, `select` and `confirm` itself. `framerate [fps]` and `resolution [preset]` also take a value, like `mochi ipc capture framerate 30`.
+The picker sends `audio`, `microphone`, `framerate`, `resolution`, `frame`, `region`, `select` and `confirm` itself, and the hub page `history` and `start`. `framerate [fps]` and `resolution [preset]` also take a value, like `mochi ipc capture framerate 30`.
+
+## The Captures page
+
+The hub has a Captures page: the newest 40 screenshots and recordings in their folders, newest first, with a thumbnail of each screenshot. Files other tools saved there show up too. Click one to open it in the preview card; each row also copies it, opens a screenshot in the editor, opens its folder or deletes it. Its Screenshot and Record buttons close the hub before the picker opens, so the hub isn't in the capture. `mochi ipc hub open capture/history` opens the page.
+
+`copy`, `edit`, `delete` and `open` take a file from the history, like `mochi ipc capture delete <path>`; without one they work on the last capture. Only files the history lists can be deleted this way.
 
 The clipboard opens its images in the same card, through the `show <path> <entry> [label]` action: copy and edit work as for a screenshot, there's no folder, and delete removes the clipboard entry.

@@ -50,4 +50,4 @@ Text sizes: `textCaption`, `textLabel`, `textBody`, `textSubtitle`, `textTitle`,
 
 Controls report what the user did and leave the state to the owner: a `Switch` sends `toggled`, and the view sets `checked` once the module confirms. `mochi ipc demo controls` shows them all.
 
-The built-in icons: home, bell, music, clock, grid, moon, search, play, pause, next, previous, note, volume, volume-0 to volume-3, volume-muted, mic, mic-muted, headset, speakers, display, caps-lock, num-lock, wifi, bluetooth, power, lock, logout, reboot, snow, chip, leaf, bolt, scale, clipboard, close, check, chevron, plus, minus. Any other name is looked up in the icon theme.
+The built-in icons: home, bell, music, clock, grid, moon, search, play, pause, next, previous, note, volume, volume-0 to volume-3, volume-muted, mic, mic-muted, headset, speakers, display, caps-lock, num-lock, wifi, wifi-1, wifi-2, wifi-off, ethernet, offline, airplane, bluetooth, power, lock, logout, reboot, snow, chip, memory, gpu, temperature, leaf, bolt, scale, clipboard, close, check, chevron, plus, minus, tray, dot. Any other name is looked up in the icon theme.

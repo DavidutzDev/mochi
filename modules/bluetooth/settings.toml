@@ -1,0 +1,10 @@
+# Bluetooth: power, paired devices with their battery, scanning and pairing,
+# from BlueZ. The hub has a Bluetooth page and a tile.
+[module.bluetooth]
+# A bubble while a device is connected, with its battery when it reports it.
+# A click opens the Bluetooth page.
+# bubble = true
+# A short notice on the island when a paired device connects or disconnects.
+# notices = true
+# How long a scan looks for devices to pair, in seconds.
+# scan_seconds = 30

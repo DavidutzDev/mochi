@@ -2,7 +2,7 @@
 
 A desktop shell built around a central island, like a dynamic island. `mochid`, a Rust daemon, owns state and system integration and supervises a Quickshell UI. `mochi` is its command-line client.
 
-Early work in progress, at version 0.0.4: the island, bubbles, the notch layout, and the idle, OSD, workspaces, media, audio, notifications, launcher, hub, power, capture, share and clipboard modules work today. `CHANGELOG.md` lists what each release has. `TODO.md` has the plan, the documentation site in `docs/book` how to install and configure it, `docs/protocol.md` the daemon's protocol, `docs/views.md` how to write views with the built-in controls and `docs/spike.md` the results of the first prototype.
+Early work in progress, at version 0.0.4: the island, bubbles, the notch layout, and the idle, OSD, workspaces, media, audio, notifications, launcher, hub, power, capture, share, clipboard, tray, network, bluetooth, battery and performance modules work today. `CHANGELOG.md` lists what each release has. `TODO.md` has the plan, the documentation site in `docs/book` how to install and configure it, `docs/protocol.md` the daemon's protocol, `docs/views.md` how to write views with the built-in controls and `docs/spike.md` the results of the first prototype.
 
 ## Running it
 
@@ -111,6 +111,11 @@ cargo test -p mochid --test record -- --ignored --nocapture
 | `capture` | Screenshots and recordings: `mochi ipc capture screenshot` freezes the screens so you drag a region right away, or switch to a window or a screen on the island, then shows the capture with copy, edit and delete buttons. `record` does the same through gpu-screen-recorder, with a red dot while it records. |
 | `share` | The screen-share picker for xdg-desktop-portal-hyprland: screens and windows with live pictures, or a region, on the island, and a bubble while something shares the screen. Click the bubble to share something else without the app asking again. The home-manager module sets the portal up. |
 | `clipboard` | A clipboard history: `mochi ipc clipboard toggle` (bind it to SUPER+V) searches what you copied, text and images, and pastes the entry you pick. It stays in memory until you log out, or encrypted on disk with a key from the Secret Service. Copies password managers mark as secret are skipped. |
+| `tray` | Apps' tray icons, like Discord, Steam or nm-applet: a tray bubble opens a drawer with every app on the island, a right click shows the app's menu in Mochi's style, and apps in `pinned` get a bubble of their own. Mochi serves the StatusNotifierWatcher, or shows another tray's icons when one runs. |
+| `network` | Wi-Fi, Ethernet, VPNs and airplane mode from NetworkManager: a bubble with the connection, a Network page to join networks (asking for passwords on the island), a home card, and notices when you connect or disconnect. |
+| `bluetooth` | Bluetooth from BlueZ: a bubble with the connected device's battery, a page to connect, pair and forget devices, a home tile, and pairing questions on the island. |
+| `battery` | A laptop's battery from UPower: a short notice as it drops past 80, 50, 20 and 10%, a warning bubble at or under 50%, red at 10%, notices on plugging in or out, and a hub card. Every level is a setting. |
+| `performance` | CPU, memory and GPU use and temperatures: a hub page with graphs and the busiest processes, a notice when a reading stays high naming the busiest process, and a red bubble while one stays critical. Every level is a setting. |
 | `demo` | Test views and `mochi ipc demo` actions for trying the island. |
 
 ## Configuration

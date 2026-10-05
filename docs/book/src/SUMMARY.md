@@ -17,6 +17,10 @@
 - [Workspaces](modules/workspaces.md)
 - [Media](modules/media.md)
 - [Audio](modules/audio.md)
+- [Network](modules/network.md)
+- [Bluetooth](modules/bluetooth.md)
+- [Battery](modules/battery.md)
+- [Performance](modules/performance.md)
 - [Notifications](modules/notifications.md)
 - [Launcher](modules/launcher.md)
 - [Hub](modules/hub.md)
@@ -24,6 +28,7 @@
 - [Capture](modules/capture.md)
 - [Share](modules/share.md)
 - [Clipboard](modules/clipboard.md)
+- [Tray](modules/tray.md)
 
 # Building on Mochi
 
