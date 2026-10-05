@@ -526,7 +526,7 @@ mod tests {
 
     #[test]
     fn percent_and_level_round_trip() {
-        for value in [0, 1, 37, 50, 100, 150] {
+        for value in [0, 1, 37, 50, 100, 150, 200, 300] {
             assert_eq!(percent(level(value)), value);
         }
         assert_eq!(level(100), Volume::NORMAL);

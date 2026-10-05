@@ -10,7 +10,7 @@
 //!
 //! ```toml
 //! [module.audio]
-//! max_volume = 100   # the top of the sliders, up to 150
+//! max_volume = 100   # the top of the sliders and the OSD's bar, up to 300
 //! ```
 
 mod mixer;
@@ -30,7 +30,7 @@ use crate::pulse::{Command, Handle, Report, Snapshot, Target};
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
 /// The loudest a slider goes; past it, sound distorts.
-const LOUDEST: u32 = 150;
+const LOUDEST: u32 = 300;
 
 #[derive(Debug, Default)]
 pub struct Audio;
@@ -283,8 +283,9 @@ mod settings_example {
     #[test]
     fn max_volume_stays_in_range() {
         let table = |max: u32| mochi_core::toml::from_str(&format!("max_volume = {max}")).unwrap();
-        assert!(super::Settings::load(&table(150)).is_ok());
+        assert!(super::Settings::load(&table(200)).is_ok());
+        assert!(super::Settings::load(&table(300)).is_ok());
         assert!(super::Settings::load(&table(0)).is_err());
-        assert!(super::Settings::load(&table(200)).is_err());
+        assert!(super::Settings::load(&table(301)).is_err());
     }
 }

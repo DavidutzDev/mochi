@@ -7,6 +7,9 @@ Item {
     property var payload: ({})
     readonly property int percent: payload.percent ?? 0
     readonly property bool muted: payload.muted ?? false
+    // The top of the bar: the audio module's max_volume, so 150% fills it
+    // when the mixer goes that far.
+    readonly property int maxVolume: Math.max(Daemon.state("audio")?.max_volume ?? 100, 100)
 
     implicitWidth: row.implicitWidth + Theme.padding * 2
     implicitHeight: 40
@@ -30,12 +33,25 @@ Item {
         }
 
         ProgressBar {
+            id: bar
+
             anchors.verticalCenter: parent.verticalCenter
             width: 160
             height: 6
-            value: Math.min(percent, 100) / 100
-            // Above 100% the bar stays full and turns to the accent color.
+            value: Math.min(percent, maxVolume) / maxVolume
+            // Above 100% the bar turns to the accent color.
             fill: muted ? Theme.muted : percent > 100 ? Theme.accent : Theme.foreground
+
+            // Where 100% is, when the bar goes further.
+            Rectangle {
+                visible: maxVolume > 100
+                x: bar.width * 100 / maxVolume - 1
+                anchors.verticalCenter: parent.verticalCenter
+                width: 2
+                height: bar.height + 6
+                radius: 1
+                color: Theme.muted
+            }
         }
     }
 }

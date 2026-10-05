@@ -442,6 +442,7 @@ A new module, `audio`: the volume mixer. Players stay in the media module and no
 - [ ] Recording apps: a slider per app using the microphone (source outputs)
 - [ ] Group an app's streams into one row, with a way to open them
 - [ ] Peak meters next to the sliders
+- [ ] App icons in the mixer: Chromium, Zen and WebRTC streams name icons the theme lacks; look the app up by its desktop entry or process instead
 - [ ] Scroll on the volume bubble or the OSD to change the volume
 
 ### Tray

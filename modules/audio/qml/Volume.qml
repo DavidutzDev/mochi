@@ -158,8 +158,23 @@ Item {
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 4
         thickness: 6
-        fill: root.muted ? Theme.muted : Theme.foreground
+        // Above 100%, louder than the device's normal level, in the accent
+        // color, as in the OSD.
+        fill: root.muted ? Theme.muted : shownPercent > 100 ? Theme.accent : Theme.foreground
         value: root.volume / root.maxVolume
+
+        readonly property int shownPercent: dragging ? Math.round(shown * root.maxVolume) : root.volume
+
+        // Where 100% is, when the slider goes further.
+        Rectangle {
+            visible: root.maxVolume > 100
+            x: slider.width * 100 / root.maxVolume - 1
+            anchors.verticalCenter: parent.verticalCenter
+            width: 2
+            height: slider.thickness + 8
+            radius: 1
+            color: Theme.muted
+        }
         onMoved: value => {
             root.pending = Math.round(value * root.maxVolume);
             if (!throttle.running)
@@ -179,7 +194,7 @@ Item {
         anchors.verticalCenter: slider.verticalCenter
         width: 38
         horizontalAlignment: Text.AlignRight
-        text: `${slider.dragging ? Math.round(slider.shown * root.maxVolume) : root.volume}%`
+        text: `${slider.shownPercent}%`
         color: Theme.muted
         font.pixelSize: Theme.textLabel
         font.family: Theme.fontFamily

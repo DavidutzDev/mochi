@@ -203,6 +203,7 @@ mod tests {
         assert_eq!(level("+5", 98, 150), Ok(103));
         assert_eq!(level("-5", 3, 100), Ok(0));
         assert_eq!(level("200", 0, 150), Ok(150));
+        assert_eq!(level("+10", 195, 200), Ok(200));
         assert!(level("loud", 0, 100).is_err());
         assert!(level("+", 0, 100).is_err());
     }
