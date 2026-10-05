@@ -195,6 +195,10 @@ async fn run(
                         client.model.ipc_screencast(active);
                         client.done = true;
                     }
+                    Some(hyprland::Event::Captured { started, target }) => {
+                        client.model.ipc_captured(target, started);
+                        client.done = true;
+                    }
                     Some(hyprland::Event::Connected) => {
                         client.model.reset_screencasts();
                         client.done = true;
@@ -316,6 +320,15 @@ impl Dispatch<wl_output::WlOutput, ()> for Client {
             wl_output::Event::Name { name } => client.model.output_name(id, name),
             wl_output::Event::Description { description } => {
                 client.model.output_description(id, description);
+            }
+            wl_output::Event::Mode {
+                flags: WEnum::Value(flags),
+                width,
+                height,
+                ..
+            } if flags.contains(wl_output::Mode::Current) => {
+                let size = |value: i32| u32::try_from(value).unwrap_or_default();
+                client.model.output_mode(id, size(width), size(height));
             }
             wl_output::Event::Done => client.done = true,
             _ => {}

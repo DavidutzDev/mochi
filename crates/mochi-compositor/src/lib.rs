@@ -63,6 +63,19 @@ pub struct State {
     /// one-frame screenshot or a live thumbnail, so a module that shows it
     /// should wait a moment before believing it.
     pub screencast: bool,
+    /// What is being captured now, by monitor or window name, from the same
+    /// events. Sorted.
+    pub captured: Vec<String>,
+}
+
+/// Monitors Mochi makes for itself, like the share module's switchable
+/// screen, are named with this prefix. They hold no island or workspace
+/// worth showing, so modules and views skip them.
+pub const VIRTUAL_PREFIX: &str = "MOCHI-";
+
+/// Whether an output is one of Mochi's own: see [`VIRTUAL_PREFIX`].
+pub fn is_virtual(output: &str) -> bool {
+    output.starts_with(VIRTUAL_PREFIX)
 }
 
 impl State {
@@ -90,6 +103,9 @@ pub struct Output {
     pub name: String,
     /// A human-readable name, often the monitor model.
     pub description: String,
+    /// The current mode in pixels, 0 until the compositor says.
+    pub width: u32,
+    pub height: u32,
 }
 
 /// Valid while the workspace exists. Compositors may reuse it afterwards, so
@@ -123,6 +139,8 @@ pub enum CompositorError {
     NotAllowed(WorkspaceId),
     #[error("this compositor doesn't say where its windows are")]
     NoWindowGeometry,
+    #[error("this compositor can't make monitors of Mochi's own")]
+    NoVirtualOutputs,
     #[error("the compositor's IPC failed: {0}")]
     Ipc(String),
 }
@@ -220,6 +238,40 @@ impl Compositor {
         hyprland::pointer_output(self.hyprland.as_deref()?)
     }
 
+    /// Makes a monitor of its own for Mochi, off to the side of the real
+    /// ones, with no screen behind it: what's drawn there can be captured
+    /// like any monitor. `name` starts with [`VIRTUAL_PREFIX`]. Keyboard
+    /// focus stays where it was. Hyprland only; waits for the compositor to
+    /// answer, not for the output to appear.
+    pub async fn create_virtual_output(
+        &self,
+        name: &str,
+        width: u32,
+        height: u32,
+    ) -> Result<(), CompositorError> {
+        let dir = self
+            .hyprland
+            .as_deref()
+            .ok_or(CompositorError::NoVirtualOutputs)?;
+        let focused = self.state().focused_output;
+        hyprland::create_headless(dir, name, width, height, focused.as_deref())
+            .await
+            .map_err(|error| CompositorError::Ipc(error.to_string()))
+    }
+
+    /// Removes a monitor made by [`Compositor::create_virtual_output`],
+    /// keeping keyboard focus where it was.
+    pub async fn remove_virtual_output(&self, name: &str) -> Result<(), CompositorError> {
+        let dir = self
+            .hyprland
+            .as_deref()
+            .ok_or(CompositorError::NoVirtualOutputs)?;
+        let focused = self.state().focused_output;
+        hyprland::remove_output(dir, name, focused.as_deref())
+            .await
+            .map_err(|error| CompositorError::Ipc(error.to_string()))
+    }
+
     /// Whether [`Compositor::windows`] can work here.
     pub fn knows_windows(&self) -> bool {
         self.hyprland.is_some()
@@ -272,6 +324,7 @@ mod tests {
             focused_output: None,
             focused_app: None,
             screencast: false,
+            captured: Vec::new(),
         });
         let (actions, mut received) = mpsc::unbounded_channel();
         let compositor = Compositor {

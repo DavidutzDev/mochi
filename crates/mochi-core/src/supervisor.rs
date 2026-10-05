@@ -41,6 +41,9 @@ pub enum UiEvent {
 pub struct Supervisor {
     pid: Arc<Mutex<Option<u32>>>,
     stopping: Arc<AtomicBool>,
+    /// Set by [`Supervisor::reload`]: the next exit is asked for, not a
+    /// crash.
+    reloading: Arc<AtomicBool>,
 }
 
 impl Supervisor {
@@ -52,14 +55,16 @@ impl Supervisor {
     pub fn spawn(command: UiCommand, events: UnboundedSender<UiEvent>) -> io::Result<Self> {
         let pid = Arc::new(Mutex::new(None));
         let stopping = Arc::new(AtomicBool::new(false));
+        let reloading = Arc::new(AtomicBool::new(false));
         let supervisor = Self {
             pid: Arc::clone(&pid),
             stopping: Arc::clone(&stopping),
+            reloading: Arc::clone(&reloading),
         };
 
         thread::Builder::new()
             .name("quickshell".into())
-            .spawn(move || supervise(&command, &pid, &stopping, &events))?;
+            .spawn(move || supervise(&command, &pid, &stopping, &reloading, &events))?;
         Ok(supervisor)
     }
 
@@ -68,6 +73,14 @@ impl Supervisor {
     /// stopped process never handles SIGTERM.
     pub fn restart(&self) {
         self.signal(libc::SIGKILL);
+    }
+
+    /// Stops Quickshell and starts a fresh one at once, which reads the shell
+    /// directory again: Quickshell only finds a directory's QML types when it
+    /// starts, so views of a module added since then can't use each other.
+    pub fn reload(&self) {
+        self.reloading.store(true, Ordering::SeqCst);
+        self.signal(libc::SIGTERM);
     }
 
     /// Stops Quickshell for good.
@@ -112,6 +125,7 @@ fn supervise(
     command: &UiCommand,
     pid: &Mutex<Option<u32>>,
     stopping: &AtomicBool,
+    reloading: &AtomicBool,
     events: &UnboundedSender<UiEvent>,
 ) {
     let mut exits = VecDeque::new();
@@ -136,6 +150,10 @@ fn supervise(
                     Ok(status) if stopping.load(Ordering::SeqCst) => {
                         tracing::info!(%status, "quickshell stopped");
                         return;
+                    }
+                    Ok(_) if reloading.swap(false, Ordering::SeqCst) => {
+                        tracing::info!("restarting quickshell for new views");
+                        continue;
                     }
                     Ok(status) => tracing::warn!(%status, "quickshell exited"),
                     Err(error) => tracing::error!(%error, "lost track of quickshell"),

@@ -15,6 +15,15 @@ Singleton {
     // True once the daemon answered our hello.
     property bool ready: false
 
+    // The real monitors. Mochi makes monitors of its own, named MOCHI-<module>,
+    // like the share module's switchable screen; they get no island.
+    readonly property var screens: Quickshell.screens.filter(screen => !isVirtual(screen))
+    readonly property var virtualScreens: Quickshell.screens.filter(isVirtual)
+
+    function isVirtual(screen: var): bool {
+        return (screen?.name ?? "").startsWith("MOCHI-");
+    }
+
     // Enabled module ids.
     property var modules: []
 

@@ -1,0 +1,8 @@
+# Share: the screen-share picker for xdg-desktop-portal-hyprland, and a
+# bubble while something shares the screen.
+[module.share]
+# Share a switchable copy by default: the app gets a monitor of Mochi's own
+# with a live copy of what you pick, and clicking the bubble picks something
+# else without the app asking again. The picker's Switchable switch changes
+# it for one share. Hyprland only.
+# switchable = true

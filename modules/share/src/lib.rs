@@ -11,9 +11,14 @@
 //! the flag `r` lets the app keep the choice for next time. An empty answer
 //! cancels.
 //!
+//! With `switchable` on, the app gets a monitor of Mochi's own instead,
+//! with a live copy of the choice on it, and clicking the bubble picks
+//! another source for the copy: see [`switch`].
+//!
 //! The bubble follows the compositor's screencast state, which Hyprland
 //! reports on its event socket.
 
+mod switch;
 mod windows;
 
 use std::time::{Duration, Instant};
@@ -23,14 +28,28 @@ use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Args, Assets, BoxFuture, BubbleId,
     BubbleSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
+use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::switch::{OUTPUT, Session, Source};
 use crate::windows::Window;
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
 #[derive(Debug, Default)]
 pub struct Share;
+
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(default, deny_unknown_fields)]
+struct Settings {
+    switchable: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self { switchable: true }
+    }
+}
 
 impl Module for Share {
     fn id(&self) -> &'static str {
@@ -39,6 +58,16 @@ impl Module for Share {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn settings_example(&self) -> &'static str {
+        include_str!("../settings.toml")
+    }
+
+    fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {
+        mochi_core::settings::<Settings>(table)
+            .map(drop)
+            .map_err(|error| error.to_string())
     }
 
     fn actions(&self) -> Vec<ActionSpec> {
@@ -58,8 +87,12 @@ impl Module for Share {
             ),
             ActionSpec::new("screen", "Share a screen; the picker sends this")
                 .arg(ArgSpec::string("output", "The monitor")),
-            ActionSpec::new("window", "Share a window; the picker sends this")
-                .arg(ArgSpec::string("handle", "The portal's handle for it")),
+            ActionSpec::new("window", "Share a window; the picker sends this").arg(
+                ArgSpec::string(
+                    "handle",
+                    "The portal's handle for it, or Hyprland's address when switching",
+                ),
+            ),
             ActionSpec::new("region", "Draw the area to share instead"),
             ActionSpec::new("back", "Go back from drawing an area to the list"),
             ActionSpec::new("area", "Share this area; the overlay sends this")
@@ -69,6 +102,14 @@ impl Module for Share {
                 .arg(ArgSpec::int("width", "In logical pixels"))
                 .arg(ArgSpec::int("height", "In logical pixels")),
             ActionSpec::new("remember", "Turn keeping the choice on or off"),
+            ActionSpec::new(
+                "switchable",
+                "Turn sharing a switchable copy on or off, for this share",
+            ),
+            ActionSpec::new(
+                "switch",
+                "Pick another source for the switchable share; the bubble does this",
+            ),
             ActionSpec::new("cancel", "Share nothing"),
         ]
     }
@@ -78,17 +119,25 @@ impl Module for Share {
             let mut compositor = ctx.compositor().subscribe();
             // Until the compositor connection goes away.
             let mut following = true;
-            let mut state = State::default();
-            state.capturing(&ctx, compositor.borrow().screencast);
+            let mut state = State {
+                settings: ctx.settings()?,
+                ..State::default()
+            };
+            // A switchable monitor left by a crash shares nothing now.
+            state.stop(&ctx).await;
+            state.capturing(&ctx, &compositor.borrow());
+            ctx.publish_state(Value::Null);
             loop {
                 tokio::select! {
                     event = ctx.next_event() => match event {
                         None => {
                             state.finish(&ctx, String::new());
+                            state.stop(&ctx).await;
                             return Ok(());
                         }
-                        Some(ModuleEvent::Command(command)) => state.command(&ctx, command),
+                        Some(ModuleEvent::Command(command)) => state.command(&ctx, command).await,
                         Some(ModuleEvent::Ended { activity, .. }) => state.ended(&ctx, activity),
+                        Some(ModuleEvent::BubbleClicked(_)) => state.switch(&ctx),
                         Some(_) => {}
                     },
                     changed = compositor.changed(), if following => {
@@ -96,10 +145,16 @@ impl Module for Share {
                             following = false;
                             continue;
                         }
-                        let screencast = compositor.borrow_and_update().screencast;
-                        state.capturing(&ctx, screencast);
+                        let snapshot = compositor.borrow_and_update().clone();
+                        state.capturing(&ctx, &snapshot);
                     }
                     () = sleep_until(state.bubble_due()) => state.update_bubble(&ctx),
+                    () = sleep_until(state.session_due()) => {
+                        if state.session.as_ref().is_some_and(|session| session.ended(Instant::now())) {
+                            tracing::info!("the switchable share ended");
+                            state.stop(&ctx).await;
+                        }
+                    }
                 }
             }
         })
@@ -121,8 +176,11 @@ async fn sleep_until(deadline: Option<Instant>) {
 /// A `pick` waiting for the user.
 #[derive(Debug)]
 struct Pick {
-    command: ModuleCommand,
+    /// The portal's request; `None` when switching a running share.
+    command: Option<ModuleCommand>,
     remember: bool,
+    /// Share a switchable copy rather than the choice itself.
+    switchable: bool,
     windows: Vec<Window>,
     /// Drawing an area over the screen, rather than choosing from the list.
     drawing: bool,
@@ -135,6 +193,8 @@ impl Pick {
     fn payload(&self) -> Value {
         json!({
             "remember": self.remember,
+            "switchable": self.switchable,
+            "switching": self.command.is_none(),
             "windows": self.windows.iter().map(Window::to_json).collect::<Vec<_>>(),
             "output": self.output,
             "drawing": self.drawing,
@@ -163,28 +223,43 @@ impl Pick {
 
 #[derive(Debug, Default)]
 struct State {
+    settings: Settings,
     pick: Option<Pick>,
     bubble: Option<BubbleId>,
     /// Since when the compositor reports a capture, while it does.
     capturing_since: Option<Instant>,
+    /// The switchable share running now.
+    session: Option<Session>,
 }
 
 impl State {
-    fn command(&mut self, ctx: &ModuleCtx, command: ModuleCommand) {
+    async fn command(&mut self, ctx: &ModuleCtx, command: ModuleCommand) {
         let args = &command.args;
         let result = match command.action.as_str() {
             "pick" => {
                 self.open(ctx, command);
                 return;
             }
-            "screen" => self.choose(ctx, args, |args| {
-                // The portal drops the last character of a screen's name.
-                Some(format!("screen:{}\n", args.str("output")?))
-            }),
-            "window" => self.choose(ctx, args, |args| {
-                Some(format!("window:{}", args.str("handle")?))
-            }),
-            "area" => self.choose(ctx, args, area),
+            "screen" => match args.str("output") {
+                Some(output) => {
+                    // The portal drops the last character of a screen's name.
+                    let portal = format!("screen:{output}\n");
+                    self.choose(ctx, Some(Source::Screen(output.to_owned())), portal)
+                        .await
+                }
+                None => Err("bad choice".into()),
+            },
+            "window" => match args.str("handle") {
+                Some(handle) => {
+                    let source = self.window(handle);
+                    self.choose(ctx, source, format!("window:{handle}")).await
+                }
+                None => Err("bad choice".into()),
+            },
+            "area" => match (area(args), area_source(args)) {
+                (Some(portal), source) => self.choose(ctx, source, portal).await,
+                (None, _) => Err("bad choice".into()),
+            },
             "region" => self.draw(ctx, true),
             "back" => self.draw(ctx, false),
             "remember" => match &mut self.pick {
@@ -195,6 +270,22 @@ impl State {
                 }
                 None => Err("nothing is being shared".into()),
             },
+            "switchable" => match &mut self.pick {
+                Some(pick) => {
+                    pick.switchable = !pick.switchable;
+                    ctx.update(pick.activity, pick.payload());
+                    Ok(())
+                }
+                None => Err("nothing is being shared".into()),
+            },
+            "switch" => {
+                if self.session.is_some() {
+                    self.switch(ctx);
+                    Ok(())
+                } else {
+                    Err("nothing is shared switchably; turn on Switchable when you share".into())
+                }
+            }
             "cancel" => {
                 self.finish(ctx, String::new());
                 Ok(())
@@ -210,8 +301,10 @@ impl State {
         let remember = command.args.bool("remember").unwrap_or(false);
         let windows = windows::parse(command.args.str("windows").unwrap_or_default());
         let mut pick = Pick {
-            command,
+            command: Some(command),
             remember,
+            // Only Hyprland makes monitors on request.
+            switchable: self.settings.switchable && ctx.compositor().knows_windows(),
             windows,
             drawing: false,
             output: ctx.compositor().state().focused_output,
@@ -223,18 +316,148 @@ impl State {
         self.update_bubble(ctx);
     }
 
-    fn choose(
+    /// Opens the picker again for the switchable share, to change its
+    /// source. A share that isn't switchable can't change.
+    fn switch(&mut self, ctx: &ModuleCtx) {
+        if self.session.is_none() || self.pick.is_some() {
+            return;
+        }
+        let mut pick = Pick {
+            command: None,
+            remember: false,
+            switchable: true,
+            windows: Vec::new(),
+            drawing: false,
+            output: ctx.compositor().state().focused_output,
+            activity: ActivityId(0),
+        };
+        pick.activity = ctx.present(pick.spec());
+        self.pick = Some(pick);
+    }
+
+    /// The source for a window the picker sent: by the portal's handle for
+    /// a new share, by Hyprland's address when switching.
+    fn window(&self, handle: &str) -> Option<Source> {
+        let pick = self.pick.as_ref()?;
+        if pick.command.is_none() {
+            return Some(Source::Window {
+                address: handle.to_owned(),
+                title: String::new(),
+            });
+        }
+        let window = pick.windows.iter().find(|window| window.handle == handle)?;
+        (!window.address.is_empty()).then(|| Source::Window {
+            address: window.address.clone(),
+            title: window.title.clone(),
+        })
+    }
+
+    /// Shares the choice: switches the running share to it, or answers the
+    /// portal with the switchable monitor, or with the choice itself when
+    /// that's off or fails. `source` is `None` for what can't be copied.
+    async fn choose(
         &mut self,
         ctx: &ModuleCtx,
-        args: &Args,
-        choice: impl FnOnce(&Args) -> Option<String>,
+        source: Option<Source>,
+        portal: String,
     ) -> Result<(), String> {
         let pick = self.pick.as_ref().ok_or("nothing is being shared")?;
-        let choice = choice(args).ok_or("bad choice")?;
-        let answer = pick.answer(&choice);
-        tracing::info!(choice = choice.trim_end(), "sharing");
+        if pick.command.is_none() {
+            let source = source.ok_or("Mochi can't copy that window")?;
+            tracing::info!(?source, "switching the share");
+            if let Some(session) = &mut self.session {
+                session.source = source;
+                ctx.publish_state(session.payload());
+            }
+            self.finish(ctx, String::new());
+            return Ok(());
+        }
+
+        if pick.switchable
+            && let Some(source) = source
+        {
+            match self.start(ctx, source).await {
+                Ok(()) => {
+                    tracing::info!("sharing the switchable monitor");
+                    self.finish(ctx, format!("[SELECTION]/screen:{OUTPUT}\n"));
+                    return Ok(());
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "can't share switchably; sharing the choice itself");
+                }
+            }
+        }
+        let pick = self.pick.as_ref().ok_or("nothing is being shared")?;
+        let answer = pick.answer(&portal);
+        tracing::info!(choice = portal.trim_end(), "sharing");
         self.finish(ctx, answer);
         Ok(())
+    }
+
+    /// Makes the switchable monitor with a copy of `source` on it, and waits
+    /// until it's there for the portal to find.
+    async fn start(&mut self, ctx: &ModuleCtx, source: Source) -> Result<(), String> {
+        let compositor = ctx.compositor();
+        let state = compositor.state();
+        let outputs: Vec<(String, u32, u32)> = state
+            .outputs
+            .iter()
+            .map(|output| (output.name.clone(), output.width, output.height))
+            .collect();
+        let session = Session::new(source, Instant::now());
+        ctx.publish_state(session.payload());
+        self.session = Some(session);
+        if !outputs.iter().any(|(name, ..)| name == OUTPUT) {
+            let (width, height) = switch::size(&outputs);
+            compositor
+                .create_virtual_output(OUTPUT, width, height)
+                .await
+                .map_err(|error| error.to_string())?;
+        }
+        let mut changes = compositor.subscribe();
+        let appeared = tokio::time::timeout(APPEAR, async {
+            loop {
+                if changes
+                    .borrow_and_update()
+                    .outputs
+                    .iter()
+                    .any(|output| output.name == OUTPUT)
+                {
+                    return;
+                }
+                if changes.changed().await.is_err() {
+                    std::future::pending::<()>().await;
+                }
+            }
+        })
+        .await;
+        if appeared.is_err() {
+            self.stop(ctx).await;
+            return Err(format!("{OUTPUT} never appeared"));
+        }
+        // A moment for the copy to draw its first frame.
+        tokio::time::sleep(FIRST_FRAME).await;
+        Ok(())
+    }
+
+    /// Ends the switchable share and removes its monitor.
+    async fn stop(&mut self, ctx: &ModuleCtx) {
+        self.session = None;
+        ctx.publish_state(Value::Null);
+        let exists = ctx
+            .compositor()
+            .state()
+            .outputs
+            .iter()
+            .any(|output| output.name == OUTPUT);
+        if exists && let Err(error) = ctx.compositor().remove_virtual_output(OUTPUT).await {
+            tracing::warn!(%error, "can't remove the switchable monitor");
+        }
+    }
+
+    /// When the switchable share may be over.
+    fn session_due(&self) -> Option<Instant> {
+        self.session.as_ref().and_then(Session::deadline)
     }
 
     fn draw(&mut self, ctx: &ModuleCtx, drawing: bool) -> Result<(), String> {
@@ -248,7 +471,9 @@ impl State {
     fn finish(&mut self, ctx: &ModuleCtx, answer: String) {
         if let Some(pick) = self.pick.take() {
             ctx.withdraw(pick.activity);
-            pick.command.answer(Ok(answer));
+            if let Some(command) = pick.command {
+                command.answer(Ok(answer));
+            }
             // The thumbnails' captures are ending; time a real share afresh, or
             // the bubble would flash before they do.
             if self.capturing_since.is_some() {
@@ -270,7 +495,12 @@ impl State {
     }
 
     /// Follows the compositor's capture state.
-    fn capturing(&mut self, ctx: &ModuleCtx, active: bool) {
+    fn capturing(&mut self, ctx: &ModuleCtx, state: &mochi_core::compositor::State) {
+        if let Some(session) = &mut self.session {
+            let shared = state.captured.iter().any(|target| target == OUTPUT);
+            session.captured(shared, Instant::now());
+        }
+        let active = state.screencast;
         self.capturing_since = match (active, self.capturing_since) {
             (true, None) => Some(Instant::now()),
             (true, since) => since,
@@ -300,7 +530,8 @@ impl State {
                         BubbleSpec::new("Sharing")
                             .key("sharing")
                             .area(Area::CenterRight)
-                            .order(-9),
+                            .order(-9)
+                            .payload(json!({ "switchable": self.session.is_some() })),
                     ),
                 );
             }
@@ -314,6 +545,22 @@ impl State {
     }
 }
 
+/// How long the switchable monitor has to appear.
+const APPEAR: Duration = Duration::from_secs(3);
+/// How long the copy gets to draw before the app sees the monitor.
+const FIRST_FRAME: Duration = Duration::from_millis(300);
+
+/// The copy of an area the picker sent.
+fn area_source(args: &Args) -> Option<Source> {
+    Some(Source::Area {
+        output: args.str("output")?.to_owned(),
+        x: args.int("x")?,
+        y: args.int("y")?,
+        width: args.int("width")?.max(1),
+        height: args.int("height")?.max(1),
+    })
+}
+
 /// `region:<output>@x,y,w,h`, on the monitor, in logical pixels.
 fn area(args: &Args) -> Option<String> {
     let (width, height) = (args.int("width")?, args.int("height")?);
@@ -322,6 +569,17 @@ fn area(args: &Args) -> Option<String> {
     }
     let (output, x, y) = (args.str("output")?, args.int("x")?, args.int("y")?);
     Some(format!("region:{output}@{x},{y},{width},{height}"))
+}
+
+#[cfg(test)]
+mod settings_example {
+    #[test]
+    fn shows_the_defaults() {
+        mochi_core::examples::check_module::<super::Settings>(
+            "share",
+            include_str!("../settings.toml"),
+        );
+    }
 }
 
 #[cfg(test)]
@@ -352,8 +610,9 @@ mod tests {
     fn answers_with_the_remember_flag() {
         let (command, _) = ModuleCommand::new("pick".into(), Args::default());
         let mut pick = Pick {
-            command,
+            command: Some(command),
             remember: false,
+            switchable: false,
             windows: Vec::new(),
             drawing: false,
             output: None,

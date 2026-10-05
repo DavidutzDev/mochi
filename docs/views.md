@@ -13,6 +13,10 @@ A module's views are QML files in its `qml/` directory. They import the core lib
 
 An activity can bring an overlay: `ActivitySpec::overlay("Overlay")` draws `qml/Overlay.qml` over every monitor, under the island and the bubbles, while the activity shows. It's for picking something on screen, like the capture module's region. The overlay gets the activity's `payload` and a `screen` property with its monitor, and takes the clicks. Every monitor's overlay asks for the keyboard, since Hyprland only sends the pointer to surfaces that hold it; the compositor gives it to one of them, so handle keys in each. If it declares `property bool ready`, the island waits for it to turn true before it changes, so an overlay can freeze the screen first.
 
+## Virtual screens
+
+A module can make a monitor of its own through the compositor, named `MOCHI-<MODULE>`, like the share module's `MOCHI-SHARE`. The shell gives it no island or bubbles; it shows the module's `qml/Screen.qml` over the whole monitor instead, with the module's published state as `payload`, and takes no clicks. `Daemon.screens` lists the real monitors only, and `Daemon.virtualScreens` the others; use `Daemon.screens` wherever you list monitors for the user.
+
 ## Theme roles
 
 | Role | For |

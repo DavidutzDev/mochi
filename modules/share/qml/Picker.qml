@@ -8,7 +8,8 @@ import qs.island
 // The island asking what to share: the screens and the windows the portal
 // offers, each with a live thumbnail, or an area to draw. Tab switches
 // between screens and windows, arrows move, Enter shares, R draws an area,
-// Escape shares nothing.
+// Escape shares nothing. Switching a running share, from its bubble, it
+// lists Hyprland's windows, since no portal asks.
 Item {
     id: root
 
@@ -16,8 +17,14 @@ Item {
     property string tab: "screens"
     property int current: 0
 
-    readonly property var windows: payload.windows ?? []
-    readonly property int count: tab === "screens" ? Quickshell.screens.length : windows.length
+    readonly property bool switching: payload.switching ?? false
+    readonly property var windows: switching ? Hyprland.toplevels.values.filter(toplevel => toplevel.wayland && !Daemon.isVirtual(toplevel.monitor)).map(toplevel => ({
+                "handle": toplevel.address,
+                "address": toplevel.address,
+                "title": toplevel.title,
+                "class": toplevel.wayland?.appId ?? ""
+            })) : payload.windows ?? []
+    readonly property int count: tab === "screens" ? Daemon.screens.length : windows.length
     readonly property int columns: 3
     readonly property real thumbWidth: 220
     readonly property real thumbHeight: 124
@@ -39,7 +46,7 @@ Item {
 
     function share(index: int): void {
         if (tab === "screens") {
-            const screen = Quickshell.screens[index];
+            const screen = Daemon.screens[index];
             if (screen)
                 Daemon.command("share", "screen", [screen.name]);
         } else {
@@ -99,7 +106,7 @@ Item {
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Share your screen"
+                    text: root.switching ? "Switch what you share" : "Share your screen"
                     color: Theme.foreground
                     font.pixelSize: Theme.textSubtitle
                     font.family: Theme.fontFamily
@@ -107,13 +114,17 @@ Item {
                 }
             }
 
+            // A switchable share is a monitor that only exists while it's
+            // shared, so the app can't remember it.
             Row {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
+                visible: !root.switching
                 spacing: 8
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
+                    visible: !(root.payload.switchable ?? false)
                     text: "Remember"
                     color: Theme.muted
                     font.pixelSize: Theme.textLabel
@@ -122,8 +133,23 @@ Item {
 
                 Switch {
                     anchors.verticalCenter: parent.verticalCenter
+                    visible: !(root.payload.switchable ?? false)
                     checked: root.payload.remember ?? false
                     onToggled: Daemon.command("share", "remember", [])
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Switchable"
+                    color: Theme.muted
+                    font.pixelSize: Theme.textLabel
+                    font.family: Theme.fontFamily
+                }
+
+                Switch {
+                    anchors.verticalCenter: parent.verticalCenter
+                    checked: root.payload.switchable ?? false
+                    onToggled: Daemon.command("share", "switchable", [])
                 }
             }
         }
@@ -189,7 +215,7 @@ Item {
                 spacing: 10
 
                 Repeater {
-                    model: root.tab === "screens" ? Quickshell.screens : root.windows
+                    model: root.tab === "screens" ? Daemon.screens : root.windows
 
                     Thumb {
                         required property var modelData

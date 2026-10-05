@@ -45,7 +45,7 @@ Item {
     readonly property rect bounds: {
         if (!screenshot)
             return Qt.rect(0, 0, width, height);
-        const screens = Quickshell.screens;
+        const screens = Daemon.screens;
         let left = 0, top = 0, right = width, bottom = height;
         for (const other of screens) {
             left = Math.min(left, other.x - originX);
@@ -74,11 +74,11 @@ Item {
     Component.onCompleted: sendLayout()
     function sendLayout(): void {
         const session = payload.session;
-        if (session === undefined || layoutSent === session || Quickshell.screens[0]?.name !== output)
+        if (session === undefined || layoutSent === session || Daemon.screens[0]?.name !== output)
             return;
         layoutSent = session;
         const words = [String(session)];
-        for (const screen of Quickshell.screens)
+        for (const screen of Daemon.screens)
             words.push(screen.name, String(screen.x), String(screen.y), String(screen.width), String(screen.height));
         Daemon.command("capture", "layout", words);
     }

@@ -28,6 +28,8 @@ pub(crate) struct Model {
     ipc_focus: Option<String>,
     /// Screencasts IPC reported started and not yet stopped.
     screencasts: u32,
+    /// The same, by what they capture.
+    captured: BTreeMap<String, u32>,
 }
 
 #[derive(Debug, Default)]
@@ -41,6 +43,8 @@ struct Toplevel {
 struct OutputInfo {
     name: String,
     description: String,
+    /// The current mode, in pixels.
+    size: (u32, u32),
 }
 
 #[derive(Debug, Default)]
@@ -64,6 +68,10 @@ impl Model {
 
     pub fn output_description(&mut self, output: u32, description: String) {
         self.outputs.entry(output).or_default().description = description;
+    }
+
+    pub fn output_mode(&mut self, output: u32, width: u32, height: u32) {
+        self.outputs.entry(output).or_default().size = (width, height);
     }
 
     pub fn output_removed(&mut self, output: u32) {
@@ -177,17 +185,34 @@ impl Model {
     }
 
     /// After reconnecting to IPC: whatever was counted may be stale.
+    /// A capture of a monitor or window started or stopped. Hyprland
+    /// sometimes reports a stop without its start, so counts never go below
+    /// zero.
+    pub fn ipc_captured(&mut self, target: String, started: bool) {
+        let count = self.captured.entry(target).or_default();
+        *count = if started {
+            count.saturating_add(1)
+        } else {
+            count.saturating_sub(1)
+        };
+        self.captured.retain(|_, count| *count > 0);
+    }
+
     pub fn reset_screencasts(&mut self) {
         self.screencasts = 0;
+        self.captured.clear();
     }
 
     fn focused_output(&self) -> Option<String> {
-        self.ipc_focus.clone().or_else(|| {
-            self.window_focus
-                .and_then(|output| self.outputs.get(&output))
-                .map(|output| output.name.clone())
-                .filter(|name| !name.is_empty())
-        })
+        self.ipc_focus
+            .clone()
+            .or_else(|| {
+                self.window_focus
+                    .and_then(|output| self.outputs.get(&output))
+                    .map(|output| output.name.clone())
+                    .filter(|name| !name.is_empty())
+            })
+            .filter(|name| !crate::is_virtual(name))
     }
 
     /// Outputs by name, and workspaces grouped by output in the order a user
@@ -201,6 +226,8 @@ impl Model {
             .map(|output| Output {
                 name: output.name.clone(),
                 description: output.description.clone(),
+                width: output.size.0,
+                height: output.size.1,
             })
             .collect::<Vec<_>>();
 
@@ -217,6 +244,8 @@ impl Model {
                 hidden: info.state & HIDDEN != 0,
                 can_activate: info.capabilities & CAN_ACTIVATE != 0,
             })
+            // A virtual monitor's workspace is nothing to show.
+            .filter(|workspace| !workspace.output.as_deref().is_some_and(crate::is_virtual))
             .collect();
         workspaces.sort_by_cached_key(|workspace| {
             (
@@ -241,6 +270,7 @@ impl Model {
                 .map(|window| window.app_id.clone())
                 .filter(|app_id| !app_id.is_empty()),
             screencast: self.screencasts > 0,
+            captured: self.captured.keys().cloned().collect(),
         }
     }
 
@@ -376,6 +406,20 @@ mod tests {
         assert!(model.snapshot().screencast);
         model.reset_screencasts();
         assert!(!model.snapshot().screencast);
+    }
+
+    #[test]
+    fn knows_what_is_captured() {
+        let mut model = Model::default();
+        model.ipc_captured("MOCHI-SHARE".into(), false);
+        assert!(model.snapshot().captured.is_empty());
+        model.ipc_captured("MOCHI-SHARE".into(), true);
+        model.ipc_captured("DP-3".into(), true);
+        assert_eq!(model.snapshot().captured, ["DP-3", "MOCHI-SHARE"]);
+        model.ipc_captured("MOCHI-SHARE".into(), false);
+        assert_eq!(model.snapshot().captured, ["DP-3"]);
+        model.reset_screencasts();
+        assert!(model.snapshot().captured.is_empty());
     }
 
     #[test]

@@ -90,6 +90,8 @@ pub struct Daemon {
     runner: Runner,
     /// Attached once the shell is written; `None` only during startup.
     supervisor: Option<Supervisor>,
+    /// The modules whose views the running Quickshell has.
+    shell: Vec<&'static str>,
     compositor: Compositor,
     /// `[island] panels`: which monitor panels open on.
     panels: Panels,
@@ -120,6 +122,7 @@ impl Daemon {
             files,
             runner,
             supervisor: None,
+            shell: Vec::new(),
             compositor,
             panels: Panels::default(),
             handshake_deadline: None,
@@ -159,6 +162,13 @@ impl Daemon {
             .map(|module| module.as_ref())
             .collect();
         self.runner.write_shell(&views)?;
+        // A module new to the shell needs a fresh Quickshell to find its
+        // views' types. At startup none runs yet.
+        let added = wanted.iter().any(|id| !self.shell.contains(id));
+        self.shell = wanted.clone();
+        if added && let Some(supervisor) = &self.supervisor {
+            supervisor.reload();
+        }
 
         for id in &wanted {
             if self.modules.contains_key(id) {

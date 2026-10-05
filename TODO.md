@@ -408,7 +408,8 @@ After capture, reusing its pickers.
 
 - [x] `mochi share-pick` is xdg-desktop-portal-hyprland's `custom_picker_binary` (packaged as `mochi-share-picker`, which the home-manager module writes into `xdph.conf`). The island panel shows screens and the portal's windows with live thumbnails, Hyprland toplevels matched by address, plus Region over a live overlay and a Remember switch; the answer goes back as the command's new `output` reply. Without Mochi or the module it runs `hyprland-share-picker`
 - [x] A bubble while the screen is shared, from Hyprland's `screencast` events counted per capture session; it waits 1.5 s and ignores the picker's own thumbnails, since Hyprland reports every capture, screenshots included
-- [ ] Clicking the sharing bubble asks again what to share, for the app sharing now. The portal has no way to change a running share, so this means stopping it and the app asking again, or a choice that Mochi serves itself
+- [x] Clicking the sharing bubble asks again what to share, for the app sharing now. The portal can't change a running share, so with Switchable on (the default) the app shares `MOCHI-SHARE`, a Hyprland headless monitor far from the real ones, and Mochi draws a live copy of the screen, window or region on it; the bubble's picker changes the copy. The monitor goes 3 s after `screencastv2` stops reporting captures of it
+- [ ] Keep the switchable copy's aspect: size `MOCHI-SHARE` to the first source instead of the largest screen
 - [ ] `chooser_cmd` for xdg-desktop-portal-wlr
 - [ ] Screencast state on compositors other than Hyprland (PipeWire streams)
 

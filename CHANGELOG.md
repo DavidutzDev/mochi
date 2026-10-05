@@ -12,10 +12,13 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 - Clicking a clipboard image opens it in the screenshot preview card, with copy, edit and delete. The capture module has a `show` action for it.
 - Audio module: a volume mixer, as the hub's Sound page or on the island with `mochi ipc audio toggle`. It has the output and the input with their volumes and a list of devices to switch to, and a volume and mute for each app playing sound. `volume <target> <level>` (with `+5` and `-5`), `mute`, `output` and `input` do the same from keybinds. `max_volume` sets the top of the sliders, up to 150. It's on in newly generated configs.
 - Media: arrows next to the player's name, on the island and the hub card, switch between players when several have a track, like Spotify and a browser video. The one you pick stays shown until it stops, even when another starts a new track. `next-player`, `previous-player` and `player <name>` do the same from keybinds.
+- Share: clicking the sharing bubble changes what you share, without the app asking again. The portal can't change a running share, so with the picker's new Switchable switch on, the default, the app shares a monitor of Mochi's own, `MOCHI-SHARE`, and Mochi draws a live copy of the screen, window or region you picked on it. The bubble, or `mochi ipc share switch`, opens the picker to change the copy. The monitor goes a few seconds after the app stops. `switchable = false` in `[module.share]` shares the choice itself, as before. Hyprland only.
+- Views: a module can show `Screen.qml` on a monitor of its own, named `MOCHI-<MODULE>`. `Daemon.screens` lists the real monitors and `Daemon.virtualScreens` these. The compositor state has each output's size, and what is being captured (`captured`, from Hyprland's `screencastv2` events).
 - `ActivitySpec::fleeting`: an activity that shows at once or not at all, never queued or suspended. The volume and workspace notices are fleeting, so they no longer show late after the hub, the launcher or the mixer closes. The volume notice now replaces a workspace notice on screen instead of waiting for it.
 
 ### Fixed
 
+- A module added by `mochi reload` showed nothing when its views use each other, like the audio mixer: Quickshell only finds a directory's QML types when it starts. The daemon now restarts Quickshell when a reload adds a module.
 - Each monitor's island sends events for the activity it shows, not the daemon's current one.
 - The capture overlay no longer reports itself ready before it knows its screen, which could let the island change before the screen froze.
 

@@ -34,6 +34,8 @@ pub(crate) enum Event {
     Focus(String),
     /// A screencast started (true) or stopped.
     Screencast(bool),
+    /// The same, with what it captures: a monitor's name, or a window's.
+    Captured { started: bool, target: String },
     /// The event socket (re)connected: counts kept so far may be stale.
     Connected,
 }
@@ -164,6 +166,69 @@ fn windows_from(clients: &str, monitors: &str) -> Option<Vec<Window>> {
     Some(windows.into_iter().map(|(_, _, window)| window).collect())
 }
 
+/// Makes a headless monitor named `name`, far from the real ones so the
+/// pointer never reaches it, then gives the keyboard back to `focused`:
+/// Hyprland moves it when a monitor comes. Lua configs set the monitor rule
+/// through `eval`, older ones through `keyword`.
+pub(crate) async fn create_headless(
+    dir: &Path,
+    name: &str,
+    width: u32,
+    height: u32,
+    focused: Option<&str>,
+) -> std::io::Result<()> {
+    let mode = format!("{width}x{height}@60");
+    let lua = format!(
+        "eval hl.monitor({{ output = \"{name}\", mode = \"{mode}\", position = \"{FAR_AWAY}\", scale = 1 }})"
+    );
+    if !ok(&query(dir, &lua).await?) {
+        let legacy = format!("keyword monitor {name},{mode},{FAR_AWAY},1");
+        expect_ok(&query(dir, &legacy).await?)?;
+    }
+    expect_ok(&query(dir, &format!("output create headless {name}")).await?)?;
+    refocus(dir, focused).await
+}
+
+/// Removes a monitor, then gives the keyboard back to `focused`.
+pub(crate) async fn remove_output(
+    dir: &Path,
+    name: &str,
+    focused: Option<&str>,
+) -> std::io::Result<()> {
+    expect_ok(&query(dir, &format!("output remove {name}")).await?)?;
+    refocus(dir, focused).await
+}
+
+/// Focuses a monitor, in a Lua config's words or an older one's.
+async fn refocus(dir: &Path, output: Option<&str>) -> std::io::Result<()> {
+    let Some(output) = output else {
+        return Ok(());
+    };
+    let lua = format!("dispatch hl.dsp.focus({{ monitor = \"{output}\" }})");
+    if !ok(&query(dir, &lua).await?) {
+        query(dir, &format!("dispatch focusmonitor {output}")).await?;
+    }
+    Ok(())
+}
+
+/// Where virtual monitors go: past any real layout.
+const FAR_AWAY: &str = "-20000x-20000";
+
+fn ok(reply: &str) -> bool {
+    reply.trim() == "ok"
+}
+
+fn expect_ok(reply: &str) -> std::io::Result<()> {
+    if ok(reply) {
+        Ok(())
+    } else {
+        Err(std::io::Error::other(format!(
+            "Hyprland said: {}",
+            reply.trim()
+        )))
+    }
+}
+
 /// The monitor under the pointer. Blocking, but bounded: the daemon asks
 /// this while it decides where a panel opens, and Hyprland answers in about
 /// a millisecond.
@@ -211,7 +276,28 @@ fn event(line: &str) -> Option<Event> {
     if let Some(output) = focused_from_event(line) {
         return Some(Event::Focus(output.to_owned()));
     }
+    if let Some((started, target)) = captured_from_event(line) {
+        return Some(Event::Captured {
+            started,
+            target: target.to_owned(),
+        });
+    }
     screencast_from_event(line).map(Event::Screencast)
+}
+
+/// `screencastv2>>1,monitor,DP-3`: the `screencast` event again, with the
+/// monitor captured, or the window. A region names its monitor.
+fn captured_from_event(line: &str) -> Option<(bool, &str)> {
+    let rest = line.strip_prefix("screencastv2>>")?;
+    let mut parts = rest.splitn(3, ',');
+    let started = match parts.next()? {
+        "1" => true,
+        "0" => false,
+        _ => return None,
+    };
+    let _kind = parts.next()?;
+    let target = parts.next().filter(|target| !target.is_empty())?;
+    Some((started, target))
 }
 
 /// `screencast>>1,monitor`: a capture started (1) or stopped (0), of a
@@ -287,7 +373,14 @@ mod tests {
             Some(Event::Screencast(false))
         );
         assert_eq!(event("screencast>>1,0"), Some(Event::Screencast(true)));
-        assert_eq!(event("screencastv2>>1,monitor,DP-3"), None);
+        assert_eq!(
+            event("screencastv2>>1,region,MOCHI-SHARE"),
+            Some(Event::Captured {
+                started: true,
+                target: "MOCHI-SHARE".into()
+            })
+        );
+        assert_eq!(event("screencastv2>>0,monitor,"), None);
         assert_eq!(event("screencast>>maybe"), None);
         assert_eq!(
             event("focusedmon>>DP-3,2"),

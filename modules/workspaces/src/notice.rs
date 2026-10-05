@@ -170,6 +170,8 @@ mod tests {
                 .map(|name| Output {
                     name: (*name).into(),
                     description: String::new(),
+                    width: 1920,
+                    height: 1080,
                 })
                 .collect(),
             workspaces: spec
@@ -189,6 +191,7 @@ mod tests {
             focused_output: None,
             focused_app: None,
             screencast: false,
+            captured: Vec::new(),
         }
     }
 
