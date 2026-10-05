@@ -29,6 +29,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- A stack of bubbles left of the island stood a bubble's width away from it: the layout read the deck's width while it animated.
 - The hub has one size for every page, `width` and `height` in `[module.hub]`, so it no longer changes size when switching pages.
 - The hub no longer grows past the screen, which pushed the navbar off it: its cards or page scroll past most of the screen's height. It's wider, with three columns packed without gaps, and cards with nothing to show, like Bluetooth without an adapter or Battery on a desktop, hide, as do the pages of modules that aren't available.
 - Stopping mochid gives modules up to 2 seconds to clean up, so the share module removes its switchable monitor instead of leaving it behind.
