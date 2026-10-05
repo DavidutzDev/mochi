@@ -1,0 +1,18 @@
+[package]
+name = "mochi-plugin-pomodoro"
+description = "Example Mochi plugin: a focus timer on the island"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "pomodoro"
+path = "src/main.rs"
+
+[dependencies]
+# In a plugin of your own:
+# mochi-sdk = { git = "https://github.com/DavidutzDev/mochi", tag = "v0.0.5" }
+mochi-sdk = { path = "../../../crates/mochi-sdk" }
+serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["macros", "time"] }

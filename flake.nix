@@ -32,12 +32,27 @@
           mochi = pkgs.callPackage ./packaging/nix/package.nix {
             quickshell = quickshell.packages.${system}.default;
           };
+          # The plugin SDK's API documentation: the package's source and
+          # vendored crates, with `cargo doc` instead of the build.
+          sdk-docs = self.packages.${system}.mochi.overrideAttrs {
+            pname = "mochi-sdk-docs";
+            buildPhase = ''
+              runHook preBuild
+              cargo doc --offline --no-deps -p mochi-sdk -p mochi-protocol
+              runHook postBuild
+            '';
+            doCheck = false;
+            installPhase = "cp -r target/doc $out";
+            postInstall = "";
+          };
           # The documentation site, from docs/book. Its pages include the
-          # modules' settings.toml files, so it needs the whole source.
+          # modules' settings.toml files, so it needs the whole source. The
+          # SDK's API documentation goes under api/.
           docs = pkgs.runCommand "mochi-docs" { nativeBuildInputs = [ pkgs.mdbook ]; } ''
             cp -r ${self} source
             chmod -R u+w source
             mdbook build source/docs/book --dest-dir $out
+            cp -r ${self.packages.${system}.sdk-docs} $out/api
           '';
         }
       );
@@ -82,6 +97,9 @@
 
               # The documentation site: `mdbook serve docs/book`
               pkgs.mdbook
+
+              # The Python example plugin and its test
+              pkgs.python3
 
               # UI
               quickshell.packages.${system}.default

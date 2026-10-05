@@ -1,0 +1,14 @@
+# Weather, from Open-Meteo.
+[module.weather]
+# A place name to look up, like "Lyon" or "Lyon, France". Leave it empty
+# and set latitude and longitude instead to skip the lookup.
+# city = ""
+# latitude = 45.76
+# longitude = 4.84
+# "metric" for °C and km/h, "imperial" for °F and mph.
+# units = "metric"
+# How often to fetch, in minutes.
+# refresh_minutes = 20
+# A bubble with the temperature, in this area: left, center-left,
+# center-right or right. Unset, there's none.
+# bubble = "right"

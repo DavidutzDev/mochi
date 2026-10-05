@@ -1,0 +1,22 @@
+# An example plugin with a backend in Python, and a tiny Python SDK in
+# mochi_plugin.py. Python 3 needs to be installed.
+
+[plugin]
+id = "hello"
+name = "Hello"
+version = "0.1.0"
+description = "Says hello on the island, from Python"
+authors = ["Mochi"]
+api = 1
+
+[backend]
+exec = "hello.py"
+
+[[actions]]
+name = "say"
+description = "Show some text on the island"
+args = [{ name = "text", description = "What to say, instead of the greeting", optional = true, rest = true }]
+
+[[actions]]
+name = "count"
+description = "Print how many times it said something"

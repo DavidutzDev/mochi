@@ -1,0 +1,19 @@
+[package]
+name = "mochi-plugin-weather"
+description = "Example Mochi plugin: the weather from Open-Meteo"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "weather"
+path = "src/main.rs"
+
+[dependencies]
+# In a plugin of your own:
+# mochi-sdk = { git = "https://github.com/DavidutzDev/mochi", tag = "v0.0.5" }
+mochi-sdk = { path = "../../../crates/mochi-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["macros", "process", "time"] }

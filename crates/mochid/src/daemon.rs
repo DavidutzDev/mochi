@@ -1,7 +1,7 @@
 //! The daemon loop. It owns the arbiter, the bubbles, the module slots and
 //! the connections, and is the only place any of them change.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
@@ -14,7 +14,7 @@ use mochi_core::{
 };
 use mochi_protocol::{
     API, ActionSpec, ClientMessage, CompositorStatus, Contribution, DaemonMessage, ErrorCode,
-    EventKind, ModuleActions, Role, Status, Theme,
+    EventKind, ModuleActions, PluginState, PluginStatus, Role, Status, Theme,
 };
 use serde_json::Value;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -94,6 +94,17 @@ pub struct Daemon {
     supervisor: Option<Supervisor>,
     /// The modules whose views the running Quickshell has.
     shell: Vec<&'static str>,
+    /// The builtin views plugins replace, by module: file name and the
+    /// plugin's file.
+    overrides: BTreeMap<&'static str, Vec<(String, PathBuf)>>,
+    /// Each running plugin's revision, to restart it when its files change.
+    revisions: BTreeMap<&'static str, String>,
+    /// The plugins plugins.toml lists, for `mochi status`.
+    listed: Vec<modules::Listed>,
+    /// Plugins whose backend gave up, and why.
+    failed: BTreeMap<&'static str, String>,
+    /// Who watches whose state: watched module to watchers.
+    watchers: BTreeMap<String, BTreeSet<&'static str>>,
     compositor: Compositor,
     /// `[island] panels`: which monitor panels open on.
     panels: Panels,
@@ -125,6 +136,11 @@ impl Daemon {
             runner,
             supervisor: None,
             shell: Vec::new(),
+            overrides: BTreeMap::new(),
+            revisions: BTreeMap::new(),
+            listed: Vec::new(),
+            failed: BTreeMap::new(),
+            watchers: BTreeMap::new(),
             compositor,
             panels: Panels::default(),
             handshake_deadline: None,
@@ -136,39 +152,62 @@ impl Daemon {
     }
 
     /// Makes the running modules match `config`: starts new ones, stops
-    /// removed ones, restarts the ones whose settings changed, and rewrites
-    /// the shell's views. Modules that didn't change keep running.
+    /// removed ones, restarts the ones whose settings or plugin files changed
+    /// and the ones that ended, and rewrites the shell's views. Modules that
+    /// didn't change keep running.
     pub fn apply(&mut self, config: &Config) -> anyhow::Result<()> {
-        let mut builtin = modules::builtin();
+        let catalog = modules::catalog(&self.files.config)?;
+        let mut builtin = catalog.modules;
         let wanted: Vec<&'static str> = config
             .modules
             .iter()
             .filter_map(|id| {
-                builtin
+                let found = builtin
                     .iter()
                     .find(|module| module.id() == id)
-                    .map(|module| module.id())
+                    .map(|module| module.id());
+                if found.is_none() {
+                    tracing::warn!(module = %id, "enabled, but the plugin can't load; see `mochi status`");
+                }
+                found
             })
             .collect();
+        let revisions: BTreeMap<&'static str, String> = catalog
+            .plugins
+            .iter()
+            .map(|(id, plugin)| (*id, plugin.revision()))
+            .collect();
 
+        let mut updated = false;
         for id in self.order.clone() {
             let changed = self.settings.get(id) != Some(&config.settings(id));
-            if !wanted.contains(&id) || changed {
+            let replaced = self.revisions.get(id) != revisions.get(id);
+            // One that stopped or failed gets another go.
+            let ended = self
+                .modules
+                .get(id)
+                .is_some_and(|slot| slot.events.is_none());
+            if !wanted.contains(&id) || changed || replaced || ended {
                 self.stop(id);
+                updated |= replaced;
             }
         }
 
+        let overrides = overrides(&catalog.plugins, &wanted, &builtin);
         let views: Vec<&dyn Module> = wanted
             .iter()
             .filter_map(|id| builtin.iter().find(|module| module.id() == *id))
             .map(|module| module.as_ref())
             .collect();
-        self.runner.write_shell(&views)?;
+        self.runner.write_shell(&views, &overrides)?;
         // A module new to the shell needs a fresh Quickshell to find its
-        // views' types. At startup none runs yet.
+        // views' types, and so do new overrides and a plugin's new files.
+        // At startup none runs yet.
         let added = wanted.iter().any(|id| !self.shell.contains(id));
+        let reload = added || updated || overrides != self.overrides;
         self.shell = wanted.clone();
-        if added && let Some(supervisor) = &self.supervisor {
+        self.overrides = overrides;
+        if reload && let Some(supervisor) = &self.supervisor {
             supervisor.reload();
         }
 
@@ -186,9 +225,14 @@ impl Daemon {
                 .start(builtin.swap_remove(index), settings.clone())?;
             self.modules.insert(id, slot);
             self.settings.insert(id, settings);
+            self.failed.remove(id);
+            if let Some(revision) = revisions.get(id) {
+                self.revisions.insert(id, revision.clone());
+            }
             tracing::info!(module = id, "started");
         }
         self.order = wanted;
+        self.listed = catalog.listed;
         self.panels = config.island.panels;
         self.arbiter
             .set_outside_expanded_only(config.island.click_outside == ClickOutside::Expanded);
@@ -207,7 +251,11 @@ impl Daemon {
             return;
         }
         self.settings.remove(module);
+        self.revisions.remove(module);
         self.order.retain(|id| *id != module);
+        for watchers in self.watchers.values_mut() {
+            watchers.remove(module);
+        }
         let now = Instant::now();
         self.arbiter.withdraw_all(module, now);
         self.bubbles.hide_all(module);
@@ -216,6 +264,7 @@ impl Daemon {
                 module: module.to_owned(),
                 state: Value::Null,
             });
+            self.tell_watchers(module, &Value::Null);
         }
         tracing::info!(module, "stopped");
     }
@@ -370,6 +419,7 @@ impl Daemon {
                     ui_connected: self.ui_connected(),
                     modules: self.order.iter().map(|id| (*id).to_owned()).collect(),
                     compositor: self.compositor_status(),
+                    plugins: self.plugin_status(),
                 };
                 self.reply(id, DaemonMessage::Status { status });
             }
@@ -601,6 +651,7 @@ impl Daemon {
         let now = Instant::now();
         let result = match request {
             Request::PublishState(state) => {
+                self.tell_watchers(module, &state);
                 self.states.insert(module.to_owned(), state.clone());
                 let message = DaemonMessage::State {
                     module: module.to_owned(),
@@ -642,6 +693,17 @@ impl Daemon {
                 .bubbles
                 .hide(module, id)
                 .map_err(|error| error.to_string()),
+            Request::WatchState { module: watched } => {
+                if let Some(state) = self.states.get(&watched) {
+                    let event = ModuleEvent::State {
+                        module: watched.clone(),
+                        state: state.clone(),
+                    };
+                    self.notify(module, event);
+                }
+                self.watchers.entry(watched).or_default().insert(module);
+                return;
+            }
             Request::Call {
                 module: target,
                 action,
@@ -660,11 +722,8 @@ impl Daemon {
     /// Whether the module ships every view it names. A missing one is a bug
     /// in the module, logged instead of shown.
     fn has_views<'a>(&self, module: &str, views: impl IntoIterator<Item = &'a String>) -> bool {
-        let assets = self.modules[module].assets;
-        match views
-            .into_iter()
-            .find(|view| assets.embedded.get_file(format!("{view}.qml")).is_none())
-        {
+        let assets = &self.modules[module].assets;
+        match views.into_iter().find(|view| !assets.has_view(view)) {
             Some(missing) => {
                 tracing::error!(module, view = %missing, "the module has no such view");
                 false
@@ -692,8 +751,14 @@ impl Daemon {
         }
         match result {
             Ok(Ok(())) => tracing::info!(module, "module stopped"),
-            Ok(Err(error)) => tracing::error!(module, %error, "module failed"),
-            Err(error) => tracing::error!(module, %error, "module panicked"),
+            Ok(Err(error)) => {
+                tracing::error!(module, %error, "module failed");
+                self.failed.insert(module, error.to_string());
+            }
+            Err(error) => {
+                tracing::error!(module, %error, "module panicked");
+                self.failed.insert(module, error.to_string());
+            }
         }
         if let Some(slot) = self.modules.get_mut(module) {
             slot.events = None;
@@ -747,6 +812,44 @@ impl Daemon {
                 } => self.notify(&module, ModuleEvent::Ended { activity, reason }),
             }
         }
+    }
+
+    /// Sends a module's new state to the modules watching it.
+    fn tell_watchers(&self, module: &str, state: &Value) {
+        let Some(watchers) = self.watchers.get(module) else {
+            return;
+        };
+        for watcher in watchers {
+            let event = ModuleEvent::State {
+                module: module.to_owned(),
+                state: state.clone(),
+            };
+            self.notify(watcher, event);
+        }
+    }
+
+    fn plugin_status(&self) -> Vec<PluginStatus> {
+        self.listed
+            .iter()
+            .map(|listed| {
+                let running = self.order.iter().find(|id| **id == listed.id);
+                let failed = running.and_then(|id| self.failed.get(id));
+                let (state, message) = match (&listed.problem, running, failed) {
+                    (Some(problem), _, _) => (PluginState::Missing, Some(problem.clone())),
+                    (None, Some(_), Some(error)) => (PluginState::Failed, Some(error.clone())),
+                    (None, Some(_), None) => (PluginState::Running, None),
+                    (None, None, _) => (
+                        PluginState::Disabled,
+                        Some("add it to `modules` in config.toml".into()),
+                    ),
+                };
+                PluginStatus {
+                    id: listed.id.clone(),
+                    state,
+                    message,
+                }
+            })
+            .collect()
     }
 
     fn notify(&self, module: &str, event: ModuleEvent) {
@@ -807,4 +910,49 @@ impl Daemon {
         let message = message.into();
         self.reply(id, DaemonMessage::Error { code, message });
     }
+}
+
+/// The files plugins put in place of builtin views, for the enabled
+/// modules. When two plugins replace the same view, the one whose id
+/// sorts first wins.
+fn overrides(
+    plugins: &BTreeMap<&'static str, crate::plugins::PluginModule>,
+    enabled: &[&'static str],
+    modules: &[Box<dyn Module>],
+) -> BTreeMap<&'static str, Vec<(String, PathBuf)>> {
+    let mut overrides: BTreeMap<&'static str, Vec<(String, PathBuf)>> = BTreeMap::new();
+    let mut owners: BTreeMap<String, &'static str> = BTreeMap::new();
+    for (id, plugin) in plugins {
+        if !enabled.contains(id) {
+            continue;
+        }
+        for (module, view, file) in plugin.overrides() {
+            let name = format!("{module}/{view}");
+            let Some(target) = modules
+                .iter()
+                .find(|candidate| candidate.id() == module && enabled.contains(&candidate.id()))
+            else {
+                tracing::debug!(plugin = id, view = %name, "replaces a view of a module that isn't enabled");
+                continue;
+            };
+            if !target.assets().has_view(&view) {
+                tracing::warn!(plugin = id, view = %name, "replaces a view that doesn't exist");
+                continue;
+            }
+            if !file.is_file() {
+                tracing::warn!(plugin = id, file = %file.display(), "the override's file is missing");
+                continue;
+            }
+            if let Some(owner) = owners.get(&name) {
+                tracing::warn!(plugin = id, view = %name, owner, "another plugin already replaces this view");
+                continue;
+            }
+            owners.insert(name, id);
+            overrides
+                .entry(target.id())
+                .or_default()
+                .push((format!("{view}.qml"), file));
+        }
+    }
+    overrides
 }

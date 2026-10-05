@@ -1,0 +1,4 @@
+# Hello: an example plugin in Python.
+[module.hello]
+# What `say` shows without text.
+# greeting = "Hello from Python"

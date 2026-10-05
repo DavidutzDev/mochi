@@ -2,13 +2,17 @@
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, IsTerminal, Write};
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
-use mochi_protocol::{API, ActionSpec, ArgKind, ClientMessage, DaemonMessage, ModuleActions, Role};
+use mochi_plugins::install::{Installer, Mode, Outcome, Plan};
+use mochi_plugins::{Locations, Lock, PluginList};
+use mochi_protocol::{
+    API, ActionSpec, ArgKind, ClientMessage, DaemonMessage, ModuleActions, PluginState, Role,
+};
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -47,6 +51,17 @@ enum Command {
         #[arg(long)]
         allow_token: bool,
     },
+    /// Install, update and remove the plugins plugins.toml lists.
+    ///
+    /// plugins.toml sits next to config.toml. `install` and `update` show
+    /// what each plugin will run and ask first; mochid reloads after.
+    Plugins {
+        /// The config.toml whose plugins.toml to use.
+        #[arg(long, value_name = "FILE", global = true)]
+        config: Option<PathBuf>,
+        #[command(subcommand)]
+        action: PluginsAction,
+    },
     /// Work with config.toml and theme.toml: `init`, `check`, `path`.
     ///
     /// Runs `mochid config`, which knows every module's settings, so it
@@ -59,6 +74,31 @@ enum Command {
         )]
         args: Vec<String>,
     },
+}
+
+#[derive(Debug, Subcommand)]
+enum PluginsAction {
+    /// Show each plugin, where it's from, and whether it runs.
+    List,
+    /// Install plugins that aren't yet, as plugins.lock pins them.
+    Install {
+        /// Only these plugins; all of them without any.
+        ids: Vec<String>,
+        /// Don't ask.
+        #[arg(long, short)]
+        yes: bool,
+    },
+    /// Fetch the latest of each plugin's branch or release, rebuild, and
+    /// move plugins.lock.
+    Update {
+        /// Only these plugins; all of them without any.
+        ids: Vec<String>,
+        /// Don't ask.
+        #[arg(long, short)]
+        yes: bool,
+    },
+    /// Delete an installed plugin and its entry in plugins.lock.
+    Remove { id: String },
 }
 
 fn main() -> ExitCode {
@@ -100,6 +140,20 @@ fn run(command: Command) -> Result<(), String> {
                 };
                 println!("ui:         {ui}");
                 println!("modules:    {}", status.modules.join(", "));
+                for plugin in &status.plugins {
+                    let state = match plugin.state {
+                        PluginState::Running => "running",
+                        PluginState::Disabled => "disabled",
+                        PluginState::Missing => "missing",
+                        PluginState::Failed => "failed",
+                    };
+                    let note = plugin
+                        .message
+                        .as_deref()
+                        .map(|message| format!(": {message}"))
+                        .unwrap_or_default();
+                    println!("plugin:     {} {state}{note}", plugin.id);
+                }
                 let compositor = &status.compositor;
                 if compositor.backend == "unsupported" {
                     println!("compositor: no workspace information");
@@ -126,7 +180,194 @@ fn run(command: Command) -> Result<(), String> {
             Ok(())
         }
         Command::Config { args } => config(&args),
+        Command::Plugins { config, action } => plugins(config, action),
         Command::SharePick { allow_token } => share_pick(allow_token),
+    }
+}
+
+/// `$XDG_CONFIG_HOME/mochi/config.toml`, like mochid's default.
+fn default_config() -> Result<PathBuf, String> {
+    let set = |name| std::env::var_os(name).filter(|value| !value.is_empty());
+    let dir = set("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| set("HOME").map(|home| Path::new(&home).join(".config")))
+        .ok_or("cannot find the config directory: set XDG_CONFIG_HOME or HOME")?;
+    Ok(dir.join("mochi").join("config.toml"))
+}
+
+fn plugins(config: Option<PathBuf>, action: PluginsAction) -> Result<(), String> {
+    let config = match config {
+        Some(config) => config,
+        None => default_config()?,
+    };
+    let locations = Locations::beside(&config);
+    let list = PluginList::load(&locations.list).map_err(|error| error.to_string())?;
+    match action {
+        PluginsAction::List => plugins_list(&locations, &list),
+        PluginsAction::Install { ids, yes } => {
+            plugins_install(&locations, &list, &ids, yes, Mode::Install)
+        }
+        PluginsAction::Update { ids, yes } => {
+            plugins_install(&locations, &list, &ids, yes, Mode::Update)
+        }
+        PluginsAction::Remove { id } => {
+            let mut confirm = |_: &Plan| true;
+            let installer = Installer {
+                locations: &locations,
+                confirm: &mut confirm,
+            };
+            if installer.remove(&id).map_err(|error| error.to_string())? {
+                println!("removed {id}");
+                reload_if_running();
+            } else {
+                println!("{id} wasn't installed");
+            }
+            if list.plugins.contains_key(&id) {
+                println!(
+                    "{id} is still in {}: remove it there too, or `mochi plugins install` brings it back",
+                    locations.list.display()
+                );
+            }
+            Ok(())
+        }
+    }
+}
+
+fn plugins_list(locations: &Locations, list: &PluginList) -> Result<(), String> {
+    if list.plugins.is_empty() {
+        println!("no plugins in {}", locations.list.display());
+        return Ok(());
+    }
+    let lock = Lock::load(&locations.lock).map_err(|error| error.to_string())?;
+    // What mochid says, when it runs.
+    let running = match request(ClientMessage::Status) {
+        Ok(DaemonMessage::Status { status }) => Some(status.plugins),
+        _ => None,
+    };
+    let found = mochi_plugins::discover(locations).map_err(|error| error.to_string())?;
+    for plugin in found {
+        let locked = lock.plugins.get(&plugin.id);
+        let revision = locked
+            .and_then(|locked| locked.revision())
+            .map(|revision| format!(" at {revision}"))
+            .unwrap_or_default();
+        let version = plugin
+            .manifest
+            .as_ref()
+            .map(|manifest| format!(" {}", manifest.plugin.version))
+            .unwrap_or_default();
+        let daemon = running
+            .as_ref()
+            .and_then(|plugins| plugins.iter().find(|status| status.id == plugin.id));
+        let state = match (daemon, &plugin.manifest) {
+            (Some(status), _) => match status.state {
+                PluginState::Running => "running",
+                PluginState::Disabled => "disabled",
+                PluginState::Missing => "missing",
+                PluginState::Failed => "failed",
+            },
+            (None, Ok(_)) => "installed",
+            (None, Err(_)) => "missing",
+        };
+        println!(
+            "{:<16} {state:<9} {}{revision}{version}",
+            plugin.id, plugin.source
+        );
+        let note = daemon
+            .and_then(|status| status.message.clone())
+            .or_else(|| plugin.manifest.as_ref().err().cloned());
+        if let Some(note) = note {
+            println!("{:<16} {note}", "");
+        }
+    }
+    if running.is_none() {
+        println!("(mochid isn't running, so this doesn't say which run)");
+    }
+    Ok(())
+}
+
+fn plugins_install(
+    locations: &Locations,
+    list: &PluginList,
+    ids: &[String],
+    yes: bool,
+    mode: Mode,
+) -> Result<(), String> {
+    for id in ids {
+        if !list.plugins.contains_key(id) {
+            return Err(format!(
+                "{id} isn't in {}: add it there first, like\n\n[plugins.{id}]\nsource = \"git:github.com/<user>/<repo>\"",
+                locations.list.display()
+            ));
+        }
+    }
+    if list.plugins.is_empty() {
+        println!("no plugins in {}", locations.list.display());
+        return Ok(());
+    }
+    if !yes && !std::io::stdin().is_terminal() {
+        return Err("not on a terminal, so nobody can confirm: pass --yes".into());
+    }
+    let mut confirm = |plan: &Plan| {
+        eprintln!();
+        eprint!("{plan}");
+        if yes {
+            return true;
+        }
+        eprint!("Install {}? [y/N] ", plan.id);
+        let _ = std::io::stderr().flush();
+        let mut answer = String::new();
+        let _ = std::io::stdin().read_line(&mut answer);
+        matches!(answer.trim(), "y" | "Y" | "yes")
+    };
+    let mut installer = Installer {
+        locations,
+        confirm: &mut confirm,
+    };
+    let mut changed = false;
+    let mut failed = 0;
+    for (id, source) in &list.plugins {
+        if !ids.is_empty() && !ids.contains(id) {
+            continue;
+        }
+        match installer.run(id, source, mode) {
+            Ok(Outcome::Installed { revision }) => {
+                changed = true;
+                let at = revision
+                    .map(|revision| format!(" at {revision}"))
+                    .unwrap_or_default();
+                println!("installed {id}{at}");
+            }
+            Ok(Outcome::UpToDate { revision }) => {
+                let at = revision
+                    .map(|revision| format!(" at {revision}"))
+                    .unwrap_or_default();
+                println!("{id} is up to date{at}");
+            }
+            Ok(Outcome::Declined) => println!("skipped {id}"),
+            Err(error) => {
+                failed += 1;
+                eprintln!("mochi: {id}: {error}");
+            }
+        }
+    }
+    if changed {
+        reload_if_running();
+    }
+    match failed {
+        0 => Ok(()),
+        1 => Err("one plugin failed".into()),
+        count => Err(format!("{count} plugins failed")),
+    }
+}
+
+/// Tells a running mochid to pick up the change; without one, the next
+/// start does.
+fn reload_if_running() {
+    match request(ClientMessage::Reload) {
+        Ok(_) => println!("mochid reloaded"),
+        Err(error) if error.starts_with("cannot reach mochid") => {}
+        Err(error) => eprintln!("mochi: mochid didn't reload: {error}"),
     }
 }
 

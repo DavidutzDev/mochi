@@ -2,7 +2,7 @@
 
 A desktop shell built around a central island, like a dynamic island. `mochid`, a Rust daemon, owns state and system integration and supervises a Quickshell UI. `mochi` is its command-line client.
 
-Early work in progress, at version 0.0.4: the island, bubbles, the notch layout, and the idle, OSD, workspaces, media, audio, notifications, launcher, hub, power, capture, share, clipboard, tray, network, bluetooth, battery and performance modules work today. `CHANGELOG.md` lists what each release has. `TODO.md` has the plan, the documentation site in `docs/book` how to install and configure it, `docs/protocol.md` the daemon's protocol, `docs/views.md` how to write views with the built-in controls and `docs/spike.md` the results of the first prototype.
+Early work in progress, at version 0.0.5: the island, bubbles, the notch layout, plugins, and the idle, OSD, workspaces, media, audio, notifications, launcher, hub, power, capture, share, clipboard, tray, network, bluetooth, battery and performance modules work today. `CHANGELOG.md` lists what each release has. `TODO.md` has the plan, the documentation site in `docs/book` how to install and configure it, `docs/protocol.md` the daemon's protocol and the plugin protocol, `docs/views.md` how to write views with the built-in controls and `docs/spike.md` the results of the first prototype.
 
 ## Running it
 
@@ -36,7 +36,7 @@ The flake has the `mochi` package, a home-manager module, a NixOS module and an 
 
 ```nix
 # flake inputs
-mochi.url = "github:DavidutzDev/mochi/v0.0.4";
+mochi.url = "github:DavidutzDev/mochi/v0.0.5";
 
 # home configuration
 imports = [ inputs.mochi.homeModules.default ];
@@ -129,6 +129,23 @@ mochi reload          # apply changes without a restart
 ```
 
 `mochi reload` starts modules you added, stops the ones you removed and restarts the ones whose settings changed. A file with an error changes nothing.
+
+## Plugins
+
+Plugins add modules, with the same powers as the builtin ones. List them in `~/.config/mochi/plugins.toml`, install them, and enable them in `modules`:
+
+```toml
+[plugins.pomodoro]
+source = "git:github.com/User/mochi-pomodoro:main"   # or git-release:…:v1, or path:~/code/x
+```
+
+```sh
+mochi plugins install    # shows what each one runs and asks first; pins them in plugins.lock
+mochi plugins update     # moves the pins
+mochi plugins list
+```
+
+A plugin is a manifest, `mochi-plugin.toml`, QML views, and usually a backend: any program that speaks the plugin protocol over a socket mochid gives it. `crates/mochi-sdk` writes backends in Rust, and `examples/plugins` has two to start from, a pomodoro timer and the weather. `examples/python/hello` is one in Python, with a small SDK of its own. The documentation site covers installing plugins, writing them, the manifest, the Rust SDK and making an SDK for another language, and has the SDK's API reference.
 
 ## Documentation
 

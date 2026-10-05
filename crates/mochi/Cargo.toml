@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 clap.workspace = true
+mochi-plugins.workspace = true
 mochi-protocol.workspace = true
 
 [lints]

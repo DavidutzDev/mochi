@@ -1,4 +1,3 @@
-| `output` | `output`: what the command says, like the share picker's choice | whoever sent `command` |
 # Mochi protocol
 
 `mochid` talks to the Quickshell UI and to the `mochi` CLI over one Unix socket. The Rust definitions live in `crates/mochi-protocol`, and this page describes the conversation they implement.
@@ -21,7 +20,7 @@ The first message on every connection is the client's `hello`:
 `role` is `ui` for Quickshell and `ctl` for the CLI and other control clients. The daemon answers with its own `hello`:
 
 ```json
-{"type":"hello","api":1,"version":"0.0.4"}
+{"type":"hello","api":1,"version":"0.0.5"}
 ```
 
 If the API versions differ, the daemon answers with an `unsupported_api` error and closes the connection. Any other message before `hello` gets a `hello_first` error and the connection closes.
@@ -94,7 +93,8 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `bubbles` | `bubbles`, `overflow` (optional) | UI |
 | `theme` | `theme` | UI |
 | `ok` | | whoever sent `command` or `reload` |
-| `status` | `status`: `version`, `api`, `ui_connected`, `modules`, `compositor` (`backend`, `outputs`, `workspaces`) | control |
+| `output` | `output`: what the command says, like the share picker's choice | whoever sent `command` |
+| `status` | `status`: `version`, `api`, `ui_connected`, `modules`, `compositor` (`backend`, `outputs`, `workspaces`), `plugins` (each `id`, `state` and an optional `message`; left out without plugins) | control |
 | `actions` | `modules`: list of `{module, actions}` | control |
 | `error` | `code`, `message` | everyone |
 
@@ -126,6 +126,7 @@ The UI loads `root:/modules/<module>/<view>.qml` and passes `payload` to it. `ac
 `output` is only present for a modal activity shown on one monitor, by name, from `[island] panels`. The islands on other monitors keep what they showed.
 
 `outside` is only present when `true`: a click outside the island closes the activity, so the UI catches every click while it shows and sends an `outside` event. `modal` implies it.
+
 `key` is only present when the module set one. A module uses it to replace its own activity, for example a volume OSD on every volume step. When the next `present` has the same `module`, `key` and `view` as the shown activity, the UI updates the view's `payload` in place instead of switching views, even though the `id` is new.
 
 ### Bubbles
@@ -191,6 +192,58 @@ Consecutive bubbles in the same area with the same `group` share one pill. A bub
 | `module_failed` | The module accepted the command and then reported a failure, or isn't running. |
 | `invalid_config` | `reload` found an error in a config file. The message names the file and the key. |
 | `internal` | A daemon bug. |
+
+## Plugin backends
+
+A plugin's backend talks to `mochid` over a connection of its own, not the main socket. `mochid` starts the backend with one end of a socket pair as file descriptor 3, named in `MOCHI_PLUGIN_FD`, and the plugin's directory in `MOCHI_PLUGIN_DIR`, which is also its working directory. Messages are the same JSON lines. What the backend prints on stdout and stderr goes to mochid's log.
+
+`mochid` speaks first:
+
+```json
+{"type":"hello","api":1,"version":"0.0.5","module":"pomodoro","settings":{"focus_minutes":25},"data_dir":"/run/user/1000/mochi/data/pomodoro","session_dir":"/run/user/1000/mochi/session/pomodoro","compositor":{"backend":"wayland","outputs":[],"workspaces":[]}}
+```
+
+`settings` is the plugin's `[module.<id>]` table from config.toml. The backend answers within 5 seconds with the API version it speaks, or mochid stops it:
+
+```json
+{"type":"hello","api":1}
+```
+
+From then on, either side may send at any time. The backend picks the numbers of its activities and bubbles, and events about them use those numbers. The backend should exit when mochid closes the socket; after 1.5 seconds it is killed.
+
+### Backend to daemon
+
+| Type | Fields | Does |
+|---|---|---|
+| `publish_state` | `state` | Replaces the plugin's state, which views and other modules read |
+| `present` | `id`, `spec` | Submits an activity: see below |
+| `update` | `id`, `payload` | Replaces an activity's payload |
+| `withdraw` | `id` | Removes an activity |
+| `show_bubble` | `id`, `spec` | Shows a bubble, or replaces the one with the same key |
+| `update_bubble` | `id`, `payload` | Replaces a bubble's payload |
+| `hide_bubble` | `id` | Removes a bubble |
+| `reply` | `id`, `output` (optional), `error` (optional) | Answers a `command` |
+| `call` | `id`, `module`, `action`, `args` | Runs another module's action; answered with `call_result` |
+| `activate_workspace` | `id`, `workspace` | Answered with `compositor_result` |
+| `windows` | `id` | The windows on visible workspaces; answered with `compositor_result` |
+| `pointer_output` | `id` | The output under the pointer; answered with `compositor_result` |
+
+An activity `spec` needs only `compact`, the view's name. The rest are optional: `expanded`, `expand_for_ms`, `payload`, `priority` (0 to 255, 50 by default), `timeout_ms`, `interruptible` (true by default), `same_priority` (`queue` or `stack`), `modal`, `overlay`, `passive`, `fleeting`, `output` and `key`. A bubble `spec` needs only `view`; the rest are `wide`, `payload`, `area`, `group`, `order`, `priority`, `news` and `key`. They mean what the builder methods of the same name in `mochi-sdk` do.
+
+### Daemon to backend
+
+| Type | Fields | Means |
+|---|---|---|
+| `command` | `id`, `action`, `args` | An action to run, with `args` checked against the manifest, as an object like `{"minutes": 5}`. Answer with `reply` and the same `id` |
+| `clicked` | `activity` | A click on an activity without an expanded view |
+| `ended` | `activity`, `reason` | An activity is gone: `expired`, `dismissed`, `withdrawn`, `replaced` or `outside` |
+| `bubble_clicked` | `bubble` | A click on a bubble |
+| `state` | `module`, `state` | A module from the manifest's `[uses] state` published state; `null` when it stopped |
+| `compositor` | `state` | The compositor's state changed |
+| `call_result` | `id`, `error` (optional) | `error` is `{"kind": "not_enabled", "detail": "media"}` and the like |
+| `compositor_result` | `id`, `value`, `error` (optional) | |
+
+A backend that exits with an error is started again after 250 ms, then after twice as long each time, up to 8 seconds. After 5 crashes within a minute it stays stopped until `mochi reload`, and a desktop notification says so.
 
 ## Changing the protocol
 

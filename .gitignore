@@ -2,3 +2,7 @@ target/
 /.direnv
 /result
 /result-*
+
+# Example plugins build into their own directories.
+/examples/plugins/*/target
+/examples/plugins/*/bin

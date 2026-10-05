@@ -9,6 +9,7 @@
 - [Configuration](configuration.md)
   - [Bubbles](bubbles.md)
   - [Theme](theme.md)
+- [Plugins](plugins.md)
 
 # Modules
 
@@ -33,4 +34,8 @@
 # Building on Mochi
 
 - [Writing views](views.md)
+- [Writing plugins](writing-plugins.md)
+  - [Plugin manifest](plugin-manifest.md)
+  - [The Rust SDK](sdk.md)
+  - [Making an SDK](custom-sdks.md)
 - [Protocol](protocol.md)

@@ -28,7 +28,8 @@ mochi-shell/
     mochi-protocol/          # message types, api version
     mochi-core/              # Module trait, ModuleCtx, arbiter, config,
       qml/                   #   asset writer, supervisor; core QML
-    mochi-plugin/            # SDK for plugin backends
+    mochi-plugins/           # manifests, plugins.toml, installing
+    mochi-sdk/               # SDK for plugin backends
     mochid/                  # daemon binary
     mochi/                   # CLI binary
   modules/
@@ -44,7 +45,8 @@ mochi-shell/
 |---|---|
 | `~/.config/mochi/config.toml` | enabled modules, per-module settings |
 | `~/.config/mochi/theme.toml` | colors, radii, fonts, spring constants |
-| `~/.local/share/mochi/plugins/<id>/` | user plugins (`mochi-plugin.toml`, `qml/`, optional `bin/`) |
+| `~/.config/mochi/plugins.toml`, `plugins.lock` | the plugins to install, and what each resolved to |
+| `~/.local/share/mochi/plugins/<id>/` | installed plugins (`mochi-plugin.toml`, `qml/`, the backend) |
 | `$XDG_RUNTIME_DIR/mochi/mochi.sock` | IPC socket for Quickshell and `mochi` |
 | `$XDG_RUNTIME_DIR/mochi/shell/` | generated shell tree that Quickshell loads |
 
@@ -499,17 +501,27 @@ A new module: the apps' tray icons.
 
 ## Plugins
 
-- [ ] `mochi-plugin.toml`: `id`, `api`, `overrides`, `backend`, `actions`
-- [ ] Scan `~/.local/share/mochi/plugins/` and report invalid manifests clearly
-- [ ] Reject plugins with an unsupported `api` version
-- [ ] QML-only plugins: add their views to the asset writer
-- [ ] View overrides (`overrides = ["idle/Compact"]`) with fallback to the builtin view
-- [ ] Backend plugins: spawn with a `socketpair`, supervise them, wrap them in the `Module` adapter
-- [ ] Plugin actions reachable through `mochi ipc <plugin> <action>`
-- [ ] Enable and disable plugins at runtime
-- [ ] `mochi-plugin` SDK crate
-- [ ] One example QML-only plugin and one example backend plugin
-- [ ] `docs/plugins.md`
+- [x] `mochi-plugin.toml`: `[plugin]` (`id`, `api`), `[backend]`, `[release]`, `[views]` with `overrides`, `[uses]`, `[[actions]]`, `[[contributions]]`
+- [x] `plugins.toml` next to config.toml, with `git:`, `git-release:` and `path:` sources, and `plugins.lock`
+- [x] Report missing plugins and invalid manifests in `mochi status` and `mochi plugins list`
+- [x] Reject plugins with an unsupported `api` version, or a builtin's id
+- [x] QML-only plugins: their views go in the shell, linked
+- [x] View overrides (`overrides = ["idle/Pill"]`) with fallback to the builtin view
+- [x] Backend plugins: spawned with a socket pair on fd 3, supervised with backoff, wrapped in the `Module` adapter
+- [x] Plugin actions reachable through `mochi ipc <plugin> <action>`
+- [x] Restart a plugin whose files changed on `mochi reload`
+- [x] `mochi plugins install|update|remove|list`, showing what a plugin runs and asking first
+- [x] `mochi-sdk` crate
+- [x] Example plugins: pomodoro and weather
+- [x] Plugin docs: Plugins and Writing plugins pages, the plugin protocol in `docs/protocol.md`
+- [x] home-manager `plugins` option
+- [ ] Publish `mochi-sdk` to crates.io
+- [ ] `git-release:` for Forgejo, Gitea and GitLab
+- [ ] Archive sources (`https://…/plugin.tar.gz` with a hash)
+- [ ] A plugin replacing a builtin module entirely
+- [ ] Building plugins with Nix, for declarative setups
+- [ ] Release workflow template for plugin repositories
+- [ ] Settings checks for plugins, from their `settings.toml`
 
 ## Integration and docs
 
@@ -528,6 +540,7 @@ A new module: the apps' tray icons.
 - [x] Release 0.0.2: capture, overlays, gpu-screen-recorder in the Nix package and modules
 - [x] Release 0.0.3: the frozen screen no longer stretches when a screenshot opens
 - [x] Release 0.0.4: clipboard, share, Arch packages, screenshots over anything
+- [x] Release 0.0.5: plugins and the SDK, audio mixer, tray, network, Bluetooth, battery, performance, stacked bubbles
 - [x] Documentation site with mdBook in `docs/book`: installing, getting started, configuration, bubbles, theme, a page per module that includes its `settings.toml`, writing views and the protocol. `nix build .#docs`, part of `nix flake check`; `.github/workflows/docs.yml` publishes it to GitHub Pages
 - [ ] Publish the site once the repository is on GitHub
 - [ ] `docs/architecture.md`
@@ -541,7 +554,7 @@ A new module: the apps' tray icons.
 ## Open questions
 
 1. Multiple monitors: one island per output, or only on the focused output?
-2. Can a plugin read state from other modules? Proposal: yes, through dependencies declared in the manifest.
+2. ~~Can a plugin read state from other modules?~~ Yes: `[uses] state` in the manifest, and `ModuleCtx::watch_state` for builtins.
 3. Is the lock screen a module, or a separate minimal program? A crash in the lock screen is a security problem.
 4. Does the theme control the animation springs, or are they fixed per view?
 
@@ -552,4 +565,4 @@ Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module
 1. Capture: screenshots and recordings
 2. Share: the portal picker and a sharing bubble
 3. Hub pages: audio, network, Bluetooth
-4. Plugins
+4. ~~Plugins~~ (v1 done)

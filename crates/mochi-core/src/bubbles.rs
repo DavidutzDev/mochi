@@ -19,91 +19,7 @@ use mochi_protocol::{Area, Bubble, BubbleId, Overflow};
 use serde::Deserialize;
 use serde_json::Value;
 
-use crate::Priority;
-
-/// Everything a module says about a bubble it wants to show.
-#[derive(Debug, Clone, PartialEq)]
-pub struct BubbleSpec {
-    /// Replaces the module's existing bubble with the same key, keeping its
-    /// place.
-    pub key: Option<String>,
-    /// `modules/<module>/<view>.qml`: a small view that fits a round bubble,
-    /// an icon or a cover.
-    pub view: String,
-    /// A wider view with text, shown in a pill when the user asks for it
-    /// with `wide = true`.
-    pub wide: Option<String>,
-    pub payload: Value,
-    pub area: Area,
-    /// Bubbles with the same group in the same area share one pill.
-    pub group: Option<String>,
-    /// Lower goes further left.
-    pub order: i32,
-    /// Breaks ties in `order`, decides who is left out when an area is
-    /// full, and who is in front of a stack.
-    pub priority: Priority,
-    /// Showing it again over the one with the same key is news: a stack
-    /// brings it to the front for a while. A new bubble always is.
-    pub news: bool,
-}
-
-impl BubbleSpec {
-    /// A normal-priority bubble on its own, right of the center.
-    pub fn new(view: impl Into<String>) -> Self {
-        Self {
-            key: None,
-            view: view.into(),
-            wide: None,
-            payload: Value::Null,
-            area: Area::CenterRight,
-            group: None,
-            order: 0,
-            priority: Priority::NORMAL,
-            news: false,
-        }
-    }
-
-    pub fn key(mut self, key: impl Into<String>) -> Self {
-        self.key = Some(key.into());
-        self
-    }
-
-    pub fn wide(mut self, view: impl Into<String>) -> Self {
-        self.wide = Some(view.into());
-        self
-    }
-
-    pub fn payload(mut self, payload: Value) -> Self {
-        self.payload = payload;
-        self
-    }
-
-    pub fn area(mut self, area: Area) -> Self {
-        self.area = area;
-        self
-    }
-
-    pub fn group(mut self, group: impl Into<String>) -> Self {
-        self.group = Some(group.into());
-        self
-    }
-
-    pub fn order(mut self, order: i32) -> Self {
-        self.order = order;
-        self
-    }
-
-    pub fn priority(mut self, priority: Priority) -> Self {
-        self.priority = priority;
-        self
-    }
-
-    /// Marks this showing as news: see [`BubbleSpec::news`].
-    pub fn news(mut self) -> Self {
-        self.news = true;
-        self
-    }
-}
+pub use mochi_protocol::spec::BubbleSpec;
 
 /// The user's placement for all of one module's bubbles:
 /// `[bubbles.<module>]` in `config.toml`.
@@ -376,6 +292,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+    use crate::Priority;
 
     fn ids(bubbles: &Bubbles) -> Vec<u64> {
         bubbles
