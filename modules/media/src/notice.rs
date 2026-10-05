@@ -4,7 +4,8 @@
 //! The player shown is the most recently active one: the last to start
 //! playing or change track while playing. A player that plays beats one that
 //! doesn't, so a paused browser tab never takes the island from a playing
-//! music player.
+//! music player. A player picked with the arrows stays shown until it stops
+//! or goes away, whatever the others do.
 
 use std::collections::BTreeMap;
 use std::time::SystemTime;
@@ -25,6 +26,9 @@ pub enum Notice {
     Refresh,
     /// Nothing to show any more.
     Hide,
+    /// Another player was picked: shown where the last one was, without
+    /// opening the island.
+    Switched,
 }
 
 #[derive(Debug, Default)]
@@ -35,6 +39,8 @@ pub struct Tracker {
     /// Counts activations, so the latest has the highest stamp.
     clock: u64,
     shown: Option<Shown>,
+    /// The player picked with the arrows, by bus name.
+    pinned: Option<String>,
 }
 
 #[derive(Debug)]
@@ -107,13 +113,93 @@ impl Tracker {
 
     /// The player on the island, with its bus name.
     pub fn chosen(&self) -> Option<(&str, &Player)> {
+        if let Some((bus, known)) = self
+            .pinned
+            .as_ref()
+            .and_then(|bus| self.players.get_key_value(bus))
+            .filter(|(_, known)| showable(&known.player))
+        {
+            return Some((bus.as_str(), &known.player));
+        }
         self.players
             .iter()
-            .filter(|(_, known)| {
-                known.player.status != Status::Stopped && !known.player.track.title.is_empty()
-            })
+            .filter(|(_, known)| showable(&known.player))
             .max_by_key(|(_, known)| (known.player.status == Status::Playing, known.active))
             .map(|(bus, known)| (bus.as_str(), &known.player))
+    }
+
+    /// The players the arrows go through, in bus name order.
+    pub fn players(&self) -> impl Iterator<Item = (&str, &Player)> {
+        self.players
+            .iter()
+            .filter(|(_, known)| showable(&known.player))
+            .map(|(bus, known)| (bus.as_str(), &known.player))
+    }
+
+    /// Shows the player `step` places after the shown one, wrapping around.
+    pub fn step(&mut self, step: isize) -> Result<Option<Notice>, String> {
+        let current = self
+            .chosen()
+            .ok_or("no media player is playing anything")?
+            .0;
+        let players: Vec<&str> = self.players().map(|(bus, _)| bus).collect();
+        let index = players
+            .iter()
+            .position(|bus| *bus == current)
+            .unwrap_or_default();
+        let count = players.len() as isize;
+        let bus = players[(index as isize + step).rem_euclid(count) as usize].to_owned();
+        Ok(self.pin(bus))
+    }
+
+    /// Shows the player with this name, like `firefox` or `Spotify`.
+    pub fn pick(&mut self, name: &str) -> Result<Option<Notice>, String> {
+        let name = name.to_lowercase();
+        let bus = self
+            .players()
+            .find(|(bus, player)| {
+                short_name(bus).to_lowercase() == name || player.identity.to_lowercase() == name
+            })
+            .ok_or_else(|| format!("no player called {name} has a track"))?
+            .0
+            .to_owned();
+        Ok(self.pin(bus))
+    }
+
+    /// Keeps `bus` shown until it stops.
+    fn pin(&mut self, bus: String) -> Option<Notice> {
+        let changed = self.chosen().is_none_or(|(shown, _)| shown != bus);
+        self.pinned = Some(bus);
+        if !changed {
+            return None;
+        }
+        self.shown = self.chosen().map(|(bus, player)| Shown {
+            bus: bus.to_owned(),
+            track: track_key(player),
+            status: player.status,
+        });
+        Some(Notice::Switched)
+    }
+
+    /// What the views get: the shown player, and the players the arrows go
+    /// through.
+    pub fn payload(&self) -> Value {
+        let Some((current, player)) = self.chosen() else {
+            return Value::Null;
+        };
+        let mut payload = payload(player);
+        let players: Vec<Value> = self
+            .players()
+            .map(|(bus, player)| {
+                json!({
+                    "name": player.identity,
+                    "shown": bus == current,
+                    "playing": player.status == Status::Playing,
+                })
+            })
+            .collect();
+        payload["players"] = Value::Array(players);
+        payload
     }
 
     fn ignored(&self, bus: &str, player: &Player) -> bool {
@@ -125,6 +211,14 @@ impl Tracker {
     }
 
     fn decide(&mut self) -> Option<Notice> {
+        if let Some(bus) = &self.pinned
+            && !self
+                .players
+                .get(bus)
+                .is_some_and(|known| showable(&known.player))
+        {
+            self.pinned = None;
+        }
         let next = self.chosen().map(|(bus, player)| Shown {
             bus: bus.to_owned(),
             track: track_key(player),
@@ -156,6 +250,11 @@ impl Tracker {
         };
         Some(notice)
     }
+}
+
+/// Whether a player has something to show.
+fn showable(player: &Player) -> bool {
+    player.status != Status::Stopped && !player.track.title.is_empty()
 }
 
 /// What the views get. `position_ms` is the position at `read_at_ms`, so a
@@ -350,6 +449,61 @@ mod tests {
             None
         );
         assert_eq!(chosen(&tracker), None);
+    }
+
+    #[test]
+    fn a_picked_player_stays_until_it_stops() {
+        let mut tracker = Tracker::default();
+        tracker.apply(changed(SPOTIFY, player("Song", Status::Playing)));
+        tracker.apply(changed(FIREFOX, player("Video", Status::Paused)));
+        assert_eq!(chosen(&tracker), Some(SPOTIFY));
+
+        assert_eq!(tracker.step(1), Ok(Some(Notice::Switched)));
+        assert_eq!(chosen(&tracker), Some(FIREFOX));
+        // Picking the shown one changes nothing.
+        assert_eq!(tracker.pick("firefox"), Ok(None));
+
+        // A new song doesn't take the island back.
+        assert_eq!(
+            tracker.apply(changed(SPOTIFY, player("Next song", Status::Playing))),
+            Some(Notice::Refresh)
+        );
+        assert_eq!(chosen(&tracker), Some(FIREFOX));
+
+        // Until the video stops.
+        assert_eq!(
+            tracker.apply(changed(FIREFOX, player("Video", Status::Stopped))),
+            Some(Notice::Track)
+        );
+        assert_eq!(chosen(&tracker), Some(SPOTIFY));
+        tracker.apply(changed(FIREFOX, player("Video", Status::Playing)));
+        assert_eq!(chosen(&tracker), Some(FIREFOX));
+        assert_eq!(
+            tracker.apply(changed(SPOTIFY, player("Third song", Status::Playing))),
+            Some(Notice::Track)
+        );
+        assert_eq!(chosen(&tracker), Some(SPOTIFY));
+    }
+
+    #[test]
+    fn the_arrows_wrap_around() {
+        let mut tracker = Tracker::default();
+        assert!(tracker.step(1).is_err());
+        tracker.apply(changed(SPOTIFY, player("Song", Status::Playing)));
+        assert_eq!(tracker.step(1), Ok(None));
+        tracker.apply(changed(FIREFOX, player("Video", Status::Paused)));
+
+        // Firefox sorts first, so the previous one wraps to it.
+        assert_eq!(tracker.step(-1), Ok(Some(Notice::Switched)));
+        assert_eq!(chosen(&tracker), Some(FIREFOX));
+        assert_eq!(tracker.step(-1), Ok(Some(Notice::Switched)));
+        assert_eq!(chosen(&tracker), Some(SPOTIFY));
+        assert!(tracker.pick("vlc").is_err());
+
+        let payload = tracker.payload();
+        assert_eq!(payload["players"].as_array().map(Vec::len), Some(2));
+        assert_eq!(payload["players"][1]["shown"], true);
+        assert_eq!(payload["players"][1]["playing"], true);
     }
 
     #[test]

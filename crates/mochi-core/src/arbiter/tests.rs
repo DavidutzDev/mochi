@@ -704,3 +704,38 @@ fn clicks_outside_can_close_only_what_the_user_opened() {
     bench.arbiter.click(note, bench.now);
     assert!(bench.arbiter.shown().unwrap().outside);
 }
+
+#[test]
+fn fleeting_activities_never_wait() {
+    let mut bench = Bench::new();
+    let panel = bench.submit(
+        "hub",
+        ActivitySpec::new("Panel")
+            .priority(Priority::URGENT)
+            .uninterruptible()
+            .modal(),
+    );
+    bench.ended();
+    let volume = bench.submit(
+        "osd",
+        timed(2).key("osd").priority(Priority::HIGH).fleeting(),
+    );
+    assert_eq!(bench.shown(), Some(panel));
+    assert_eq!(bench.ended(), vec![(volume, EndReason::Expired)]);
+
+    bench.arbiter.dismiss(panel, bench.now);
+    assert_eq!(bench.ended(), vec![(panel, EndReason::Dismissed)]);
+    assert_eq!(bench.shown(), None);
+}
+
+#[test]
+fn fleeting_activities_end_when_interrupted() {
+    let mut bench = Bench::new();
+    let volume = bench.submit("osd", timed(2).priority(Priority::HIGH).fleeting());
+    let panel = bench.submit("hub", ActivitySpec::new("Panel").priority(Priority::URGENT));
+    assert_eq!(bench.shown(), Some(panel));
+    assert_eq!(bench.ended(), vec![(volume, EndReason::Expired)]);
+
+    bench.arbiter.dismiss(panel, bench.now);
+    assert_eq!(bench.shown(), None);
+}

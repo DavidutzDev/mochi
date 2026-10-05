@@ -13,6 +13,9 @@
 //!   one ends.
 //! - Otherwise the new activity **waits** in a queue ordered by priority, then
 //!   arrival.
+//! - A [fleeting](ActivitySpec::fleeting) activity never waits: when it
+//!   can't show at once, or another interrupts it, it ends with
+//!   [`EndReason::Expired`].
 //! - When the shown activity ends, the next one is the most recently
 //!   suspended activity or the head of the queue, whichever has the higher
 //!   priority. Suspended activities win ties: they were on screen first.
@@ -97,6 +100,9 @@ pub struct ActivitySpec {
     /// Never closes on a click outside, for feedback like the volume OSD
     /// that shows while the user is busy elsewhere.
     pub passive: bool,
+    /// Shown at once or not at all, never queued or suspended: feedback
+    /// like the volume OSD is stale by the time it would come back.
+    pub fleeting: bool,
     /// The monitor a modal activity shows on. The daemon picks one from
     /// `[island] panels` when the module leaves it out.
     pub output: Option<String>,
@@ -119,6 +125,7 @@ impl ActivitySpec {
             overlay: None,
             output: None,
             passive: false,
+            fleeting: false,
         }
     }
 
@@ -180,6 +187,12 @@ impl ActivitySpec {
     /// Never closes on a click outside: see [`ActivitySpec::passive`].
     pub fn passive(mut self) -> Self {
         self.passive = true;
+        self
+    }
+
+    /// Never waits behind another activity: see [`ActivitySpec::fleeting`].
+    pub fn fleeting(mut self) -> Self {
+        self.fleeting = true;
         self
     }
 
@@ -299,9 +312,16 @@ impl Arbiter {
             let found = self.locate(|entry| {
                 entry.module == module && entry.spec.key.as_deref() == Some(key.as_str())
             });
-            if let Some(slot) = found {
-                self.replace(slot, id, spec, now);
-                return;
+            match found {
+                // Not on screen: a fleeting one starts over instead.
+                Some(slot) if spec.fleeting && slot != Slot::Current => {
+                    self.remove(slot, EndReason::Replaced, now);
+                }
+                Some(slot) => {
+                    self.replace(slot, id, spec, now);
+                    return;
+                }
+                None => {}
             }
         }
 
@@ -310,13 +330,21 @@ impl Arbiter {
         match self.current.take() {
             None => self.show(entry, now),
             Some(mut current) if entry.interrupts(&current) => {
-                current.suspend(now);
-                self.suspended.push(current);
+                if current.spec.fleeting {
+                    self.ended(current, EndReason::Expired);
+                } else {
+                    current.suspend(now);
+                    self.suspended.push(current);
+                }
                 self.show(entry, now);
             }
             Some(current) => {
                 self.current = Some(current);
-                self.enqueue(entry);
+                if entry.spec.fleeting {
+                    self.ended(entry, EndReason::Expired);
+                } else {
+                    self.enqueue(entry);
+                }
             }
         }
     }

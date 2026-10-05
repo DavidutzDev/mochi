@@ -154,6 +154,7 @@ impl Module for Workspaces {
                                     // Feedback for a switch you just made:
                                     // clicks go on to your windows.
                                     .passive()
+                                    .fleeting()
                                     .timeout(timeout)
                                     .payload(payload),
                             );

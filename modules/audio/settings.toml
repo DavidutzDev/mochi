@@ -1,0 +1,6 @@
+# Audio: the volume mixer, as the hub's Sound page. `mochi ipc audio toggle`
+# opens it on the island.
+[module.audio]
+# The top of the volume sliders, in percent, up to 150. Past 100, sound gets
+# louder than the device's normal level and may distort.
+# max_volume = 100

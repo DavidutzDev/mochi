@@ -56,7 +56,8 @@ Item {
 
             Text {
                 width: parent.width
-                text: [root.payload?.artist, root.payload?.player].filter(part => part).join(" · ")
+                // With several players, the arrows below name the player.
+                text: [root.payload?.artist, players.several ? "" : root.payload?.player].filter(part => part).join(" · ")
                 elide: Text.ElideRight
                 color: Theme.muted
                 font.pixelSize: Theme.textLabel
@@ -69,28 +70,45 @@ Item {
                 value: clock.progress
             }
 
-            Row {
-                spacing: 10
+            Item {
+                width: parent.width
+                height: controls.height
 
-                IconButton {
-                    icon: "previous"
-                    size: 18
-                    enabled: root.payload?.can_previous ?? false
-                    onClicked: Daemon.command("media", "previous", [])
+                Row {
+                    id: controls
+
+                    spacing: 10
+
+                    IconButton {
+                        icon: "previous"
+                        size: 18
+                        enabled: root.payload?.can_previous ?? false
+                        onClicked: Daemon.command("media", "previous", [])
+                    }
+
+                    IconButton {
+                        icon: root.playing ? "pause" : "play"
+                        size: 22
+                        enabled: root.payload?.can_play_pause ?? false
+                        onClicked: Daemon.command("media", "play-pause", [])
+                    }
+
+                    IconButton {
+                        icon: "next"
+                        size: 18
+                        enabled: root.payload?.can_next ?? false
+                        onClicked: Daemon.command("media", "next", [])
+                    }
                 }
 
-                IconButton {
-                    icon: root.playing ? "pause" : "play"
-                    size: 22
-                    enabled: root.payload?.can_play_pause ?? false
-                    onClicked: Daemon.command("media", "play-pause", [])
-                }
+                Players {
+                    id: players
 
-                IconButton {
-                    icon: "next"
-                    size: 18
-                    enabled: root.payload?.can_next ?? false
-                    onClicked: Daemon.command("media", "next", [])
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, parent.width - controls.width - 12)
+                    visible: several
+                    payload: root.payload
                 }
             }
         }

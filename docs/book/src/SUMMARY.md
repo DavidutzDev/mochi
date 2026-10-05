@@ -16,6 +16,7 @@
 - [OSD](modules/osd.md)
 - [Workspaces](modules/workspaces.md)
 - [Media](modules/media.md)
+- [Audio](modules/audio.md)
 - [Notifications](modules/notifications.md)
 - [Launcher](modules/launcher.md)
 - [Hub](modules/hub.md)

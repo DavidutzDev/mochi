@@ -62,13 +62,9 @@ Item {
                 width: parent.width - art.width - parent.spacing
                 spacing: 2
 
-                Text {
-                    width: parent.width
-                    text: root.payload.player ?? ""
-                    elide: Text.ElideRight
-                    color: Theme.muted
-                    font.pixelSize: Theme.textCaption
-                    font.family: Theme.fontFamily
+                Players {
+                    width: Math.min(implicitWidth, parent.width)
+                    payload: root.payload
                 }
 
                 Text {

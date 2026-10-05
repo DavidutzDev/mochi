@@ -13,6 +13,7 @@ publish = false
 mochi-protocol = { path = "crates/mochi-protocol" }
 mochi-compositor = { path = "crates/mochi-compositor" }
 mochi-core = { path = "crates/mochi-core" }
+mochi-module-audio = { path = "modules/audio" }
 mochi-module-capture = { path = "modules/capture" }
 mochi-module-clipboard = { path = "modules/clipboard" }
 mochi-module-demo = { path = "modules/demo" }

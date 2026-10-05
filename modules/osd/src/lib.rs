@@ -24,6 +24,7 @@ use std::time::Duration;
 use include_dir::{Dir, include_dir};
 use mochi_core::{
     ActivitySpec, Assets, BoxFuture, Module, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    SamePriority,
 };
 use serde::Deserialize;
 use tokio::sync::mpsc;
@@ -136,8 +137,13 @@ fn spec(notice: &Notice, timeout: Duration) -> ActivitySpec {
     ActivitySpec::new(notice.view())
         .key(KEY)
         .priority(Priority::HIGH)
-        // Feedback for a key you just pressed: clicks go on to your windows.
+        // Over the workspace notice, which then ends: the newest feedback
+        // wins.
+        .same_priority(SamePriority::Stack)
+        // Feedback for a key you just pressed: clicks go on to your windows,
+        // and it never shows late, after a panel closes.
         .passive()
+        .fleeting()
         .timeout(timeout)
         .payload(notice.payload())
 }

@@ -359,7 +359,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] `Symbol`: a built-in icon set in the core (home, bell, music, clock, grid, moon, volume, power, lock, logout, reboot, snow, chip, leaf, bolt, scale), filled or stroked, so contribution icons look the same everywhere; other names come from the icon theme
 - [x] Tested in a private D-Bus session: the three cards, the notifications page opened with `open notifications/history`, and the launcher replacing the hub
 - [ ] Cards spanning two rows, like the tall Now Playing tile in the inspiration
-- [ ] More cards and pages: audio devices and volumes, network, Bluetooth, power, system load
+- [ ] More cards and pages: network, Bluetooth, power, system load (audio has its Sound page)
 - [ ] Clicking a card opens its page
 
 ### Power
@@ -430,12 +430,18 @@ After capture, reusing its pickers.
 
 ### Audio
 
-A new module: what plays sound, on the island.
+A new module, `audio`: the volume mixer. Players stay in the media module and notices in the OSD.
 
-- [ ] Switch which app the center shows when several play at once, like Spotify and a browser video
-- [ ] Volume mixer: a volume slider and mute per app (PulseAudio sink inputs, served by pipewire-pulse), next to the output volume
-- [ ] Output and input device switch
-- [ ] Decide what moves here from the media and OSD modules, and whether the mixer is a hub page, an island view, or both
+- [x] Switch which player the island shows when several have a track, like Spotify and a browser video: arrows next to the player's name on the island and the hub card, and `next-player`, `previous-player` and `player <name>` in the media module. The pick holds until that player stops or closes
+- [x] Volume mixer: a volume slider and mute per app (PulseAudio sink inputs, served by pipewire-pulse), next to the output and input volumes, keeping each device's balance
+- [x] Output and input device switch
+- [x] The mixer is both a hub page (Sound) and an island view (`mochi ipc audio toggle`), with `volume`, `mute`, `output` and `input` actions for keybinds
+- [x] Fleeting activities: the volume and workspace notices never queue behind a panel, so they don't show late once it closes
+- [ ] Move an app to another output, like Discord on the headset and Spotify on the speakers
+- [ ] Recording apps: a slider per app using the microphone (source outputs)
+- [ ] Group an app's streams into one row, with a way to open them
+- [ ] Peak meters next to the sliders
+- [ ] Scroll on the volume bubble or the OSD to change the volume
 
 ### Tray
 

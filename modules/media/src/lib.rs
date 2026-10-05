@@ -7,6 +7,10 @@
 //! stays as a bubble next to it. Clicking the bubble opens the player on the
 //! island again. A pause dims the bubble, which leaves after a while.
 //!
+//! With several players, arrows next to the player's name switch between
+//! them. The one picked stays shown until it stops, even when another starts
+//! a new track.
+//!
 //! Settings in `config.toml`, all optional:
 //!
 //! ```toml
@@ -32,11 +36,11 @@ use mochi_core::{
     ContributionSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::json;
 use tokio::sync::mpsc;
 use zbus::Connection;
 
-use crate::mpris::{Control, Player, Status};
+use crate::mpris::{Control, Status};
 use crate::notice::{Notice, Tracker};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
@@ -106,6 +110,15 @@ impl Module for Media {
                 "position",
                 "Seconds from the start of the track",
             )),
+            ActionSpec::new("next-player", "Show the next player, until it stops"),
+            ActionSpec::new(
+                "previous-player",
+                "Show the previous player, until it stops",
+            ),
+            ActionSpec::new("player", "Show a player, until it stops").arg(ArgSpec::string(
+                "name",
+                "The player's name, like spotify or firefox",
+            )),
         ]
     }
 
@@ -121,32 +134,44 @@ impl Module for Media {
             let mut screen = Screen::default();
             loop {
                 tokio::select! {
-                    event = ctx.next_event() => {
-                        let player = tracker.chosen().map(|(_, player)| player);
-                        match event {
-                            None => return Ok(()),
-                            Some(ModuleEvent::Command(command)) => {
-                                control(&connection, &tracker, command);
-                            }
-                            Some(ModuleEvent::Ended { activity, .. }) => {
-                                screen.ended(&ctx, &settings, activity, player);
-                            }
-                            Some(ModuleEvent::BubbleClicked(_)) => {
-                                if let Some(player) = player {
-                                    screen.open(&ctx, &settings, player);
+                    event = ctx.next_event() => match event {
+                        None => return Ok(()),
+                        Some(ModuleEvent::Command(command)) => {
+                            let switch = match command.action.as_str() {
+                                "next-player" => Some(tracker.step(1)),
+                                "previous-player" => Some(tracker.step(-1)),
+                                "player" => Some(tracker.pick(command.args.str("name").unwrap_or_default())),
+                                _ => None,
+                            };
+                            match switch {
+                                Some(Ok(notice)) => {
+                                    command.reply(Ok(()));
+                                    if let Some(notice) = notice {
+                                        ctx.publish_state(tracker.payload());
+                                        screen.apply(&ctx, &settings, notice, &tracker);
+                                    }
                                 }
+                                Some(Err(error)) => command.reply(Err(error)),
+                                None => control(&connection, &tracker, command),
                             }
-                            Some(_) => {}
                         }
-                    }
+                        Some(ModuleEvent::Ended { activity, .. }) => {
+                            screen.ended(&ctx, &settings, activity, &tracker);
+                        }
+                        Some(ModuleEvent::BubbleClicked(_)) => {
+                            if tracker.chosen().is_some() {
+                                screen.open(&ctx, &settings, &tracker);
+                            }
+                        }
+                        Some(_) => {}
+                    },
                     Some(update) = updates.recv() => {
                         let notice = tracker.apply(update);
-                        let player = tracker.chosen().map(|(_, player)| player);
                         // For views outside the island, like the hub's card.
-                        ctx.publish_state(player.map_or(Value::Null, notice::payload));
+                        ctx.publish_state(tracker.payload());
                         let Some(notice) = notice else { continue };
                         tracing::debug!(?notice, "media");
-                        screen.apply(&ctx, &settings, notice, player);
+                        screen.apply(&ctx, &settings, notice, &tracker);
                     }
                     () = sleep_until(screen.bubble_ends) => screen.hide_bubble(&ctx),
                 }
@@ -166,14 +191,8 @@ struct Screen {
 }
 
 impl Screen {
-    fn apply(
-        &mut self,
-        ctx: &ModuleCtx,
-        settings: &Settings,
-        notice: Notice,
-        player: Option<&Player>,
-    ) {
-        let Some(player) = player.filter(|_| notice != Notice::Hide) else {
+    fn apply(&mut self, ctx: &ModuleCtx, settings: &Settings, notice: Notice, tracker: &Tracker) {
+        if notice == Notice::Hide || tracker.chosen().is_none() {
             if let Some(id) = self.activity.take() {
                 ctx.withdraw(id);
             }
@@ -181,20 +200,20 @@ impl Screen {
             return;
         };
         match (notice, self.activity, self.bubble) {
-            (Notice::Track, ..) => self.open(ctx, settings, player),
-            (_, Some(activity), _) => ctx.update(activity, notice::payload(player)),
+            (Notice::Track, ..) => self.open(ctx, settings, tracker),
+            (_, Some(activity), _) => ctx.update(activity, tracker.payload()),
             (Notice::Refresh, None, Some(bubble)) => {
-                ctx.update_bubble(bubble, notice::payload(player));
+                ctx.update_bubble(bubble, tracker.payload());
             }
             (Notice::Refresh, None, None) => {}
-            // Playing or paused: the bubble shows it, and a paused one starts
-            // its countdown.
-            _ => self.show_bubble(ctx, settings, player),
+            // Playing, paused or switched: the bubble shows it, and a paused
+            // one starts its countdown.
+            _ => self.show_bubble(ctx, settings, tracker),
         }
     }
 
     /// Puts the player on the island, opening on the expanded view.
-    fn open(&mut self, ctx: &ModuleCtx, settings: &Settings, player: &Player) {
+    fn open(&mut self, ctx: &ModuleCtx, settings: &Settings, tracker: &Tracker) {
         self.hide_bubble(ctx);
         let spec = ActivitySpec::new("Compact")
             .expanded("Expanded")
@@ -202,7 +221,7 @@ impl Screen {
             .priority(Priority::LOW)
             .expand_for(Duration::from_millis(settings.expand_ms))
             .timeout(Duration::from_millis(settings.island_ms))
-            .payload(notice::payload(player));
+            .payload(tracker.payload());
         self.activity = Some(ctx.present(spec));
     }
 
@@ -212,23 +231,24 @@ impl Screen {
         ctx: &ModuleCtx,
         settings: &Settings,
         activity: ActivityId,
-        player: Option<&Player>,
+        tracker: &Tracker,
     ) {
         if self.activity != Some(activity) {
             return;
         }
         self.activity = None;
-        if let Some(player) = player {
-            self.show_bubble(ctx, settings, player);
-        }
+        self.show_bubble(ctx, settings, tracker);
     }
 
-    fn show_bubble(&mut self, ctx: &ModuleCtx, settings: &Settings, player: &Player) {
+    fn show_bubble(&mut self, ctx: &ModuleCtx, settings: &Settings, tracker: &Tracker) {
+        let Some((_, player)) = tracker.chosen() else {
+            return;
+        };
         let spec = BubbleSpec::new("Bubble")
             .wide("BubbleWide")
             .key(KEY)
             .area(Area::CenterLeft)
-            .payload(notice::payload(player));
+            .payload(tracker.payload());
         self.bubble = Some(ctx.show_bubble(spec));
         self.bubble_ends = (player.status != Status::Playing)
             .then(|| Instant::now() + Duration::from_millis(settings.paused_ms));

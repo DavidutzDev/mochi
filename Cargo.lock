@@ -724,6 +724,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-audio"
+version = "0.0.4"
+dependencies = [
+ "include_dir",
+ "libpulse-binding",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-capture"
 version = "0.0.4"
 dependencies = [
@@ -906,6 +919,7 @@ dependencies = [
  "clap",
  "libc",
  "mochi-core",
+ "mochi-module-audio",
  "mochi-module-capture",
  "mochi-module-clipboard",
  "mochi-module-demo",

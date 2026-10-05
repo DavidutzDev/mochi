@@ -17,11 +17,12 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::daemon::{ModuleExit, ModuleSlot};
 
 /// What a generated `config.toml` turns on: the whole shell.
-pub const DEFAULT_MODULES: [&str; 11] = [
+pub const DEFAULT_MODULES: [&str; 12] = [
     "idle",
     "osd",
     "workspaces",
     "media",
+    "audio",
     "notifications",
     "launcher",
     "hub",
@@ -40,6 +41,7 @@ pub fn builtin() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_osd::Osd),
         Box::new(mochi_module_workspaces::Workspaces),
         Box::new(mochi_module_media::Media),
+        Box::new(mochi_module_audio::Audio),
         Box::new(mochi_module_notifications::Notifications),
         Box::new(mochi_module_launcher::Launcher),
         Box::new(mochi_module_hub::Hub),
