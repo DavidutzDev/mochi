@@ -48,6 +48,8 @@ Singleton {
     property var bubbles: []
     // [{area, hidden}] for areas with more bubbles than fit.
     property var overflow: []
+    // {news_ms} when each area stacks its bubbles, or null.
+    property var bubbleStack: null
 
     // Design tokens from theme.toml, or null until the daemon sends them.
     property var theme: null
@@ -118,6 +120,7 @@ Singleton {
         case "bubbles":
             bubbles = message.bubbles;
             overflow = message.overflow ?? [];
+            bubbleStack = message.stack ?? null;
             break;
         case "theme":
             theme = message.theme;

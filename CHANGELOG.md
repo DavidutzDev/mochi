@@ -6,6 +6,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- Stacked bubbles, with `stack = true` in `[bubbles]`: each area shows its most important bubble, the others peeking out behind it, and fans out on hover. A bubble with news comes to the front for `news_ms`, then goes back. Modules mark news with `BubbleSpec::news()`; notifications, network, Bluetooth, battery, tray and performance do for what matters. The protocol's bubbles carry `priority` and `news`, and the bubbles message `stack`.
 - Performance module: CPU, memory and GPU use and the CPU's and GPU's temperatures. A Performance page in the hub with graphs of the last two minutes and the busiest processes; a notice when a reading stays over its level, naming the busiest process; and a red bubble while one stays critical. Levels per reading, and how long a reading must stay up, are settings. NVIDIA GPUs are read through `nvidia-smi`, AMD ones from sysfs. It's on in newly generated configs.
 - Symbols: `memory`, `gpu` and `temperature`.
 - Battery module, from UPower: a short notice on the island when the battery drops past a level on battery, at 80, 50, 20 and 10% by default, once per discharge; a warning bubble at or under 50%, red and breathing at 10%, where the notice also stays longer; notices on plugging in or out with the time left; and a hub card with the level. `notices`, `warning`, `critical` and `plugged` set it. It shows nothing without a battery. It's on in newly generated configs.

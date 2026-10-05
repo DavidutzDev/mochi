@@ -4,6 +4,12 @@
 [bubbles]
 # How many bubbles fit in one area; the rest hide behind a "+N".
 # max_per_area = 4
+# Stack each area's bubbles into one: the most important in front, the
+# others peeking behind it. Hovering fans them out side by side. A bubble
+# that appears, or has news like a new missed notification, comes to the
+# front for news_ms milliseconds, then goes back.
+# stack = false
+# news_ms = 4000
 
 # Each module puts its bubbles where it thinks best. A [bubbles.<module>]
 # section moves them, for example:

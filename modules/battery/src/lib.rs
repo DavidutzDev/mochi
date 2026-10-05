@@ -130,6 +130,7 @@ impl Module for BatteryModule {
             tokio::spawn(upower::watch(connection, sender));
             let mut tracker = Tracker::default();
             let mut bubble: Option<BubbleId> = None;
+            let mut was_critical = false;
             ctx.publish_state(model::payload(None, &levels));
             loop {
                 tokio::select! {
@@ -155,7 +156,7 @@ impl Module for BatteryModule {
                         {
                             show(&ctx, &notice);
                         }
-                        update_bubble(&ctx, &mut bubble, battery.as_ref(), &levels);
+                        update_bubble(&ctx, &mut bubble, &mut was_critical, battery.as_ref(), &levels);
                     }
                 }
             }
@@ -185,16 +186,25 @@ fn show(ctx: &ModuleCtx, notice: &Notice) {
 fn update_bubble(
     ctx: &ModuleCtx,
     bubble: &mut Option<BubbleId>,
+    was_critical: &mut bool,
     battery: Option<&Battery>,
     levels: &Levels,
 ) {
     match battery.and_then(|battery| model::bubble(battery, levels)) {
         Some(payload) => {
+            let critical = payload["critical"] == true;
             let spec = BubbleSpec::new("Bubble")
                 .key("warning")
                 .area(Area::Right)
                 .group("status")
                 .payload(payload);
+            // Turning critical is news; a percent less isn't.
+            let spec = if bubble.is_some() && critical && !*was_critical {
+                spec.news()
+            } else {
+                spec
+            };
+            *was_critical = critical;
             *bubble = Some(ctx.show_bubble(spec));
         }
         None => {

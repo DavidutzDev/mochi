@@ -134,6 +134,7 @@ impl Module for Network {
                 connection,
                 snapshot: None,
                 bubble: None,
+                shown_status: serde_json::Value::Null,
                 prompt: None,
                 airplane: None,
                 results: results_sender,
@@ -180,6 +181,8 @@ struct State {
     connection: Connection,
     snapshot: Option<Snapshot>,
     bubble: Option<BubbleId>,
+    /// What the bubble shows, to tell news from a refresh.
+    shown_status: serde_json::Value,
     /// The password prompt on the island: the network's name, the activity.
     prompt: Option<(String, ActivityId)>,
     /// While in airplane mode, the radios that were on: Wi-Fi, mobile,
@@ -206,11 +209,19 @@ impl State {
         ctx.publish_state(payload.clone());
         match (self.settings.bubble, &self.snapshot) {
             (true, Some(_)) => {
+                let status = payload["status"].clone();
                 let spec = BubbleSpec::new("Bubble")
                     .key("status")
                     .area(Area::Right)
                     .group("status")
-                    .payload(payload["status"].clone());
+                    .payload(status.clone());
+                // Another network, or none, is news; the same one isn't.
+                let spec = if self.bubble.is_some() && status != self.shown_status {
+                    spec.news()
+                } else {
+                    spec
+                };
+                self.shown_status = status;
                 self.bubble = Some(ctx.show_bubble(spec));
             }
             _ => {

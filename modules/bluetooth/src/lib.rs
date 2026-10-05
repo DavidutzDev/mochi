@@ -131,6 +131,7 @@ impl Module for Bluetooth {
                 connection,
                 snapshot: None,
                 bubble: None,
+                shown_devices: None,
                 question: None,
                 scan_ends: None,
                 failures: failures_sender,
@@ -181,6 +182,8 @@ struct State {
     /// `None` while there's no adapter or BlueZ isn't running.
     snapshot: Option<Snapshot>,
     bubble: Option<BubbleId>,
+    /// The bubble's device and count, to tell news from a refresh.
+    shown_devices: Option<(serde_json::Value, serde_json::Value)>,
     question: Option<(ActivityId, Asking)>,
     /// When Mochi's scan stops.
     scan_ends: Option<Instant>,
@@ -221,11 +224,17 @@ impl State {
             .and_then(model::bubble);
         match payload {
             Some(payload) => {
+                // Another device connected or gone is news; a battery
+                // reading isn't.
+                let devices = (payload["name"].clone(), payload["count"].clone());
+                let news = self.bubble.is_some() && Some(&devices) != self.shown_devices.as_ref();
+                self.shown_devices = Some(devices);
                 let spec = BubbleSpec::new("Bubble")
                     .key("connected")
                     .area(Area::Right)
                     .group("status")
                     .payload(payload);
+                let spec = if news { spec.news() } else { spec };
                 self.bubble = Some(ctx.show_bubble(spec));
             }
             None => {
