@@ -179,9 +179,12 @@ Row {
             const behind = items.filter(item => item !== front);
             const peek = 8;
             const peeking = Math.min(behind.length, 2);
-            width = front.implicitWidth + peek * peeking;
+            // From the target, not `width`, which animates and still reads
+            // the old value here.
+            const total = front.implicitWidth + peek * peeking;
+            width = total;
             const sign = root.peekLeft ? -1 : 1;
-            const centre = root.peekLeft ? width - front.implicitWidth / 2 : front.implicitWidth / 2;
+            const centre = root.peekLeft ? total - front.implicitWidth / 2 : front.implicitWidth / 2;
             front.x = centre - front.implicitWidth / 2;
             front.z = behind.length + 1;
             front.stackScale = 1;

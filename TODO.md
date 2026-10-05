@@ -260,6 +260,7 @@ wide = true         # the module's wide views with text, in pills
 - [ ] Notch mode: fuse adjacent pills and the island into one outline instead of separate tabs whose ears overlap
 - [ ] Placement per bubble key, not only per module, for modules with several bubbles
 - [x] Stacked bubbles, an option: one per area, the most important in front, news brought forward for a while, fanned out on hover
+- [ ] Parked: switching a recording's source while it records. A fixed 1080p frame drawn by Mochi on a virtual monitor, regions zoomed to fill it with animated pans; needs a spike first, as gpu-screen-recorder likely can't capture a headless monitor except through the portal
 - [ ] Bubbles off per module
 - [ ] `mochi reload` applying `[bubbles]` changes
 - [ ] Plugin backends get the same calls through the protocol
