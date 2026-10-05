@@ -240,7 +240,8 @@ impl Compositor {
 
     /// Makes a monitor of its own for Mochi, off to the side of the real
     /// ones, with no screen behind it: what's drawn there can be captured
-    /// like any monitor. `name` starts with [`VIRTUAL_PREFIX`]. Keyboard
+    /// like any monitor. `name` starts with [`VIRTUAL_PREFIX`]. `refresh` is in hertz,
+    /// and caps how often the monitor gets a new frame. Keyboard
     /// focus stays where it was. Hyprland only; waits for the compositor to
     /// answer, not for the output to appear.
     pub async fn create_virtual_output(
@@ -248,13 +249,14 @@ impl Compositor {
         name: &str,
         width: u32,
         height: u32,
+        refresh: u32,
     ) -> Result<(), CompositorError> {
         let dir = self
             .hyprland
             .as_deref()
             .ok_or(CompositorError::NoVirtualOutputs)?;
         let focused = self.state().focused_output;
-        hyprland::create_headless(dir, name, width, height, focused.as_deref())
+        hyprland::create_headless(dir, name, (width, height, refresh), focused.as_deref())
             .await
             .map_err(|error| CompositorError::Ipc(error.to_string()))
     }

@@ -173,11 +173,10 @@ fn windows_from(clients: &str, monitors: &str) -> Option<Vec<Window>> {
 pub(crate) async fn create_headless(
     dir: &Path,
     name: &str,
-    width: u32,
-    height: u32,
+    (width, height, refresh): (u32, u32, u32),
     focused: Option<&str>,
 ) -> std::io::Result<()> {
-    let mode = format!("{width}x{height}@60");
+    let mode = format!("{width}x{height}@{refresh}");
     let lua = format!(
         "eval hl.monitor({{ output = \"{name}\", mode = \"{mode}\", position = \"{FAR_AWAY}\", scale = 1 }})"
     );

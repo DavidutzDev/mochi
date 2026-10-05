@@ -438,8 +438,8 @@ Item {
     }
 
     // Keys, on whichever monitor has the keyboard: Enter takes the region,
-    // Tab or a number switch modes, A the desktop audio, M the microphone, Escape
-    // cancels.
+    // Tab or a number switch modes, A the desktop audio, M the microphone, F
+    // the frame rate, Q the resolution, Escape cancels.
     Item {
         id: keys
 
@@ -459,6 +459,12 @@ Item {
                 event.accepted = true;
             } else if (event.key === Qt.Key_M && !root.screenshot) {
                 Daemon.command("capture", "microphone", []);
+                event.accepted = true;
+            } else if (event.key === Qt.Key_F && !root.screenshot) {
+                Daemon.command("capture", "framerate", []);
+                event.accepted = true;
+            } else if (event.key === Qt.Key_Q && !root.screenshot) {
+                Daemon.command("capture", "resolution", []);
                 event.accepted = true;
             }
         }

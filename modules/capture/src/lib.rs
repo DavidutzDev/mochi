@@ -28,6 +28,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use include_dir::{Dir, include_dir};
 use mochi_core::compositor::Window;
+use mochi_core::quality::{self, Resolution};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Args, Assets, BoxFuture, BubbleId,
     BubbleSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
@@ -43,6 +44,9 @@ use crate::record::{Options, Recording, Target};
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
 const MODES: [&str; 4] = ["region", "window", "screen", "all"];
+const RESOLUTIONS: [&str; 5] = ["native", "480p", "720p", "1080p", "1440p"];
+/// The highest frame rate a recording may ask for.
+const MAX_FRAMERATE: i64 = 240;
 
 #[derive(Debug, Default)]
 pub struct Capture;
@@ -57,6 +61,7 @@ struct Settings {
     editor: Vec<String>,
     recorder: Vec<String>,
     framerate: u32,
+    resolution: Resolution,
     audio: String,
     microphone: String,
     record_audio: bool,
@@ -77,6 +82,7 @@ impl Default for Settings {
             editor: vec!["satty".into(), "--filename".into()],
             recorder: vec!["gpu-screen-recorder".into()],
             framerate: 60,
+            resolution: Resolution::Native,
             audio: "default_output".into(),
             microphone: "default_input".into(),
             record_audio: true,
@@ -193,6 +199,29 @@ impl Module for Capture {
             )),
             ActionSpec::new("audio", "Turn recording the desktop audio on or off"),
             ActionSpec::new("microphone", "Turn recording the microphone on or off"),
+            ActionSpec::new(
+                "framerate",
+                "Set the recording's frame rate, or step to the next preset",
+            )
+            .arg(
+                ArgSpec::int(
+                    "fps",
+                    "Frames per second; the next of 15, 30, 60, 90 and 120 when left out",
+                )
+                .optional(),
+            ),
+            ActionSpec::new(
+                "resolution",
+                "Set the recording's resolution, or step to the next preset",
+            )
+            .arg(
+                ArgSpec::choice(
+                    "resolution",
+                    "The most lines; the next preset when left out",
+                    RESOLUTIONS,
+                )
+                .optional(),
+            ),
             ActionSpec::new("layout", "Where the screens are; the overlay sends this")
                 .arg(ArgSpec::int("session", "The picker it belongs to"))
                 .arg(ArgSpec::string("screens", "Each screen as name x y width height").rest()),
@@ -286,7 +315,7 @@ struct Session {
     number: u64,
     kind: Kind,
     mode: Mode,
-    sound: Sound,
+    setup: Setup,
     /// The monitor with the keyboard.
     output: Option<String>,
     /// For the window picker. `None` when the compositor doesn't say where
@@ -334,8 +363,10 @@ impl Session {
             "kind": self.kind.as_str(),
             "mode": self.mode.as_str(),
             "modes": modes,
-            "audio": self.sound.desktop,
-            "microphone": self.sound.microphone,
+            "audio": self.setup.desktop,
+            "microphone": self.setup.microphone,
+            "framerate": self.setup.framerate,
+            "resolution": self.setup.resolution.as_str(),
             "output": self.output,
             "frames": frames.display().to_string(),
             "windows": self.windows.as_ref().map(|windows| windows
@@ -378,12 +409,14 @@ impl Session {
     }
 }
 
-/// What a recording hears.
+/// What a recording hears, and its quality.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct Sound {
+struct Setup {
     /// The desktop audio, `audio` in the settings.
     desktop: bool,
     microphone: bool,
+    framerate: u32,
+    resolution: Resolution,
 }
 
 /// A file the island shows after a capture.
@@ -465,8 +498,25 @@ impl State {
                 Some(mode) => self.choose(ctx, mode).await,
                 None => Err("no such mode".into()),
             },
-            "audio" => self.toggle_sound(ctx, |sound| sound.desktop = !sound.desktop),
-            "microphone" => self.toggle_sound(ctx, |sound| sound.microphone = !sound.microphone),
+            "audio" => self.change_setup(ctx, |setup| setup.desktop = !setup.desktop),
+            "microphone" => self.change_setup(ctx, |setup| setup.microphone = !setup.microphone),
+            "framerate" => match args.int("fps") {
+                Some(fps) if !(1..=MAX_FRAMERATE).contains(&fps) => Err(format!(
+                    "{fps} fps is out of range; it goes from 1 to {MAX_FRAMERATE}"
+                )),
+                fps => self.change_setup(ctx, |setup| {
+                    setup.framerate = fps.map_or_else(
+                        || quality::next_framerate(setup.framerate),
+                        |fps| fps as u32,
+                    );
+                }),
+            },
+            "resolution" => {
+                let asked = args.str("resolution").and_then(Resolution::parse);
+                self.change_setup(ctx, |setup| {
+                    setup.resolution = asked.unwrap_or_else(|| setup.resolution.next());
+                })
+            }
             "layout" => self.layout(ctx, args).await,
             "frame" => self.frame(ctx, args).await,
             "region" => self.region(ctx, args),
@@ -531,7 +581,7 @@ impl State {
             mode = Mode::Region;
         }
         if kind == Kind::Recording && mode == Mode::Window {
-            return self.start_recording(ctx, Target::Portal, self.default_sound());
+            return self.start_recording(ctx, Target::Portal, self.default_setup());
         }
 
         let output = compositor.state().focused_output;
@@ -540,7 +590,7 @@ impl State {
             number: self.sessions,
             kind,
             mode,
-            sound: self.default_sound(),
+            setup: self.default_setup(),
             output: output.clone(),
             windows,
             layout: Vec::new(),
@@ -623,9 +673,9 @@ impl State {
             return Err(format!("can't pick a {} here", mode.as_str()));
         }
         if session.kind == Kind::Recording && mode == Mode::Window {
-            let sound = session.sound;
+            let setup = session.setup;
             self.close(ctx);
-            return self.start_recording(ctx, Target::Portal, sound);
+            return self.start_recording(ctx, Target::Portal, setup);
         }
         session.mode = mode;
         session.region = None;
@@ -633,20 +683,22 @@ impl State {
         Ok(())
     }
 
-    fn default_sound(&self) -> Sound {
-        Sound {
+    fn default_setup(&self) -> Setup {
+        Setup {
             desktop: self.settings.record_audio,
             microphone: self.settings.record_microphone,
+            framerate: self.settings.framerate,
+            resolution: self.settings.resolution,
         }
     }
 
-    fn toggle_sound(
+    fn change_setup(
         &mut self,
         ctx: &ModuleCtx,
-        toggle: impl FnOnce(&mut Sound),
+        toggle: impl FnOnce(&mut Setup),
     ) -> Result<(), String> {
         let session = self.session.as_mut().ok_or("the picker isn't open")?;
-        toggle(&mut session.sound);
+        toggle(&mut session.setup);
         self.refresh(ctx);
         Ok(())
     }
@@ -702,7 +754,7 @@ impl State {
             return Ok(());
         }
         if session.kind == Kind::Recording {
-            let sound = session.sound;
+            let setup = session.setup;
             // A whole screen records the output itself, which follows a
             // change of resolution.
             let target = match session.mode {
@@ -712,7 +764,7 @@ impl State {
             self.close(ctx);
             // Lets the shade leave the screen before the first frame.
             tokio::time::sleep(Duration::from_millis(150)).await;
-            return self.start_recording(ctx, target, sound);
+            return self.start_recording(ctx, target, setup);
         }
         let pick = match session.mode {
             Mode::Screen => Pick::Output(output),
@@ -788,9 +840,21 @@ impl State {
         &mut self,
         ctx: &ModuleCtx,
         target: Target,
-        sound: Sound,
+        setup: Setup,
     ) -> Result<(), String> {
-        let recording = match self.spawn_recorder(&target, sound) {
+        // The size of what's recorded, to scale it down, never up.
+        let size = match &target {
+            Target::Region(area) => Some((area.width.round() as u32, area.height.round() as u32)),
+            Target::Output(name) => ctx
+                .compositor()
+                .state()
+                .outputs
+                .iter()
+                .find(|output| output.name == *name && output.height > 0)
+                .map(|output| (output.width, output.height)),
+            Target::Portal => None,
+        };
+        let recording = match self.spawn_recorder(&target, setup, size) {
             Ok(recording) => recording,
             Err(message) => {
                 self.failed(ctx, Kind::Recording, &message);
@@ -815,21 +879,27 @@ impl State {
         Ok(())
     }
 
-    fn spawn_recorder(&self, target: &Target, sound: Sound) -> Result<Recording, String> {
+    fn spawn_recorder(
+        &self,
+        target: &Target,
+        setup: Setup,
+        size: Option<(u32, u32)>,
+    ) -> Result<Recording, String> {
         std::fs::create_dir_all(&self.recordings)
             .map_err(|error| format!("cannot create {}: {error}", self.recordings.display()))?;
         let name = files::timestamp(&self.settings.recording_name, SystemTime::now());
         let file = files::unused(&self.recordings, &name, "mp4");
         let mut audio = Vec::new();
-        if sound.desktop {
+        if setup.desktop {
             audio.push(self.settings.audio.as_str());
         }
-        if sound.microphone {
+        if setup.microphone {
             audio.push(self.settings.microphone.as_str());
         }
         let options = Options {
             recorder: &self.settings.recorder,
-            framerate: self.settings.framerate,
+            framerate: setup.framerate,
+            limit: record::limit(setup.resolution, size),
             audio,
             codec: if self.settings.codec.is_empty() {
                 self.codec
@@ -1064,9 +1134,11 @@ mod tests {
             number: 3,
             kind,
             mode: Mode::Region,
-            sound: Sound {
+            setup: Setup {
                 desktop: true,
                 microphone: false,
+                framerate: 60,
+                resolution: Resolution::Native,
             },
             output: Some("DP-3".into()),
             windows,

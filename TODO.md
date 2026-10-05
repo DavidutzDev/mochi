@@ -400,7 +400,7 @@ Screenshots and recordings from the island. Decided on 2026-10-04: our own froze
 - [ ] Recording a region across screens, if gpu-screen-recorder can
 - [x] Capture every screen at once: the All screens mode, `mochi ipc capture screenshot all`
 - [ ] A hub page for captures: the latest screenshots and recordings as a history, with thumbnails, and the preview card's copy, edit, open folder and delete on each
-- [ ] Pick the quality of a recording and of a screen share: frame rate presets (15, 30, 60, 90, 120 fps) and resolution presets (480p, 720p, 1080p, 1440p), in the picker and as settings. gpu-screen-recorder takes `-f` and `-s`; a screen share's quality is the app's to choose, so check what the portal lets the picker say
+- [x] Pick the quality of a recording and of a screen share: frame rate presets (15, 30, 60, 90, 120 fps) and resolution presets (480p, 720p, 1080p, 1440p), in the picker and as settings. Recordings pass gpu-screen-recorder `-f` and `-s`; a switchable share sets `MOCHI-SHARE`'s refresh rate and size. A share that isn't switchable stays the app's to choose
 
 ### Share
 

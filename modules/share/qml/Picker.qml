@@ -138,6 +138,24 @@ Item {
                     onToggled: Daemon.command("share", "remember", [])
                 }
 
+                // The switchable copy's quality, which Mochi sets for its
+                // monitor; each click steps to the next preset.
+                Button {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.payload.switchable ?? false
+                    tone: "ghost"
+                    text: `${root.payload.framerate ?? 60} fps`
+                    onClicked: Daemon.command("share", "framerate", [])
+                }
+
+                Button {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: root.payload.switchable ?? false
+                    tone: "ghost"
+                    text: (root.payload.resolution ?? "native") === "native" ? "Native" : root.payload.resolution
+                    onClicked: Daemon.command("share", "resolution", [])
+                }
+
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
                     text: "Switchable"

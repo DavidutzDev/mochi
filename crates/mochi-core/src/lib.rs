@@ -13,6 +13,7 @@ pub mod contributions;
 pub mod examples;
 pub mod module;
 pub mod process;
+pub mod quality;
 pub mod supervisor;
 
 // Protocol types modules need, so a module only depends on this crate.

@@ -11,6 +11,8 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
 use tokio::sync::oneshot;
 
+use mochi_core::quality::Resolution;
+
 use crate::crop::Rect;
 
 /// What to record.
@@ -31,6 +33,8 @@ pub struct Options<'a> {
     /// The program and any arguments of its own.
     pub recorder: &'a [String],
     pub framerate: u32,
+    /// The most pixels across and down, from [`limit`].
+    pub limit: Option<(u32, u32)>,
     /// Audio sources, mixed into one track.
     pub audio: Vec<&'a str>,
     /// The video codec, or gpu-screen-recorder's own choice.
@@ -58,6 +62,9 @@ pub fn command(options: &Options<'_>, target: &Target, file: &Path) -> Vec<Strin
         Target::Portal => argv.extend(["-w".into(), "portal".into()]),
     }
     argv.extend(["-f".into(), options.framerate.to_string()]);
+    if let Some((width, height)) = options.limit {
+        argv.extend(["-s".into(), format!("{width}x{height}")]);
+    }
     if let Some(codec) = options.codec {
         argv.extend(["-k".into(), codec.to_owned()]);
     }
@@ -74,6 +81,22 @@ pub fn command(options: &Options<'_>, target: &Target, file: &Path) -> Vec<Strin
     }
     argv.extend(["-o".into(), file.display().to_string()]);
     argv
+}
+
+/// The size to ask gpu-screen-recorder for, which scales the video to fit
+/// in it and keeps its shape: the source scaled down to the resolution, or
+/// nothing when it's no taller. Of a source of unknown size, like a window
+/// from the portal, only the height counts.
+pub fn limit(resolution: Resolution, size: Option<(u32, u32)>) -> Option<(u32, u32)> {
+    let lines = resolution.height()?;
+    match size {
+        Some((width, height)) => {
+            let fitted = resolution.fit(width, height);
+            (fitted != (width, height)).then_some(fitted)
+        }
+        // Wide enough for any screen's shape.
+        None => Some((lines * 4, lines)),
+    }
 }
 
 /// A recording in progress.
@@ -232,6 +255,7 @@ mod tests {
         Options {
             recorder: &RECORDER,
             framerate: 60,
+            limit: None,
             audio,
             codec: None,
         }
@@ -249,6 +273,27 @@ mod tests {
             argv.join(" "),
             "gpu-screen-recorder -w 640x360+1942+62 -f 60 -fallback-cpu-encoding yes -a default_output -o /tmp/a.mp4"
         );
+    }
+
+    #[test]
+    fn scales_down_to_the_resolution() {
+        let options = Options {
+            framerate: 30,
+            limit: limit(Resolution::P720, Some((1920, 1080))),
+            ..options(vec![])
+        };
+        let argv = command(
+            &options,
+            &Target::Output("DP-3".into()),
+            Path::new("/a.mp4"),
+        );
+        assert_eq!(
+            argv.join(" "),
+            "gpu-screen-recorder -w DP-3 -f 30 -s 1280x720 -fallback-cpu-encoding yes -o /a.mp4"
+        );
+        assert_eq!(limit(Resolution::P1440, Some((1920, 1080))), None);
+        assert_eq!(limit(Resolution::Native, None), None);
+        assert_eq!(limit(Resolution::P480, None), Some((1920, 480)));
     }
 
     #[test]

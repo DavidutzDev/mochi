@@ -26,6 +26,8 @@ use crate::modules::{self, Runner};
 
 /// How long a new Quickshell process gets to say hello.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long modules get to finish when the daemon stops.
+const SHUTDOWN: Duration = Duration::from_secs(2);
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -275,8 +277,22 @@ impl Daemon {
         if let Some(supervisor) = &self.supervisor {
             supervisor.stop();
         }
-        // Closing the event channels ends every module's `next_event`.
+        // Closing the event channels ends every module's `next_event`. They
+        // get a moment to clean up, like the share module removing its
+        // monitor, before the runtime stops their tasks.
+        let running = self.modules.len();
         self.modules.clear();
+        let finished = tokio::time::timeout(SHUTDOWN, async {
+            for _ in 0..running {
+                if inputs.exits.recv().await.is_none() {
+                    return;
+                }
+            }
+        })
+        .await;
+        if finished.is_err() {
+            tracing::warn!("some modules didn't stop in time");
+        }
         Ok(())
     }
 

@@ -24,6 +24,7 @@ mod windows;
 use std::time::{Duration, Instant};
 
 use include_dir::{Dir, include_dir};
+use mochi_core::quality::{self, Resolution};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Args, Assets, BoxFuture, BubbleId,
     BubbleSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
@@ -43,13 +44,35 @@ pub struct Share;
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     switchable: bool,
+    framerate: u32,
+    resolution: Resolution,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { switchable: true }
+        Self {
+            switchable: true,
+            framerate: 60,
+            resolution: Resolution::Native,
+        }
     }
 }
+
+impl Settings {
+    fn load(table: &mochi_core::toml::Table) -> Result<Self, String> {
+        let settings: Self = mochi_core::settings(table).map_err(|error| error.to_string())?;
+        if !(1..=MAX_FRAMERATE).contains(&settings.framerate) {
+            return Err(format!(
+                "framerate is {}; it goes from 1 to {MAX_FRAMERATE}",
+                settings.framerate
+            ));
+        }
+        Ok(settings)
+    }
+}
+
+/// The highest refresh rate the switchable monitor may have.
+const MAX_FRAMERATE: u32 = 240;
 
 impl Module for Share {
     fn id(&self) -> &'static str {
@@ -65,9 +88,7 @@ impl Module for Share {
     }
 
     fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {
-        mochi_core::settings::<Settings>(table)
-            .map(drop)
-            .map_err(|error| error.to_string())
+        Settings::load(table).map(drop)
     }
 
     fn actions(&self) -> Vec<ActionSpec> {
@@ -105,6 +126,14 @@ impl Module for Share {
             ActionSpec::new(
                 "switchable",
                 "Turn sharing a switchable copy on or off, for this share",
+            ),
+            ActionSpec::new(
+                "framerate",
+                "Step the switchable share's frame rate to the next preset",
+            ),
+            ActionSpec::new(
+                "resolution",
+                "Step the switchable share's resolution to the next preset",
             ),
             ActionSpec::new(
                 "switch",
@@ -181,6 +210,9 @@ struct Pick {
     remember: bool,
     /// Share a switchable copy rather than the choice itself.
     switchable: bool,
+    /// The switchable copy's quality.
+    framerate: u32,
+    resolution: Resolution,
     windows: Vec<Window>,
     /// Drawing an area over the screen, rather than choosing from the list.
     drawing: bool,
@@ -194,6 +226,8 @@ impl Pick {
         json!({
             "remember": self.remember,
             "switchable": self.switchable,
+            "framerate": self.framerate,
+            "resolution": self.resolution.as_str(),
             "switching": self.command.is_none(),
             "windows": self.windows.iter().map(Window::to_json).collect::<Vec<_>>(),
             "output": self.output,
@@ -270,14 +304,12 @@ impl State {
                 }
                 None => Err("nothing is being shared".into()),
             },
-            "switchable" => match &mut self.pick {
-                Some(pick) => {
-                    pick.switchable = !pick.switchable;
-                    ctx.update(pick.activity, pick.payload());
-                    Ok(())
-                }
-                None => Err("nothing is being shared".into()),
-            },
+            "switchable" => self.change(ctx, |pick| pick.switchable = !pick.switchable),
+            // The copy's monitor is made once, so only a new share picks it.
+            "framerate" => self.change(ctx, |pick| {
+                pick.framerate = quality::next_framerate(pick.framerate);
+            }),
+            "resolution" => self.change(ctx, |pick| pick.resolution = pick.resolution.next()),
             "switch" => {
                 if self.session.is_some() {
                     self.switch(ctx);
@@ -295,6 +327,14 @@ impl State {
         command.reply(result);
     }
 
+    /// Changes the open picker's choices.
+    fn change(&mut self, ctx: &ModuleCtx, change: impl FnOnce(&mut Pick)) -> Result<(), String> {
+        let pick = self.pick.as_mut().ok_or("nothing is being shared")?;
+        change(pick);
+        ctx.update(pick.activity, pick.payload());
+        Ok(())
+    }
+
     fn open(&mut self, ctx: &ModuleCtx, command: ModuleCommand) {
         // A newer request wins; the older one shares nothing.
         self.finish(ctx, String::new());
@@ -305,6 +345,8 @@ impl State {
             remember,
             // Only Hyprland makes monitors on request.
             switchable: self.settings.switchable && ctx.compositor().knows_windows(),
+            framerate: self.settings.framerate,
+            resolution: self.settings.resolution,
             windows,
             drawing: false,
             output: ctx.compositor().state().focused_output,
@@ -326,6 +368,8 @@ impl State {
             command: None,
             remember: false,
             switchable: true,
+            framerate: self.settings.framerate,
+            resolution: self.settings.resolution,
             windows: Vec::new(),
             drawing: false,
             output: ctx.compositor().state().focused_output,
@@ -376,7 +420,8 @@ impl State {
         if pick.switchable
             && let Some(source) = source
         {
-            match self.start(ctx, source).await {
+            let quality = (pick.framerate, pick.resolution);
+            match self.start(ctx, source, quality).await {
                 Ok(()) => {
                     tracing::info!("sharing the switchable monitor");
                     self.finish(ctx, format!("[SELECTION]/screen:{OUTPUT}\n"));
@@ -396,7 +441,12 @@ impl State {
 
     /// Makes the switchable monitor with a copy of `source` on it, and waits
     /// until it's there for the portal to find.
-    async fn start(&mut self, ctx: &ModuleCtx, source: Source) -> Result<(), String> {
+    async fn start(
+        &mut self,
+        ctx: &ModuleCtx,
+        source: Source,
+        (framerate, resolution): (u32, Resolution),
+    ) -> Result<(), String> {
         let compositor = ctx.compositor();
         let state = compositor.state();
         let outputs: Vec<(String, u32, u32)> = state
@@ -409,8 +459,10 @@ impl State {
         self.session = Some(session);
         if !outputs.iter().any(|(name, ..)| name == OUTPUT) {
             let (width, height) = switch::size(&outputs);
+            let (width, height) = resolution.fit(width, height);
+            tracing::info!(width, height, framerate, "making the switchable monitor");
             compositor
-                .create_virtual_output(OUTPUT, width, height)
+                .create_virtual_output(OUTPUT, width, height, framerate)
                 .await
                 .map_err(|error| error.to_string())?;
         }
@@ -613,6 +665,8 @@ mod tests {
             command: Some(command),
             remember: false,
             switchable: false,
+            framerate: 60,
+            resolution: Resolution::Native,
             windows: Vec::new(),
             drawing: false,
             output: None,

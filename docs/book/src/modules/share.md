@@ -10,6 +10,8 @@ The portal can't change what a running share captures, so by default Mochi share
 
 `MOCHI-SHARE` is a Hyprland headless monitor, placed far from your screens so the pointer and your windows never reach it, at the size of your largest screen. It gets no island. A source with another shape is scaled to fit, with black around it. Mochi removes the monitor a few seconds after the app stops capturing it, or 30 seconds after the pick if the app never starts.
 
+With Switchable on, the picker also sets the quality the app receives: the frame rate (15, 30, 60, 90 or 120 fps) is the switchable monitor's refresh rate, and the resolution (Native, 480p, 720p, 1080p or 1440p) its size, scaled down from your largest screen with its shape kept. Each click steps to the next preset; `framerate` and `resolution` in the settings set how they start. The app can still send less, like Discord without Nitro. A share that isn't switchable leaves the quality to the app.
+
 Turn off **Switchable** in the picker to share the choice itself for one share, or set `switchable = false` for every share. Without the switchable copy, **Remember** lets the app keep the choice, which a monitor that only exists while it's shared can't offer. Switching needs Hyprland; elsewhere the picker shares the choice itself.
 
 ```toml

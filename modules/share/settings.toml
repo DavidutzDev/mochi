@@ -6,3 +6,9 @@
 # else without the app asking again. The picker's Switchable switch changes
 # it for one share. Hyprland only.
 # switchable = true
+# The switchable copy's frame rate and resolution, which the picker steps
+# through: 15, 30, 60, 90 and 120 fps, and "native", "480p", "720p", "1080p"
+# and "1440p". "native" is your largest screen's size; the others scale it
+# down to that many lines, keeping its shape. The app may still send less.
+# framerate = 60
+# resolution = "native"

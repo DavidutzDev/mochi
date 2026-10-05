@@ -3,9 +3,10 @@ import qs.island
 
 // The island while picking: the modes, the current one highlighted, and
 // what to do next, and for a recording the desktop audio and microphone
-// toggles. A click on another mode switches to it; the overlay handles the
-// keys (Tab or a number switch, A the desktop audio, M the microphone, Escape
-// cancels).
+// toggles and the quality, whose buttons step through the presets. A click
+// on another mode switches to it; the overlay handles the keys (Tab or a
+// number switch, A the desktop audio, M the microphone, F the frame rate, Q
+// the resolution, Escape cancels).
 Item {
     id: root
 
@@ -116,6 +117,22 @@ Item {
             tone: root.payload.microphone ? "accent" : "ghost"
             size: 15
             onClicked: Daemon.command("capture", "microphone", [])
+        }
+
+        Button {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: !root.screenshot
+            tone: "ghost"
+            text: `${root.payload.framerate ?? 60} fps`
+            onClicked: Daemon.command("capture", "framerate", [])
+        }
+
+        Button {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: !root.screenshot
+            tone: "ghost"
+            text: (root.payload.resolution ?? "native") === "native" ? "Native" : root.payload.resolution
+            onClicked: Daemon.command("capture", "resolution", [])
         }
     }
 }

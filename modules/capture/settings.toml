@@ -20,7 +20,12 @@
 # The video codec, like "h264_vulkan" or "hevc". "" picks one: a hardware
 # encoder when the GPU has one, otherwise Vulkan, and the CPU as a last resort.
 # codec = ""
+# The frame rate and the resolution recordings start with; the picker
+# steps through 15, 30, 60, 90 and 120 fps, and "native", "480p", "720p",
+# "1080p" and "1440p". A resolution scales the video down to that many lines,
+# keeping its shape, and never up.
 # framerate = 60
+# resolution = "native"
 # The sound to record, and the microphone the picker can add. "" for none.
 # audio = "default_output"
 # microphone = "default_input"
