@@ -391,7 +391,13 @@ impl Daemon {
                 self.count_bubble = None;
             }
             _ if count == 0 => {}
-            _ => {
+            Some((_, shown)) => {
+                let spec = bubble("Count", "count").payload(json!({ "count": count }));
+                // One more missed is news; one fewer isn't.
+                let spec = if count > shown { spec.news() } else { spec };
+                self.count_bubble = Some((ctx.show_bubble(spec), count));
+            }
+            None => {
                 let spec = bubble("Count", "count").payload(json!({ "count": count }));
                 self.count_bubble = Some((ctx.show_bubble(spec), count));
             }

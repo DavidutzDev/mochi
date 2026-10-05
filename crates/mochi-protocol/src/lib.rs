@@ -15,7 +15,7 @@ mod messages;
 mod theme;
 
 pub use actions::{ActionSpec, ArgKind, ArgSpec, ModuleActions};
-pub use bubbles::{Area, Bubble, BubbleId, Overflow};
+pub use bubbles::{Area, Bubble, BubbleId, Overflow, Stacking};
 pub use contributions::Contribution;
 pub use messages::{
     Activity, ActivityId, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode, EventKind,

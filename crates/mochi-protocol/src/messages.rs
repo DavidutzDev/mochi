@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{Bubble, BubbleId, Contribution, ModuleActions, Overflow, Theme};
+use crate::{Bubble, BubbleId, Contribution, ModuleActions, Overflow, Stacking, Theme};
 
 /// Identifies one activity for its whole life, across the daemon and the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -81,6 +81,9 @@ pub enum DaemonMessage {
         bubbles: Vec<Bubble>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         overflow: Vec<Overflow>,
+        /// Each area stacks its bubbles into one, when set.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        stack: Option<Stacking>,
     },
     /// Design tokens. Sent to the UI after `hello` and on reload.
     Theme { theme: Box<Theme> },
@@ -309,11 +312,14 @@ mod tests {
                 payload: json!({ "title": "Song" }),
                 area: Area::CenterLeft,
                 group: Some("status".into()),
+                priority: 50,
+                news: 3,
             }],
             overflow: vec![Overflow {
                 area: Area::Right,
                 hidden: 2,
             }],
+            stack: Some(Stacking { news_ms: 4000 }),
         });
         round_trip_daemon(DaemonMessage::Theme {
             theme: Box::default(),

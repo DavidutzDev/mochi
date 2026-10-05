@@ -68,6 +68,25 @@ pub struct Bubble {
     pub area: Area,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub group: Option<String>,
+    /// Higher is more important: the front of a stack.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub priority: u8,
+    /// Goes up whenever the bubble has news, like when it appears or its
+    /// module says something new happened; payload updates alone leave it.
+    /// A stack brings a bubble whose news went up to the front for a while.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub news: u64,
+}
+
+fn is_zero<T: Default + PartialEq>(value: &T) -> bool {
+    *value == T::default()
+}
+
+/// Bubbles stacking, one per area, from `[bubbles] stack`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Stacking {
+    /// How long a bubble with news stays in front, in milliseconds.
+    pub news_ms: u64,
 }
 
 /// How many bubbles an area has beyond its maximum.

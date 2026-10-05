@@ -39,9 +39,12 @@ pub struct BubbleSpec {
     pub group: Option<String>,
     /// Lower goes further left.
     pub order: i32,
-    /// Breaks ties in `order`, and decides who is left out when an area is
-    /// full.
+    /// Breaks ties in `order`, decides who is left out when an area is
+    /// full, and who is in front of a stack.
     pub priority: Priority,
+    /// Showing it again over the one with the same key is news: a stack
+    /// brings it to the front for a while. A new bubble always is.
+    pub news: bool,
 }
 
 impl BubbleSpec {
@@ -56,6 +59,7 @@ impl BubbleSpec {
             group: None,
             order: 0,
             priority: Priority::NORMAL,
+            news: false,
         }
     }
 
@@ -93,6 +97,12 @@ impl BubbleSpec {
         self.priority = priority;
         self
     }
+
+    /// Marks this showing as news: see [`BubbleSpec::news`].
+    pub fn news(mut self) -> Self {
+        self.news = true;
+        self
+    }
 }
 
 /// The user's placement for all of one module's bubbles:
@@ -124,6 +134,10 @@ pub struct Bubbles {
     max_per_area: Option<usize>,
     /// Counts arrivals, so older bubbles sort first on ties.
     arrivals: u64,
+    /// Counts news, so the latest has the highest.
+    news: u64,
+    /// Areas stack their bubbles, when set.
+    stack: Option<mochi_protocol::Stacking>,
     changed: bool,
 }
 
@@ -133,6 +147,8 @@ struct Entry {
     module: String,
     spec: BubbleSpec,
     arrival: u64,
+    /// The bubble's latest news, from `Bubbles::news`.
+    news: u64,
 }
 
 /// Where an entry ends up once the user's placement applies.
@@ -153,6 +169,18 @@ impl Bubbles {
             max_per_area,
             ..Self::default()
         }
+    }
+
+    /// Stacks each area's bubbles, or lays them side by side with `None`.
+    pub fn set_stack(&mut self, stack: Option<mochi_protocol::Stacking>) {
+        if self.stack != stack {
+            self.stack = stack;
+            self.changed = true;
+        }
+    }
+
+    pub fn stack(&self) -> Option<mochi_protocol::Stacking> {
+        self.stack
     }
 
     /// Replaces the user's placements and the per-area maximum, for a
@@ -176,16 +204,22 @@ impl Bubbles {
                 entry.module == module && entry.spec.key.as_deref() == Some(key.as_str())
             })
         {
+            if spec.news {
+                self.news += 1;
+                entry.news = self.news;
+            }
             entry.id = id;
             entry.spec = spec;
             return;
         }
         self.arrivals += 1;
+        self.news += 1;
         self.entries.push(Entry {
             id,
             module: module.to_owned(),
             spec,
             arrival: self.arrivals,
+            news: self.news,
         });
     }
 
@@ -247,7 +281,8 @@ impl Bubbles {
         for area in Area::ALL {
             let mut in_area: Vec<&Placed<'_>> =
                 placed.iter().filter(|placed| placed.area == area).collect();
-            if let Some(max) = self.max_per_area
+            // A stack holds them all.
+            if let Some(max) = self.max_per_area.filter(|_| self.stack.is_none())
                 && in_area.len() > max
             {
                 let hidden = u32::try_from(in_area.len() - max).unwrap_or(u32::MAX);
@@ -269,6 +304,8 @@ impl Bubbles {
                 payload: placed.entry.spec.payload.clone(),
                 area,
                 group: placed.group.map(str::to_owned),
+                priority: placed.entry.spec.priority.0,
+                news: placed.entry.news,
             }));
         }
         (bubbles, overflow)
@@ -351,6 +388,49 @@ mod tests {
 
     fn spec(area: Area) -> BubbleSpec {
         BubbleSpec::new("Bubble").area(area)
+    }
+
+    fn news(bubbles: &Bubbles) -> Vec<(u64, u64)> {
+        bubbles
+            .snapshot()
+            .0
+            .iter()
+            .map(|bubble| (bubble.id.0, bubble.news))
+            .collect()
+    }
+
+    #[test]
+    fn news_counts_arrivals_and_flagged_showings_only() {
+        let mut bubbles = Bubbles::default();
+        bubbles.show(BubbleId(1), "a", spec(Area::Right).key("x"));
+        bubbles.show(BubbleId(2), "b", spec(Area::Right).key("y"));
+        assert_eq!(news(&bubbles), [(1, 1), (2, 2)]);
+        // Showing again without news keeps it; an update too.
+        bubbles.show(BubbleId(3), "a", spec(Area::Right).key("x"));
+        bubbles.update("a", BubbleId(3), json!({ "n": 1 })).unwrap();
+        assert_eq!(news(&bubbles), [(3, 1), (2, 2)]);
+        bubbles.show(BubbleId(4), "a", spec(Area::Right).key("x").news());
+        assert_eq!(news(&bubbles), [(4, 3), (2, 2)]);
+    }
+
+    #[test]
+    fn a_stack_holds_every_bubble() {
+        let mut bubbles = Bubbles::new(BTreeMap::new(), Some(1));
+        bubbles.show(BubbleId(1), "a", spec(Area::Right));
+        bubbles.show(BubbleId(2), "b", spec(Area::Right).priority(Priority::HIGH));
+        assert_eq!(bubbles.snapshot().1.len(), 1);
+        bubbles.set_stack(Some(mochi_protocol::Stacking { news_ms: 4000 }));
+        let (shown, overflow) = bubbles.snapshot();
+        assert_eq!(shown.len(), 2);
+        assert!(overflow.is_empty());
+        assert_eq!(
+            shown
+                .iter()
+                .find(|bubble| bubble.id.0 == 2)
+                .unwrap()
+                .priority,
+            Priority::HIGH.0
+        );
     }
 
     #[test]

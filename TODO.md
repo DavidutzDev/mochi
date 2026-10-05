@@ -259,6 +259,7 @@ wide = true         # the module's wide views with text, in pills
 - [ ] Pills leave instantly; give them an exit animation, and slide the others instead of jumping when one comes or goes
 - [ ] Notch mode: fuse adjacent pills and the island into one outline instead of separate tabs whose ears overlap
 - [ ] Placement per bubble key, not only per module, for modules with several bubbles
+- [x] Stacked bubbles, an option: one per area, the most important in front, news brought forward for a while, fanned out on hover
 - [ ] Bubbles off per module
 - [ ] `mochi reload` applying `[bubbles]` changes
 - [ ] Plugin backends get the same calls through the protocol

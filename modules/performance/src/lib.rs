@@ -262,6 +262,8 @@ struct State {
     top: Vec<(String, f64, u64)>,
     detail_until: Option<Instant>,
     bubble: Option<BubbleId>,
+    /// The critical readings the bubble shows, to tell news from new values.
+    critical_shown: Vec<Value>,
 }
 
 impl State {
@@ -287,6 +289,7 @@ impl State {
             top: Vec::new(),
             detail_until: None,
             bubble: None,
+            critical_shown: Vec::new(),
         }
     }
 
@@ -514,11 +517,16 @@ impl State {
                 ctx.hide_bubble(bubble);
             }
         } else {
+            // Another reading turning critical is news; new values aren't.
+            let labels: Vec<Value> = critical.iter().map(|entry| entry["icon"].clone()).collect();
+            let news = self.bubble.is_some() && labels != self.critical_shown;
+            self.critical_shown = labels;
             let spec = BubbleSpec::new("Bubble")
                 .key("critical")
                 .area(Area::Right)
                 .group("status")
                 .payload(json!({ "critical": critical }));
+            let spec = if news { spec.news() } else { spec };
             self.bubble = Some(ctx.show_bubble(spec));
         }
     }

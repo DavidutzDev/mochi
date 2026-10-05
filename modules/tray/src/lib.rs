@@ -125,6 +125,7 @@ impl Module for Tray {
                 pins: HashMap::new(),
                 panel: None,
                 menu: None,
+                attention: false,
             };
             loop {
                 tokio::select! {
@@ -180,6 +181,8 @@ struct State {
     pins: HashMap<String, BubbleId>,
     panel: Option<ActivityId>,
     menu: Option<OpenMenu>,
+    /// Whether an app asked for attention at the last refresh.
+    attention: bool,
 }
 
 impl State {
@@ -266,11 +269,15 @@ impl State {
             .collect();
         let attention = shown.iter().any(|(_, item, _)| item["attention"] == true);
 
+        // An app starting to ask for attention is news.
+        let news = attention && !self.attention;
+        self.attention = attention;
         let drawer = (!shown.is_empty()).then(|| {
-            BubbleSpec::new("Drawer")
+            let spec = BubbleSpec::new("Drawer")
                 .key("drawer")
                 .area(Area::Right)
-                .payload(json!({ "count": shown.len(), "attention": attention }))
+                .payload(json!({ "count": shown.len(), "attention": attention }));
+            if news { spec.news() } else { spec }
         });
         match (drawer, self.drawer) {
             (Some(spec), _) => self.drawer = Some(ctx.show_bubble(spec)),

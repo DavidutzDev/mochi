@@ -165,6 +165,10 @@ pub enum Panels {
 pub struct BubblesConfig {
     /// Bubbles shown per area; the rest are counted instead.
     pub max_per_area: usize,
+    /// Each area stacks its bubbles into one, the most important in front.
+    pub stack: bool,
+    /// How long a bubble with news stays in front of its stack.
+    pub news_ms: u64,
     #[serde(flatten)]
     pub modules: BTreeMap<String, Placement>,
 }
@@ -173,8 +177,19 @@ impl Default for BubblesConfig {
     fn default() -> Self {
         Self {
             max_per_area: 4,
+            stack: false,
+            news_ms: 4000,
             modules: BTreeMap::new(),
         }
+    }
+}
+
+impl BubblesConfig {
+    /// What the UI needs to stack, when it does.
+    pub fn stacking(&self) -> Option<mochi_protocol::Stacking> {
+        self.stack.then_some(mochi_protocol::Stacking {
+            news_ms: self.news_ms,
+        })
     }
 }
 

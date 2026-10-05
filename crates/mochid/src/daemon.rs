@@ -196,6 +196,7 @@ impl Daemon {
             config.bubbles.modules.clone(),
             Some(config.bubbles.max_per_area),
         );
+        self.bubbles.set_stack(config.bubbles.stacking());
         Ok(())
     }
 
@@ -760,7 +761,11 @@ impl Daemon {
 
     fn bubbles_message(&self) -> DaemonMessage {
         let (bubbles, overflow) = self.bubbles.snapshot();
-        DaemonMessage::Bubbles { bubbles, overflow }
+        DaemonMessage::Bubbles {
+            bubbles,
+            overflow,
+            stack: self.bubbles.stack(),
+        }
     }
 
     fn compositor_status(&self) -> CompositorStatus {
