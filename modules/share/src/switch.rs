@@ -71,6 +71,9 @@ impl Source {
 #[derive(Debug)]
 pub struct Session {
     pub source: Source,
+    /// The monitor's refresh rate and resolution now.
+    pub framerate: u32,
+    pub resolution: mochi_core::quality::Resolution,
     started: Instant,
     /// The app has captured the monitor at some point.
     shared: bool,
@@ -84,6 +87,8 @@ impl Session {
     pub fn new(source: Source, now: Instant) -> Self {
         Self {
             source,
+            framerate: 60,
+            resolution: mochi_core::quality::Resolution::Native,
             started: now,
             shared: false,
             busy_since: None,

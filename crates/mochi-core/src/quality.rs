@@ -75,6 +75,11 @@ impl Resolution {
         Self::ALL[index.map_or(0, |index| (index + 1) % Self::ALL.len())]
     }
 
+    /// [`Resolution::fit`], for a size as a pair.
+    pub fn fit_within(self, (width, height): (u32, u32)) -> (u32, u32) {
+        self.fit(width, height)
+    }
+
     /// The size a `width` × `height` source gets: scaled down to this many
     /// lines with its shape kept, in even numbers as encoders want, or kept
     /// as it is when it's no taller.

@@ -173,8 +173,20 @@ fn windows_from(clients: &str, monitors: &str) -> Option<Vec<Window>> {
 pub(crate) async fn create_headless(
     dir: &Path,
     name: &str,
-    (width, height, refresh): (u32, u32, u32),
+    mode: (u32, u32, u32),
     focused: Option<&str>,
+) -> std::io::Result<()> {
+    set_mode(dir, name, mode).await?;
+    expect_ok(&query(dir, &format!("output create headless {name}")).await?)?;
+    refocus(dir, focused).await
+}
+
+/// Sets the monitor rule for `name`: its size and refresh rate, far from
+/// the real monitors. Hyprland applies it at once to a monitor that exists.
+pub(crate) async fn set_mode(
+    dir: &Path,
+    name: &str,
+    (width, height, refresh): (u32, u32, u32),
 ) -> std::io::Result<()> {
     let mode = format!("{width}x{height}@{refresh}");
     let lua = format!(
@@ -184,8 +196,7 @@ pub(crate) async fn create_headless(
         let legacy = format!("keyword monitor {name},{mode},{FAR_AWAY},1");
         expect_ok(&query(dir, &legacy).await?)?;
     }
-    expect_ok(&query(dir, &format!("output create headless {name}")).await?)?;
-    refocus(dir, focused).await
+    Ok(())
 }
 
 /// Removes a monitor, then gives the keyboard back to `focused`.

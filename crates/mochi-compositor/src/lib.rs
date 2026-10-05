@@ -261,6 +261,24 @@ impl Compositor {
             .map_err(|error| CompositorError::Ipc(error.to_string()))
     }
 
+    /// Changes the size and refresh rate of a monitor made by
+    /// [`Compositor::create_virtual_output`], while it's in use.
+    pub async fn resize_virtual_output(
+        &self,
+        name: &str,
+        width: u32,
+        height: u32,
+        refresh: u32,
+    ) -> Result<(), CompositorError> {
+        let dir = self
+            .hyprland
+            .as_deref()
+            .ok_or(CompositorError::NoVirtualOutputs)?;
+        hyprland::set_mode(dir, name, (width, height, refresh))
+            .await
+            .map_err(|error| CompositorError::Ipc(error.to_string()))
+    }
+
     /// Removes a monitor made by [`Compositor::create_virtual_output`],
     /// keeping keyboard focus where it was.
     pub async fn remove_virtual_output(&self, name: &str) -> Result<(), CompositorError> {

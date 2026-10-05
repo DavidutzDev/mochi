@@ -306,10 +306,17 @@ impl State {
             },
             "switchable" => self.change(ctx, |pick| pick.switchable = !pick.switchable),
             // The copy's monitor is made once, so only a new share picks it.
-            "framerate" => self.change(ctx, |pick| {
+            "framerate" => match self.change(ctx, |pick| {
                 pick.framerate = quality::next_framerate(pick.framerate);
-            }),
-            "resolution" => self.change(ctx, |pick| pick.resolution = pick.resolution.next()),
+            }) {
+                Ok(()) => self.resize(ctx).await,
+                Err(error) => Err(error),
+            },
+            "resolution" => match self.change(ctx, |pick| pick.resolution = pick.resolution.next())
+            {
+                Ok(()) => self.resize(ctx).await,
+                Err(error) => Err(error),
+            },
             "switch" => {
                 if self.session.is_some() {
                     self.switch(ctx);
@@ -361,15 +368,18 @@ impl State {
     /// Opens the picker again for the switchable share, to change its
     /// source. A share that isn't switchable can't change.
     fn switch(&mut self, ctx: &ModuleCtx) {
-        if self.session.is_none() || self.pick.is_some() {
+        let Some(session) = &self.session else {
+            return;
+        };
+        if self.pick.is_some() {
             return;
         }
         let mut pick = Pick {
             command: None,
             remember: false,
             switchable: true,
-            framerate: self.settings.framerate,
-            resolution: self.settings.resolution,
+            framerate: session.framerate,
+            resolution: session.resolution,
             windows: Vec::new(),
             drawing: false,
             output: ctx.compositor().state().focused_output,
@@ -377,6 +387,33 @@ impl State {
         };
         pick.activity = ctx.present(pick.spec());
         self.pick = Some(pick);
+    }
+
+    /// While switching a running share, gives its monitor the quality the
+    /// picker now shows. The app sees the stream change size or pace, as
+    /// when a shared window is resized.
+    async fn resize(&mut self, ctx: &ModuleCtx) -> Result<(), String> {
+        let Some(pick) = self.pick.as_ref().filter(|pick| pick.command.is_none()) else {
+            return Ok(());
+        };
+        let Some(session) = self.session.as_mut() else {
+            return Ok(());
+        };
+        let (framerate, resolution) = (pick.framerate, pick.resolution);
+        let (width, height) = resolution.fit_within(switch::size(&outputs(ctx)));
+        ctx.compositor()
+            .resize_virtual_output(OUTPUT, width, height, framerate)
+            .await
+            .map_err(|error| error.to_string())?;
+        tracing::info!(
+            width,
+            height,
+            framerate,
+            "changed the switchable share's quality"
+        );
+        session.framerate = framerate;
+        session.resolution = resolution;
+        Ok(())
     }
 
     /// The source for a window the picker sent: by the portal's handle for
@@ -448,18 +485,14 @@ impl State {
         (framerate, resolution): (u32, Resolution),
     ) -> Result<(), String> {
         let compositor = ctx.compositor();
-        let state = compositor.state();
-        let outputs: Vec<(String, u32, u32)> = state
-            .outputs
-            .iter()
-            .map(|output| (output.name.clone(), output.width, output.height))
-            .collect();
-        let session = Session::new(source, Instant::now());
+        let outputs = outputs(ctx);
+        let mut session = Session::new(source, Instant::now());
+        session.framerate = framerate;
+        session.resolution = resolution;
         ctx.publish_state(session.payload());
         self.session = Some(session);
         if !outputs.iter().any(|(name, ..)| name == OUTPUT) {
-            let (width, height) = switch::size(&outputs);
-            let (width, height) = resolution.fit(width, height);
+            let (width, height) = resolution.fit_within(switch::size(&outputs));
             tracing::info!(width, height, framerate, "making the switchable monitor");
             compositor
                 .create_virtual_output(OUTPUT, width, height, framerate)
@@ -601,6 +634,16 @@ impl State {
 const APPEAR: Duration = Duration::from_secs(3);
 /// How long the copy gets to draw before the app sees the monitor.
 const FIRST_FRAME: Duration = Duration::from_millis(300);
+
+/// Every monitor's name and size in pixels.
+fn outputs(ctx: &ModuleCtx) -> Vec<(String, u32, u32)> {
+    ctx.compositor()
+        .state()
+        .outputs
+        .iter()
+        .map(|output| (output.name.clone(), output.width, output.height))
+        .collect()
+}
 
 /// The copy of an area the picker sent.
 fn area_source(args: &Args) -> Option<Source> {

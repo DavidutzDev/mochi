@@ -115,16 +115,16 @@ Item {
             }
 
             // A switchable share is a monitor that only exists while it's
-            // shared, so the app can't remember it.
+            // shared, so the app can't remember it. Switching a running
+            // share, only the quality shows.
             Row {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
-                visible: !root.switching
                 spacing: 8
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: !(root.payload.switchable ?? false)
+                    visible: !root.switching && !(root.payload.switchable ?? false)
                     text: "Remember"
                     color: Theme.muted
                     font.pixelSize: Theme.textLabel
@@ -133,13 +133,14 @@ Item {
 
                 Switch {
                     anchors.verticalCenter: parent.verticalCenter
-                    visible: !(root.payload.switchable ?? false)
+                    visible: !root.switching && !(root.payload.switchable ?? false)
                     checked: root.payload.remember ?? false
                     onToggled: Daemon.command("share", "remember", [])
                 }
 
                 // The switchable copy's quality, which Mochi sets for its
-                // monitor; each click steps to the next preset.
+                // monitor; each click steps to the next preset. While
+                // switching a running share, it changes at once.
                 Button {
                     anchors.verticalCenter: parent.verticalCenter
                     visible: root.payload.switchable ?? false
@@ -158,6 +159,7 @@ Item {
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
+                    visible: !root.switching
                     text: "Switchable"
                     color: Theme.muted
                     font.pixelSize: Theme.textLabel
@@ -166,6 +168,7 @@ Item {
 
                 Switch {
                     anchors.verticalCenter: parent.verticalCenter
+                    visible: !root.switching
                     checked: root.payload.switchable ?? false
                     onToggled: Daemon.command("share", "switchable", [])
                 }
