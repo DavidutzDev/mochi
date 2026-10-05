@@ -1,0 +1,8 @@
+# Hub: the panel `mochi ipc hub toggle` opens, with cards on its home and
+# pages in a navbar.
+[module.hub]
+# Its size, the same for every page, in logical pixels: the width, and the
+# height of the cards or a page above the navbar. A page taller than that
+# scrolls. It never grows past the screen.
+# width = 860
+# height = 480

@@ -3,9 +3,10 @@ import QtQuick.Window
 import qs.island
 
 // The panel, laid out like a control center: the home screen's cards as
-// labeled sections, or one page, then a divider and the navbar. Its height
-// follows the content up to most of the screen; past that the cards or the
-// page scroll, and the navbar stays. A card whose view sets `hidden` to
+// labeled sections, or one page, then a divider and the navbar. Every page
+// gets the same size, the hub's `width` and `height` settings, capped by the
+// screen: a shorter page leaves room below, a longer one scrolls, and the
+// navbar never moves. A card whose view sets `hidden` to
 // true, like Bluetooth without an adapter, leaves no gap. Every card and
 // page comes from a module's contribution; this view only lays them out.
 Item {
@@ -28,8 +29,9 @@ Item {
     // Room left for the cards or the page once the navbar, the margins and
     // the space around the island are taken.
     readonly property real tallest: Math.max(240, (Screen.height > 0 ? Screen.height : 1080) - 220)
+    readonly property real fixedHeight: Math.min(payload.height ?? 480, tallest)
 
-    implicitWidth: 860
+    implicitWidth: payload.width ?? 860
     implicitHeight: margin + body.height + 12 + 1 + navbar.height
 
     focus: true
@@ -57,8 +59,7 @@ Item {
         }
     }
 
-    // Height follows the content, the cards or the page, up to `tallest`;
-    // past that it scrolls.
+    // The same height for every page; what's taller scrolls.
     Flickable {
         id: body
 
@@ -67,7 +68,7 @@ Item {
         width: parent.width - root.margin * 2
         contentWidth: width
         contentHeight: root.current ? pageHeight : cards.height
-        height: Math.min(contentHeight, root.tallest)
+        height: root.fixedHeight
         interactive: contentHeight > height
         boundsBehavior: Flickable.StopAtBounds
         clip: true

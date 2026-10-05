@@ -8,3 +8,9 @@ Clicking the clock opens it, and Escape or a click elsewhere closes it. It has n
 |---|---|
 | `toggle`, `close` | Shows or hides the hub |
 | `open [page]` | Opens it, on a page like `power/power` |
+
+Every page, the home included, has the same size, so the panel doesn't jump when you switch: a shorter page leaves room below, a longer one scrolls, and the navbar stays in place. It never grows past the screen.
+
+```toml
+{{#include ../../../../modules/hub/settings.toml}}
+```
