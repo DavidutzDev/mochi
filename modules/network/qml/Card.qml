@@ -9,6 +9,7 @@ Item {
 
     property var payload: null
     readonly property bool available: payload?.available ?? false
+    readonly property bool hidden: !available
     readonly property bool wifi: payload?.wifi?.available ?? false
     readonly property var vpns: payload?.vpns ?? []
     readonly property var activeVpn: vpns.find(vpn => vpn.active) ?? null

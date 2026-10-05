@@ -359,6 +359,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] `Symbol`: a built-in icon set in the core (home, bell, music, clock, grid, moon, volume, power, lock, logout, reboot, snow, chip, leaf, bolt, scale), filled or stroked, so contribution icons look the same everywhere; other names come from the icon theme
 - [x] Tested in a private D-Bus session: the three cards, the notifications page opened with `open notifications/history`, and the launcher replacing the hub
 - [ ] Cards spanning two rows, like the tall Now Playing tile in the inspiration
+- [x] Three columns, cards packed densely with the last of a row stretched over free columns, cards that hide when empty, a height capped to the screen with scrolling and the navbar always shown
 - [x] Cards and pages for network and Bluetooth
 - [x] A Performance page: CPU, memory and GPU with graphs and the busiest processes
 - [ ] More cards and pages: power

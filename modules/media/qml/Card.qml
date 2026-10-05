@@ -8,6 +8,8 @@ Item {
 
     property var payload: null
     readonly property bool playing: payload?.status === "playing"
+    // Nothing playing: the card makes room for the others.
+    readonly property bool hidden: payload === null
 
     implicitHeight: payload === null ? 40 : 96
 

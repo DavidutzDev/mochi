@@ -1,10 +1,13 @@
 import QtQuick
+import QtQuick.Window
 import qs.island
 
 // The panel, laid out like a control center: the home screen's cards as
 // labeled sections, or one page, then a divider and the navbar. Its height
-// follows the content. Every card and page comes from a module's
-// contribution; this view only lays them out.
+// follows the content up to most of the screen; past that the cards or the
+// page scroll, and the navbar stays. A card whose view sets `hidden` to
+// true, like Bluetooth without an adapter, leaves no gap. Every card and
+// page comes from a module's contribution; this view only lays them out.
 Item {
     id: root
 
@@ -14,15 +17,20 @@ Item {
     // "home", or module/id for a page.
     property string page: payload.page ?? "home"
     readonly property var current: pages.find(entry => `${entry.module}/${entry.id}` === page) ?? null
-    readonly property var tabs: [{ "module": "", "id": "home", "title": "Home", "icon": "home" }].concat(pages)
+    // A module whose state says it isn't `available`, like Bluetooth without
+    // an adapter, keeps its page out of the navbar.
+    readonly property var tabs: [{ "module": "", "id": "home", "title": "Home", "icon": "home" }].concat(pages.filter(entry => Daemon.state(entry.module)?.available !== false))
 
-    readonly property int margin: 16
-    readonly property int columns: 2
+    readonly property int margin: 14
+    readonly property int columns: 3
     readonly property int gap: 10
     readonly property real column: (width - margin * 2 - gap * (columns - 1)) / columns
+    // Room left for the cards or the page once the navbar, the margins and
+    // the space around the island are taken.
+    readonly property real tallest: Math.max(240, (Screen.height > 0 ? Screen.height : 1080) - 220)
 
-    implicitWidth: 640
-    implicitHeight: margin + body.height + 14 + 1 + navbar.height
+    implicitWidth: 860
+    implicitHeight: margin + body.height + 12 + 1 + navbar.height
 
     focus: true
     Keys.onEscapePressed: Daemon.event("dismiss")
@@ -49,38 +57,97 @@ Item {
         }
     }
 
-    // Height follows the content: the cards, or the page.
-    Item {
+    // Height follows the content, the cards or the page, up to `tallest`;
+    // past that it scrolls.
+    Flickable {
         id: body
 
         x: root.margin
         y: root.margin
         width: parent.width - root.margin * 2
-        height: root.current ? pageHeight : cards.height
+        contentWidth: width
+        contentHeight: root.current ? pageHeight : cards.height
+        height: Math.min(contentHeight, root.tallest)
+        interactive: contentHeight > height
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
 
         // Set by the page itself: a repeater's items aren't bindable.
         property real pageHeight: 0
 
+        // A new page starts at its top.
+        Connections {
+            target: root
+
+            function onPageChanged() {
+                body.contentY = 0;
+            }
+        }
+
         // Each card is a section, like a control center: a small label,
-        // then the module's view on a surface.
-        Flow {
+        // then the module's view on a surface. Cards fill rows in order, and
+        // one that doesn't fit the row goes to the first row below with
+        // room, so wide cards leave no gaps.
+        Item {
             id: cards
 
             width: parent.width
             visible: root.current === null
-            spacing: root.gap
+
+            function relayout(): void {
+                const rows = [];
+                let y = 0;
+                for (let index = 0; index < placed.count; index++) {
+                    const card = placed.itemAt(index);
+                    if (!card || !card.visible)
+                        continue;
+                    let row = rows.find(row => row.free >= card.span);
+                    if (!row) {
+                        row = { "free": root.columns, "items": [], "height": 0 };
+                        rows.push(row);
+                    }
+                    row.free -= card.span;
+                    row.items.push(card);
+                    row.height = Math.max(row.height, card.height);
+                }
+                for (const row of rows) {
+                    // Free columns go to the row's last card, so no row
+                    // ends in a gap.
+                    row.items.forEach((card, index) => card.extra = index === row.items.length - 1 ? row.free : 0);
+                    let column = 0;
+                    for (const card of row.items) {
+                        card.x = column * (root.column + root.gap);
+                        column += card.span + card.extra;
+                        card.y = y;
+                    }
+                    y += row.height + root.gap;
+                }
+                height = Math.max(0, y - root.gap);
+            }
+
+            onWidthChanged: Qt.callLater(relayout)
 
             Repeater {
+                id: placed
+
                 model: root.cards
+                onItemAdded: Qt.callLater(cards.relayout)
+                onItemRemoved: Qt.callLater(cards.relayout)
 
                 Column {
                     id: card
 
                     required property var modelData
                     readonly property int span: Math.max(1, Math.min(root.columns, modelData.options?.span ?? 1))
+                    // Columns left free in its row, which it fills.
+                    property int extra: 0
 
-                    width: root.column * span + root.gap * (span - 1)
-                    spacing: 8
+                    width: root.column * (span + extra) + root.gap * (span + extra - 1)
+                    // A card with nothing to show hides, and the rest close up.
+                    visible: !(view.item?.hidden ?? false)
+                    spacing: 6
+                    onVisibleChanged: Qt.callLater(cards.relayout)
+                    onHeightChanged: Qt.callLater(cards.relayout)
 
                     Row {
                         spacing: 6
@@ -101,16 +168,16 @@ Item {
 
                     Rectangle {
                         width: parent.width
-                        height: Math.max(view.height, 64) + 28
+                        height: Math.max(view.height, 52) + 24
                         radius: Theme.radiusLarge
                         color: Theme.surface
 
                         Contributed {
                             id: view
 
-                            x: 14
-                            y: 14
-                            width: parent.width - 28
+                            x: 12
+                            y: 12
+                            width: parent.width - 24
                             height: item ? item.implicitHeight : 0
                             entry: card.modelData
                         }
@@ -148,7 +215,7 @@ Item {
 
         x: root.margin
         anchors.top: body.bottom
-        anchors.topMargin: 14
+        anchors.topMargin: 12
         width: parent.width - root.margin * 2
         height: 1
         color: Theme.raised
@@ -161,7 +228,7 @@ Item {
 
         anchors.top: divider.bottom
         width: parent.width
-        height: 56
+        height: 52
 
         Row {
             anchors.centerIn: parent
