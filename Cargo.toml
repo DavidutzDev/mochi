@@ -1,9 +1,12 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "modules/*"]
+members = ["crates/*", "modules/*", "examples/plugins/*"]
+# The example plugins build with `cargo build --workspace`, but aren't part
+# of the Mochi package.
+default-members = ["crates/*", "modules/*"]
 
 [workspace.package]
-version = "0.0.4"
+version = "0.0.5"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"
@@ -13,6 +16,8 @@ publish = false
 mochi-protocol = { path = "crates/mochi-protocol" }
 mochi-compositor = { path = "crates/mochi-compositor" }
 mochi-core = { path = "crates/mochi-core" }
+mochi-plugins = { path = "crates/mochi-plugins" }
+mochi-sdk = { path = "crates/mochi-sdk" }
 mochi-module-audio = { path = "modules/audio" }
 mochi-module-battery = { path = "modules/battery" }
 mochi-module-bluetooth = { path = "modules/bluetooth" }

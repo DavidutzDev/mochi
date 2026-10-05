@@ -3,55 +3,7 @@
 
 use mochi_protocol::{ActionSpec, ArgKind, ArgSpec};
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum ArgValue {
-    String(String),
-    Int(i64),
-    Float(f64),
-    Bool(bool),
-}
-
-/// Parsed arguments, looked up by name.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct Args(Vec<(String, ArgValue)>);
-
-impl Args {
-    pub fn get(&self, name: &str) -> Option<&ArgValue> {
-        self.0
-            .iter()
-            .find(|(arg, _)| arg == name)
-            .map(|(_, value)| value)
-    }
-
-    /// The value of a `string`, `choice` or `rest` argument.
-    pub fn str(&self, name: &str) -> Option<&str> {
-        match self.get(name)? {
-            ArgValue::String(value) => Some(value),
-            _ => None,
-        }
-    }
-
-    pub fn int(&self, name: &str) -> Option<i64> {
-        match self.get(name)? {
-            ArgValue::Int(value) => Some(*value),
-            _ => None,
-        }
-    }
-
-    pub fn float(&self, name: &str) -> Option<f64> {
-        match self.get(name)? {
-            ArgValue::Float(value) => Some(*value),
-            _ => None,
-        }
-    }
-
-    pub fn bool(&self, name: &str) -> Option<bool> {
-        match self.get(name)? {
-            ArgValue::Bool(value) => Some(*value),
-            _ => None,
-        }
-    }
-}
+pub use mochi_protocol::spec::{ArgValue, Args};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum ArgError {
@@ -101,7 +53,7 @@ pub fn parse(spec: &ActionSpec, words: &[String]) -> Result<Args, ArgError> {
     if words.next().is_some() {
         return Err(ArgError::TooMany { usage });
     }
-    Ok(Args(args))
+    Ok(args.into_iter().collect())
 }
 
 /// Checks the rules `parse` relies on: only trailing arguments are optional,

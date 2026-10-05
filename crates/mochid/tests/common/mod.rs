@@ -43,6 +43,17 @@ impl Daemon {
 
     /// Like `start`, with a real Quickshell when `quickshell` is given.
     pub fn start_with(name: &str, modules: &str, quickshell: Option<&str>) -> Self {
+        Self::start_prepared(name, modules, quickshell, |_, _| {})
+    }
+
+    /// Like `start_with`, with `prepare` setting up the scratch directory
+    /// and the command first: config files, plugins, environment.
+    pub fn start_prepared(
+        name: &str,
+        modules: &str,
+        quickshell: Option<&str>,
+        prepare: impl FnOnce(&Path, &mut Command),
+    ) -> Self {
         let dir = std::env::temp_dir().join(format!("mochid-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(dir.join("run")).unwrap();
@@ -67,6 +78,7 @@ impl Daemon {
             // the session and the user's config files don't matter.
             .env("XDG_RUNTIME_DIR", dir.join("run"))
             .env("XDG_CONFIG_HOME", dir.join("config"))
+            .env("XDG_DATA_HOME", dir.join("data"))
             .env("MOCHI_LOG", "debug")
             .stdin(Stdio::null())
             .stdout(Stdio::null())
@@ -78,6 +90,7 @@ impl Daemon {
             let display = std::env::var_os("WAYLAND_DISPLAY").expect("a Wayland session");
             command.env("WAYLAND_DISPLAY", Path::new(&runtime).join(display));
         }
+        prepare(&dir, &mut command);
         let child = command.spawn().unwrap();
 
         let socket = dir.join("run/mochi/mochi.sock");
@@ -125,8 +138,12 @@ impl Daemon {
         }
     }
 
-    pub fn wait_for(&self, mut done: impl FnMut() -> bool, what: &str) {
-        let deadline = Instant::now() + TIMEOUT;
+    pub fn wait_for(&self, done: impl FnMut() -> bool, what: &str) {
+        self.wait_long(done, what, TIMEOUT);
+    }
+
+    pub fn wait_long(&self, mut done: impl FnMut() -> bool, what: &str, timeout: Duration) {
+        let deadline = Instant::now() + timeout;
         while !done() {
             assert!(
                 Instant::now() < deadline,

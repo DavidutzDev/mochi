@@ -1,0 +1,12 @@
+# Pomodoro: a focus timer.
+[module.pomodoro]
+# Minutes of focus `start` counts down without an argument.
+# focus_minutes = 25
+# Minutes of rest after a focus session.
+# break_minutes = 5
+# Starts the break by itself when focus ends.
+# auto_break = true
+# Pauses the media player when focus starts.
+# pause_media = false
+# Where the countdown bubble goes: left, center-left, center-right, right.
+# area = "center-right"

@@ -2,10 +2,15 @@
 
 Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor release may change the config format, the protocol or the module interface; the changelog says when.
 
-## Unreleased
+## 0.0.5 - 2026-10-06
 
 ### Added
 
+- Plugins. A plugin is a module from outside Mochi, with the same powers as a builtin: activities, bubbles, actions in `mochi ipc`, hub cards and pages, settings under `[module.<id>]`, the compositor, and calls to other modules. Its manifest, `mochi-plugin.toml`, names its backend, actions, contributions, the builtin views it replaces and the modules whose state it reads. `~/.config/mochi/plugins.toml` lists plugins with a `git:` source built from a branch, tag or commit, a `git-release:` source downloaded from a GitHub release, or a `path:`. `mochi plugins install`, `update`, `remove` and `list` manage them: install shows what a plugin runs and asks first, and `plugins.lock` pins each one's commit or release. A backend runs as its own process over a socket, supervised: after 5 crashes within a minute it stays stopped until `mochi reload`, with a notification. `mochi status` lists plugins. The home-manager module has `plugins`.
+- `mochi-sdk`, for plugin backends in Rust: `ModuleCtx` and `ModuleEvent` work like a builtin's. Two example plugins in `examples/plugins`: a pomodoro timer and the weather from Open-Meteo.
+- Plugin documentation: the Plugins page for installing them, and Writing plugins, Plugin manifest, The Rust SDK and Making an SDK for writing them and libraries for other languages. The documentation site has the SDK's API reference under `api/` (`nix build .#sdk-docs`). `examples/python/hello` is a plugin in Python with a small SDK of its own, which the Making an SDK page walks through; the test suite runs it.
+- Modules can read each other's state: `ModuleCtx::watch_state` sends another module's state as `ModuleEvent::State`, the latest at once and every change after.
+- The plugin protocol, in `docs/protocol.md` and `mochi_protocol::plugin`. `ActivitySpec`, `BubbleSpec`, `Priority`, `Args` and `CallError` moved to `mochi_protocol::spec` and serialize to JSON; `mochi-core` re-exports them where they were.
 - Stacked bubbles, with `stack = true` in `[bubbles]`: each area shows its most important bubble, the others peeking out behind it, and fans out on hover. A bubble with news comes to the front for `news_ms`, then goes back. Modules mark news with `BubbleSpec::news()`; notifications, network, Bluetooth, battery, tray and performance do for what matters. The protocol's bubbles carry `priority` and `news`, and the bubbles message `stack`.
 - Performance module: CPU, memory and GPU use and the CPU's and GPU's temperatures. A Performance page in the hub with graphs of the last two minutes and the busiest processes; a notice when a reading stays over its level, naming the busiest process; and a red bubble while one stays critical. Levels per reading, and how long a reading must stay up, are settings. NVIDIA GPUs are read through `nvidia-smi`, AMD ones from sysfs. It's on in newly generated configs.
 - Symbols: `memory`, `gpu` and `temperature`.
@@ -29,6 +34,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- `mochi reload` restarts a module that stopped or failed, instead of leaving it out until mochid restarts.
 - A stack of bubbles left of the island stood a bubble's width away from it: the layout read the deck's width while it animated.
 - The hub has one size for every page, `width` and `height` in `[module.hub]`, so it no longer changes size when switching pages.
 - The hub no longer grows past the screen, which pushed the navbar off it: its cards or page scroll past most of the screen's height. It's wider, with three columns packed without gaps, and cards with nothing to show, like Bluetooth without an adapter or Battery on a desktop, hide, as do the pages of modules that aren't available.

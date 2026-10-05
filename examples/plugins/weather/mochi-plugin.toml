@@ -1,0 +1,35 @@
+# An example plugin: the weather where you are, from Open-Meteo, which
+# needs no account or key. A card on the hub, and `mochi ipc weather show`
+# for a forecast on the island.
+
+[plugin]
+id = "weather"
+name = "Weather"
+version = "0.1.0"
+description = "The weather from Open-Meteo: a hub card and a forecast on the island"
+authors = ["Mochi"]
+api = 1
+homepage = "https://open-meteo.com"
+
+[backend]
+exec = "bin/weather"
+build = "cargo build --release --locked --target-dir target && install -Dm755 target/release/weather bin/weather"
+
+[release]
+asset = "weather-{version}-{arch}-linux.tar.gz"
+
+[[actions]]
+name = "show"
+description = "Show the forecast on the island"
+
+[[actions]]
+name = "refresh"
+description = "Fetch the weather now"
+
+[[contributions]]
+target = "hub"
+kind = "card"
+id = "now"
+view = "Card"
+title = "Weather"
+order = 70

@@ -165,7 +165,7 @@ impl Module for Notifications {
                             daemon.ended(&ctx, activity, reason).await;
                         }
                         Some(ModuleEvent::BubbleClicked(_)) => daemon.show_history(&ctx),
-                        Some(ModuleEvent::Clicked(_)) => {}
+                        Some(ModuleEvent::Clicked(_) | ModuleEvent::State { .. }) => {}
                     },
                 }
                 daemon.sync(&ctx);

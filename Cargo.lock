@@ -688,15 +688,16 @@ dependencies = [
 
 [[package]]
 name = "mochi"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "clap",
+ "mochi-plugins",
  "mochi-protocol",
 ]
 
 [[package]]
 name = "mochi-compositor"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "serde_json",
  "thiserror",
@@ -709,7 +710,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-core"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "include_dir",
  "libc",
@@ -725,7 +726,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-audio"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "include_dir",
  "libpulse-binding",
@@ -738,7 +739,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-battery"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -752,7 +753,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-bluetooth"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -766,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-capture"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "include_dir",
  "libc",
@@ -780,7 +781,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-clipboard"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "blake3",
  "chacha20poly1305",
@@ -804,7 +805,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-demo"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -815,7 +816,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-hub"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -827,7 +828,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-idle"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -839,7 +840,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-launcher"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -852,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-media"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -866,7 +867,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-network"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -880,7 +881,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-notifications"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "enumflags2",
  "futures-util",
@@ -896,7 +897,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-osd"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "include_dir",
  "libpulse-binding",
@@ -909,7 +910,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-performance"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -921,7 +922,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-power"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -935,7 +936,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-share"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -947,7 +948,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-tray"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "enumflags2",
  "futures-util",
@@ -963,7 +964,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-workspaces"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -974,8 +975,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-plugin-pomodoro"
+version = "0.1.0"
+dependencies = [
+ "mochi-sdk",
+ "serde",
+ "tokio",
+]
+
+[[package]]
+name = "mochi-plugin-weather"
+version = "0.1.0"
+dependencies = [
+ "mochi-sdk",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "mochi-plugins"
+version = "0.0.5"
+dependencies = [
+ "blake3",
+ "mochi-protocol",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "toml",
+]
+
+[[package]]
 name = "mochi-protocol"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "serde",
  "serde_json",
@@ -983,8 +1015,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-sdk"
+version = "0.0.5"
+dependencies = [
+ "mochi-protocol",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "mochid"
-version = "0.0.4"
+version = "0.0.5"
 dependencies = [
  "anyhow",
  "clap",
@@ -1008,11 +1050,13 @@ dependencies = [
  "mochi-module-share",
  "mochi-module-tray",
  "mochi-module-workspaces",
+ "mochi-plugins",
  "mochi-protocol",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "zbus",
 ]
 
 [[package]]

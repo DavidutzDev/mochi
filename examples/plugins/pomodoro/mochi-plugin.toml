@@ -1,0 +1,55 @@
+# An example plugin: a focus timer. `mochi ipc pomodoro start` starts 25
+# minutes of focus; a bubble counts down, and the island says when it's
+# time for a break.
+
+[plugin]
+id = "pomodoro"
+name = "Pomodoro"
+version = "0.1.0"
+description = "A focus timer: a bubble counts down, the island says when to rest"
+authors = ["Mochi"]
+api = 1
+
+[backend]
+exec = "bin/pomodoro"
+# Its own target directory, so it builds the same inside the Mochi
+# repository and in a repository of its own.
+build = "cargo build --release --locked --target-dir target && install -Dm755 target/release/pomodoro bin/pomodoro"
+
+[release]
+asset = "pomodoro-{version}-{arch}-linux.tar.gz"
+
+[uses]
+# With `pause_media`, a focus session pauses what's playing.
+state = ["media"]
+
+[[actions]]
+name = "start"
+description = "Start a focus session"
+args = [{ name = "minutes", description = "How long, instead of focus_minutes", kind = "int", optional = true }]
+
+[[actions]]
+name = "break"
+description = "Start a break"
+args = [{ name = "minutes", description = "How long, instead of break_minutes", kind = "int", optional = true }]
+
+[[actions]]
+name = "pause"
+description = "Pause or resume the timer"
+
+[[actions]]
+name = "stop"
+description = "Stop the timer"
+
+[[actions]]
+name = "status"
+description = "Print what the timer is doing"
+
+[[contributions]]
+target = "hub"
+kind = "card"
+id = "timer"
+view = "Card"
+title = "Focus"
+icon = "clock"
+order = 60

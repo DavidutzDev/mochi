@@ -158,6 +158,32 @@ pub struct Status {
     pub modules: Vec<String>,
     #[serde(default)]
     pub compositor: CompositorStatus,
+    /// The plugins in plugins.toml.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub plugins: Vec<PluginStatus>,
+}
+
+/// One plugin from plugins.toml, as the daemon sees it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PluginStatus {
+    pub id: String,
+    pub state: PluginState,
+    /// Why it's missing or failed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PluginState {
+    /// Enabled and running.
+    Running,
+    /// Installed, but not in `modules`.
+    Disabled,
+    /// Listed but not installed, or its manifest has an error.
+    Missing,
+    /// Its backend kept crashing and was stopped until the next reload.
+    Failed,
 }
 
 /// What the daemon knows about the compositor.
@@ -259,7 +285,7 @@ mod tests {
     fn every_daemon_message_round_trips() {
         round_trip_daemon(DaemonMessage::Hello {
             api: 1,
-            version: "0.0.4".into(),
+            version: "0.0.5".into(),
         });
         round_trip_daemon(DaemonMessage::Modules {
             modules: vec!["idle".into()],
@@ -327,7 +353,7 @@ mod tests {
         round_trip_daemon(DaemonMessage::Ok);
         round_trip_daemon(DaemonMessage::Status {
             status: Status {
-                version: "0.0.4".into(),
+                version: "0.0.5".into(),
                 api: 1,
                 ui_connected: true,
                 modules: vec!["idle".into()],
@@ -337,6 +363,11 @@ mod tests {
                     workspaces: 4,
                     focused: Some("DP-3".into()),
                 },
+                plugins: vec![PluginStatus {
+                    id: "pomodoro".into(),
+                    state: PluginState::Failed,
+                    message: Some("it crashed 5 times in a minute".into()),
+                }],
             },
         });
         round_trip_daemon(DaemonMessage::Actions {

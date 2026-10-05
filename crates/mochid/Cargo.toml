@@ -15,7 +15,9 @@ demo = ["dep:mochi-module-demo"]
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+libc.workspace = true
 mochi-core.workspace = true
+mochi-plugins.workspace = true
 mochi-module-audio.workspace = true
 mochi-module-battery.workspace = true
 mochi-module-bluetooth.workspace = true
@@ -36,12 +38,10 @@ mochi-module-tray.workspace = true
 mochi-module-workspaces.workspace = true
 mochi-protocol.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
-
-[dev-dependencies]
-libc.workspace = true
+zbus.workspace = true
 
 [lints]
 workspace = true

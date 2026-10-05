@@ -21,11 +21,18 @@ let
     ${lib.optionalString (cfg.theme != { }) ''
       cp ${toml.generate "theme.toml" cfg.theme} $out/theme.toml
     ''}
+    ${lib.optionalString (cfg.plugins != { }) ''
+      cp ${toml.generate "plugins.toml" pluginList} $out/plugins.toml
+    ''}
     ${lib.getExe' package "mochid"} config check --config $out/config.toml
   '';
 
+  pluginList.plugins = lib.mapAttrs (_: source: { inherit source; }) cfg.plugins;
+
   written =
-    lib.optional (cfg.settings != { }) "config.toml" ++ lib.optional (cfg.theme != { }) "theme.toml";
+    lib.optional (cfg.settings != { }) "config.toml"
+    ++ lib.optional (cfg.theme != { }) "theme.toml"
+    ++ lib.optional (cfg.plugins != { }) "plugins.toml";
 
   # gpu-screen-recorder comes with the package unless the settings name
   # another recorder.
@@ -84,6 +91,24 @@ in
         The contents of {file}`$XDG_CONFIG_HOME/mochi/theme.toml`. Left empty,
         home-manager doesn't manage the file and Mochi writes a commented
         example on its first start.
+      '';
+    };
+
+    plugins = lib.mkOption {
+      type = lib.types.attrsOf lib.types.str;
+      default = { };
+      example = lib.literalExpression ''
+        {
+          pomodoro = "git:github.com/User/mochi-pomodoro:main";
+          weather = "git-release:github.com/User/mochi-weather:v0.2.0";
+        }
+      '';
+      description = ''
+        Plugins by id and source, written to
+        {file}`$XDG_CONFIG_HOME/mochi/plugins.toml`. Enable them in
+        `settings.modules` like builtin modules. Nix doesn't fetch or build
+        them: run `mochi plugins install` after switching, which also
+        writes {file}`plugins.lock` next to it.
       '';
     };
 

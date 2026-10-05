@@ -12,6 +12,8 @@ mod actions;
 mod bubbles;
 mod contributions;
 mod messages;
+pub mod plugin;
+pub mod spec;
 mod theme;
 
 pub use actions::{ActionSpec, ArgKind, ArgSpec, ModuleActions};
@@ -19,7 +21,7 @@ pub use bubbles::{Area, Bubble, BubbleId, Overflow, Stacking};
 pub use contributions::Contribution;
 pub use messages::{
     Activity, ActivityId, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode, EventKind,
-    Role, Status,
+    PluginState, PluginStatus, Role, Status,
 };
 pub use theme::{Anchor, Color, ColorError, Colors, Layout, Mode, Motion, Notch, Theme};
 

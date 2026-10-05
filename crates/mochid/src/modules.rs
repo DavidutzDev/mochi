@@ -1,20 +1,24 @@
-//! The built-in modules, reading `config.toml` against them, and starting
-//! them. Modules start at launch and again on `mochi reload`, so this lives
-//! apart from the daemon loop that calls it.
+//! The built-in modules and the installed plugins, reading `config.toml`
+//! against them, and starting them. Modules start at launch and again on
+//! `mochi reload`, so this lives apart from the daemon loop that calls it.
 
+use std::collections::BTreeMap;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use anyhow::Context;
+use mochi_core::assets::ShellModule;
 use mochi_core::assets::{self, Mode};
 use mochi_core::compositor::Compositor;
 use mochi_core::{
     ActivityIds, Config, ConfigError, Module, ModuleCtx, ModuleRequest, Paths, actions, examples,
 };
+use mochi_plugins::Locations;
 use mochi_protocol::Contribution;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::daemon::{ModuleExit, ModuleSlot};
+use crate::plugins::PluginModule;
 
 /// What a generated `config.toml` turns on: the whole shell.
 pub const DEFAULT_MODULES: [&str; 17] = [
@@ -65,16 +69,78 @@ pub fn builtin() -> Vec<Box<dyn Module>> {
     modules
 }
 
+/// A plugin from plugins.toml, and why it can't run when it can't.
+#[derive(Debug, Clone)]
+pub struct Listed {
+    pub id: String,
+    pub problem: Option<String>,
+}
+
+/// Every module there is: the builtins, and the plugins plugins.toml lists
+/// that are installed and well-formed.
+#[allow(missing_debug_implementations)]
+pub struct Catalog {
+    pub modules: Vec<Box<dyn Module>>,
+    pub plugins: BTreeMap<&'static str, PluginModule>,
+    pub listed: Vec<Listed>,
+}
+
+/// Reads plugins.toml next to `config_file` and the manifests it leads to.
+/// A plugins.toml with an error is a config error; a plugin that isn't
+/// installed, or has a bad manifest, is only listed with its problem.
+pub fn catalog(config_file: &Path) -> Result<Catalog, ConfigError> {
+    let locations = Locations::beside(config_file);
+    let found = mochi_plugins::discover(&locations)
+        .map_err(|error| ConfigError::invalid(&locations.list, error.to_string()))?;
+    let mut modules = builtin();
+    let mut plugins = BTreeMap::new();
+    let mut listed = Vec::new();
+    for found in found {
+        let checked = found.manifest.and_then(|manifest| {
+            for spec in manifest.actions() {
+                actions::validate(&spec)
+                    .map_err(|error| format!("its manifest declares an invalid action: {error}"))?;
+            }
+            Ok(manifest)
+        });
+        let problem = match checked {
+            Ok(manifest) => {
+                let plugin = PluginModule::new(found.dir, manifest);
+                plugins.insert(plugin.id(), plugin.clone());
+                modules.push(Box::new(plugin));
+                None
+            }
+            Err(problem) => Some(problem),
+        };
+        listed.push(Listed {
+            id: found.id,
+            problem,
+        });
+    }
+    Ok(Catalog {
+        modules,
+        plugins,
+        listed,
+    })
+}
+
 /// Reads `config.toml` and checks everything in it: module names, every
 /// module's settings, and the actions the enabled modules declare.
-/// `modules` replaces the file's module list, like `--modules` does.
+/// `modules` replaces the file's module list, like `--modules` does. A
+/// plugin plugins.toml lists counts as a module even before it's
+/// installed, so the file stays valid while it isn't.
 pub fn load_config(path: &Path, modules: Option<&[String]>) -> Result<Config, ConfigError> {
     let mut config = Config::load(path)?;
     if let Some(modules) = modules {
         config.modules = modules.to_vec();
     }
-    let builtin = builtin();
-    let available: Vec<&str> = builtin.iter().map(|module| module.id()).collect();
+    let catalog = catalog(path)?;
+    let builtin = catalog.modules;
+    let available: Vec<&str> = builtin
+        .iter()
+        .map(|module| module.id())
+        .chain(catalog.listed.iter().map(|listed| listed.id.as_str()))
+        .collect();
     config.check(&available, path)?;
     for module in &builtin {
         module
@@ -164,14 +230,29 @@ impl Runner {
         }
     }
 
-    /// Writes the core QML and these modules' views.
-    pub fn write_shell(&self, modules: &[&dyn Module]) -> anyhow::Result<()> {
-        let views: Vec<(&str, mochi_core::Assets)> = modules
+    /// Writes the core QML and these modules' views, with the files that
+    /// override some of them.
+    pub fn write_shell(
+        &self,
+        modules: &[&dyn Module],
+        overrides: &BTreeMap<&'static str, Vec<(String, PathBuf)>>,
+    ) -> anyhow::Result<()> {
+        let assets: Vec<mochi_core::Assets> =
+            modules.iter().map(|module| module.assets()).collect();
+        let views: Vec<ShellModule<'_>> = modules
             .iter()
-            .map(|module| (module.id(), module.assets()))
+            .zip(&assets)
+            .map(|(module, assets)| ShellModule {
+                id: module.id(),
+                assets,
+                overrides: overrides
+                    .get(module.id())
+                    .map(Vec::as_slice)
+                    .unwrap_or_default(),
+            })
             .collect();
         let dir = self.paths.shell_dir();
-        let written = assets::write_shell(&dir, mochi_core::QML, &views, self.mode)
+        let written = assets::write_shell(&dir, &mochi_core::QML, &views, self.mode)
             .with_context(|| format!("cannot write {}", dir.display()))?;
         tracing::info!(mode = ?self.mode, written, dir = %dir.display(), "wrote the shell");
         Ok(())
@@ -229,7 +310,7 @@ fn contributions(module: &dyn Module) -> Vec<Contribution> {
         .contributions()
         .into_iter()
         .filter(|spec| {
-            let found = assets.embedded.get_file(format!("{}.qml", spec.view)).is_some();
+            let found = assets.has_view(&spec.view);
             if !found {
                 tracing::error!(module = module.id(), view = %spec.view, "the module offers a view it doesn't have");
             }
@@ -237,4 +318,22 @@ fn contributions(module: &dyn Module) -> Vec<Contribution> {
         })
         .map(|spec| spec.into_contribution(module.id()))
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `mochi plugins` refuses these ids without mochid at hand.
+    #[test]
+    fn the_plugins_crate_knows_every_builtin() {
+        let mut ids: Vec<&str> = builtin().iter().map(|module| module.id()).collect();
+        if !ids.contains(&"demo") {
+            ids.push("demo");
+        }
+        ids.sort_unstable();
+        let mut known = mochi_plugins::BUILTIN.to_vec();
+        known.sort_unstable();
+        assert_eq!(ids, known);
+    }
 }

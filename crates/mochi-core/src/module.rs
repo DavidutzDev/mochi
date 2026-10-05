@@ -22,6 +22,7 @@ use crate::actions::Args;
 use crate::arbiter::{ActivitySpec, EndReason};
 use crate::bubbles::BubbleSpec;
 use crate::contributions::ContributionSpec;
+pub use mochi_protocol::spec::CallError;
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -75,8 +76,9 @@ pub fn settings<T: DeserializeOwned>(table: &toml::Table) -> Result<T, toml::de:
     toml::Value::Table(table.clone()).try_into()
 }
 
-/// A directory of QML files, embedded in the binary and also known by its
-/// path in the source tree, which dev mode links to for hot reload.
+/// A module's QML views: embedded in the binary and also known by their
+/// path in the source tree, which dev mode links to for hot reload; or, for
+/// a plugin, a directory on disk.
 ///
 /// ```ignore
 /// static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
@@ -85,15 +87,31 @@ pub fn settings<T: DeserializeOwned>(table: &toml::Table) -> Result<T, toml::de:
 ///     Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
 /// }
 /// ```
-#[derive(Debug, Clone, Copy)]
-pub struct Assets {
-    pub embedded: &'static Dir<'static>,
-    pub source: &'static str,
+#[derive(Debug, Clone)]
+pub enum Assets {
+    Embedded {
+        dir: &'static Dir<'static>,
+        source: &'static str,
+    },
+    /// Always linked, never copied, so edits hot-reload.
+    Disk(PathBuf),
 }
 
 impl Assets {
     pub const fn new(embedded: &'static Dir<'static>, source: &'static str) -> Self {
-        Self { embedded, source }
+        Self::Embedded {
+            dir: embedded,
+            source,
+        }
+    }
+
+    /// Whether `<view>.qml` is there.
+    pub fn has_view(&self, view: &str) -> bool {
+        let file = format!("{view}.qml");
+        match self {
+            Self::Embedded { dir, .. } => dir.get_file(&file).is_some(),
+            Self::Disk(dir) => dir.join(&file).is_file(),
+        }
     }
 }
 
@@ -139,6 +157,10 @@ pub enum Request {
     HideBubble {
         id: BubbleId,
     },
+    /// Sends it another module's state from now on.
+    WatchState {
+        module: String,
+    },
     /// Runs another module's action.
     Call {
         module: String,
@@ -146,23 +168,6 @@ pub enum Request {
         args: Vec<String>,
         reply: oneshot::Sender<Result<(), CallError>>,
     },
-}
-
-/// Why calling another module's action failed.
-#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
-pub enum CallError {
-    /// The module isn't enabled: the usual case for a soft dependency.
-    #[error("module {0:?} is not enabled")]
-    NotEnabled(String),
-    #[error("a module cannot call itself")]
-    Itself,
-    #[error("{module} has no action {action:?}")]
-    UnknownAction { module: String, action: String },
-    #[error("{0}")]
-    InvalidArgs(String),
-    /// The module ran the action and reported a failure, or isn't running.
-    #[error("{0}")]
-    Failed(String),
 }
 
 /// What the daemon tells a module.
@@ -178,6 +183,12 @@ pub enum ModuleEvent {
     },
     /// A click on one of its bubbles.
     BubbleClicked(BubbleId),
+    /// A module it watches published state: see [`ModuleCtx::watch_state`].
+    /// `Value::Null` when that module stopped.
+    State {
+        module: String,
+        state: Value,
+    },
 }
 
 /// What a module answers a command with: some output to hand back, or none.
@@ -360,6 +371,15 @@ impl ModuleCtx {
                 .await
                 .unwrap_or_else(|_| Err(CallError::Failed("the daemon stopped".into())))
         }
+    }
+
+    /// Sends it `module`'s state as [`ModuleEvent::State`]: the latest at
+    /// once, when there is one, then every change. Fine to call before that
+    /// module starts, or when it isn't enabled.
+    pub fn watch_state(&self, module: &str) {
+        self.send(Request::WatchState {
+            module: module.to_owned(),
+        });
     }
 
     /// The next command or activity event. `None` once the daemon is

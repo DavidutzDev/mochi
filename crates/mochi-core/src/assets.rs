@@ -30,40 +30,113 @@ pub enum Mode {
     Link,
 }
 
+/// One module's views in the shell.
+#[derive(Debug, Clone, Copy)]
+pub struct ShellModule<'a> {
+    pub id: &'a str,
+    pub assets: &'a Assets,
+    /// Files that replace some of its own, by file name, like
+    /// `Compact.qml`: a plugin's override of a builtin view. They are
+    /// linked, so they sit in the module's directory and can use its other
+    /// files.
+    pub overrides: &'a [(String, PathBuf)],
+}
+
 /// Returns how many files were written or relinked.
 pub fn write_shell(
     out: &Path,
-    core: Assets,
-    modules: &[(&str, Assets)],
+    core: &Assets,
+    modules: &[ShellModule<'_>],
     mode: Mode,
 ) -> io::Result<usize> {
     fs::create_dir_all(out.join("modules"))?;
     let mut written = 0;
 
     let mut keep = vec!["modules".to_owned(), MODULES_FILE.to_owned()];
-    for entry in core.embedded.entries() {
+    let (core_dir, core_source) = match core {
+        Assets::Embedded { dir, source } => (*dir, *source),
+        Assets::Disk(_) => panic!("the core QML is embedded"),
+    };
+    for entry in core_dir.entries() {
         let name = file_name(entry.path());
         written += match mode {
             Mode::Copy => copy(entry, out)?,
-            Mode::Link => link(&Path::new(core.source).join(&name), &out.join(&name))?,
+            Mode::Link => link(&Path::new(core_source).join(&name), &out.join(&name))?,
         };
         keep.push(name);
     }
     remove_others(out, &keep)?;
 
-    for (id, assets) in modules {
-        let target = out.join("modules").join(id);
-        written += match mode {
-            Mode::Copy => copy_dir(assets.embedded, &target)?,
-            Mode::Link => link(Path::new(assets.source), &target)?,
+    for module in modules {
+        let target = out.join("modules").join(module.id);
+        written += match (module.assets, mode, module.overrides.is_empty()) {
+            (Assets::Embedded { dir, .. }, Mode::Copy, true) => copy_dir(dir, &target)?,
+            (Assets::Embedded { source, .. }, Mode::Link, true) => {
+                link(Path::new(source), &target)?
+            }
+            (Assets::Disk(dir), _, true) => link(dir, &target)?,
+            (assets, mode, false) => overridden(assets, mode, module.overrides, &target)?,
         };
     }
-    let ids: Vec<String> = modules.iter().map(|(id, _)| (*id).to_owned()).collect();
+    let ids: Vec<String> = modules.iter().map(|module| module.id.to_owned()).collect();
     remove_others(&out.join("modules"), &ids)?;
 
     if write_if_changed(&out.join(MODULES_FILE), modules_file(&ids).as_bytes())? {
         written += 1;
     }
+    Ok(written)
+}
+
+/// A module directory with some files replaced: a real directory where the
+/// replacements are links, and the rest is copied or linked one by one.
+fn overridden(
+    assets: &Assets,
+    mode: Mode,
+    overrides: &[(String, PathBuf)],
+    target: &Path,
+) -> io::Result<usize> {
+    if is_symlink(target) {
+        remove(target)?;
+    }
+    fs::create_dir_all(target)?;
+    let replaced = |name: &str| overrides.iter().any(|(file, _)| file == name);
+
+    let mut written = 0;
+    let mut keep: Vec<String> = Vec::new();
+    match (assets, mode) {
+        (Assets::Embedded { dir, .. }, Mode::Copy) => {
+            for child in dir.entries() {
+                let name = file_name(child.path());
+                if !replaced(&name) {
+                    written += copy(child, target)?;
+                    keep.push(name);
+                }
+            }
+        }
+        (Assets::Embedded { dir, source }, Mode::Link) => {
+            for child in dir.entries() {
+                let name = file_name(child.path());
+                if !replaced(&name) {
+                    written += link(&Path::new(source).join(&name), &target.join(&name))?;
+                    keep.push(name);
+                }
+            }
+        }
+        (Assets::Disk(dir), _) => {
+            for child in fs::read_dir(dir)? {
+                let name = child?.file_name().to_string_lossy().into_owned();
+                if !replaced(&name) {
+                    written += link(&dir.join(&name), &target.join(&name))?;
+                    keep.push(name);
+                }
+            }
+        }
+    }
+    for (name, replacement) in overrides {
+        written += link(replacement, &target.join(name))?;
+        keep.push(name.clone());
+    }
+    remove_others(target, &keep)?;
     Ok(written)
 }
 
@@ -178,10 +251,9 @@ mod tests {
     use super::*;
 
     static FIXTURE: Dir = include_dir::include_dir!("$CARGO_MANIFEST_DIR/tests/fixtures/module");
-    const FIXTURE_ASSETS: Assets = Assets::new(
-        &FIXTURE,
-        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/module"),
-    );
+    const FIXTURE_ASSETS_SOURCE: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/module");
+    static FIXTURE_ASSETS: Assets = Assets::new(&FIXTURE, FIXTURE_ASSETS_SOURCE);
 
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("mochi-assets-{name}-{}", std::process::id()));
@@ -190,8 +262,15 @@ mod tests {
     }
 
     fn write(out: &Path, modules: &[&str], mode: Mode) -> usize {
-        let modules: Vec<(&str, Assets)> = modules.iter().map(|id| (*id, FIXTURE_ASSETS)).collect();
-        write_shell(out, crate::QML, &modules, mode).unwrap()
+        let modules: Vec<ShellModule<'_>> = modules
+            .iter()
+            .map(|id| ShellModule {
+                id,
+                assets: &FIXTURE_ASSETS,
+                overrides: &[],
+            })
+            .collect();
+        write_shell(out, &crate::QML, &modules, mode).unwrap()
     }
 
     #[test]
@@ -242,5 +321,51 @@ mod tests {
         assert!(!is_symlink(&out.join("modules/clock")));
         assert!(out.join("modules/clock/View.qml").is_file());
         fs::remove_dir_all(out).unwrap();
+    }
+
+    #[test]
+    fn plugins_on_disk_are_linked() {
+        let out = scratch("disk");
+        let plugin = Assets::Disk(PathBuf::from(FIXTURE_ASSETS_SOURCE));
+        let modules = [ShellModule {
+            id: "plugin",
+            assets: &plugin,
+            overrides: &[],
+        }];
+        write_shell(&out, &crate::QML, &modules, Mode::Copy).unwrap();
+        assert!(is_symlink(&out.join("modules/plugin")));
+        assert!(out.join("modules/plugin/View.qml").is_file());
+        fs::remove_dir_all(out).unwrap();
+    }
+
+    #[test]
+    fn overrides_replace_one_file_in_either_mode() {
+        let out = scratch("overrides");
+        let replacement = out.with_extension("replacement.qml");
+        fs::write(&replacement, "// mine\n").unwrap();
+        let overrides = [("View.qml".to_owned(), replacement.clone())];
+        for mode in [Mode::Copy, Mode::Link, Mode::Copy] {
+            let modules = [ShellModule {
+                id: "clock",
+                assets: &FIXTURE_ASSETS,
+                overrides: &overrides,
+            }];
+            write_shell(&out, &crate::QML, &modules, mode).unwrap();
+            let dir = out.join("modules/clock");
+            assert!(!is_symlink(&dir));
+            assert_eq!(fs::read_link(dir.join("View.qml")).unwrap(), replacement);
+            assert_eq!(
+                fs::read_to_string(dir.join("View.qml")).unwrap(),
+                "// mine\n"
+            );
+        }
+        // Without the override, the module's own file comes back.
+        write(&out, &["clock"], Mode::Copy);
+        assert_ne!(
+            fs::read_to_string(out.join("modules/clock/View.qml")).unwrap(),
+            "// mine\n"
+        );
+        fs::remove_dir_all(out).unwrap();
+        fs::remove_file(replacement).unwrap();
     }
 }

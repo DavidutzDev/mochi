@@ -4,6 +4,7 @@
 mod daemon;
 mod ipc;
 mod modules;
+mod plugins;
 
 use std::ffi::OsString;
 use std::io::IsTerminal;
