@@ -19,6 +19,7 @@
 
 mod crop;
 mod files;
+mod history;
 mod record;
 
 use std::collections::HashMap;
@@ -31,7 +32,8 @@ use mochi_core::compositor::Window;
 use mochi_core::quality::{self, Resolution};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Args, Assets, BoxFuture, BubbleId,
-    BubbleSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    BubbleSpec, ContributionSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent,
+    Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -45,6 +47,8 @@ static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
 const MODES: [&str; 4] = ["region", "window", "screen", "all"];
 const RESOLUTIONS: [&str; 5] = ["native", "480p", "720p", "1080p", "1440p"];
+/// How long the hub takes to close, before a capture started from its page.
+const HUB_CLOSES: Duration = Duration::from_millis(350);
 /// The highest frame rate a recording may ask for.
 const MAX_FRAMERATE: i64 = 240;
 
@@ -161,6 +165,14 @@ impl Module for Capture {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
     }
 
+    fn contributions(&self) -> Vec<ContributionSpec> {
+        vec![
+            ContributionSpec::new("hub", "page", "history", "Page", "Captures")
+                .icon("camera")
+                .order(35),
+        ]
+    }
+
     fn settings_example(&self) -> &'static str {
         include_str!("../settings.toml")
     }
@@ -172,6 +184,14 @@ impl Module for Capture {
     }
 
     fn actions(&self) -> Vec<ActionSpec> {
+        let file = || {
+            ArgSpec::string(
+                "path",
+                "A file from the history; the last capture when left out",
+            )
+            .optional()
+            .rest()
+        };
         let mode = || {
             ArgSpec::choice(
                 "mode",
@@ -238,10 +258,34 @@ impl Module for Capture {
                 "Capture this area; the overlay sends this",
             )),
             ActionSpec::new("confirm", "Capture the region drawn"),
-            ActionSpec::new("copy", "Copy the last capture"),
-            ActionSpec::new("edit", "Open the last screenshot in the editor"),
-            ActionSpec::new("delete", "Delete the last capture"),
-            ActionSpec::new("open", "Open the last capture's folder"),
+            ActionSpec::new("copy", "Copy the last capture, or one from the history").arg(file()),
+            ActionSpec::new(
+                "edit",
+                "Open the last screenshot, or one from the history, in the editor",
+            )
+            .arg(file()),
+            ActionSpec::new("delete", "Delete the last capture, or one from the history")
+                .arg(file()),
+            ActionSpec::new(
+                "open",
+                "Open the folder of the last capture, or of one from the history",
+            )
+            .arg(file()),
+            ActionSpec::new(
+                "preview",
+                "Show a capture from the history in the preview card",
+            )
+            .arg(ArgSpec::string("path", "The file, as the history lists it").rest()),
+            ActionSpec::new("history", "Look for new captures; the hub page sends this"),
+            ActionSpec::new(
+                "start",
+                "Close the hub, then open the picker; the hub page sends this",
+            )
+            .arg(ArgSpec::choice(
+                "kind",
+                "What to make",
+                ["screenshot", "record"],
+            )),
             ActionSpec::new(
                 "show",
                 "Show an image in the preview card; the clipboard sends this for its images",
@@ -266,6 +310,7 @@ impl Module for Capture {
                 tokio::spawn(async move { record::probe(&program).await })
             });
             let mut state = State::new(settings, ctx.data_dir().to_owned());
+            state.publish_history(&ctx);
             loop {
                 tokio::select! {
                     codec = probed(&mut probe) => {
@@ -441,6 +486,8 @@ struct State {
     recording: Option<Recording>,
     bubble: Option<BubbleId>,
     last: Option<Saved>,
+    /// The newest captures in the folders, for the hub page.
+    history: Vec<history::Entry>,
     preview: Option<ActivityId>,
     /// The video codec the probe picked, when it picked one.
     codec: Option<&'static str>,
@@ -468,6 +515,7 @@ impl State {
             recording: None,
             bubble: None,
             last: None,
+            history: Vec::new(),
             preview: None,
             codec: None,
         }
@@ -528,22 +576,37 @@ impl State {
                 Some(area) => self.select(ctx, String::new(), area).await,
                 None => Err("draw a region first".into()),
             },
-            "copy" => match &self.last {
-                Some(saved) => copy(saved).await,
-                None => Err("nothing captured yet".into()),
+            "copy" => match self.target(args) {
+                Ok(saved) => copy(&saved).await,
+                Err(error) => Err(error),
             },
-            "edit" => self.edit(),
-            "delete" => self.delete(ctx),
-            "open" => match &self.last {
-                Some(saved) if saved.clipboard.is_some() => {
-                    Err("a clipboard image has no folder".into())
+            "edit" => self.target(args).and_then(|saved| self.edit(&saved)),
+            "delete" => self.delete(ctx, args),
+            "open" => self.target(args).and_then(|saved| {
+                if saved.clipboard.is_some() {
+                    return Err("a clipboard image has no folder".into());
                 }
-                Some(saved) => spawn(&[
+                spawn(&[
                     "xdg-open".into(),
                     folder_of(&saved.path).display().to_string(),
-                ]),
-                None => Err("nothing captured yet".into()),
-            },
+                ])
+            }),
+            "preview" => self.preview_file(ctx, args),
+            "history" => {
+                self.publish_history(ctx);
+                Ok(())
+            }
+            "start" => {
+                let _ = ctx.call("hub", "close", &[]).await;
+                // Long enough for the hub to shrink away before the screen
+                // freezes.
+                tokio::time::sleep(HUB_CLOSES).await;
+                let kind = match args.str("kind") {
+                    Some("record") => Kind::Recording,
+                    _ => Kind::Screenshot,
+                };
+                self.open(ctx, kind, None).await
+            }
             "show" => self.show(ctx, &command.args),
             other => Err(format!("capture has no action {other}")),
         };
@@ -969,6 +1032,80 @@ impl State {
         });
         self.preview = Some(ctx.present(self.preview_spec(payload)));
         self.last = Some(saved);
+        self.publish_history(ctx);
+    }
+
+    /// Looks at the folders again and tells the hub page.
+    fn publish_history(&mut self, ctx: &ModuleCtx) {
+        self.history = history::scan(&[&self.screenshots, &self.recordings], history::SHOWN);
+        let entries: Vec<Value> = self.history.iter().map(history::Entry::to_json).collect();
+        ctx.publish_state(json!({
+            "captures": entries,
+            "editable": !self.settings.editor.is_empty(),
+        }));
+    }
+
+    /// What a file action works on: the file given, which must be in the
+    /// history, or the last capture.
+    fn target(&self, args: &Args) -> Result<Saved, String> {
+        match args.str("path") {
+            Some(path) => {
+                let entry = self
+                    .history
+                    .iter()
+                    .find(|entry| entry.path == Path::new(path))
+                    .ok_or_else(|| format!("{path} isn't in the captures history"))?;
+                Ok(Saved {
+                    kind: if entry.screenshot {
+                        Kind::Screenshot
+                    } else {
+                        Kind::Recording
+                    },
+                    path: entry.path.clone(),
+                    clipboard: None,
+                })
+            }
+            None => {
+                let saved = self.last.as_ref().ok_or("nothing captured yet")?;
+                Ok(Saved {
+                    kind: saved.kind,
+                    path: saved.path.clone(),
+                    clipboard: saved.clipboard,
+                })
+            }
+        }
+    }
+
+    /// Shows a capture from the history in the preview card, where its
+    /// buttons work on it.
+    fn preview_file(&mut self, ctx: &ModuleCtx, args: &Args) -> Result<(), String> {
+        if args.str("path").is_none() {
+            return Err("which capture?".into());
+        }
+        let saved = self.target(args)?;
+        let payload = json!({
+            "kind": saved.kind.as_str(),
+            "title": match saved.kind {
+                Kind::Screenshot => "Screenshot",
+                Kind::Recording => "Recording",
+            },
+            "path": saved.path.display().to_string(),
+            "name": saved.path.file_name().map(|name| name.to_string_lossy().into_owned()),
+            "folder": folder_of(&saved.path).display().to_string(),
+            "copied": false,
+            "editable": saved.kind == Kind::Screenshot && !self.settings.editor.is_empty(),
+        });
+        // Opened from the hub's page: the hub holds the keyboard.
+        let close = ctx.call("hub", "close", &[]);
+        tokio::spawn(async move {
+            match close.await {
+                Ok(()) | Err(mochi_core::CallError::NotEnabled(_)) => {}
+                Err(error) => tracing::warn!(%error, "could not close the hub"),
+            }
+        });
+        self.preview = Some(ctx.present(self.preview_spec(payload)));
+        self.last = Some(saved);
+        Ok(())
     }
 
     /// Shows an image from the clipboard in the card a screenshot gets.
@@ -1010,8 +1147,7 @@ impl State {
             .payload(payload)
     }
 
-    fn edit(&self) -> Result<(), String> {
-        let saved = self.last.as_ref().ok_or("nothing captured yet")?;
+    fn edit(&self, saved: &Saved) -> Result<(), String> {
         if saved.kind != Kind::Screenshot {
             return Err("only screenshots open in the editor".into());
         }
@@ -1020,8 +1156,16 @@ impl State {
         spawn(&argv)
     }
 
-    fn delete(&mut self, ctx: &ModuleCtx) -> Result<(), String> {
-        let saved = self.last.take().ok_or("nothing captured yet")?;
+    fn delete(&mut self, ctx: &ModuleCtx, args: &Args) -> Result<(), String> {
+        let saved = self.target(args)?;
+        // The card shows the last capture: it goes with it.
+        let shown = self
+            .last
+            .as_ref()
+            .is_some_and(|last| last.path == saved.path);
+        if shown {
+            self.last = None;
+        }
         if let Some(entry) = saved.clipboard {
             let id = entry.to_string();
             let remove = ctx.call("clipboard", "delete", &[&id]);
@@ -1037,9 +1181,10 @@ impl State {
         }
         std::fs::remove_file(&saved.path)
             .map_err(|error| format!("cannot delete {}: {error}", saved.path.display()))?;
-        if let Some(preview) = self.preview.take() {
+        if shown && let Some(preview) = self.preview.take() {
             ctx.withdraw(preview);
         }
+        self.publish_history(ctx);
         Ok(())
     }
 

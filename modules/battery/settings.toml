@@ -1,0 +1,13 @@
+# Battery: a laptop's battery, from UPower. Nothing shows without one.
+[module.battery]
+# Levels, in percent, that show a short notice on the island when the
+# battery drops past them while unplugged. Each shows once per discharge.
+# notices = [80, 50, 20, 10]
+# At or under this, unplugged, a bubble with the level stays next to the
+# island.
+# warning = 50
+# At or under this, the bubble and the notice turn red, and the notice stays
+# for ten seconds, even over an open panel.
+# critical = 10
+# A notice when the charger is plugged in or out.
+# plugged = true

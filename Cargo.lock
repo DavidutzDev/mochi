@@ -737,6 +737,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-battery"
+version = "0.0.4"
+dependencies = [
+ "futures-util",
+ "include_dir",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
+name = "mochi-module-bluetooth"
+version = "0.0.4"
+dependencies = [
+ "futures-util",
+ "include_dir",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
 name = "mochi-module-capture"
 version = "0.0.4"
 dependencies = [
@@ -837,6 +865,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-network"
+version = "0.0.4"
+dependencies = [
+ "futures-util",
+ "include_dir",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
 name = "mochi-module-notifications"
 version = "0.0.4"
 dependencies = [
@@ -858,6 +900,18 @@ version = "0.0.4"
 dependencies = [
  "include_dir",
  "libpulse-binding",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "mochi-module-performance"
+version = "0.0.4"
+dependencies = [
+ "include_dir",
  "mochi-core",
  "serde",
  "serde_json",
@@ -892,6 +946,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-tray"
+version = "0.0.4"
+dependencies = [
+ "enumflags2",
+ "futures-util",
+ "include_dir",
+ "mochi-core",
+ "png",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
 name = "mochi-module-workspaces"
 version = "0.0.4"
 dependencies = [
@@ -921,6 +991,8 @@ dependencies = [
  "libc",
  "mochi-core",
  "mochi-module-audio",
+ "mochi-module-battery",
+ "mochi-module-bluetooth",
  "mochi-module-capture",
  "mochi-module-clipboard",
  "mochi-module-demo",
@@ -928,10 +1000,13 @@ dependencies = [
  "mochi-module-idle",
  "mochi-module-launcher",
  "mochi-module-media",
+ "mochi-module-network",
  "mochi-module-notifications",
  "mochi-module-osd",
+ "mochi-module-performance",
  "mochi-module-power",
  "mochi-module-share",
+ "mochi-module-tray",
  "mochi-module-workspaces",
  "mochi-protocol",
  "serde_json",

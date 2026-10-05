@@ -14,6 +14,8 @@ mochi-protocol = { path = "crates/mochi-protocol" }
 mochi-compositor = { path = "crates/mochi-compositor" }
 mochi-core = { path = "crates/mochi-core" }
 mochi-module-audio = { path = "modules/audio" }
+mochi-module-battery = { path = "modules/battery" }
+mochi-module-bluetooth = { path = "modules/bluetooth" }
 mochi-module-capture = { path = "modules/capture" }
 mochi-module-clipboard = { path = "modules/clipboard" }
 mochi-module-demo = { path = "modules/demo" }
@@ -21,10 +23,13 @@ mochi-module-hub = { path = "modules/hub" }
 mochi-module-idle = { path = "modules/idle" }
 mochi-module-launcher = { path = "modules/launcher" }
 mochi-module-media = { path = "modules/media" }
+mochi-module-network = { path = "modules/network" }
 mochi-module-notifications = { path = "modules/notifications" }
+mochi-module-performance = { path = "modules/performance" }
 mochi-module-osd = { path = "modules/osd" }
 mochi-module-power = { path = "modules/power" }
 mochi-module-share = { path = "modules/share" }
+mochi-module-tray = { path = "modules/tray" }
 mochi-module-workspaces = { path = "modules/workspaces" }
 
 anyhow = "1"

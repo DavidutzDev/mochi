@@ -1,0 +1,9 @@
+# Network: Wi-Fi, Ethernet, VPNs and airplane mode, from NetworkManager. The
+# hub has a Network page and a card; a bubble shows the connection.
+[module.network]
+# The bubble with the connection: the Wi-Fi's strength, Ethernet or
+# offline, and a lock while a VPN runs. A click opens the Network page.
+# bubble = true
+# A short notice on the island when you connect, disconnect, or a VPN
+# starts or stops.
+# notices = true

@@ -262,7 +262,7 @@ wide = true         # the module's wide views with text, in pills
 - [ ] Bubbles off per module
 - [ ] `mochi reload` applying `[bubbles]` changes
 - [ ] Plugin backends get the same calls through the protocol
-- [ ] First real user beyond media: a Bluetooth module (connected device battery from BlueZ over D-Bus)
+- [x] First real user beyond media: a Bluetooth module (connected device battery from BlueZ over D-Bus)
 
 ## Modules
 
@@ -359,7 +359,9 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] `Symbol`: a built-in icon set in the core (home, bell, music, clock, grid, moon, volume, power, lock, logout, reboot, snow, chip, leaf, bolt, scale), filled or stroked, so contribution icons look the same everywhere; other names come from the icon theme
 - [x] Tested in a private D-Bus session: the three cards, the notifications page opened with `open notifications/history`, and the launcher replacing the hub
 - [ ] Cards spanning two rows, like the tall Now Playing tile in the inspiration
-- [ ] More cards and pages: network, Bluetooth, power, system load (audio has its Sound page)
+- [x] Cards and pages for network and Bluetooth
+- [x] A Performance page: CPU, memory and GPU with graphs and the busiest processes
+- [ ] More cards and pages: power
 - [ ] Clicking a card opens its page
 
 ### Power
@@ -399,7 +401,8 @@ Screenshots and recordings from the island. Decided on 2026-10-04: our own froze
 - [x] A region across several monitors: regions are global, the first overlay sends the layout, a drag keeps going into the next screen and the other screens draw their part as it moves; each screen it touches saves its frame and `crop::join` puts them together at the finest scale, transparent where no screen is. Tested on Hyprland through IPC; a real drag across still needs trying by hand. Recordings stay on one screen
 - [ ] Recording a region across screens, if gpu-screen-recorder can
 - [x] Capture every screen at once: the All screens mode, `mochi ipc capture screenshot all`
-- [ ] A hub page for captures: the latest screenshots and recordings as a history, with thumbnails, and the preview card's copy, edit, open folder and delete on each
+- [x] A hub page for captures: the latest screenshots and recordings as a history, with thumbnails, and the preview card's copy, edit, open folder and delete on each
+- [ ] Thumbnails for recordings: a frame from each video, made once and kept
 - [x] Pick the quality of a recording and of a screen share: frame rate presets (15, 30, 60, 90, 120 fps) and resolution presets (480p, 720p, 1080p, 1440p), in the picker and as settings. Recordings pass gpu-screen-recorder `-f` and `-s`; a switchable share sets `MOCHI-SHARE`'s refresh rate and size. A share that isn't switchable stays the app's to choose
 
 ### Share
@@ -449,10 +452,47 @@ A new module, `audio`: the volume mixer. Players stay in the media module and no
 
 A new module: the apps' tray icons.
 
-- [ ] StatusNotifierItem over D-Bus: register as the watcher and host, follow items as they come and go
-- [ ] Icons, tooltips and attention state, from the icon theme or the pixmaps the app sends
-- [ ] Click to activate, right click for the app's menu (DBusMenu), scroll
-- [ ] Where it lives: bubbles next to the island, a hub card, or both
+- [x] StatusNotifierItem over D-Bus: register as the watcher and host, follow items as they come and go. When another watcher runs, show its items instead
+- [x] Icons and attention state, from the icon theme, the app's own icon folder, or the pixmaps the app sends
+- [x] Click to activate, right click for the app's menu (DBusMenu) in Mochi's style with submenus as pages, middle click, scroll
+- [x] Where it lives: a tray bubble that opens a drawer on the island, and a bubble of their own for apps in `pinned`. Attention makes the bubble breathe
+- [ ] Tooltips on hover in the drawer and on pinned bubbles
+- [ ] Keyboard in the drawer and the menus: arrows, Enter
+- [ ] Follow a menu's changes while it's open (`LayoutUpdated`)
+- [ ] XEmbed tray icons, through a bridge like xembedsniproxy
+
+### Network
+
+- [x] NetworkManager over D-Bus: devices, Wi-Fi networks, active and saved connections, read again after its signals
+- [x] A bubble with the connection, a Network page, a home card, notices on connecting and disconnecting
+- [x] Join Wi-Fi with a password asked on the island, forget networks, VPNs, airplane mode
+- [ ] WPA Enterprise: ask for the user name and password too
+- [ ] Hidden networks
+- [ ] Be NetworkManager's secret agent, so a changed password is asked on the island
+- [ ] Mobile broadband
+
+### Bluetooth
+
+- [x] BlueZ over D-Bus: the adapter, devices and batteries, read again after its signals
+- [x] A bubble with the connected device's battery, a page, a home tile, notices on connecting and disconnecting
+- [x] Scan, pair through Mochi's agent with the questions on the island, connect, forget
+- [ ] Battery of devices that report it only through their own app, like some headsets
+- [ ] More than one adapter
+
+### Battery
+
+- [x] UPower's display device: the level, charging, time left
+- [x] Notices when dropping past configurable levels, once per discharge; a warning bubble at or under a level, red at the critical one; notices on plugging in or out; a hub card
+- [ ] Power profiles on the card, next to the power module's
+- [ ] Each battery on its own, and peripherals' batteries (mice, controllers) from UPower
+
+### Performance
+
+- [x] CPU use and temperature, memory and swap, GPU use, video memory and temperature (AMD from sysfs, NVIDIA from one long-running nvidia-smi)
+- [x] Notices when a reading stays over a level, naming the busiest process; a red bubble while one stays critical; a hub page with graphs and the busiest processes
+- [ ] Intel GPUs
+- [ ] Disk and network throughput
+- [ ] End a process from the page
 
 ## Plugins
 

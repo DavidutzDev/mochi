@@ -176,7 +176,7 @@ impl State {
     async fn open(&mut self, ctx: &ModuleCtx) {
         // The other panels take the keyboard too; only one can be
         // open. Not awaited: they close the launcher the same way.
-        for module in ["hub", "clipboard", "audio"] {
+        for module in ["hub", "clipboard", "audio", "tray"] {
             let close = ctx.call(module, "close", &[]);
             tokio::spawn(async move {
                 match close.await {

@@ -17,7 +17,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::daemon::{ModuleExit, ModuleSlot};
 
 /// What a generated `config.toml` turns on: the whole shell.
-pub const DEFAULT_MODULES: [&str; 12] = [
+pub const DEFAULT_MODULES: [&str; 17] = [
     "idle",
     "osd",
     "workspaces",
@@ -30,6 +30,11 @@ pub const DEFAULT_MODULES: [&str; 12] = [
     "capture",
     "share",
     "clipboard",
+    "tray",
+    "network",
+    "bluetooth",
+    "battery",
+    "performance",
 ];
 
 /// Every module compiled into this binary, fresh: a module runs once, so a
@@ -49,6 +54,11 @@ pub fn builtin() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_capture::Capture),
         Box::new(mochi_module_share::Share),
         Box::new(mochi_module_clipboard::Clipboard),
+        Box::new(mochi_module_tray::Tray),
+        Box::new(mochi_module_network::Network),
+        Box::new(mochi_module_bluetooth::Bluetooth),
+        Box::new(mochi_module_battery::BatteryModule),
+        Box::new(mochi_module_performance::Performance),
     ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));
