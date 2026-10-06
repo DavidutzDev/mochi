@@ -28,8 +28,10 @@ Item {
 
     // For the window.
     property list<Item> shapes: []
-    // While arranging, the island's strip takes no clicks, so the island's
-    // notice can open the drawer.
+    // The island's strip. While arranging, this layer holds the keyboard,
+    // and Hyprland only sends the pointer to the surface holding it, so the
+    // island never hears a click: this layer takes it there instead, and
+    // opens the drawer the island's notice talks about.
     readonly property rect hole: {
         const width = 480;
         const height = Theme.margin + Theme.idleHeight + 6;
@@ -115,11 +117,27 @@ Item {
         }
     }
 
-    // A click beside the widgets closes the settings.
+    // A click beside the widgets closes the settings and the drawer.
     MouseArea {
         anchors.fill: parent
         enabled: root.editing
-        onClicked: root.selected = ""
+        onClicked: {
+            root.selected = "";
+            if (root.layout?.drawer)
+                Daemon.command("widgets", "drawer", ["off"]);
+        }
+    }
+
+    // Over the island's notice: opens the drawer.
+    MouseArea {
+        x: root.hole.x
+        y: root.hole.y
+        width: root.hole.width
+        height: root.hole.height
+        z: 1
+        enabled: root.editing
+        cursorShape: Qt.PointingHandCursor
+        onClicked: Daemon.command("widgets", "drawer", ["on"])
     }
 
     // The widgets, in their own stack: their layers order them among
