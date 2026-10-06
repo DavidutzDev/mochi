@@ -4,6 +4,7 @@ import QtQuick
 // inside, like a control center's volume; or thin, like a seek bar, with
 // `thickness` and no icon. `moved` follows the pointer, `released` gives the
 // final value; the slider shows the pointer's value until `value` catches up.
+// With `reset` set, a double click goes back to it, like a volume to 100%.
 Item {
     id: root
 
@@ -11,6 +12,8 @@ Item {
     property string icon: ""
     property real thickness: 32
     property color fill: Theme.foreground
+    // Where a double click puts it, from 0 to 1; below 0, nowhere.
+    property real reset: -1
     readonly property bool dragging: area.pressed
     signal moved(real value)
     signal released(real value)
@@ -75,9 +78,24 @@ Item {
                 root.moved(root.held);
             }
         }
+        // Set by a double click, which comes before the second release: that
+        // release then leaves the reset alone.
+        property bool resetting: false
+
         onReleased: mouse => {
+            if (resetting) {
+                resetting = false;
+                return;
+            }
             root.held = at(mouse.x);
             root.released(root.held);
+        }
+        onDoubleClicked: {
+            if (root.reset < 0)
+                return;
+            resetting = true;
+            root.held = root.reset;
+            root.released(root.reset);
         }
     }
 }

@@ -162,6 +162,8 @@ Item {
         // color, as in the OSD.
         fill: root.muted ? Theme.muted : shownPercent > 100 ? Theme.accent : Theme.foreground
         value: root.volume / root.maxVolume
+        // A double click puts it back to 100%.
+        reset: 100 / root.maxVolume
 
         readonly property int shownPercent: dragging ? Math.round(shown * root.maxVolume) : root.volume
 
