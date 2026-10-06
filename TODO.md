@@ -568,6 +568,7 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [x] Release 0.0.3: the frozen screen no longer stretches when a screenshot opens
 - [x] Release 0.0.4: clipboard, share, Arch packages, screenshots over anything
 - [x] Release 0.0.5: plugins and the SDK, audio mixer, tray, network, Bluetooth, battery, performance, stacked bubbles
+- [x] Release 0.0.6: widgets and notes, emoji and colors, launcher providers, notices on one monitor, `mochi dismiss`
 - [x] Documentation site with mdBook in `docs/book`: installing, getting started, configuration, bubbles, theme, a page per module that includes its `settings.toml`, writing views and the protocol. `nix build .#docs`, part of `nix flake check`; `.github/workflows/docs.yml` publishes it to GitHub Pages
 - [ ] Publish the site once the repository is on GitHub
 - [ ] `docs/architecture.md`

@@ -28,7 +28,7 @@ Every message is one JSON object on one line, ended by `\n`, at most 1 MiB. Keep
 mochid speaks first:
 
 ```json
-{"type":"hello","api":1,"version":"0.0.5","module":"hello","settings":{},"data_dir":"…","session_dir":"…","compositor":{…}}
+{"type":"hello","api":1,"version":"0.0.6","module":"hello","settings":{},"data_dir":"…","session_dir":"…","compositor":{…}}
 ```
 
 Check `api`: an SDK for API 1 should refuse anything else with a clear message. Keep `module`, `settings`, `data_dir`, `session_dir` and `compositor` for the plugin. Then answer within 5 seconds, or mochid stops the backend:
