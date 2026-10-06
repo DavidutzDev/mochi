@@ -44,6 +44,29 @@ A widget's `anchor` point sits at the same point of the screen, moved by `x` and
 
 A widget whose module isn't running, or whose monitor isn't connected, waits in the file until it is.
 
+## With home-manager
+
+`programs.mochi.widgets` declares a layout, as a list like `mochi ipc widgets export` prints, or as the text of a `widgets.toml`:
+
+```nix
+programs.mochi.widgets = [
+  {
+    id = "w1";
+    module = "widgets";
+    widget = "clock";
+    output = "DP-3";
+    anchor = "top-left";
+    x = 2;
+    y = 4;
+    width = 16;
+    height = 8;
+    settings.seconds = true;
+  }
+];
+```
+
+It's written as a file Mochi can change, not a link into the store, so arranging keeps working. A rebuild writes it again only when the declared layout changed, so what you arranged survives other rebuilds. To keep an arrangement for good, use "Copy as Nix" while arranging, or `mochi ipc widgets export`, and paste it in place of the old layout.
+
 ```toml
 {{#include ../../../../modules/widgets/settings.toml}}
 ```

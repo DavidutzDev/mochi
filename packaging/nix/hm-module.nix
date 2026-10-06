@@ -24,8 +24,18 @@ let
     ${lib.optionalString (cfg.plugins != { }) ''
       cp ${toml.generate "plugins.toml" pluginList} $out/plugins.toml
     ''}
+    ${lib.optionalString (cfg.widgets != null) ''
+      cp ${widgetsFile} $out/widgets.toml
+    ''}
     ${lib.getExe' package "mochid"} config check --config $out/config.toml
   '';
+
+  # The declared widget layout, as Nix or as TOML text.
+  widgetsFile =
+    if builtins.isString cfg.widgets then
+      pkgs.writeText "widgets.toml" cfg.widgets
+    else
+      toml.generate "widgets.toml" { widget = cfg.widgets; };
 
   pluginList.plugins = lib.mapAttrs (_: source: { inherit source; }) cfg.plugins;
 
@@ -112,6 +122,36 @@ in
       '';
     };
 
+    widgets = lib.mkOption {
+      type = lib.types.nullOr (lib.types.either (lib.types.listOf toml.type) lib.types.lines);
+      default = null;
+      example = lib.literalExpression ''
+        [
+          {
+            id = "w1";
+            module = "widgets";
+            widget = "clock";
+            output = "DP-3";
+            anchor = "top-left";
+            x = 2;
+            y = 3;
+            width = 14;
+            height = 7;
+            settings.seconds = true;
+          }
+        ]
+      '';
+      description = ''
+        The widget layout, as `mochi ipc widgets export` prints it, or the
+        text of a {file}`widgets.toml`. It's written to
+        {file}`$XDG_CONFIG_HOME/mochi/widgets.toml` as a file Mochi can
+        change, so arranging the widgets keeps working; a rebuild writes it
+        again only when this layout changed. To keep what you arranged,
+        "Copy as Nix" in edit mode, or `mochi ipc widgets export`, and paste
+        it here. Left `null`, home-manager doesn't touch the file.
+      '';
+    };
+
     portalPicker.enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -163,6 +203,21 @@ in
           }
         '';
       };
+
+    # A real file, not a link into the store, so the editor can rewrite it.
+    # The stamp remembers which declared layout was written last, so a
+    # rebuild that doesn't change it keeps what was arranged since.
+    home.activation.mochiWidgets = lib.mkIf (cfg.widgets != null) (
+      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        dir="${config.xdg.configHome}/mochi"
+        stamp="$dir/.widgets-declared"
+        if [ "$(cat "$stamp" 2>/dev/null)" != "${widgetsFile}" ]; then
+          run mkdir -p "$dir"
+          run install -m 644 "${widgetsFile}" "$dir/widgets.toml"
+          run sh -c 'echo "$1" > "$2"' sh "${widgetsFile}" "$stamp"
+        fi
+      ''
+    );
 
     systemd.user.services.mochid = lib.mkIf cfg.systemd.enable {
       Unit = {
