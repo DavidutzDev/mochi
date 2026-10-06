@@ -142,6 +142,8 @@ pub struct ManifestContribution {
     pub target: String,
     pub kind: String,
     pub id: String,
+    /// Empty for kinds without one, like a launcher provider.
+    #[serde(default)]
     pub view: String,
     pub title: String,
     #[serde(default)]

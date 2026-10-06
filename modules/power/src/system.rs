@@ -62,6 +62,39 @@ pub trait Profiles {
     fn profiles(&self) -> zbus::Result<Vec<HashMap<String, OwnedValue>>>;
 }
 
+/// power-profiles-daemon and its names, under the name it has had since 0.20
+/// or, for older versions, under `net.hadess.PowerProfiles`. `None` when
+/// neither answers.
+pub async fn profiles(system: &Connection) -> Option<(ProfilesProxy<'static>, Vec<String>)> {
+    let mut last = None;
+    for proxy in [ProfilesProxy::new(system).await, older(system).await] {
+        match proxy {
+            Ok(proxy) => match proxy.profiles().await {
+                Ok(list) => {
+                    let names = profile_names(&list);
+                    return Some((proxy, names));
+                }
+                Err(error) => last = Some(error),
+            },
+            Err(error) => last = Some(error),
+        }
+    }
+    if let Some(error) = last {
+        tracing::info!(%error, "no power profiles");
+    }
+    None
+}
+
+/// power-profiles-daemon under its name before 0.20.
+async fn older(system: &Connection) -> zbus::Result<ProfilesProxy<'static>> {
+    ProfilesProxy::builder(system)
+        .destination("net.hadess.PowerProfiles")?
+        .path("/net/hadess/PowerProfiles")?
+        .interface("net.hadess.PowerProfiles")?
+        .build()
+        .await
+}
+
 /// What logind lets this user do, read once at startup.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Abilities {
@@ -117,6 +150,18 @@ pub fn profile_names(profiles: &[HashMap<String, OwnedValue>]) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Reads, never sets: `cargo test -p mochi-module-power -- --ignored`
+    /// on a system whose power-profiles-daemon still answers to the old name.
+    #[tokio::test]
+    #[ignore = "needs power-profiles-daemon on the system bus"]
+    async fn the_older_name_answers() {
+        let system = Connection::system().await.unwrap();
+        let proxy = older(&system).await.unwrap();
+        let names = profile_names(&proxy.profiles().await.unwrap());
+        assert!(names.contains(&"balanced".to_owned()), "{names:?}");
+        assert!(!proxy.active_profile().await.unwrap().is_empty());
+    }
 
     #[test]
     fn only_yes_and_challenge_show_a_button() {

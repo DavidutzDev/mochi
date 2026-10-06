@@ -1,0 +1,21 @@
+[package]
+name = "mochi-plugin-emoji"
+description = "Example Mochi plugin: an emoji picker in the launcher"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[[bin]]
+name = "emoji"
+path = "src/main.rs"
+
+[dependencies]
+# In a plugin of your own:
+# mochi-sdk = { git = "https://github.com/DavidutzDev/mochi", tag = "v0.0.5" }
+mochi-sdk = { path = "../../../crates/mochi-sdk" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+toml = "1"

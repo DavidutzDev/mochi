@@ -17,6 +17,9 @@ Item {
     readonly property var pages: Daemon.offered("hub", "page")
     // "home", or module/id for a page.
     property string page: payload.page ?? "home"
+    // `mochi ipc hub open <page>` while it's open switches pages, after a
+    // click on a tab replaced the binding above.
+    onPayloadChanged: page = payload.page ?? "home"
     readonly property var current: pages.find(entry => `${entry.module}/${entry.id}` === page) ?? null
     // A module whose state says it isn't `available`, like Bluetooth without
     // an adapter, keeps its page out of the navbar.
@@ -142,6 +145,9 @@ Item {
                     readonly property int span: Math.max(1, Math.min(root.columns, modelData.options?.span ?? 1))
                     // Columns left free in its row, which it fills.
                     property int extra: 0
+                    // The page it opens: `options.page` names one of its
+                    // module's pages, otherwise the module's first.
+                    readonly property var opens: root.tabs.find(tab => tab.module === modelData.module && (modelData.options?.page == null || tab.id === modelData.options.page)) ?? null
 
                     width: root.column * (span + extra) + root.gap * (span + extra - 1)
                     // A card with nothing to show hides, and the rest close up.
@@ -150,20 +156,53 @@ Item {
                     onVisibleChanged: Qt.callLater(cards.relayout)
                     onHeightChanged: Qt.callLater(cards.relayout)
 
-                    Row {
-                        spacing: 6
+                    // The heading opens the card's page, when it has one.
+                    Item {
+                        implicitWidth: label.implicitWidth
+                        implicitHeight: label.implicitHeight
 
-                        Symbol {
-                            anchors.verticalCenter: parent.verticalCenter
-                            visible: card.modelData.icon != null
-                            name: card.modelData.icon ?? ""
-                            size: 13
-                            color: Theme.muted
+                        MouseArea {
+                            id: heading
+
+                            anchors.fill: parent
+                            enabled: card.opens !== null
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.page = `${card.opens.module}/${card.opens.id}`
                         }
 
-                        SectionLabel {
-                            anchors.verticalCenter: parent.verticalCenter
-                            text: card.modelData.title
+                        Row {
+                            id: label
+
+                            spacing: 6
+                            opacity: heading.containsMouse ? 0.75 : 1
+
+                            Behavior on opacity {
+                                NumberAnimation {
+                                    duration: Theme.fast
+                                }
+                            }
+
+                            Symbol {
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: card.modelData.icon != null
+                                name: card.modelData.icon ?? ""
+                                size: 13
+                                color: Theme.muted
+                            }
+
+                            SectionLabel {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: card.modelData.title
+                            }
+
+                            Symbol {
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: card.opens !== null
+                                name: "chevron"
+                                size: 10
+                                color: Theme.muted
+                            }
                         }
                     }
 
@@ -172,6 +211,15 @@ Item {
                         height: Math.max(view.height, 52) + 24
                         radius: Theme.radiusLarge
                         color: Theme.surface
+
+                        // A click on the card that misses its controls opens
+                        // the page too.
+                        MouseArea {
+                            anchors.fill: parent
+                            enabled: card.opens !== null
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.page = `${card.opens.module}/${card.opens.id}`
+                        }
 
                         Contributed {
                             id: view

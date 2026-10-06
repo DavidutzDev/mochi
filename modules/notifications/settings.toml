@@ -9,3 +9,7 @@
 # "replace": a new popup from an app replaces the one shown, so a burst
 # shows only the latest. "stack": each shows in turn.
 # same_app = "replace"
+# Keep the history across restarts, in $XDG_STATE_HOME/mochi/, readable
+# only by you. Their buttons don't come back, since the apps that sent
+# them can't answer anymore.
+# save_history = true

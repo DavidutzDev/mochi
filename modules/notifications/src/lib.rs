@@ -12,6 +12,7 @@
 //!   it lists them on the island.
 //! - Do not disturb sends everything but critical ones straight to the
 //!   history, and shows a bubble while it's on.
+//! - The history lasts across restarts, in `$XDG_STATE_HOME/mochi/`.
 //!
 //! If another notification daemon runs, Mochi waits for the name and takes
 //! over when that daemon stops.
@@ -23,6 +24,7 @@
 //! timeout_ms = 5000     # how long a popup stays, unless the app says
 //! history = 50          # missed notifications kept
 //! same_app = "replace"  # or "stack": every popup from an app in turn
+//! save_history = true   # keep the history across restarts
 //!
 //! [bubbles.notifications]  # the missed count; center-right by default
 //! area = "right"
@@ -30,10 +32,11 @@
 
 mod center;
 mod note;
+mod saved;
 mod server;
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use include_dir::{Dir, include_dir};
@@ -66,6 +69,7 @@ struct Settings {
     timeout_ms: u64,
     history: usize,
     same_app: SameApp,
+    save_history: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -83,6 +87,7 @@ impl Default for Settings {
             timeout_ms: 5000,
             history: 50,
             same_app: SameApp::Replace,
+            save_history: true,
         }
     }
 }
@@ -140,9 +145,32 @@ impl Module for Notifications {
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {
         Box::pin(async move {
             let settings: Settings = ctx.settings()?;
+            let saved = saved::dir().filter(|_| settings.save_history);
+            let mut center = Center::new(settings.history, settings.same_app == SameApp::Replace);
+            // Images from pixels go next to the saved history, so they last
+            // as long as it does.
+            let images = match &saved {
+                Some(dir) => {
+                    let images = dir.join("notifications");
+                    let restored = saved::load(&dir.join("notifications.json"));
+                    if let Err(error) = std::fs::create_dir_all(&images) {
+                        tracing::warn!(%error, "can't keep notification images");
+                    }
+                    saved::tidy(&images, &restored);
+                    center.restore(restored);
+                    images
+                }
+                None => ctx.data_dir().to_owned(),
+            };
             let (sender, mut incoming) = mpsc::unbounded_channel();
-            let connection = server::start(sender).await?;
-            let mut daemon = Daemon::new(&settings, ctx.data_dir().to_owned(), connection);
+            let connection = server::start(sender, center.last_id()).await?;
+            let mut daemon = Daemon::new(
+                &settings,
+                center,
+                images,
+                saved.map(|dir| dir.join("notifications.json")),
+                connection,
+            );
 
             loop {
                 tokio::select! {
@@ -165,7 +193,11 @@ impl Module for Notifications {
                             daemon.ended(&ctx, activity, reason).await;
                         }
                         Some(ModuleEvent::BubbleClicked(_)) => daemon.show_history(&ctx),
-                        Some(ModuleEvent::Clicked(_) | ModuleEvent::State { .. }) => {}
+                        Some(
+                            ModuleEvent::Clicked(_)
+                            | ModuleEvent::State { .. }
+                            | ModuleEvent::Offers(_),
+                        ) => {}
                     },
                 }
                 daemon.sync(&ctx);
@@ -181,7 +213,10 @@ struct Daemon {
     center: Center,
     timeout: Duration,
     connection: Connection,
-    data_dir: PathBuf,
+    /// Where images from pixels go.
+    image_dir: PathBuf,
+    /// The file the history is saved to, when it is.
+    saved: Option<PathBuf>,
     /// Image files written from pixels, by notification.
     images: BTreeMap<u32, PathBuf>,
     /// Numbers image files, so a replaced image gets a new URL and the UI
@@ -196,13 +231,30 @@ struct Daemon {
 }
 
 impl Daemon {
-    fn new(settings: &Settings, data_dir: PathBuf, connection: Connection) -> Self {
+    fn new(
+        settings: &Settings,
+        center: Center,
+        image_dir: PathBuf,
+        saved: Option<PathBuf>,
+        connection: Connection,
+    ) -> Self {
+        // Restored images are deleted with their notification, like new ones.
+        let images = center
+            .history()
+            .filter_map(|note| match &note.image {
+                Some(Image::Path(path)) if Path::new(path).starts_with(&image_dir) => {
+                    Some((note.id, PathBuf::from(path)))
+                }
+                _ => None,
+            })
+            .collect();
         Self {
-            center: Center::new(settings.history, settings.same_app == SameApp::Replace),
+            center,
             timeout: Duration::from_millis(settings.timeout_ms),
             connection,
-            data_dir,
-            images: BTreeMap::new(),
+            image_dir,
+            saved,
+            images,
             written: 0,
             popups: BTreeMap::new(),
             history_view: None,
@@ -222,7 +274,7 @@ impl Daemon {
         {
             self.written += 1;
             let path = self
-                .data_dir
+                .image_dir
                 .join(format!("{}-{}.png", note.id, self.written));
             note.image = match write_png(&path, *width, *height, rgba) {
                 Ok(()) => Some(Image::Path(path.display().to_string())),
@@ -381,6 +433,13 @@ impl Daemon {
         if state != self.published {
             ctx.publish_state(state.clone());
             self.published = state;
+            if let Some(path) = &self.saved {
+                // The file wants the oldest first.
+                let notes: Vec<&Note> = self.center.history().collect();
+                if let Err(error) = saved::save(path, notes.into_iter().rev()) {
+                    tracing::warn!(%error, "could not save the notification history");
+                }
+            }
         }
 
         let count = self.center.history_len();
@@ -457,7 +516,7 @@ fn payload(note: &Note) -> Value {
     })
 }
 
-fn write_png(path: &std::path::Path, width: u32, height: u32, rgba: &[u8]) -> std::io::Result<()> {
+fn write_png(path: &Path, width: u32, height: u32, rgba: &[u8]) -> std::io::Result<()> {
     let file = std::io::BufWriter::new(std::fs::File::create(path)?);
     let mut encoder = png::Encoder::new(file, width, height);
     encoder.set_color(png::ColorType::Rgba);

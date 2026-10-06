@@ -3,7 +3,8 @@
 //! through [`ContributionSpec`]s with `target = "hub"`:
 //!
 //! - `card`: a tile on the home screen. `options.span` sets its width in
-//!   columns, 1 to 3.
+//!   columns, 1 to 3. Its heading, and a click beside its controls, open
+//!   its module's page: `options.page` names one when it has several.
 //! - `page`: a tab in the navbar, filling the panel when picked.
 //!
 //! Contributed views get their module's published state as `payload`, and

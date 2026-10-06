@@ -166,16 +166,7 @@ impl Module for Power {
             let uwsm = succeeds(Command::new("uwsm").args(["check", "is-active"])).await;
 
             // Profiles are optional: without the service, the page has none.
-            let profiles = match ProfilesProxy::new(&system).await {
-                Ok(proxy) => match proxy.profiles().await {
-                    Ok(list) => Some((proxy, system::profile_names(&list))),
-                    Err(error) => {
-                        tracing::info!(%error, "no power profiles");
-                        None
-                    }
-                },
-                Err(_) => None,
-            };
+            let profiles = system::profiles(&system).await;
             let mut changes = match &profiles {
                 Some((proxy, _)) => Some(proxy.receive_active_profile_changed().await),
                 None => None,

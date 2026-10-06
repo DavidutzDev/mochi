@@ -26,7 +26,7 @@ Item {
             text: root.now.toLocaleTimeString(Qt.locale(), "HH:mm")
             color: Theme.foreground
             font.pixelSize: Theme.textDisplay
-            font.family: Theme.fontFamily
+            font.family: Theme.displayFamily
             font.weight: Font.DemiBold
             font.features: { "tnum": 1 }
         }

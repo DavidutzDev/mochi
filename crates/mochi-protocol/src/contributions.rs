@@ -18,7 +18,9 @@ pub struct Contribution {
     /// Unique within the offering module.
     pub id: String,
     /// `modules/<module>/<view>.qml`. It gets the offering module's
-    /// published state as `payload`.
+    /// published state as `payload`. Empty for what has no view, like a
+    /// launcher provider.
+    #[serde(default)]
     pub view: String,
     pub title: String,
     /// An icon name from the icon theme, or a path.

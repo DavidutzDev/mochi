@@ -56,6 +56,8 @@ Singleton {
     readonly property var overshoot: [0.38, 1.21, 0.22, 1.0, 1, 1]
 
     readonly property string fontFamily: tokens?.text.family || Qt.application.font.family
+    // The clocks.
+    readonly property string displayFamily: tokens?.text.display_family || fontFamily
     readonly property int textCaption: tokens?.text.caption ?? 11
     readonly property int textLabel: tokens?.text.label ?? 12
     readonly property int textBody: tokens?.text.body ?? 13

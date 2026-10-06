@@ -105,6 +105,8 @@ pub struct Daemon {
     failed: BTreeMap<&'static str, String>,
     /// Who watches whose state: watched module to watchers.
     watchers: BTreeMap<String, BTreeSet<&'static str>>,
+    /// What each module was last told is offered to it.
+    offered: BTreeMap<&'static str, Vec<Contribution>>,
     compositor: Compositor,
     /// `[island] panels`: which monitor panels open on.
     panels: Panels,
@@ -141,6 +143,7 @@ impl Daemon {
             listed: Vec::new(),
             failed: BTreeMap::new(),
             watchers: BTreeMap::new(),
+            offered: BTreeMap::new(),
             compositor,
             panels: Panels::default(),
             handshake_deadline: None,
@@ -241,7 +244,25 @@ impl Daemon {
             Some(config.bubbles.max_per_area),
         );
         self.bubbles.set_stack(config.bubbles.stacking());
+        self.tell_offers();
         Ok(())
+    }
+
+    /// Tells each module what the others offer it, when that changed or it
+    /// just started.
+    fn tell_offers(&mut self) {
+        let contributions = self.contributions();
+        for module in self.order.clone() {
+            let offers: Vec<Contribution> = contributions
+                .iter()
+                .filter(|contribution| contribution.target == module)
+                .cloned()
+                .collect();
+            if self.offered.get(module) != Some(&offers) {
+                self.notify(module, ModuleEvent::Offers(offers.clone()));
+                self.offered.insert(module, offers);
+            }
+        }
     }
 
     /// Stops a module: its events end, which ends its task, and everything
@@ -252,6 +273,7 @@ impl Daemon {
         }
         self.settings.remove(module);
         self.revisions.remove(module);
+        self.offered.remove(module);
         self.order.retain(|id| *id != module);
         for watchers in self.watchers.values_mut() {
             watchers.remove(module);
@@ -523,7 +545,7 @@ impl Daemon {
         module: &str,
         action: &str,
         args: &[String],
-        reply: oneshot::Sender<Result<(), CallError>>,
+        reply: oneshot::Sender<Result<Option<String>, CallError>>,
     ) {
         if caller == module {
             let _ = reply.send(Err(CallError::Itself));
@@ -549,7 +571,7 @@ impl Daemon {
         };
         tokio::spawn(async move {
             let result = match answer.await {
-                Ok(result) => result.map(drop).map_err(CallError::Failed),
+                Ok(result) => result.map_err(CallError::Failed),
                 Err(_) => Err(CallError::Failed(
                     "the module dropped the command without answering".into(),
                 )),

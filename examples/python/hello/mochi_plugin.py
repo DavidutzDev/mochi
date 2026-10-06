@@ -125,10 +125,12 @@ class Plugin:
     # wait in the backlog for `events`.
 
     def call(self, module, action, *args):
-        """Runs another module's action. Raises CallError when it fails."""
+        """Runs another module's action and returns what it answered with,
+        or None. Raises CallError when it fails."""
         answer = self._ask({"type": "call", "module": module, "action": action, "args": list(args)})
         if answer.get("error"):
             raise CallError(answer["error"])
+        return answer.get("output")
 
     def activate_workspace(self, workspace):
         self._compositor({"type": "activate_workspace", "workspace": workspace})

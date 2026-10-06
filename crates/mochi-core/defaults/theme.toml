@@ -74,6 +74,9 @@
 [text]
 # A font family name; empty keeps the system font.
 # family = ""
+# The font of the clocks, on the idle island and in the hub; empty keeps
+# `family`.
+# display_family = ""
 # Sizes in pixels, from fine print to a big clock.
 # caption = 11
 # label = 12

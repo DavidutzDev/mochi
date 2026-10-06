@@ -46,7 +46,7 @@ pub use mochi_protocol::plugin::{CompositorState, OutputInfo, WindowInfo, Worksp
 pub use mochi_protocol::spec::{
     ActivitySpec, ArgValue, Args, BubbleSpec, CallError, EndReason, Priority, SamePriority,
 };
-pub use mochi_protocol::{API, ActivityId, Area, BubbleId};
+pub use mochi_protocol::{API, ActivityId, Area, BubbleId, Contribution};
 pub use serde_json::{Value, json};
 
 use mochi_protocol::plugin::{FD_ENV, FromPlugin, ToPlugin};
@@ -123,6 +123,9 @@ pub enum ModuleEvent {
         /// Its whole state, as it published it.
         state: Value,
     },
+    /// What the enabled modules offer this plugin: every contribution whose
+    /// `target` is its id. Sent at the start, then when a reload changes it.
+    Offers(Vec<Contribution>),
 }
 
 /// An action to run, with arguments already checked against the manifest.
@@ -393,6 +396,18 @@ impl ModuleCtx {
         action: &str,
         args: &[&str],
     ) -> impl Future<Output = Result<(), CallError>> + Send + 'static {
+        let answer = self.ask(module, action, args);
+        async move { answer.await.map(drop) }
+    }
+
+    /// Like [`ModuleCtx::call`], and returns what the action answered with,
+    /// like the output `mochi ipc` prints.
+    pub fn ask(
+        &self,
+        module: &str,
+        action: &str,
+        args: &[&str],
+    ) -> impl Future<Output = Result<Option<String>, CallError>> + Send + 'static {
         let (id, answer) = self.request();
         self.send(FromPlugin::Call {
             id,
@@ -402,7 +417,11 @@ impl ModuleCtx {
         });
         async move {
             match answer.await {
-                Ok(ToPlugin::CallResult { error: None, .. }) => Ok(()),
+                Ok(ToPlugin::CallResult {
+                    error: None,
+                    output,
+                    ..
+                }) => Ok(output),
                 Ok(ToPlugin::CallResult {
                     error: Some(error), ..
                 }) => Err(error),
@@ -533,6 +552,7 @@ async fn read(
             },
             ToPlugin::BubbleClicked { bubble } => ModuleEvent::BubbleClicked(BubbleId(bubble)),
             ToPlugin::State { module, state } => ModuleEvent::State { module, state },
+            ToPlugin::Offers { offers } => ModuleEvent::Offers(offers),
             ToPlugin::Compositor { state } => {
                 compositor.send_replace(state);
                 continue;
@@ -703,10 +723,26 @@ mod tests {
             ToPlugin::CallResult {
                 id,
                 error: Some(CallError::NotEnabled("media".into())),
+                output: None,
             },
         )
         .await;
         assert_eq!(call.await, Err(CallError::NotEnabled("media".into())));
+
+        let ask = ctx.ask("launcher", "search", &["2+2"]);
+        let FromPlugin::Call { id, .. } = receive(&mut reader).await else {
+            panic!("no call");
+        };
+        send(
+            &mut writer,
+            ToPlugin::CallResult {
+                id,
+                error: None,
+                output: Some("4".into()),
+            },
+        )
+        .await;
+        assert_eq!(ask.await, Ok(Some("4".into())));
 
         let pointer = ctx.pointer_output();
         let FromPlugin::PointerOutput { id } = receive(&mut reader).await else {

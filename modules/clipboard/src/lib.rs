@@ -28,6 +28,7 @@ use mochi_core::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
+use zeroize::Zeroizing;
 
 use crate::store::{Clip, Kind, Store};
 use crate::wayland::{Formats, Request, Watcher};
@@ -144,6 +145,13 @@ impl Module for Clipboard {
             )
             .arg(id()),
             ActionSpec::new("copy", "Copy an entry without pasting it").arg(id()),
+            ActionSpec::new("copy-text", "Copy some text, like a calculator's result")
+                .arg(ArgSpec::string("text", "What to copy").rest()),
+            ActionSpec::new(
+                "paste-text",
+                "Copy some text and paste it into the window you were in",
+            )
+            .arg(ArgSpec::string("text", "What to paste").rest()),
             ActionSpec::new(
                 "show",
                 "Open an image entry in the preview card a screenshot gets",
@@ -304,6 +312,10 @@ impl State {
             }
             "pick" => id().and_then(|id| self.pick(ctx, id, self.settings.paste)),
             "copy" => id().and_then(|id| self.pick(ctx, id, false)),
+            "copy-text" | "paste-text" => {
+                let text = command.args.str("text").unwrap_or_default().to_owned();
+                self.put_text(ctx, text, command.action == "paste-text")
+            }
             "show" => match id() {
                 Ok(id) => self.show(ctx, id).await,
                 Err(error) => Err(error),
@@ -371,17 +383,43 @@ impl State {
     }
 
     /// Puts an entry on the clipboard, closes the picker, and pastes it.
+    /// Text from another module, like the launcher: kept in the history
+    /// unless that's paused, and copied or pasted like an entry.
+    fn put_text(&mut self, ctx: &ModuleCtx, text: String, paste: bool) -> Result<(), String> {
+        let bytes = Zeroizing::new(text.into_bytes());
+        if self.listening.load(Ordering::Relaxed) {
+            let clip = Clip {
+                kind: Kind::Text,
+                formats: vec![(wayland::TEXT[0].to_owned(), bytes)],
+            };
+            let id = self
+                .store
+                .add(&clip, now())
+                .map_err(|error| error.to_string())?;
+            self.changed(ctx);
+            return self.pick(ctx, id, paste);
+        }
+        let formats = wayland::text_formats(Arc::new(bytes));
+        self.serve(ctx, formats, paste)
+    }
+
     fn pick(&mut self, ctx: &ModuleCtx, id: u64, paste: bool) -> Result<(), String> {
-        let clipboard = self
-            .clipboard
-            .clone()
-            .ok_or("the clipboard isn't available")?;
         let formats = self.formats(id)?;
-        clipboard.send(Request::Serve(formats))?;
         // Mochi's own selection isn't read back; move the entry up here.
         self.store
             .touch(id, now())
             .map_err(|error| error.to_string())?;
+        self.serve(ctx, formats, paste)
+    }
+
+    /// Owns the selection with `formats`, closes the picker, and pastes
+    /// into the window that had the keyboard before when `paste` is set.
+    fn serve(&mut self, ctx: &ModuleCtx, formats: Formats, paste: bool) -> Result<(), String> {
+        let clipboard = self
+            .clipboard
+            .clone()
+            .ok_or("the clipboard isn't available")?;
+        clipboard.send(Request::Serve(formats))?;
         self.close(ctx);
         self.publish(ctx);
         // Picked from the hub's page: the hub holds the keyboard.

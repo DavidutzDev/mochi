@@ -30,6 +30,7 @@
 - [Share](modules/share.md)
 - [Clipboard](modules/clipboard.md)
 - [Tray](modules/tray.md)
+- [Widgets](modules/widgets.md)
 
 # Building on Mochi
 
@@ -38,4 +39,6 @@
   - [Plugin manifest](plugin-manifest.md)
   - [The Rust SDK](sdk.md)
   - [Making an SDK](custom-sdks.md)
+  - [Launcher providers](launcher-providers.md)
+  - [Writing widgets](writing-widgets.md)
 - [Protocol](protocol.md)

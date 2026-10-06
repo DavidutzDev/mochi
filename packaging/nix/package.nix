@@ -1,7 +1,9 @@
 {
   lib,
+  stdenv,
   rustPlatform,
   makeWrapper,
+  installShellFiles,
   git,
   curl,
   gnutar,
@@ -40,6 +42,7 @@ rustPlatform.buildRustPackage {
 
   nativeBuildInputs = [
     makeWrapper
+    installShellFiles
     pkg-config
   ];
   # libpulse for the OSD module.
@@ -58,6 +61,14 @@ rustPlatform.buildRustPackage {
     install -Dm644 systemd/mochid.service $out/lib/systemd/user/mochid.service
     substituteInPlace $out/lib/systemd/user/mochid.service \
       --replace-fail /usr/bin/ $out/bin/
+  ''
+  + lib.optionalString (stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''
+    installShellCompletion --cmd mochi \
+      --bash <($out/bin/mochi completions bash) \
+      --fish <($out/bin/mochi completions fish) \
+      --zsh <($out/bin/mochi completions zsh)
+  ''
+  + ''
     # xdg-desktop-portal-hyprland runs one program, without arguments of
     # our choosing, as its screen-share picker.
     makeWrapper $out/bin/mochi $out/bin/mochi-share-picker --add-flags share-pick

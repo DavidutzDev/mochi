@@ -1,0 +1,39 @@
+# An example plugin: an emoji picker for the launcher. Type ":" and a few
+# words, like ":cat face", and Enter copies the emoji. The ones you pick
+# come first next time.
+
+[plugin]
+id = "emoji"
+name = "Emoji"
+version = "0.1.0"
+description = "Finds emoji by name in the launcher and copies the one you pick"
+authors = ["Mochi"]
+api = 1
+
+[backend]
+exec = "bin/emoji"
+# Its own target directory, so it builds the same inside the Mochi
+# repository and in a repository of its own.
+build = "cargo build --release --locked --target-dir target && install -Dm755 target/release/emoji bin/emoji"
+
+[release]
+asset = "emoji-{version}-{arch}-linux.tar.gz"
+
+[[actions]]
+name = "search"
+description = "Print the emoji matching some words, as launcher results"
+args = [{ name = "query", description = "Words of the name, like cat face", kind = "string", optional = true, rest = true }]
+
+[[actions]]
+name = "pick"
+description = "Remember an emoji as picked, so it comes first next time"
+args = [{ name = "id", description = "The emoji", kind = "string" }]
+
+# No view: the launcher shows the results the search action prints.
+[[contributions]]
+target = "launcher"
+kind = "provider"
+id = "emoji"
+title = "Emoji"
+icon = "face-smile"
+options = { prefix = ":", search = "search", pick = "pick" }

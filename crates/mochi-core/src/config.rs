@@ -379,8 +379,7 @@ mod tests {
             Placement {
                 area: Some(mochi_protocol::Area::Left),
                 group: Some("status".into()),
-                order: None,
-                wide: None,
+                ..Placement::default()
             }
         );
         config.check(AVAILABLE, path()).unwrap();

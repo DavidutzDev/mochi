@@ -161,8 +161,13 @@ fn config_command(action: &ConfigAction, config: Option<PathBuf>) -> anyhow::Res
         ConfigAction::Check => {
             modules::load_config(&config_file, None)?;
             mochi_core::config::load_theme(&theme_file)?;
+            let widgets_file = config_file.with_file_name(mochi_module_widgets::FILE);
+            let widgets = mochi_module_widgets::check(&widgets_file).map_err(anyhow::Error::msg)?;
             println!("{} is fine", config_file.display());
             println!("{} is fine", theme_file.display());
+            if widgets {
+                println!("{} is fine", widgets_file.display());
+            }
         }
         ConfigAction::Path => {
             println!("{}", config_file.display());
@@ -211,7 +216,10 @@ async fn run(args: Args) -> anyhow::Result<()> {
     let mode = if args.dev { Mode::Link } else { Mode::Copy };
     let socket = paths.socket();
     let shell_dir = paths.shell_dir();
-    let runner = Runner::new(paths, mode, compositor, request_sender, exit_sender);
+    let mut runner = Runner::new(paths, mode, compositor, request_sender, exit_sender);
+    if let Some(dir) = config_file.parent() {
+        runner.config_dir = dir.to_owned();
+    }
 
     let files = Files {
         config: config_file,

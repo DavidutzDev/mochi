@@ -32,6 +32,9 @@ pub struct Placement {
     pub order: Option<i32>,
     /// Shows the module's wide views, for modules that have them.
     pub wide: Option<bool>,
+    /// `false` hides the module's bubbles. The module keeps running and
+    /// still shows them as far as it knows.
+    pub show: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -181,8 +184,17 @@ impl Bubbles {
     /// Every shown bubble in drawing order, and what each full area left
     /// out.
     pub fn snapshot(&self) -> (Vec<Bubble>, Vec<Overflow>) {
-        let mut placed: Vec<Placed<'_>> =
-            self.entries.iter().map(|entry| self.place(entry)).collect();
+        let mut placed: Vec<Placed<'_>> = self
+            .entries
+            .iter()
+            .filter(|entry| {
+                self.placements
+                    .get(&entry.module)
+                    .and_then(|placement| placement.show)
+                    != Some(false)
+            })
+            .map(|entry| self.place(entry))
+            .collect();
         placed.sort_by_key(|placed| {
             (
                 placed.area,
@@ -388,7 +400,7 @@ mod tests {
                     area: Some(Area::Left),
                     group: Some(String::new()),
                     order: Some(-1),
-                    wide: None,
+                    ..Placement::default()
                 },
             ),
             (
@@ -417,6 +429,30 @@ mod tests {
                 (3, Area::Left, Some("status")),
             ]
         );
+    }
+
+    #[test]
+    fn the_user_hides_a_modules_bubbles() {
+        let hidden = Placement {
+            show: Some(false),
+            ..Placement::default()
+        };
+        let mut bubbles = Bubbles::new(BTreeMap::from([("media".to_owned(), hidden)]), Some(1));
+        bubbles.show(
+            BubbleId(1),
+            "media",
+            spec(Area::Left).priority(Priority::HIGH),
+        );
+        bubbles.show(BubbleId(2), "bt", spec(Area::Left));
+
+        // Hidden ones take no room either.
+        let (snapshot, overflow) = bubbles.snapshot();
+        assert_eq!(ids(&bubbles), [2]);
+        assert_eq!(snapshot.len(), 1);
+        assert!(overflow.is_empty());
+        // The module can still change and hide them.
+        assert_eq!(bubbles.update("media", BubbleId(1), json!({})), Ok(()));
+        assert_eq!(bubbles.hide("media", BubbleId(1)), Ok(()));
     }
 
     #[test]

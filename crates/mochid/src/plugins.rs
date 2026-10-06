@@ -67,14 +67,43 @@ pub struct PluginModule {
     id: &'static str,
     dir: PathBuf,
     manifest: Manifest,
+    /// Its settings at their defaults, from the `# key = value` lines of its
+    /// `settings.toml`. `None` without one, which leaves them unchecked.
+    defaults: Option<mochi_core::toml::Table>,
 }
 
 impl PluginModule {
     pub fn new(dir: PathBuf, manifest: Manifest) -> Self {
+        let id = intern(&manifest.plugin.id);
+        let defaults = std::fs::read_to_string(dir.join("settings.toml"))
+            .ok()
+            .and_then(|example| {
+                let parsed: Result<mochi_core::toml::Table, _> =
+                    mochi_core::toml::from_str(&mochi_core::examples::uncommented(&example));
+                match parsed {
+                    Ok(table) => Some(table),
+                    Err(error) => {
+                        tracing::warn!(
+                            plugin = id,
+                            "its settings.toml doesn't parse, so its settings go unchecked: {error}"
+                        );
+                        None
+                    }
+                }
+            })
+            .map(|table| {
+                table
+                    .get("module")
+                    .and_then(|modules| modules.get(id))
+                    .and_then(|section| section.as_table())
+                    .cloned()
+                    .unwrap_or_default()
+            });
         Self {
-            id: intern(&manifest.plugin.id),
+            id,
             dir,
             manifest,
+            defaults,
         }
     }
 
@@ -141,9 +170,13 @@ impl Module for PluginModule {
         self.manifest.actions()
     }
 
-    /// A plugin reads its own settings; any table is fine here.
-    fn check_settings(&self, _table: &mochi_core::toml::Table) -> Result<(), String> {
-        Ok(())
+    /// Checks the settings against the defaults in its `settings.toml`:
+    /// every key must be one of them, with a value of the same type.
+    fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {
+        match &self.defaults {
+            Some(defaults) => check_against(defaults, table, ""),
+            None => Ok(()),
+        }
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
@@ -250,6 +283,7 @@ async fn supervise(plugin: PluginModule, mut ctx: ModuleCtx) -> Result<(), Modul
                     Some(ModuleEvent::State { module, state }) => {
                         link.states.insert(module, state);
                     }
+                    Some(ModuleEvent::Offers(offers)) => link.offers = Some(offers),
                     Some(_) => {}
                 },
             }
@@ -269,6 +303,8 @@ struct Link {
     next_command: u64,
     /// The latest state of each watched module, for the next backend.
     states: BTreeMap<String, Value>,
+    /// What's offered to the plugin, for the next backend.
+    offers: Option<Vec<mochi_protocol::Contribution>>,
 }
 
 impl Link {
@@ -356,6 +392,11 @@ async fn session(
         let _ = outgoing.send(ToPlugin::State {
             module: module.clone(),
             state: state.clone(),
+        });
+    }
+    if let Some(offers) = &link.offers {
+        let _ = outgoing.send(ToPlugin::Offers {
+            offers: offers.clone(),
         });
     }
 
@@ -452,11 +493,18 @@ fn on_message(
             args,
         } => {
             let args: Vec<&str> = args.iter().map(String::as_str).collect();
-            let call = ctx.call(&module, &action, &args);
+            let call = ctx.ask(&module, &action, &args);
             let outgoing = outgoing.clone();
             tokio::spawn(async move {
-                let error = call.await.err();
-                let _ = outgoing.send(ToPlugin::CallResult { id: number, error });
+                let (output, error) = match call.await {
+                    Ok(output) => (output, None),
+                    Err(error) => (None, Some(error)),
+                };
+                let _ = outgoing.send(ToPlugin::CallResult {
+                    id: number,
+                    error,
+                    output,
+                });
             });
         }
         FromPlugin::ActivateWorkspace {
@@ -523,6 +571,10 @@ fn on_event(event: ModuleEvent, link: &mut Link, outgoing: &mpsc::UnboundedSende
         ModuleEvent::State { module, state } => {
             link.states.insert(module.clone(), state.clone());
             ToPlugin::State { module, state }
+        }
+        ModuleEvent::Offers(offers) => {
+            link.offers = Some(offers.clone());
+            ToPlugin::Offers { offers }
         }
     };
     let _ = outgoing.send(message);
@@ -757,9 +809,104 @@ async fn notify_failure(name: String, message: String) {
     }
 }
 
+/// Checks `table` against `defaults`, the way serde would for a struct with
+/// these fields: no unknown keys, and each value of its default's type. An
+/// integer passes for a float. `prefix` names the enclosing tables.
+fn check_against(
+    defaults: &mochi_core::toml::Table,
+    table: &mochi_core::toml::Table,
+    prefix: &str,
+) -> Result<(), String> {
+    use mochi_core::toml::Value;
+    for (key, value) in table {
+        let name = format!("{prefix}{key}");
+        let Some(default) = defaults.get(key) else {
+            let mut known: Vec<&str> = defaults.keys().map(String::as_str).collect();
+            known.sort_unstable();
+            return Err(if known.is_empty() {
+                format!("unknown setting `{name}`")
+            } else {
+                format!(
+                    "unknown setting `{name}`, expected one of `{}`",
+                    known.join("`, `")
+                )
+            });
+        };
+        match (default, value) {
+            // An empty table by default is a map of anything.
+            (Value::Table(defaults), Value::Table(table)) if !defaults.is_empty() => {
+                check_against(defaults, table, &format!("{name}."))?;
+            }
+            (Value::Float(_), Value::Integer(_)) => {}
+            _ if std::mem::discriminant(default) == std::mem::discriminant(value) => {}
+            _ => {
+                return Err(format!(
+                    "`{name}` should be {}, like the default {default}, not {}",
+                    default.type_str(),
+                    value.type_str()
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn example(name: &str) -> PluginModule {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../examples/plugins")
+            .join(name);
+        let manifest = Manifest::load(&dir).unwrap();
+        PluginModule::new(dir, manifest)
+    }
+
+    fn table(text: &str) -> mochi_core::toml::Table {
+        mochi_core::toml::from_str(text).unwrap()
+    }
+
+    #[test]
+    fn settings_are_checked_against_the_plugins_settings_toml() {
+        let weather = example("weather");
+        weather
+            .check_settings(&table(
+                "city = \"Lyon\"\nlatitude = 45\nrefresh_minutes = 5",
+            ))
+            .unwrap();
+
+        let typo = weather
+            .check_settings(&table("ctiy = \"Lyon\""))
+            .unwrap_err();
+        assert!(typo.contains("unknown setting `ctiy`"), "{typo}");
+        assert!(typo.contains("`city`"), "{typo}");
+
+        let wrong = weather
+            .check_settings(&table("refresh_minutes = \"often\""))
+            .unwrap_err();
+        assert!(
+            wrong.contains("`refresh_minutes` should be integer"),
+            "{wrong}"
+        );
+
+        // Every example's own defaults pass.
+        for name in ["weather", "pomodoro"] {
+            let plugin = example(name);
+            let defaults = plugin.defaults.clone().unwrap();
+            assert!(!defaults.is_empty(), "{name} shows no defaults");
+            plugin.check_settings(&defaults).unwrap();
+        }
+    }
+
+    #[test]
+    fn nested_tables_are_checked_and_empty_ones_take_anything() {
+        let defaults = table("[colors]\nfocus = \"red\"\n[aliases]");
+        check_against(&defaults, &table("[colors]\nfocus = \"blue\""), "").unwrap();
+        check_against(&defaults, &table("[aliases]\nanything = 1"), "").unwrap();
+        let error = check_against(&defaults, &table("[colors]\nbreak = \"x\""), "").unwrap_err();
+        assert!(error.contains("`colors.break`"), "{error}");
+    }
 
     #[test]
     fn interned_ids_are_shared() {

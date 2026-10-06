@@ -2,7 +2,8 @@ import QtQuick
 import qs.island
 
 // The hub's home card: the battery's level, and how long until empty or
-// full. Without a battery, it says so.
+// full, and the power module's profiles under them when it has some.
+// Without a battery, it says so.
 Item {
     id: root
 
@@ -11,8 +12,15 @@ Item {
     // A desktop: nothing worth a card.
     readonly property bool hidden: !present
     readonly property color tint: payload?.critical ? Theme.danger : payload?.low ? Theme.accent : Theme.foreground
+    readonly property var power: Daemon.state("power")
+    readonly property var profiles: power?.profiles ?? []
+    readonly property var profileIcons: ({
+            "power-saver": "leaf",
+            "balanced": "scale",
+            "performance": "bolt"
+        })
 
-    implicitHeight: 64
+    implicitHeight: profiles.length > 0 ? 64 + 10 + switcher.height : 64
 
     Text {
         anchors.centerIn: parent
@@ -24,7 +32,7 @@ Item {
     }
 
     Row {
-        anchors.verticalCenter: parent.verticalCenter
+        y: (64 - height) / 2
         visible: root.present
         spacing: 14
 
@@ -56,5 +64,22 @@ Item {
                 font.family: Theme.fontFamily
             }
         }
+    }
+
+    Segmented {
+        id: switcher
+
+        y: 64 + 10
+        width: parent.width
+        height: 36
+        visible: root.present && root.profiles.length > 0
+        color: Theme.raised
+        options: root.profiles.map(name => ({
+                    "value": name,
+                    "label": "",
+                    "icon": root.profileIcons[name] ?? "dot"
+                }))
+        current: root.power?.profile ?? ""
+        onPicked: value => Daemon.command("power", "profile", [value])
     }
 }

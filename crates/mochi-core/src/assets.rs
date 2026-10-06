@@ -67,7 +67,15 @@ pub fn write_shell(
     }
     remove_others(out, &keep)?;
 
-    for module in modules {
+    // A plugin without views, like a launcher provider, has nothing here.
+    let modules: Vec<&ShellModule<'_>> = modules
+        .iter()
+        .filter(|module| match module.assets {
+            Assets::Disk(dir) => dir.is_dir() || !module.overrides.is_empty(),
+            Assets::Embedded { .. } => true,
+        })
+        .collect();
+    for module in &modules {
         let target = out.join("modules").join(module.id);
         written += match (module.assets, mode, module.overrides.is_empty()) {
             (Assets::Embedded { dir, .. }, Mode::Copy, true) => copy_dir(dir, &target)?,
@@ -320,6 +328,22 @@ mod tests {
         assert!(!is_symlink(&out.join("island")));
         assert!(!is_symlink(&out.join("modules/clock")));
         assert!(out.join("modules/clock/View.qml").is_file());
+        fs::remove_dir_all(out).unwrap();
+    }
+
+    #[test]
+    fn plugins_without_views_are_left_out() {
+        let out = scratch("viewless");
+        let plugin = Assets::Disk(out.join("nowhere"));
+        let modules = [ShellModule {
+            id: "plugin",
+            assets: &plugin,
+            overrides: &[],
+        }];
+        write_shell(&out, &crate::QML, &modules, Mode::Copy).unwrap();
+        assert!(!out.join("modules/plugin").exists());
+        let generated = fs::read_to_string(out.join(MODULES_FILE)).unwrap();
+        assert!(!generated.contains("modules/plugin"), "{generated}");
         fs::remove_dir_all(out).unwrap();
     }
 

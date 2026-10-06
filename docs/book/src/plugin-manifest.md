@@ -85,13 +85,13 @@ What the plugin offers other modules, like a card or a page for the hub. The vie
 | Key | | |
 |---|---|---|
 | `target` | required | The module it's for, like `hub`. |
-| `kind` | required | What it is to the target: the hub takes `card` and `page`. |
+| `kind` | required | What it is to the target: the hub takes `card` and `page`, the launcher `provider`. |
 | `id` | required | Unique among the plugin's contributions. |
-| `view` | required | The view's file name, without `.qml`. |
+| `view` | | The view's file name, without `.qml`. Kinds without a view, like a launcher `provider`, leave it out. |
 | `title` | required | Its heading. |
 | `icon` | | A Mochi symbol, like `clock`, or an icon theme name. |
 | `order` | `0` | Lower comes first. |
-| `options` | | Anything else the target reads, like `{ span = 2 }` for a hub card two columns wide. |
+| `options` | | Anything else the target reads, like `{ span = 2 }` for a hub card two columns wide. A hub card opens its plugin's page when clicked; `{ page = "<id>" }` picks which, when there are several. A launcher provider takes `prefix`, `search` and `pick`: see [Launcher providers](launcher-providers.md). |
 
 ## `settings.toml`
 

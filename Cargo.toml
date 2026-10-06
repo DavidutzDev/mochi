@@ -31,6 +31,7 @@ mochi-module-media = { path = "modules/media" }
 mochi-module-network = { path = "modules/network" }
 mochi-module-notifications = { path = "modules/notifications" }
 mochi-module-performance = { path = "modules/performance" }
+mochi-module-widgets = { path = "modules/widgets" }
 mochi-module-osd = { path = "modules/osd" }
 mochi-module-power = { path = "modules/power" }
 mochi-module-share = { path = "modules/share" }
@@ -41,6 +42,7 @@ anyhow = "1"
 blake3 = "1"
 chacha20poly1305 = "0.10"
 clap = { version = "4", features = ["derive"] }
+clap_complete = "4"
 enumflags2 = "0.7"
 futures-util = { version = "0.3", default-features = false }
 getrandom = "0.3"

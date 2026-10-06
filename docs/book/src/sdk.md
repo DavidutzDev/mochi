@@ -85,6 +85,7 @@ With `deny_unknown_fields`, a typo in `config.toml` makes the backend exit with 
 | `Ended { activity, reason }` | One of its activities is gone: `Expired`, `Dismissed`, `Withdrawn`, `Replaced` or `Outside` |
 | `BubbleClicked(bubble)` | A click on one of its bubbles |
 | `State { module, state }` | A module from `[uses] state` published state |
+| `Offers(contributions)` | What other modules offer this one, like launcher providers to a launcher: at the start, then after each reload that changes it |
 
 To do work on a timer as well, wait on both with `tokio::select!`:
 
@@ -181,6 +182,8 @@ tokio::spawn(async move {
     }
 });
 ```
+
+`ask` does the same and returns what the action answered with, like the output `mochi ipc` prints: `Ok(Some(text))`, or `Ok(None)` for an action that answered nothing. The launcher asks [providers](launcher-providers.md) this way.
 
 `CallError::NotEnabled` means the module isn't enabled: the usual case for using another module when it's there and carrying on when it isn't. Spawn the call rather than awaiting it in your event loop when the other module might call back: each would wait for the other.
 

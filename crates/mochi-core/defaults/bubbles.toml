@@ -19,3 +19,4 @@
 #   group = "status"    # same group, same pill; "" for a pill of its own
 #   order = 1           # lower goes further left
 #   wide = true         # a pill with text, for modules that have one
+#   show = false        # no bubbles from this module at all

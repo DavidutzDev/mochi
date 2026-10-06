@@ -45,8 +45,21 @@ PanelWindow {
     readonly property bool overlaid: activity?.overlay != null
     // Any other activity that closes on a click outside catches every click
     // too, without the keyboard: the click closes it instead of reaching
-    // the window underneath. Not on a monitor that isn't showing it.
-    readonly property bool catching: (activity?.outside ?? false) && !island.elsewhere(activity)
+    // the window underneath. Not on a monitor that isn't showing it, and not
+    // after a scroll outside released it.
+    readonly property bool catching: (activity?.outside ?? false) && !island.elsewhere(activity) && !releases(activity)
+    // The activity whose catch a scroll released, as {id, module, key}.
+    property var released: null
+
+    // A keyed replacement, like the media notice for the next track, stays
+    // released.
+    function releases(activity: var): bool {
+        if (!released || !activity)
+            return false;
+        if (activity.id === released.id)
+            return true;
+        return activity.key != null && activity.module === released.module && activity.key === released.key;
+    }
     readonly property bool covering: modal || overlaid || catching
 
     // Always the whole screen: a layer surface that changes size is animated by
@@ -94,6 +107,18 @@ PanelWindow {
         enabled: root.covering
         acceptedButtons: Qt.AllButtons
         onClicked: Daemon.event(root.overlaid ? "dismiss" : "outside")
+        // The catch takes the scroll wheel too, and a surface can't pass an
+        // event on to the window underneath. A scroll outside a notice the
+        // user didn't open releases the catch instead, so the next scroll
+        // reaches the page; the notice stays until it times out.
+        onWheel: wheel => {
+            if (root.catching && !root.modal && !root.overlaid && !root.activity.expanded)
+                root.released = {
+                    "id": root.activity.id,
+                    "module": root.activity.module,
+                    "key": root.activity.key ?? null
+                };
+        }
     }
 
     // Escape closes a modal activity whose view doesn't take keys itself,

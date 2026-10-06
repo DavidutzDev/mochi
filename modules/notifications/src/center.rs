@@ -188,6 +188,28 @@ impl Center {
         Ok(effects)
     }
 
+    /// Puts notifications from before a restart back in the history, oldest
+    /// first. Past the limit, the oldest go without a word: their apps
+    /// aren't listening anymore.
+    pub fn restore(&mut self, notes: Vec<Note>) {
+        for note in notes {
+            if self.notes.contains_key(&note.id) {
+                continue;
+            }
+            self.history.push(note.id);
+            self.notes.insert(note.id, note);
+        }
+        let excess = self.history.len().saturating_sub(self.history_max);
+        for id in self.history.drain(..excess).collect::<Vec<_>>() {
+            self.notes.remove(&id);
+        }
+    }
+
+    /// The highest id in use, so new notifications get others.
+    pub fn last_id(&self) -> u32 {
+        self.notes.keys().next_back().copied().unwrap_or(0)
+    }
+
     /// Empties the history.
     pub fn clear(&mut self) -> Vec<Effect> {
         let ids = std::mem::take(&mut self.history);
@@ -246,6 +268,24 @@ mod tests {
 
     fn history(center: &Center) -> Vec<u32> {
         center.history().map(|note| note.id).collect()
+    }
+
+    #[test]
+    fn restored_notes_join_the_history_within_the_limit() {
+        let mut center = Center::new(2, false);
+        center.restore(vec![
+            note(4, Urgency::Normal),
+            note(5, Urgency::Normal),
+            note(9, Urgency::Low),
+        ]);
+        assert_eq!(history(&center), [9, 5]);
+        assert_eq!(center.last_id(), 9);
+        assert!(center.get(4).is_none());
+        // They close like any other.
+        assert_eq!(
+            center.close(5, Reason::Dismissed),
+            [Effect::Closed(5, Reason::Dismissed)]
+        );
     }
 
     #[test]

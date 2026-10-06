@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use include_dir::Dir;
 use mochi_compositor::Compositor;
-use mochi_protocol::{ActionSpec, ActivityId, BubbleId};
+use mochi_protocol::{ActionSpec, ActivityId, BubbleId, Contribution};
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::{mpsc, oneshot};
@@ -166,7 +166,7 @@ pub enum Request {
         module: String,
         action: String,
         args: Vec<String>,
-        reply: oneshot::Sender<Result<(), CallError>>,
+        reply: oneshot::Sender<Result<Option<String>, CallError>>,
     },
 }
 
@@ -189,6 +189,10 @@ pub enum ModuleEvent {
         module: String,
         state: Value,
     },
+    /// What the enabled modules offer this one, like the launcher's
+    /// providers: every [`Contribution`] whose `target` is this module. Comes
+    /// once at the start, then whenever a reload changes it.
+    Offers(Vec<Contribution>),
 }
 
 /// What a module answers a command with: some output to hand back, or none.
@@ -242,6 +246,7 @@ pub struct ModuleCtx {
     ids: ActivityIds,
     data_dir: PathBuf,
     session_dir: PathBuf,
+    config_dir: Option<PathBuf>,
     requests: mpsc::UnboundedSender<ModuleRequest>,
     events: mpsc::UnboundedReceiver<ModuleEvent>,
 }
@@ -266,10 +271,25 @@ impl ModuleCtx {
             ids,
             data_dir,
             session_dir,
+            config_dir: None,
             requests,
             events,
         };
         (ctx, sender)
+    }
+
+    /// Sets the directory `config.toml` is in, for modules with files of
+    /// their own next to it.
+    #[must_use]
+    pub fn with_config_dir(mut self, dir: PathBuf) -> Self {
+        self.config_dir = Some(dir);
+        self
+    }
+
+    /// The directory `config.toml` is in, like `~/.config/mochi`, also when
+    /// `mochid --config` names another file. `None` in tests.
+    pub fn config_dir(&self) -> Option<&Path> {
+        self.config_dir.as_deref()
     }
 
     pub fn module(&self) -> &'static str {
@@ -359,6 +379,18 @@ impl ModuleCtx {
         action: &str,
         args: &[&str],
     ) -> impl Future<Output = Result<(), CallError>> + Send + 'static {
+        let answer = self.ask(module, action, args);
+        async move { answer.await.map(drop) }
+    }
+
+    /// Like [`ModuleCtx::call`], and returns what the action answered with,
+    /// like the output `mochi ipc` prints.
+    pub fn ask(
+        &self,
+        module: &str,
+        action: &str,
+        args: &[&str],
+    ) -> impl Future<Output = Result<Option<String>, CallError>> + Send + 'static {
         let (reply, answer) = oneshot::channel();
         self.send(Request::Call {
             module: module.to_owned(),

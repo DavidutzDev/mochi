@@ -30,6 +30,8 @@ The hub has a card with the number of entries, a button to pause the history and
 | `toggle`, `open`, `close` | Shows or hides the history |
 | `pick <id>` | Copies an entry and pastes it into the window you were in |
 | `copy <id>` | Copies an entry without pasting it |
+| `copy-text <text>` | Copies some text, and keeps it in the history; the launcher's calculator and providers copy through it |
+| `paste-text <text>` | Copies some text and pastes it into the window you were in |
 | `show <id>` | Opens an image entry in the capture module's preview card |
 | `delete <id>` | Removes an entry |
 | `clear` | Removes everything |

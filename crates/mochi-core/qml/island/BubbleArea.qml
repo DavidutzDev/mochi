@@ -142,7 +142,8 @@ Row {
         width: 0
         // A size of its own: from the row's, it would be 0, and draw nothing.
         height: Theme.idleHeight
-        visible: placed.count > 0
+        // Shrinks to nothing as the last pill leaves, then takes no spacing.
+        visible: width > 0.5
 
         HoverHandler {
             id: hover
@@ -154,17 +155,25 @@ Row {
             }
         }
 
+        // Moves a pill to `x`: at once the first time, so a new pill grows
+        // in where it belongs, and sliding after that.
+        function place(item: Item, x: real): void {
+            item.x = x;
+            item.placed = true;
+        }
+
         function layout(): void {
+            // Leaving pills fade out where they are, and the rest close up.
             const items = [];
             for (let index = 0; index < placed.count; index++) {
                 const item = placed.itemAt(index);
-                if (item)
+                if (item && !item.leaving)
                     items.push(item);
             }
             if (root.fanned) {
                 let x = 0;
                 for (const item of items) {
-                    item.x = x;
+                    place(item, x);
                     item.z = 0;
                     item.stackScale = 1;
                     item.opacity = 1;
@@ -185,13 +194,13 @@ Row {
             width = total;
             const sign = root.peekLeft ? -1 : 1;
             const centre = root.peekLeft ? total - front.implicitWidth / 2 : front.implicitWidth / 2;
-            front.x = centre - front.implicitWidth / 2;
+            place(front, centre - front.implicitWidth / 2);
             front.z = behind.length + 1;
             front.stackScale = 1;
             front.opacity = 1;
             behind.forEach((item, index) => {
                 const depth = Math.min(index + 1, 2);
-                item.x = centre + sign * peek * depth - item.implicitWidth / 2;
+                place(item, centre + sign * peek * depth - item.implicitWidth / 2);
                 item.z = behind.length - index;
                 item.stackScale = 1 - 0.12 * depth;
                 item.opacity = index < 2 ? 1 - 0.3 * depth : 0;
@@ -199,7 +208,6 @@ Row {
         }
 
         Behavior on width {
-            enabled: root.stacking
             NumberAnimation {
                 duration: Theme.move
                 easing.type: Easing.BezierSpline
@@ -220,10 +228,34 @@ Row {
                 id: pill
 
                 required property string key
+                // Its bubbles are gone: it animates out, then its row goes.
+                required property bool leaving
                 // Set by the deck's layout.
                 property real stackScale: 1
+                property bool placed: false
+                // The last bubbles it had, shown while it leaves.
+                property var held: []
 
-                bubbles: root.pillsByKey[key] ?? []
+                bubbles: root.pillsByKey[key] ?? held
+                onBubblesChanged: {
+                    if (bubbles.length > 0 && bubbles !== held)
+                        held = bubbles;
+                }
+                exiting: leaving
+                // Out of the input mask and blur at once. In a row, it goes
+                // under the pills that slide over its place; in a stack, it
+                // stays on top while it shrinks, so it is seen to go.
+                onLeavingChanged: {
+                    if (leaving) {
+                        root.window.removePill(pill);
+                        if (root.fanned)
+                            z = -1;
+                    } else {
+                        root.window.addPill(pill);
+                    }
+                    Qt.callLater(deck.layout);
+                }
+                onGone: Lists.removeLeft(pillModel, key)
                 y: root.atBottom ? root.height - height : 0
                 attached: root.attached
                 sideAttached: root.touchesSide(pill)
@@ -251,7 +283,7 @@ Row {
                 }
 
                 Behavior on x {
-                    enabled: root.stacking
+                    enabled: pill.placed
                     NumberAnimation {
                         duration: Theme.move
                         easing.type: Easing.BezierSpline
