@@ -51,6 +51,10 @@ pub enum ClientMessage {
     Status,
     /// Reloads config and theme. Answered with `ok` or `error`.
     Reload,
+    /// Closes what the island shows, as a right click on it does. For a
+    /// keybind: notices that don't take the keyboard can't hear Escape.
+    /// Answered with `ok`, also when nothing shows.
+    Dismiss,
     /// Answered with `actions`, for one module or all of them.
     ListActions {
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -275,6 +279,7 @@ mod tests {
         });
         round_trip_client(ClientMessage::Status);
         round_trip_client(ClientMessage::Reload);
+        round_trip_client(ClientMessage::Dismiss);
         round_trip_client(ClientMessage::ListActions { module: None });
         round_trip_client(ClientMessage::ListActions {
             module: Some("osd".into()),

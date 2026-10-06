@@ -28,8 +28,11 @@ Mochi doesn't grab keys itself. Bind these in your compositor:
 | Lock the screen | `mochi ipc power lock` |
 | Take a screenshot | `mochi ipc capture screenshot` |
 | Start or stop recording | `mochi ipc capture record` |
+| Close what the island shows | `mochi dismiss` |
 
 `mochi ipc` lists every action of every module, and `mochi ipc <module>` one module's.
+
+Escape closes views that take the keyboard: the launcher, the hub, the mixer, the clipboard and the other panels. Notices that let you keep typing, like the volume or a notification, don't take it, so Escape goes to your app; `mochi dismiss` on a key like SUPER + Escape closes those, and a right click on the island does too.
 
 In Hyprland's Lua config:
 

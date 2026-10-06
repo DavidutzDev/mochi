@@ -45,6 +45,11 @@ enum Command {
     Status,
     /// Apply changes to config.toml and theme.toml without a restart.
     Reload,
+    /// Close what the island shows, like Escape or a right click on it.
+    ///
+    /// Bind it to a key: notices that don't take the keyboard, like the
+    /// volume, can't hear Escape.
+    Dismiss,
     /// Pick what to share, for xdg-desktop-portal-hyprland.
     ///
     /// Set `custom_picker_binary` in `~/.config/hypr/xdph.conf` to a program
@@ -184,6 +189,7 @@ fn run(command: Command, json: bool) -> Result<(), String> {
             }
             other => Err(unexpected(&other)),
         },
+        Command::Dismiss => request(ClientMessage::Dismiss).map(drop),
         Command::Reload => {
             request(ClientMessage::Reload)?;
             println!("reloaded config.toml and theme.toml");
