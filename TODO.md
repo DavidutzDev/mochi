@@ -77,7 +77,7 @@ Described in `docs/protocol.md`.
 - [x] Error replies with a code and a message
 - [x] Round-trip tests for every message type, plus fixed wire-format tests for what the UI parses
 - [x] `docs/protocol.md`
-- [ ] Plugin management messages (with the plugin system)
+- [x] Plugin management: `status` lists plugins with their state; installing stays in the CLI, which needs no daemon
 - [x] State snapshots re-sent on every reconnect (daemon, step 6)
 
 ## Core (`mochi-core`)
@@ -88,7 +88,7 @@ Module API
 - [x] `ModuleCtx::data_dir`: a per-module directory under the runtime directory, emptied at startup, for files views load
 - [x] Contributions: `Module::contributions()` declares what a module offers another (`target`, `kind`, `id`, `view`, `title`, `icon`, `order`, `options`); the daemon checks the views exist and sends them all to the UI in a `contributions` message. Unused when the target isn't enabled, which makes them soft dependencies
 - [x] `ModuleCtx::call(module, action, args)`: runs another module's action with the same checks as `mochi ipc`; `CallError::NotEnabled` when it isn't there, `Itself` for a module calling itself. The future doesn't borrow the context, so it can be spawned instead of awaited where two modules might call each other
-- [ ] Watching another module's published state from Rust, and module events, once a module needs them
+- [x] Watching another module's published state: `ModuleCtx::watch_state` and `ModuleEvent::State`
 - [x] Action declarations with argument names and types (`string`, `int`, `float`, `bool`, `choice`, optional and rest arguments)
 - [x] Argument parsing and spec validation, with usage lines in errors
 - [x] Route `command` messages to modules (daemon, step 6)
@@ -108,7 +108,7 @@ Config and theme
 - [x] Load and validate `config.toml` and `theme.toml`, with errors that name the file and the key
 - [x] Theme tokens: colors, layout sizes, spring and fade constants
 - [x] XDG paths for config, socket and the generated shell
-- [ ] Fonts in the theme
+- [x] Fonts in the theme: `family`, and `display_family` for the clocks
 - [x] `mochi reload` reloads `theme.toml` without restarting Quickshell
 - [x] Apply `config.toml` changes on reload: new modules start, removed ones stop, changed ones restart, the rest keep running; a broken file changes nothing. Each start has a generation, so a replaced module's exit is ignored
 - [x] Generated examples: the first start writes commented `config.toml` and `theme.toml`. Each module's section is its own `settings.toml` (`Module::settings_example`), the theme and bubbles are in `crates/mochi-core/defaults`; tests uncomment the `# key = value` lines and check they parse to the real defaults
@@ -130,7 +130,7 @@ Supervisor
 - [x] Restart with backoff, give up after 5 crashes in 30 seconds and log why
 - [x] Restart if `hello` doesn't arrive within the handshake timeout, with SIGKILL (a hung process ignores SIGTERM)
 - [x] Check the Quickshell version at startup
-- [ ] The same supervisor runs plugin backends
+- [x] Plugin backends are supervised the same way: backoff, then giving up after 5 crashes in a minute
 
 ## Daemon (`mochid`)
 
@@ -148,10 +148,10 @@ Supervisor
 - [x] `mochi ipc <module>` lists one module's actions with argument help
 - [x] `mochi status` shows daemon and UI health (plugins later)
 - [x] `mochi reload` reloads the theme and the config
-- [ ] `mochi plugins list|enable|disable`
+- [x] `mochi plugins list|install|update|remove`; enabling stays in `config.toml`'s `modules`
 - [x] Clear error when `mochid` isn't running
-- [ ] `--json` output for scripts
-- [ ] Shell completions
+- [x] `--json` output for scripts: `status`, `ipc list`, `ipc <module>`, `plugins list`
+- [x] Shell completions: `mochi completions <shell>`, installed by the Nix and Arch packages
 
 ## QML core
 
@@ -258,14 +258,14 @@ wide = true         # the module's wide views with text, in pills
 - [x] Demo actions `bubble <name> <area> [group]` and `pop <name>`; clicking a demo bubble names it on the island
 - [x] Tested on Hyprland: every area, a group, a click through the input mask, the island pushing pills, notch mode, the island in the left area, overflow with a maximum of 2
 - [ ] Clicking "+N" lists the hidden bubbles in the island
-- [ ] Pills leave instantly; give them an exit animation, and slide the others instead of jumping when one comes or goes
+- [x] Pills shrink and fade out, a bubble leaving a group fades while the pill narrows, and the others slide instead of jumping when one comes or goes
 - [ ] Notch mode: fuse adjacent pills and the island into one outline instead of separate tabs whose ears overlap
 - [ ] Placement per bubble key, not only per module, for modules with several bubbles
 - [x] Stacked bubbles, an option: one per area, the most important in front, news brought forward for a while, fanned out on hover
 - [ ] Parked: switching a recording's source while it records. A fixed 1080p frame drawn by Mochi on a virtual monitor, regions zoomed to fill it with animated pans; needs a spike first, as gpu-screen-recorder likely can't capture a headless monitor except through the portal
-- [ ] Bubbles off per module
-- [ ] `mochi reload` applying `[bubbles]` changes
-- [ ] Plugin backends get the same calls through the protocol
+- [x] Bubbles off per module: `show = false` in `[bubbles.<module>]`
+- [x] `mochi reload` applying `[bubbles]` changes
+- [x] Plugin backends get the same calls through the protocol
 - [x] First real user beyond media: a Bluetooth module (connected device battery from BlueZ over D-Bus)
 
 ## Modules
@@ -333,7 +333,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] Actions: `history`, `clear`, `dnd on|off|toggle`, `dismiss <id>`, `invoke <id> <action>`
 - [x] A pure `Center` with unit tests for every rule above, and `note.rs` tests for odd hints and padded pixel rows
 - [x] Tested live in a private D-Bus session (`dbus-run-session`), leaving the real swaync alone: icons, a critical popup outlasting its timeout, pictures from a path and from bytes, a real click on an action button reaching `notify-send`, replacement, the history and its bubble, do not disturb, clear, and one daemon queueing behind another
-- [ ] Persist the history across daemon restarts
+- [x] Persist the history across daemon restarts, without the actions
 - [ ] Body markup (`body-markup`): sanitize to the subset Qt's styled text handles
 - [ ] Inline replies (`inline-reply`)
 - [ ] Sounds (`sound-file`, `sound-name`)
@@ -348,8 +348,9 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] View like the screenshot: search box, up to seven rows with icon, name and description, the selection marked; arrows or Tab move, Enter starts, Escape closes, hover selects, click starts
 - [x] Actions: `toggle`, `open`, `close`, `search [query]`, `launch <id>`
 - [x] Tested on Hyprland: typing reaches the launcher, Enter starts a test app through uwsm and records it, it comes first next time, a click outside and Escape close, "private" finds Firefox's and Zen's private window actions
-- [ ] Keybind examples for Hyprland's Lua config and other compositors
-- [ ] Calculator and run-a-command results
+- [x] Keybind examples for Hyprland's Lua config and other compositors (Getting started)
+- [x] Calculator and run-a-command results, as providers: `apps`, `calculator`, `commands`, script providers from `config.toml`, and plugin providers (`examples/plugins/emoji`)
+- [ ] More built-in providers, like open windows or settings pages
 - [ ] Watch the application directories instead of reading them on every open, if opening ever feels slow
 
 ### Hub
@@ -367,7 +368,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] Cards and pages for network and Bluetooth
 - [x] A Performance page: CPU, memory and GPU with graphs and the busiest processes
 - [ ] More cards and pages: power
-- [ ] Clicking a card opens its page
+- [x] Clicking a card opens its page: the heading or the card beside its controls, `options.page` to pick
 
 ### Power
 
@@ -379,7 +380,7 @@ Lives only in the hub: no island view, a page and the CLI.
 - [x] Page: one tile per action, and a segmented control for profiles with the active one as a white pill. Log out, reboot, firmware and shut down need a second click within 3 seconds; acting closes the hub
 - [x] Actions: `lock`, `logout`, `suspend`, `hibernate`, `reboot`, `firmware`, `shutdown`, `profile <name>`
 - [x] Tested on this machine: hibernate hidden (logind says `na`), switching to performance and back from the CLI moves the selector, and two real clicks on Log out with a harmless replacement command (the first only asks)
-- [ ] The older `net.hadess.PowerProfiles` name, for power-profiles-daemon before 0.20
+- [x] The older `net.hadess.PowerProfiles` name, for power-profiles-daemon before 0.20
 - [ ] A lock screen of its own, if hyprlock and the others ever fall short (see open question 3)
 - [ ] Reboot into another OS, only once it can work with any bootloader and distro. Today no single way does: logind's one-shot boot loader entry only covers loaders that follow the Boot Loader Interface (systemd-boot), GRUB needs root to run `grub-reboot`, and the firmware's `BootNext` needs root too. Decided on 2026-10-03 to wait
 
@@ -417,7 +418,7 @@ After capture, reusing its pickers.
 - [x] `mochi share-pick` is xdg-desktop-portal-hyprland's `custom_picker_binary` (packaged as `mochi-share-picker`, which the home-manager module writes into `xdph.conf`). The island panel shows screens and the portal's windows with live thumbnails, Hyprland toplevels matched by address, plus Region over a live overlay and a Remember switch; the answer goes back as the command's new `output` reply. Without Mochi or the module it runs `hyprland-share-picker`
 - [x] A bubble while the screen is shared, from Hyprland's `screencast` events counted per capture session; it waits 1.5 s and ignores the picker's own thumbnails, since Hyprland reports every capture, screenshots included
 - [x] Clicking the sharing bubble asks again what to share, for the app sharing now. The portal can't change a running share, so with Switchable on (the default) the app shares `MOCHI-SHARE`, a Hyprland headless monitor far from the real ones, and Mochi draws a live copy of the screen, window or region on it; the bubble's picker changes the copy. The monitor goes 3 s after `screencastv2` stops reporting captures of it
-- [ ] Keep the switchable copy's aspect: size `MOCHI-SHARE` to the first source instead of the largest screen
+- [x] Keep the switchable copy's aspect: size `MOCHI-SHARE` to the first source instead of the largest screen (screens and areas; a window keeps the largest screen's)
 - [ ] `chooser_cmd` for xdg-desktop-portal-wlr
 - [ ] Screencast state on compositors other than Hyprland (PipeWire streams)
 
@@ -451,7 +452,7 @@ A new module, `audio`: the volume mixer. Players stay in the media module and no
 - [ ] Group an app's streams into one row, with a way to open them
 - [ ] Peak meters next to the sliders
 - [ ] App icons in the mixer: Chromium, Zen and WebRTC streams name icons the theme lacks; look the app up by its desktop entry or process instead
-- [ ] Scroll on the volume bubble or the OSD to change the volume
+- [x] Scroll on the OSD to change the volume (there's no volume bubble)
 
 ### Tray
 
@@ -488,7 +489,7 @@ A new module: the apps' tray icons.
 
 - [x] UPower's display device: the level, charging, time left
 - [x] Notices when dropping past configurable levels, once per discharge; a warning bubble at or under a level, red at the critical one; notices on plugging in or out; a hub card
-- [ ] Power profiles on the card, next to the power module's
+- [x] Power profiles on the card, next to the power module's
 - [ ] Each battery on its own, and peripherals' batteries (mice, controllers) from UPower
 
 ### Performance
@@ -520,13 +521,30 @@ A new module: the apps' tray icons.
 - [ ] Archive sources (`https://…/plugin.tar.gz` with a hash)
 - [ ] A plugin replacing a builtin module entirely
 - [ ] Building plugins with Nix, for declarative setups
-- [ ] Release workflow template for plugin repositories
-- [ ] Settings checks for plugins, from their `settings.toml`
+- [x] Release workflow template for plugin repositories: `examples/plugins/release.yml`
+- [x] Settings checks for plugins, from their `settings.toml`
+
+## Widgets
+
+Views from any module on the desktop, under the windows, placed by dragging. Designed on 2026-10-06: a `widgets` module owns `widgets.toml` next to `config.toml`; modules offer widgets with `widgets` contributions; instances have ids and settings; positions are an anchor and grid cells per monitor; a desktop layer per monitor in the core.
+
+- [x] `widgets.toml`: instances with module, widget, output, anchor, offsets and size in cells, settings; watched and applied live, a broken file keeps the last layout; checked by `mochi config check`
+- [x] Widget contributions with sizes, limits, frame, declared settings and `forget`
+- [x] Desktop layer per monitor: widgets under the windows, cards with shadow and blur, clicks only on widgets, keyboard on demand for a typing widget
+- [x] Edit mode: dim and grid, drag to move, corner to resize, generated settings form, drawer to add, remove, Copy as Nix, Escape
+- [x] Clock widget: time zone, 12/24 hours, seconds, date
+- [x] `widgets export|copy [nix|toml]`
+- [ ] home-manager `programs.mochi.widgets`, written only when the declared layout changes, taking Nix or TOML
+- [ ] Calendar widget
+- [ ] To-do and notes widgets, typed into on the desktop
+- [ ] Widgets from existing modules: now playing, performance graphs, battery, weather
+- [ ] Alignment guides while dragging
+- [ ] Moving a widget to another monitor from its settings
 
 ## Integration and docs
 
 - [x] Session setup notes: uwsm and `graphical-session.target`, or starting `mochid` from the compositor's autostart (README)
-- [ ] Keybind examples for `mochi ipc` in Hyprland's Lua config
+- [x] Keybind examples for `mochi ipc`: Hyprland's Lua config, `hyprland.conf`, Sway and niri, on the Getting started page
 - [ ] Decide how the island and Waybar share the top edge, or whether Mochi replaces Waybar
 - [x] Install instructions (Nix package and cargo)
 - [x] Flake `packages` output: both binaries, the systemd unit, and `mochid` wrapped with the pinned Quickshell

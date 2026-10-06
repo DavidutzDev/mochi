@@ -19,7 +19,7 @@ pub mod supervisor;
 // Protocol types modules need, so a module only depends on this crate.
 /// Compositor state and actions, from [`ModuleCtx::compositor`].
 pub use mochi_compositor as compositor;
-pub use mochi_protocol::{ActionSpec, ActivityId, Area, ArgSpec, BubbleId};
+pub use mochi_protocol::{ActionSpec, ActivityId, Area, ArgSpec, BubbleId, Contribution};
 /// For [`Module::check_settings`].
 pub use toml;
 

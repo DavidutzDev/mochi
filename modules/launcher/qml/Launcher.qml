@@ -3,9 +3,10 @@ import Quickshell
 import qs.island
 
 // The search box and the results. Each keystroke goes to the module, which
-// answers with new results for that query. The selection lives here: arrows
-// or Tab move it, Enter starts it, Escape closes, the pointer selects on
-// hover and starts on click.
+// answers with new results for that query, and again as slower providers
+// answer. The selection lives here: arrows or Tab move it, Enter picks it,
+// Shift+Enter runs a command in a terminal, Escape closes, the pointer
+// selects on hover and picks on click.
 Item {
     id: root
 
@@ -15,15 +16,26 @@ Item {
     property var results: []
     readonly property int rows: 7
     readonly property int rowHeight: 50
+    // The headings among the rows that fit, so the list makes room for them.
+    readonly property int headings: {
+        if (!(payload.sections ?? false))
+            return 0;
+        const shown = results.slice(0, rows);
+        return shown.filter((result, index) => index === 0 || result.section !== shown[index - 1].section).length;
+    }
 
     implicitWidth: 560
     implicitHeight: column.implicitHeight + 16
 
     onPayloadChanged: {
-        if ((payload.query ?? "") === input.text) {
-            results = payload.results ?? [];
-            list.currentIndex = 0;
-        }
+        if ((payload.query ?? "") !== input.text)
+            return;
+        // A slower provider's answer keeps the selection where it was, by
+        // what it shows; the keys change with every query.
+        const selected = results[list.currentIndex];
+        results = payload.results ?? [];
+        const same = selected ? results.findIndex(result => result.section === selected.section && result.title === selected.title) : -1;
+        list.currentIndex = Math.max(same, 0);
     }
 
     Component.onCompleted: {
@@ -31,10 +43,10 @@ Item {
         Qt.callLater(() => input.forceActiveFocus());
     }
 
-    function launch(index: int): void {
+    function pick(index: int, terminal: bool): void {
         const result = results[index];
         if (result)
-            Daemon.command("launcher", "launch", [result.id]);
+            Daemon.command("launcher", "activate", terminal ? [result.key, "true"] : [result.key]);
     }
 
     function move(by: int): void {
@@ -84,8 +96,8 @@ Item {
                 Keys.onDownPressed: root.move(1)
                 Keys.onTabPressed: root.move(1)
                 Keys.onBacktabPressed: root.move(-1)
-                Keys.onReturnPressed: root.launch(list.currentIndex)
-                Keys.onEnterPressed: root.launch(list.currentIndex)
+                Keys.onReturnPressed: event => root.pick(list.currentIndex, event.modifiers & Qt.ShiftModifier)
+                Keys.onEnterPressed: event => root.pick(list.currentIndex, event.modifiers & Qt.ShiftModifier)
                 Keys.onEscapePressed: Daemon.event("dismiss")
 
                 Text {
@@ -109,7 +121,7 @@ Item {
             height: root.rowHeight
             leftPadding: Theme.padding + 4
             verticalAlignment: Text.AlignVCenter
-            text: "No apps found"
+            text: root.payload.searching ? "Searching…" : "No results"
             color: Theme.muted
             font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
@@ -120,11 +132,26 @@ Item {
 
             visible: root.results.length > 0
             width: parent.width
-            height: Math.min(root.results.length, root.rows) * root.rowHeight + 8
+            height: Math.min(root.results.length, root.rows) * root.rowHeight + root.headings * 26 + 8
             topMargin: 8
             clip: true
             model: root.results
             boundsBehavior: Flickable.StopAtBounds
+            // Headings only when results come from more than one provider.
+            section.property: root.payload.sections ? "section" : ""
+            section.delegate: Item {
+                required property string section
+
+                width: list.width
+                height: 26
+
+                SectionLabel {
+                    x: Theme.padding + 4
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 4
+                    text: parent.section
+                }
+            }
             delegate: ListRow {
                 id: row
 
@@ -138,23 +165,34 @@ Item {
                 marker: true
                 selected: ListView.isCurrentItem
                 leadingSize: 32
-                title: modelData.name
-                subtitle: modelData.description ?? ""
+                title: modelData.title
+                subtitle: modelData.subtitle ?? ""
                 onHoveredChanged: {
                     if (hovered)
                         list.currentIndex = index;
                 }
-                onClicked: root.launch(index)
+                onClicked: root.pick(index, false)
 
                 leading: Item {
                     anchors.fill: parent
+
+                    // A short text instead of an icon, like an emoji or "=".
+                    Text {
+                        anchors.centerIn: parent
+                        visible: row.modelData.glyph != null
+                        text: row.modelData.glyph ?? ""
+                        color: Theme.foreground
+                        font.pixelSize: 22
+                        font.family: Theme.fontFamily
+                    }
 
                     Image {
                         id: icon
 
                         anchors.fill: parent
+                        visible: row.modelData.glyph == null
                         // Actions get a smaller icon, a step in.
-                        anchors.margins: row.modelData.action ? 6 : 0
+                        anchors.margins: row.modelData.small ? 6 : 0
                         source: {
                             const name = row.modelData.icon ?? "";
                             if (name.startsWith("/"))
@@ -170,7 +208,7 @@ Item {
                     Rectangle {
                         anchors.fill: parent
                         anchors.margins: 4
-                        visible: icon.status !== Image.Ready
+                        visible: row.modelData.glyph == null && icon.status !== Image.Ready
                         radius: Theme.radiusSmall
                         color: Theme.raised
                     }

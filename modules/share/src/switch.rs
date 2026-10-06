@@ -74,6 +74,8 @@ pub struct Session {
     /// The monitor's refresh rate and resolution now.
     pub framerate: u32,
     pub resolution: mochi_core::quality::Resolution,
+    /// The monitor's size at native resolution, from the first source.
+    pub size: (u32, u32),
     started: Instant,
     /// The app has captured the monitor at some point.
     shared: bool,
@@ -89,6 +91,7 @@ impl Session {
             source,
             framerate: 60,
             resolution: mochi_core::quality::Resolution::Native,
+            size: (1920, 1080),
             started: now,
             shared: false,
             busy_since: None,
@@ -132,9 +135,38 @@ impl Session {
     }
 }
 
-/// The size of the switchable monitor: the largest real one, in pixels, so
-/// a screen copied to it keeps its sharpness.
-pub fn size(outputs: &[(String, u32, u32)]) -> (u32, u32) {
+/// The size of the switchable monitor, in pixels: the shape of what's
+/// shared first, as large as fits in the largest real monitor, so it fills
+/// the copy without bars and keeps its sharpness. A window changes shape
+/// while it's shared, so it gets the largest monitor's.
+pub fn size(outputs: &[(String, u32, u32)], first: &Source) -> (u32, u32) {
+    let (width, height) = largest(outputs);
+    let shape = match first {
+        Source::Screen(name) => outputs
+            .iter()
+            .find(|(output, ..)| output == name)
+            .map(|(_, width, height)| (u64::from(*width), u64::from(*height))),
+        Source::Area { width, height, .. } => Some((width.unsigned_abs(), height.unsigned_abs())),
+        Source::Window { .. } => None,
+    };
+    let Some((shape_width, shape_height)) =
+        shape.filter(|(width, height)| *width > 0 && *height > 0)
+    else {
+        return (width, height);
+    };
+    let (width, height) = (u64::from(width), u64::from(height));
+    let (width, height) = if shape_width * height > shape_height * width {
+        (width, width * shape_height / shape_width)
+    } else {
+        (height * shape_width / shape_height, height)
+    };
+    // Even sizes, which video encoders want.
+    let even = |side: u64| u32::try_from(side).unwrap_or(u32::MAX).max(2) & !1;
+    (even(width), even(height))
+}
+
+/// The largest real monitor, in pixels.
+fn largest(outputs: &[(String, u32, u32)]) -> (u32, u32) {
     outputs
         .iter()
         .filter(|(name, width, height)| {
@@ -195,14 +227,35 @@ mod tests {
     }
 
     #[test]
-    fn copies_to_the_largest_real_monitor() {
+    fn takes_the_first_sources_shape_within_the_largest_monitor() {
         let outputs = [
-            ("HDMI-A-1".to_owned(), 1920, 1080),
+            ("HDMI-A-1".to_owned(), 1920, 1200),
             ("DP-3".to_owned(), 2560, 1440),
             ("MOCHI-SHARE".to_owned(), 3840, 2160),
         ];
-        assert_eq!(size(&outputs), (2560, 1440));
-        assert_eq!(size(&[]), (1920, 1080));
+        let window = Source::Window {
+            address: "0x1".into(),
+            title: String::new(),
+        };
+        assert_eq!(size(&outputs, &window), (2560, 1440));
+        assert_eq!(size(&[], &window), (1920, 1080));
+        // A 16:10 screen, as tall as the largest.
+        assert_eq!(
+            size(&outputs, &Source::Screen("HDMI-A-1".into())),
+            (2304, 1440)
+        );
+        assert_eq!(size(&outputs, &Source::Screen("DP-3".into())), (2560, 1440));
+        let area = |width, height| Source::Area {
+            output: "DP-3".into(),
+            x: 0,
+            y: 0,
+            width,
+            height,
+        };
+        // Wide and short, and tall and narrow; even sides.
+        assert_eq!(size(&outputs, &area(1000, 200)), (2560, 512));
+        assert_eq!(size(&outputs, &area(301, 1000)), (432, 1440));
+        assert_eq!(size(&outputs, &area(0, 100)), (2560, 1440));
     }
 
     #[test]

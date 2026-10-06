@@ -74,11 +74,13 @@ impl Daemon {
         command
             .args(["--modules", modules, "--quickshell"])
             .arg(&quickshell)
-            // A private runtime and config dir, so a daemon already running in
-            // the session and the user's config files don't matter.
+            // Private runtime, config, data and state dirs, so a daemon
+            // already running in the session and the user's files don't
+            // matter, and the tests never write to them.
             .env("XDG_RUNTIME_DIR", dir.join("run"))
             .env("XDG_CONFIG_HOME", dir.join("config"))
             .env("XDG_DATA_HOME", dir.join("data"))
+            .env("XDG_STATE_HOME", dir.join("state"))
             .env("MOCHI_LOG", "debug")
             .stdin(Stdio::null())
             .stdout(Stdio::null())

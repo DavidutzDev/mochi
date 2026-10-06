@@ -240,7 +240,8 @@ An activity `spec` needs only `compact`, the view's name. The rest are optional:
 | `bubble_clicked` | `bubble` | A click on a bubble |
 | `state` | `module`, `state` | A module from the manifest's `[uses] state` published state; `null` when it stopped |
 | `compositor` | `state` | The compositor's state changed |
-| `call_result` | `id`, `error` (optional) | `error` is `{"kind": "not_enabled", "detail": "media"}` and the like |
+| `offers` | `offers` | What other modules offer this plugin: every contribution whose `target` is its id, like launcher providers for a plugin that is a launcher. Sent at the start, then when a reload changes it |
+| `call_result` | `id`, `output` (optional), `error` (optional) | `output` is what the action answered with; `error` is `{"kind": "not_enabled", "detail": "media"}` and the like |
 | `compositor_result` | `id`, `value`, `error` (optional) | |
 
 A backend that exits with an error is started again after 250 ms, then after twice as long each time, up to 8 seconds. After 5 crashes within a minute it stays stopped until `mochi reload`, and a desktop notification says so.

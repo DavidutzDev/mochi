@@ -18,7 +18,12 @@ Item {
     property real sideAttached: 0
     property bool atBottom: false
     property bool atRight: false
+    // Set when it should go: it shrinks and fades, then says `gone`. Set
+    // back before then, it grows again.
+    property bool exiting: false
     readonly property alias shape: shape
+
+    signal gone
 
     readonly property var byKey: {
         const map = {};
@@ -47,7 +52,7 @@ Item {
 
     onBubblesChanged: Lists.sync(views, bubbles.map(Lists.bubbleKey))
 
-    // Grows in when it first appears.
+    // Grows in when it first appears, and shrinks away when it goes.
     scale: 0.6
     opacity: 0
     Component.onCompleted: {
@@ -55,11 +60,26 @@ Item {
         scale = 1;
         opacity = 1;
     }
+    onExitingChanged: {
+        scale = exiting ? 0.6 : 1;
+        opacity = exiting ? 0 : 1;
+        if (exiting)
+            leave.restart();
+        else
+            leave.stop();
+    }
+
+    Timer {
+        id: leave
+
+        interval: Theme.fadeIn
+        onTriggered: root.gone()
+    }
 
     Behavior on scale {
         NumberAnimation {
             duration: Theme.fadeIn
-            easing.type: Easing.OutBack
+            easing.type: root.exiting ? Easing.InBack : Easing.OutBack
         }
     }
 
@@ -113,16 +133,55 @@ Item {
                     id: slot
 
                     required property string key
+                    // The bubble left the group: the view keeps its last
+                    // payload while it fades and its room closes.
+                    required property bool leaving
                     readonly property var bubble: root.byKey[key] ?? null
+                    // The last payload, which a leaving view keeps.
+                    property var payload: bubble?.payload
+                    onBubbleChanged: {
+                        if (bubble)
+                            payload = bubble.payload;
+                    }
 
-                    width: loader.item ? loader.item.implicitWidth : 0
+                    width: !leaving && loader.item ? loader.item.implicitWidth : 0
                     height: root.height
+                    opacity: leaving ? 0 : 1
+                    onLeavingChanged: {
+                        if (leaving)
+                            closing.restart();
+                        else
+                            closing.stop();
+                    }
+
+                    // No overshoot: it would make the width negative on the
+                    // way to 0.
+                    Behavior on width {
+                        NumberAnimation {
+                            duration: Theme.move
+                            easing.type: Easing.OutCubic
+                        }
+                    }
+
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: Theme.fadeIn
+                        }
+                    }
+
+                    Timer {
+                        id: closing
+
+                        interval: Theme.move
+                        onTriggered: Lists.removeLeft(views, slot.key)
+                    }
 
                     // Under the view, so buttons inside the view get their
                     // own clicks. It covers half the gap on each side, so no
                     // spot in a group is dead.
                     MouseArea {
                         anchors.fill: parent
+                        enabled: !slot.leaving
                         anchors.leftMargin: -row.spacing / 2
                         anchors.rightMargin: -row.spacing / 2
                         cursorShape: Qt.PointingHandCursor
@@ -139,7 +198,7 @@ Item {
                         // place through the binding below.
                         readonly property string url: slot.bubble ? `root:/modules/${slot.bubble.module}/${slot.bubble.view}.qml` : ""
 
-                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.centerIn: parent
                         onUrlChanged: {
                             if (url === "")
                                 return;
@@ -154,8 +213,8 @@ Item {
                     Binding {
                         target: loader.item
                         property: "payload"
-                        value: slot.bubble?.payload
-                        when: loader.item !== null && slot.bubble !== null
+                        value: slot.payload
+                        when: loader.item !== null
                     }
                 }
             }

@@ -94,7 +94,9 @@ impl Module for Idle {
                             });
                         }
                     }
-                    ModuleEvent::BubbleClicked(_) | ModuleEvent::State { .. } => {}
+                    ModuleEvent::BubbleClicked(_)
+                    | ModuleEvent::State { .. }
+                    | ModuleEvent::Offers(_) => {}
                 }
             }
             Ok(())

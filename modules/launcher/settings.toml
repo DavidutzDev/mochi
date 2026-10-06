@@ -5,3 +5,24 @@
 # terminal = []
 # The most results to list.
 # max_results = 50
+
+# Providers: where results come from. The built-ins are "apps", "calculator"
+# (prefix "=", and plain math like 2+2 without it) and "commands" (prefix
+# ">"; Shift+Enter runs one in a terminal). Plugins can offer more. A
+# [module.launcher.providers.<name>] section changes one, with any of:
+#
+#   enabled = false     # turn it off
+#   prefix = "c"        # what a query starts with to ask only it; "" for none
+#   order = 5           # lower shows first; apps are at 0
+#   title = "Maths"     # the heading over its results
+#
+# A section with a command adds a script provider. It runs with the query
+# as its last argument, and prints one JSON result per line, like
+#   {"title": "Rust", "subtitle": "rust-lang.org", "open": "https://rust-lang.org"}
+# with at most one of copy, type, open or run for what Enter does:
+#
+#   [module.launcher.providers.web]
+#   prefix = "!w"
+#   command = ["sh", "/path/to/web-search.sh"]
+#   timeout_ms = 2000   # stopped after this long
+#   pick = ["my-script", "--picked"]  # run with a result's "id" once picked

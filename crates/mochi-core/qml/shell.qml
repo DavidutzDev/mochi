@@ -24,6 +24,11 @@ ShellRoot {
                 atBottom: island.atBottom
                 zone: island.zone
             }
+
+            // Widgets, under the windows.
+            DesktopWindow {
+                screen: screen.modelData
+            }
         }
     }
 

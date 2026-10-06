@@ -25,6 +25,7 @@ mochi-module-capture.workspace = true
 mochi-module-clipboard.workspace = true
 mochi-module-demo = { workspace = true, optional = true }
 mochi-module-hub.workspace = true
+mochi-module-widgets.workspace = true
 mochi-module-idle.workspace = true
 mochi-module-launcher.workspace = true
 mochi-module-media.workspace = true

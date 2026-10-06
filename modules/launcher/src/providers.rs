@@ -1,0 +1,403 @@
+//! Where the launcher's results come from. Each provider answers queries:
+//! the built-in `apps`, `calculator` and `commands`, scripts from
+//! `config.toml`, and providers other modules and plugins offer.
+//!
+//! A provider with a prefix answers only queries that start with it, and
+//! gets the rest. The others answer every query, and their results show
+//! together, in the providers' order. The calculator also answers a query
+//! that is plainly math, like `2+2`, without its prefix.
+//!
+//! Scripts and plugins answer with JSON lines, one result each:
+//!
+//! ```json
+//! {"title": "4", "subtitle": "2+2", "icon": "accessories-calculator", "copy": "4"}
+//! ```
+//!
+//! `title` is required. `glyph` is a short text shown big in place of the
+//! icon, like an emoji. At most one verb says what Enter does: `copy`
+//! text, `type` it into the window the user was in, `open` a URL or file,
+//! or `run` a shell command. `id`, with or without a verb, goes back to the
+//! provider's `pick` once the user picks the result.
+
+use std::collections::BTreeMap;
+
+use mochi_core::Contribution;
+use serde::Deserialize;
+use serde_json::Value;
+
+/// How long a script gets to answer before it is stopped.
+pub const DEFAULT_TIMEOUT_MS: u64 = 2000;
+
+/// `[module.launcher.providers.<name>]`: changes a provider, or adds a
+/// script one.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct ProviderSettings {
+    /// `false` turns it off.
+    pub enabled: Option<bool>,
+    /// Replaces its prefix; `""` asks it on every query.
+    pub prefix: Option<String>,
+    /// Lower shows first. Apps are at 0.
+    pub order: Option<i32>,
+    /// A script provider: the program and its arguments. The query comes
+    /// after them, and in `MOCHI_QUERY`.
+    pub command: Vec<String>,
+    /// Run with a result's `id` after the user picks it.
+    pub pick: Vec<String>,
+    /// The section heading over its results.
+    pub title: Option<String>,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Kind {
+    Apps,
+    Calculator,
+    Commands,
+    Script {
+        command: Vec<String>,
+        pick: Vec<String>,
+        timeout_ms: u64,
+    },
+    /// A module's provider: its `search` action answers queries.
+    Module {
+        module: String,
+        search: String,
+        pick: Option<String>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Provider {
+    pub name: String,
+    pub title: String,
+    pub prefix: Option<String>,
+    pub order: i32,
+    pub kind: Kind,
+}
+
+/// Every provider, in order: the built-ins, the scripts in `settings`, and
+/// the ones in `offers`, with the user's changes applied.
+pub fn providers(
+    settings: &BTreeMap<String, ProviderSettings>,
+    offers: &[Contribution],
+) -> Vec<Provider> {
+    let builtin = |name: &str, title: &str, prefix: Option<&str>, order, kind| Provider {
+        name: name.to_owned(),
+        title: title.to_owned(),
+        prefix: prefix.map(str::to_owned),
+        order,
+        kind,
+    };
+    let mut providers = vec![
+        builtin("calculator", "Calculator", Some("="), -10, Kind::Calculator),
+        builtin("apps", "Apps", None, 0, Kind::Apps),
+        builtin("commands", "Run", Some(">"), 10, Kind::Commands),
+    ];
+    for (name, script) in settings {
+        if script.command.is_empty() {
+            continue;
+        }
+        providers.push(Provider {
+            name: name.clone(),
+            title: script.title.clone().unwrap_or_else(|| name.clone()),
+            prefix: None,
+            order: 20,
+            kind: Kind::Script {
+                command: script.command.clone(),
+                pick: script.pick.clone(),
+                timeout_ms: script.timeout_ms.unwrap_or(DEFAULT_TIMEOUT_MS),
+            },
+        });
+    }
+    for offer in offers.iter().filter(|offer| offer.kind == "provider") {
+        let option = |key: &str| offer.options.get(key).and_then(Value::as_str);
+        if providers.iter().any(|provider| provider.name == offer.id) {
+            tracing::warn!(module = %offer.module, provider = %offer.id, "a provider with this name exists already");
+            continue;
+        }
+        providers.push(Provider {
+            name: offer.id.clone(),
+            title: offer.title.clone(),
+            prefix: option("prefix").map(str::to_owned),
+            order: offer.order,
+            kind: Kind::Module {
+                module: offer.module.clone(),
+                search: option("search").unwrap_or("search").to_owned(),
+                pick: option("pick").map(str::to_owned),
+            },
+        });
+    }
+
+    providers.retain_mut(|provider| {
+        let Some(changes) = settings.get(&provider.name) else {
+            return true;
+        };
+        if let Some(prefix) = &changes.prefix {
+            provider.prefix = Some(prefix.clone()).filter(|prefix| !prefix.is_empty());
+        }
+        if let Some(order) = changes.order {
+            provider.order = order;
+        }
+        if let Some(title) = &changes.title {
+            provider.title.clone_from(title);
+        }
+        changes.enabled != Some(false)
+    });
+    // Stable, so equal orders keep the order above.
+    providers.sort_by_key(|provider| provider.order);
+    providers
+}
+
+/// Which providers answer `query`, and what each gets: the one whose prefix
+/// it starts with, the longest when several do, with the rest; otherwise
+/// every provider without a prefix, with all of it.
+pub fn route<'a>(providers: &'a [Provider], query: &str) -> Vec<(&'a Provider, String)> {
+    let prefixed = providers
+        .iter()
+        .filter_map(|provider| {
+            let prefix = provider.prefix.as_deref()?;
+            query
+                .strip_prefix(prefix)
+                .map(|rest| (provider, prefix.len(), rest))
+        })
+        .max_by_key(|(_, length, _)| *length);
+    if let Some((provider, _, rest)) = prefixed {
+        return vec![(provider, rest.trim_start().to_owned())];
+    }
+    providers
+        .iter()
+        .filter(|provider| provider.prefix.is_none() || provider.kind == Kind::Calculator)
+        .map(|provider| (provider, query.to_owned()))
+        .collect()
+}
+
+/// What Enter does with a result.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Verb {
+    /// Starts an app: its desktop id, or `id:action`.
+    Launch(String),
+    Copy(String),
+    Type(String),
+    Open(String),
+    Run(String),
+}
+
+/// One line in the list.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Item {
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub icon: Option<String>,
+    pub glyph: Option<String>,
+    pub verb: Option<Verb>,
+    /// For the provider's `pick`.
+    pub id: Option<String>,
+    /// An app's action, drawn a step in.
+    pub small: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Line {
+    title: String,
+    #[serde(default)]
+    subtitle: Option<String>,
+    #[serde(default)]
+    icon: Option<String>,
+    #[serde(default)]
+    glyph: Option<String>,
+    #[serde(default)]
+    copy: Option<String>,
+    #[serde(default, rename = "type")]
+    type_: Option<String>,
+    #[serde(default)]
+    open: Option<String>,
+    #[serde(default)]
+    run: Option<String>,
+    #[serde(default)]
+    id: Option<String>,
+}
+
+/// A provider's answer as results. Lines that aren't a result are left out
+/// and counted in the error, so a broken provider says so in the log.
+pub fn parse(output: &str, limit: usize) -> (Vec<Item>, Option<String>) {
+    let mut items = Vec::new();
+    let mut bad = Vec::new();
+    for (number, line) in output.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        match item(line) {
+            Ok(item) => items.push(item),
+            Err(error) => bad.push(format!("line {}: {error}", number + 1)),
+        }
+    }
+    items.truncate(limit);
+    let error = (!bad.is_empty()).then(|| bad.join("; "));
+    (items, error)
+}
+
+fn item(line: &str) -> Result<Item, String> {
+    let line: Line = serde_json::from_str(line).map_err(|error| error.to_string())?;
+    let verbs = [
+        line.copy.map(Verb::Copy),
+        line.type_.map(Verb::Type),
+        line.open.map(Verb::Open),
+        line.run.map(Verb::Run),
+    ];
+    let mut verbs = verbs.into_iter().flatten();
+    let verb = verbs.next();
+    if verbs.next().is_some() {
+        return Err("more than one of copy, type, open and run".into());
+    }
+    Ok(Item {
+        title: line.title,
+        subtitle: line.subtitle,
+        icon: line.icon,
+        glyph: line.glyph,
+        verb,
+        id: line.id,
+        small: false,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    fn offer(id: &str, options: Value) -> Contribution {
+        Contribution {
+            module: "emoji".into(),
+            target: "launcher".into(),
+            kind: "provider".into(),
+            id: id.into(),
+            view: String::new(),
+            title: "Emoji".into(),
+            icon: None,
+            order: 30,
+            options,
+        }
+    }
+
+    fn names(providers: &[Provider]) -> Vec<&str> {
+        providers
+            .iter()
+            .map(|provider| provider.name.as_str())
+            .collect()
+    }
+
+    #[test]
+    fn built_ins_scripts_and_offers_in_order() {
+        let mut settings = BTreeMap::new();
+        settings.insert(
+            "web".to_owned(),
+            ProviderSettings {
+                prefix: Some("!w".into()),
+                command: vec!["web-search".into()],
+                ..ProviderSettings::default()
+            },
+        );
+        settings.insert(
+            "commands".to_owned(),
+            ProviderSettings {
+                enabled: Some(false),
+                ..ProviderSettings::default()
+            },
+        );
+        settings.insert(
+            "calculator".to_owned(),
+            ProviderSettings {
+                prefix: Some(String::new()),
+                order: Some(5),
+                ..ProviderSettings::default()
+            },
+        );
+        let offers = [
+            offer("emoji", json!({ "prefix": ":", "pick": "pick" })),
+            offer("apps", json!({})),
+        ];
+        let providers = providers(&settings, &offers);
+        assert_eq!(names(&providers), ["apps", "calculator", "web", "emoji"]);
+        let web = &providers[2];
+        assert_eq!(web.prefix.as_deref(), Some("!w"));
+        assert_eq!(web.title, "web");
+        assert_eq!(providers[1].prefix, None);
+        assert_eq!(
+            providers[3].kind,
+            Kind::Module {
+                module: "emoji".into(),
+                search: "search".into(),
+                pick: Some("pick".into()),
+            }
+        );
+    }
+
+    #[test]
+    fn a_prefix_takes_the_query_and_the_longest_wins() {
+        let mut settings = BTreeMap::new();
+        for (name, prefix) in [("web", "!w"), ("wiki", "!wiki")] {
+            settings.insert(
+                name.to_owned(),
+                ProviderSettings {
+                    prefix: Some(prefix.into()),
+                    command: vec!["x".into()],
+                    ..ProviderSettings::default()
+                },
+            );
+        }
+        let providers = providers(&settings, &[]);
+        let routed = |query| {
+            route(&providers, query)
+                .into_iter()
+                .map(|(provider, rest)| (provider.name.clone(), rest))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(routed("=2+2"), [("calculator".into(), "2+2".into())]);
+        assert_eq!(routed("> htop"), [("commands".into(), "htop".into())]);
+        assert_eq!(routed("!wiki rust"), [("wiki".into(), "rust".into())]);
+        assert_eq!(routed("!w rust"), [("web".into(), "rust".into())]);
+        // No prefix: apps, and the calculator for plain math.
+        assert_eq!(
+            routed("fire"),
+            [
+                ("calculator".into(), "fire".into()),
+                ("apps".into(), "fire".into())
+            ]
+        );
+    }
+
+    #[test]
+    fn reads_results_and_says_what_it_skipped() {
+        let output = concat!(
+            r#"{"title": "4", "subtitle": "2+2", "copy": "4"}"#,
+            "\n\n",
+            r#"{"title": "😀", "glyph": "😀", "id": "grin"}"#,
+            "\n",
+            "not json\n",
+            r#"{"title": "two", "copy": "a", "run": "b"}"#,
+            "\n",
+            r#"{"title": "rust", "open": "https://www.rust-lang.org"}"#,
+        );
+        let (items, error) = parse(output, 10);
+        assert_eq!(items.len(), 3);
+        assert_eq!(items[0].verb, Some(Verb::Copy("4".into())));
+        assert_eq!(items[1].verb, None);
+        assert_eq!(items[1].id.as_deref(), Some("grin"));
+        assert_eq!(
+            items[2].verb,
+            Some(Verb::Open("https://www.rust-lang.org".into()))
+        );
+        let error = error.unwrap();
+        assert!(
+            error.contains("line 4") && error.contains("line 5"),
+            "{error}"
+        );
+
+        let (items, error) = parse(&r#"{"title": "x"}"#.repeat(3).replace("}{", "}\n{"), 2);
+        assert_eq!((items.len(), error), (2, None));
+    }
+}

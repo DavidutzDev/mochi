@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
+use crate::Contribution;
 use crate::spec::{ActivitySpec, Args, BubbleSpec, CallError, EndReason};
 
 /// The environment variable holding the backend's end of the socket, as a
@@ -59,11 +60,18 @@ pub enum ToPlugin {
     State { module: String, state: Value },
     /// The compositor's state changed.
     Compositor { state: CompositorState },
+    /// What the enabled modules offer this plugin: every contribution whose
+    /// `target` is its id. Sent at the start, then when a reload changes it.
+    Offers { offers: Vec<Contribution> },
     /// The answer to a `call`.
     CallResult {
         id: u64,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         error: Option<CallError>,
+        /// What the action answered with, like the output `mochi ipc`
+        /// prints.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output: Option<String>,
     },
     /// The answer to a compositor request: `windows` returns a list of
     /// [`WindowInfo`], `pointer_output` a name or `null`.
@@ -303,10 +311,33 @@ mod tests {
                 captured: Vec::new(),
             },
         });
-        round_trip_to(ToPlugin::CallResult { id: 4, error: None });
+        round_trip_to(ToPlugin::CallResult {
+            id: 4,
+            error: None,
+            output: None,
+        });
         round_trip_to(ToPlugin::CallResult {
             id: 5,
             error: Some(CallError::NotEnabled("media".into())),
+            output: None,
+        });
+        round_trip_to(ToPlugin::CallResult {
+            id: 6,
+            error: None,
+            output: Some("{\"title\": \"4\"}".into()),
+        });
+        round_trip_to(ToPlugin::Offers {
+            offers: vec![Contribution {
+                module: "emoji".into(),
+                target: "launcher".into(),
+                kind: "provider".into(),
+                id: "emoji".into(),
+                view: String::new(),
+                title: "Emoji".into(),
+                icon: None,
+                order: 0,
+                options: json!({ "prefix": ":" }),
+            }],
         });
         round_trip_to(ToPlugin::CompositorResult {
             id: 6,

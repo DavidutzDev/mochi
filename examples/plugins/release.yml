@@ -1,0 +1,92 @@
+# A GitHub Actions workflow for a plugin repository, for `git-release:`
+# sources. Copy it to .github/workflows/release.yml. Pushing a tag like
+# v0.1.0 builds the backend on x86_64 and aarch64 with the manifest's
+# `build`, packs what `mochi plugins install` needs, and attaches it to the
+# tag's release under the name `[release] asset` gives.
+#
+# It reads everything from mochi-plugin.toml, so it needs no changes for a
+# Rust backend. For another language, add the steps that install its tools
+# before "Build".
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Read the manifest
+        id: manifest
+        env:
+          TAG: ${{ github.ref_name }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          python3 - >> "$GITHUB_OUTPUT" <<'PY'
+          import os, tomllib
+          manifest = tomllib.load(open("mochi-plugin.toml", "rb"))
+          plugin = manifest["plugin"]
+          asset = manifest["release"]["asset"]
+          for key, value in {
+              "{id}": plugin["id"],
+              "{version}": plugin["version"],
+              "{tag}": os.environ["TAG"],
+              "{arch}": os.environ["ARCH"],
+          }.items():
+              asset = asset.replace(key, value)
+          backend = manifest.get("backend", {})
+          print(f"id={plugin['id']}")
+          print(f"asset={asset}")
+          print(f"exec={backend.get('exec', '')}")
+          print(f"views={manifest.get('views', {}).get('dir', 'qml')}")
+          print(f"build={backend.get('build', '')}")
+          PY
+
+      - name: Build
+        if: steps.manifest.outputs.build != ''
+        env:
+          MOCHI_PLUGIN_DIR: ${{ github.workspace }}
+          BUILD: ${{ steps.manifest.outputs.build }}
+        run: sh -c "$BUILD"
+
+      - name: Pack
+        env:
+          ID: ${{ steps.manifest.outputs.id }}
+          ASSET: ${{ steps.manifest.outputs.asset }}
+          EXEC: ${{ steps.manifest.outputs.exec }}
+          VIEWS: ${{ steps.manifest.outputs.views }}
+        run: |
+          # The plugin as it should be installed, in one directory.
+          mkdir -p "pack/$ID"
+          for path in mochi-plugin.toml settings.toml README.md LICENSE "$VIEWS" "$EXEC"; do
+            if [ -n "$path" ] && [ -e "$path" ]; then
+              cp -r --parents "$path" "pack/$ID/"
+            fi
+          done
+          tar -czf "$ASSET" -C pack "$ID"
+          tar -tzf "$ASSET"
+
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          ASSET: ${{ steps.manifest.outputs.asset }}
+        run: |
+          # Both jobs race to make the release; the second just uploads.
+          gh release create "$TAG" --title "$TAG" --notes "" --verify-tag 2>/dev/null || true
+          gh release upload "$TAG" "$ASSET" --clobber

@@ -236,6 +236,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "clap_complete"
+version = "4.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "037e2a1a92236d0aff7e845093f64661d6df4c02c9fcc61a60e9e1d736fa392f"
+dependencies = [
+ "clap",
+]
+
+[[package]]
 name = "clap_derive"
 version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -691,8 +700,11 @@ name = "mochi"
 version = "0.0.5"
 dependencies = [
  "clap",
+ "clap_complete",
  "mochi-plugins",
  "mochi-protocol",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -963,6 +975,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-widgets"
+version = "0.0.5"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-workspaces"
 version = "0.0.5"
 dependencies = [
@@ -972,6 +997,16 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "mochi-plugin-emoji"
+version = "0.1.0"
+dependencies = [
+ "mochi-sdk",
+ "serde",
+ "serde_json",
+ "toml",
 ]
 
 [[package]]
@@ -1049,6 +1084,7 @@ dependencies = [
  "mochi-module-power",
  "mochi-module-share",
  "mochi-module-tray",
+ "mochi-module-widgets",
  "mochi-module-workspaces",
  "mochi-plugins",
  "mochi-protocol",

@@ -54,6 +54,17 @@ impl History {
         self.uses.get(id).map_or(0.0, |entry| decayed(*entry, now))
     }
 
+    /// The ids starting with `prefix`, without it, highest score first.
+    pub fn starting_with(&self, prefix: &str, now: u64) -> Vec<String> {
+        let mut found: Vec<(&str, f64)> = self
+            .uses
+            .iter()
+            .filter_map(|(id, entry)| Some((id.strip_prefix(prefix)?, decayed(*entry, now))))
+            .collect();
+        found.sort_by(|a, b| b.1.total_cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+        found.into_iter().map(|(id, _)| id.to_owned()).collect()
+    }
+
     /// Counts a launch and saves.
     pub fn record(&mut self, id: &str, now: u64) {
         let score = self.score(id, now) + 1.0;

@@ -63,7 +63,7 @@ The protocol only grows: a newer mochid may send message types or fields the SDK
 
 ## What an SDK should have
 
-- One call per message the backend sends, named like the protocol: `publish_state`, `present`, `update`, `withdraw`, `show_bubble`, `update_bubble`, `hide_bubble`, `call`, `reply`, `activate_workspace`, `windows`, `pointer_output`. The Rust SDK's names are the same, which helps people move between them.
+- One call per message the backend sends, named like the protocol: `publish_state`, `present`, `update`, `withdraw`, `show_bubble`, `update_bubble`, `hide_bubble`, `call`, `reply`, `activate_workspace`, `windows`, `pointer_output`. The Rust SDK's names are the same, which helps people move between them. `call` returns the `output` its `call_result` carries, for actions that answer with something, like a launcher provider's `search`.
 - Settings with defaults. `settings` holds only what the user wrote, so the plugin fills in the rest.
 - A way to wait for events and a timer at once, because most plugins also do something every second or minute: a timeout on the event wait, an async stream, or a callback API on an event loop.
 - Activity and bubble specs that need only the view: in the protocol, only `compact` and `view` are required, and everything else has a default.

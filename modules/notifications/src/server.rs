@@ -100,12 +100,9 @@ impl Server {
 }
 
 /// Serves the interface and asks for the name, queueing behind another
-/// daemon that holds it.
-pub async fn start(incoming: UnboundedSender<Incoming>) -> zbus::Result<Connection> {
-    let server = Server {
-        last_id: 0,
-        incoming,
-    };
+/// daemon that holds it. New notifications are numbered after `last_id`.
+pub async fn start(incoming: UnboundedSender<Incoming>, last_id: u32) -> zbus::Result<Connection> {
+    let server = Server { last_id, incoming };
     let connection = connection::Builder::session()?
         .serve_at(PATH, server)?
         .build()

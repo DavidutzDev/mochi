@@ -115,7 +115,11 @@ impl Module for Demo {
                         live.remove(&activity);
                         continue;
                     }
-                    ModuleEvent::Clicked(_) | ModuleEvent::State { .. } => continue,
+                    ModuleEvent::Clicked(_)
+                    | ModuleEvent::State { .. }
+                    | ModuleEvent::Offers(_) => {
+                        continue;
+                    }
                     ModuleEvent::BubbleClicked(clicked) => {
                         if let Some((name, _)) = bubbles.iter().find(|(_, id)| **id == clicked) {
                             let spec = ActivitySpec::new("Small")

@@ -7,7 +7,8 @@ use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use clap::{Parser, Subcommand};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::Shell;
 use mochi_plugins::install::{Installer, Mode, Outcome, Plan};
 use mochi_plugins::{Locations, Lock, PluginList};
 use mochi_protocol::{
@@ -17,6 +18,10 @@ use mochi_protocol::{
 #[derive(Debug, Parser)]
 #[command(version, about)]
 struct Cli {
+    /// Print JSON instead of text, for scripts: from `status`, `ipc list`,
+    /// `ipc <module>` and `plugins list`.
+    #[arg(long, global = true)]
+    json: bool,
     #[command(subcommand)]
     command: Command,
 }
@@ -74,6 +79,10 @@ enum Command {
         )]
         args: Vec<String>,
     },
+    /// Print a completion script for a shell.
+    ///
+    /// For example, `mochi completions fish > ~/.config/fish/completions/mochi.fish`.
+    Completions { shell: Shell },
 }
 
 #[derive(Debug, Subcommand)]
@@ -103,7 +112,7 @@ enum PluginsAction {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    match run(cli.command) {
+    match run(cli.command, cli.json) {
         Ok(()) => ExitCode::SUCCESS,
         Err(message) => {
             eprintln!("mochi: {message}");
@@ -112,12 +121,12 @@ fn main() -> ExitCode {
     }
 }
 
-fn run(command: Command) -> Result<(), String> {
+fn run(command: Command, json: bool) -> Result<(), String> {
     match command {
         Command::Ipc { words } => match words.as_slice() {
-            [] => list(None),
-            [only] if only == "list" => list(None),
-            [module] => list(Some(module.clone())),
+            [] => list(None, json),
+            [only] if only == "list" => list(None, json),
+            [module] => list(Some(module.clone()), json),
             [module, action, args @ ..] => {
                 let answer = request(ClientMessage::Command {
                     module: module.clone(),
@@ -131,6 +140,7 @@ fn run(command: Command) -> Result<(), String> {
             }
         },
         Command::Status => match request(ClientMessage::Status)? {
+            DaemonMessage::Status { status } if json => print_json(&status),
             DaemonMessage::Status { status } => {
                 println!("mochid {} (api {})", status.version, status.api);
                 let ui = if status.ui_connected {
@@ -180,9 +190,19 @@ fn run(command: Command) -> Result<(), String> {
             Ok(())
         }
         Command::Config { args } => config(&args),
-        Command::Plugins { config, action } => plugins(config, action),
+        Command::Plugins { config, action } => plugins(config, action, json),
         Command::SharePick { allow_token } => share_pick(allow_token),
+        Command::Completions { shell } => {
+            clap_complete::generate(shell, &mut Cli::command(), "mochi", &mut std::io::stdout());
+            Ok(())
+        }
     }
+}
+
+fn print_json(value: &impl serde::Serialize) -> Result<(), String> {
+    let text = serde_json::to_string_pretty(value).map_err(|error| error.to_string())?;
+    println!("{text}");
+    Ok(())
 }
 
 /// `$XDG_CONFIG_HOME/mochi/config.toml`, like mochid's default.
@@ -195,7 +215,7 @@ fn default_config() -> Result<PathBuf, String> {
     Ok(dir.join("mochi").join("config.toml"))
 }
 
-fn plugins(config: Option<PathBuf>, action: PluginsAction) -> Result<(), String> {
+fn plugins(config: Option<PathBuf>, action: PluginsAction, json: bool) -> Result<(), String> {
     let config = match config {
         Some(config) => config,
         None => default_config()?,
@@ -203,7 +223,7 @@ fn plugins(config: Option<PathBuf>, action: PluginsAction) -> Result<(), String>
     let locations = Locations::beside(&config);
     let list = PluginList::load(&locations.list).map_err(|error| error.to_string())?;
     match action {
-        PluginsAction::List => plugins_list(&locations, &list),
+        PluginsAction::List => plugins_list(&locations, &list, json),
         PluginsAction::Install { ids, yes } => {
             plugins_install(&locations, &list, &ids, yes, Mode::Install)
         }
@@ -233,7 +253,10 @@ fn plugins(config: Option<PathBuf>, action: PluginsAction) -> Result<(), String>
     }
 }
 
-fn plugins_list(locations: &Locations, list: &PluginList) -> Result<(), String> {
+fn plugins_list(locations: &Locations, list: &PluginList, json: bool) -> Result<(), String> {
+    if list.plugins.is_empty() && json {
+        return print_json(&[(); 0]);
+    }
     if list.plugins.is_empty() {
         println!("no plugins in {}", locations.list.display());
         return Ok(());
@@ -245,6 +268,7 @@ fn plugins_list(locations: &Locations, list: &PluginList) -> Result<(), String> 
         _ => None,
     };
     let found = mochi_plugins::discover(locations).map_err(|error| error.to_string())?;
+    let mut entries = Vec::new();
     for plugin in found {
         let locked = lock.plugins.get(&plugin.id);
         let revision = locked
@@ -269,16 +293,30 @@ fn plugins_list(locations: &Locations, list: &PluginList) -> Result<(), String> 
             (None, Ok(_)) => "installed",
             (None, Err(_)) => "missing",
         };
+        let note = daemon
+            .and_then(|status| status.message.clone())
+            .or_else(|| plugin.manifest.as_ref().err().cloned());
+        if json {
+            entries.push(serde_json::json!({
+                "id": plugin.id,
+                "source": plugin.source.to_string(),
+                "state": state,
+                "revision": locked.and_then(|locked| locked.revision()),
+                "version": plugin.manifest.as_ref().ok().map(|manifest| &manifest.plugin.version),
+                "message": note,
+            }));
+            continue;
+        }
         println!(
             "{:<16} {state:<9} {}{revision}{version}",
             plugin.id, plugin.source
         );
-        let note = daemon
-            .and_then(|status| status.message.clone())
-            .or_else(|| plugin.manifest.as_ref().err().cloned());
         if let Some(note) = note {
             println!("{:<16} {note}", "");
         }
+    }
+    if json {
+        return print_json(&entries);
     }
     if running.is_none() {
         println!("(mochid isn't running, so this doesn't say which run)");
@@ -426,10 +464,13 @@ fn config(args: &[String]) -> Result<(), String> {
     Err(format!("cannot run {}: {error}", program.to_string_lossy()))
 }
 
-fn list(module: Option<String>) -> Result<(), String> {
+fn list(module: Option<String>, json: bool) -> Result<(), String> {
     let DaemonMessage::Actions { modules } = request(ClientMessage::ListActions { module })? else {
         return Err("the daemon sent an unexpected answer".into());
     };
+    if json {
+        return print_json(&modules);
+    }
     for (index, ModuleActions { module, actions }) in modules.iter().enumerate() {
         if index > 0 {
             println!();

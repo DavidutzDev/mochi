@@ -1,25 +1,45 @@
 .pragma library
 
-// Brings a ListModel of {key} rows in line with `keys` by removing, moving
+// Brings a ListModel of {key, leaving} rows in line with `keys` by moving
 // and inserting rows. Rows that stay keep their delegates, so views keep
-// their state and animations instead of reloading.
+// their state and animations instead of reloading. Rows whose key went away
+// stay with `leaving` set, so their delegates can animate out and call
+// `removeLeft` when done; a key that comes back before then stays put.
 function sync(model, keys) {
-    for (let i = model.count - 1; i >= 0; i--) {
-        if (!keys.includes(model.get(i).key))
-            model.remove(i);
+    for (let i = 0; i < model.count; i++) {
+        const leaving = !keys.includes(model.get(i).key);
+        if (model.get(i).leaving !== leaving)
+            model.setProperty(i, "leaving", leaving);
     }
-    for (let i = 0; i < keys.length; i++) {
+    // Live rows in the order of `keys`; leaving rows keep their place among
+    // them.
+    let at = 0;
+    for (const key of keys) {
+        while (at < model.count && model.get(at).leaving)
+            at++;
         let found = -1;
-        for (let j = i; j < model.count; j++) {
-            if (model.get(j).key === keys[i]) {
+        for (let j = at; j < model.count; j++) {
+            if (model.get(j).key === key) {
                 found = j;
                 break;
             }
         }
         if (found === -1)
-            model.insert(i, { key: keys[i] });
-        else if (found !== i)
-            model.move(found, i, 1);
+            model.insert(at, { key: key, leaving: false });
+        else if (found !== at)
+            model.move(found, at, 1);
+        at++;
+    }
+}
+
+// Removes the row with `key` if it is still leaving.
+function removeLeft(model, key) {
+    for (let i = 0; i < model.count; i++) {
+        const row = model.get(i);
+        if (row.key === key && row.leaving) {
+            model.remove(i);
+            return;
+        }
     }
 }
 

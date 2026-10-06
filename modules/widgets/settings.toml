@@ -1,0 +1,7 @@
+# Widgets: views from any module on the desktop, under the windows. Where
+# they are is in widgets.toml next to this file; `mochi ipc widgets edit`
+# arranges them.
+[module.widgets]
+# The size of a grid cell, in pixels. Widgets snap to it, and widgets.toml
+# counts in cells.
+# grid = 16

@@ -31,6 +31,57 @@ Mochi doesn't grab keys itself. Bind these in your compositor:
 
 `mochi ipc` lists every action of every module, and `mochi ipc <module>` one module's.
 
+In Hyprland's Lua config:
+
+```lua
+hl.bind("SUPER + space", hl.dsp.exec_cmd("mochi ipc launcher toggle"))
+hl.bind("SUPER + C", hl.dsp.exec_cmd("mochi ipc hub toggle"))
+hl.bind("SUPER + SHIFT + N", hl.dsp.exec_cmd("mochi ipc notifications dnd toggle"))
+hl.bind("Print", hl.dsp.exec_cmd("mochi ipc capture screenshot"))
+hl.bind("ALT + Print", hl.dsp.exec_cmd("mochi ipc capture record"))
+-- `locked` keeps media keys working on the lock screen.
+hl.bind("XF86AudioPlay", hl.dsp.exec_cmd("mochi ipc media play-pause"), { locked = true })
+hl.bind("XF86AudioNext", hl.dsp.exec_cmd("mochi ipc media next"), { locked = true })
+hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("mochi ipc media previous"), { locked = true })
+```
+
+In `hyprland.conf`:
+
+```ini
+bind = SUPER, space, exec, mochi ipc launcher toggle
+bind = SUPER, C, exec, mochi ipc hub toggle
+bind = , Print, exec, mochi ipc capture screenshot
+bindl = , XF86AudioPlay, exec, mochi ipc media play-pause
+```
+
+In Sway:
+
+```
+bindsym $mod+space exec mochi ipc launcher toggle
+bindsym $mod+c exec mochi ipc hub toggle
+bindsym Print exec mochi ipc capture screenshot
+bindsym --locked XF86AudioPlay exec mochi ipc media play-pause
+```
+
+In niri:
+
+```kdl
+binds {
+    Mod+Space { spawn "mochi" "ipc" "launcher" "toggle"; }
+    Mod+C { spawn "mochi" "ipc" "hub" "toggle"; }
+    Print { spawn "mochi" "ipc" "capture" "screenshot"; }
+    XF86AudioPlay allow-when-locked=true { spawn "mochi" "ipc" "media" "play-pause"; }
+}
+```
+
+## The command line
+
+`mochi completions <shell>` prints completions for bash, zsh, fish, elvish or PowerShell; the Nix and Arch packages install them for bash, zsh and fish. `--json` makes `mochi status`, `mochi ipc list`, `mochi ipc <module>` and `mochi plugins list` print JSON, for scripts:
+
+```sh
+mochi status --json | jq -r '.modules[]'
+```
+
 ## Using the island
 
 - A left click expands what the island shows, or collapses it; clicking the clock opens the hub.

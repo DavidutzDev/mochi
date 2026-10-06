@@ -16,6 +16,7 @@ The repository has example plugins to copy:
 |---|---|
 | `examples/plugins/pomodoro` | A Rust backend: a countdown bubble updated every second, island notices, actions with arguments, a hub card with buttons, watching the media module's state |
 | `examples/plugins/weather` | A Rust backend fetching from the web on a timer, settings with a place and units, a hub card and a forecast view |
+| `examples/plugins/emoji` | A Rust backend that is a [launcher provider](launcher-providers.md): an emoji picker with no views |
 | `examples/python/hello` | A Python backend with a small SDK of its own: see [Making an SDK](custom-sdks.md) |
 
 To work on a plugin, list it with a `path:` source and install it, which runs its build:
@@ -114,3 +115,9 @@ done
 ## Publishing a release
 
 For a `git-release:` source, attach an archive to a GitHub release, named as `[release] asset` says with `{id}`, `{version}`, `{tag}` and `{arch}` (`x86_64` or `aarch64`) filled in. The archive holds the plugin as it should be installed: the manifest, the views and the built `exec`, at its root or in one directory. `mochi plugins install` reads the manifest from the tagged commit first, to show what it will install, then downloads the asset.
+
+This GitHub Actions workflow does it on every tag: copy it to `.github/workflows/release.yml` in the plugin's repository. It reads the manifest, runs its `build` on x86_64 and aarch64, packs the manifest, `settings.toml`, the views and the built `exec`, and attaches the archive to the tag's release.
+
+```yaml
+{{#include ../../../examples/plugins/release.yml}}
+```

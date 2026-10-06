@@ -2,7 +2,8 @@ import QtQuick
 import qs.island
 
 // Output volume. Later steps update `payload` in place, so the bar slides
-// instead of the view reloading.
+// instead of the view reloading. Scrolling on it changes the volume, through
+// the audio module when it runs.
 Item {
     property var payload: ({})
     readonly property int percent: payload.percent ?? 0
@@ -13,6 +14,22 @@ Item {
 
     implicitWidth: row.implicitWidth + Theme.padding * 2
     implicitHeight: 40
+
+    WheelHandler {
+        // Touchpads send small steps: 5% for every notch's worth.
+        property real pending: 0
+
+        enabled: Daemon.state("audio") != null
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        onWheel: event => {
+            pending += event.angleDelta.y / 120;
+            const notches = Math.trunc(pending);
+            if (notches === 0)
+                return;
+            pending -= notches;
+            Daemon.command("audio", "volume", ["output", `${notches > 0 ? "+" : "-"}${Math.abs(notches) * 5}`]);
+        }
+    }
 
     Row {
         id: row

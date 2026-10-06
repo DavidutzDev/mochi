@@ -400,7 +400,7 @@ impl State {
             return Ok(());
         };
         let (framerate, resolution) = (pick.framerate, pick.resolution);
-        let (width, height) = resolution.fit_within(switch::size(&outputs(ctx)));
+        let (width, height) = resolution.fit_within(session.size);
         ctx.compositor()
             .resize_virtual_output(OUTPUT, width, height, framerate)
             .await
@@ -486,13 +486,21 @@ impl State {
     ) -> Result<(), String> {
         let compositor = ctx.compositor();
         let outputs = outputs(ctx);
+        let size = switch::size(&outputs, &source);
         let mut session = Session::new(source, Instant::now());
         session.framerate = framerate;
         session.resolution = resolution;
+        session.size = size;
         ctx.publish_state(session.payload());
         self.session = Some(session);
-        if !outputs.iter().any(|(name, ..)| name == OUTPUT) {
-            let (width, height) = resolution.fit_within(switch::size(&outputs));
+        let (width, height) = resolution.fit_within(size);
+        if outputs.iter().any(|(name, ..)| name == OUTPUT) {
+            // Left from the last share, maybe in another shape.
+            compositor
+                .resize_virtual_output(OUTPUT, width, height, framerate)
+                .await
+                .map_err(|error| error.to_string())?;
+        } else {
             tracing::info!(width, height, framerate, "making the switchable monitor");
             compositor
                 .create_virtual_output(OUTPUT, width, height, framerate)

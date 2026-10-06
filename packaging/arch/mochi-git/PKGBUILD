@@ -56,6 +56,9 @@ package() {
   install -Dm755 target/release/mochid target/release/mochi -t "$pkgdir/usr/bin/"
   install -Dm644 systemd/mochid.service -t "$pkgdir/usr/lib/systemd/user/"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
+  target/release/mochi completions bash | install -Dm644 /dev/stdin "$pkgdir/usr/share/bash-completion/completions/mochi"
+  target/release/mochi completions fish | install -Dm644 /dev/stdin "$pkgdir/usr/share/fish/vendor_completions.d/mochi.fish"
+  target/release/mochi completions zsh | install -Dm644 /dev/stdin "$pkgdir/usr/share/zsh/site-functions/_mochi"
   # xdg-desktop-portal-hyprland runs one program, without arguments of our
   # choosing, as its screen-share picker.
   install -Dm755 /dev/stdin "$pkgdir/usr/bin/mochi-share-picker" <<'SH'

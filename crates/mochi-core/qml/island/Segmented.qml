@@ -66,7 +66,8 @@ Rectangle {
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: choice.modelData.label
+                        visible: text !== ""
+                        text: choice.modelData.label ?? ""
                         color: choice.selected ? Theme.background : Theme.foreground
                         font.pixelSize: Theme.textBody
                         font.family: Theme.fontFamily

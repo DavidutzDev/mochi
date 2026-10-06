@@ -37,7 +37,7 @@ Item {
             text: Qt.formatTime(clock.date, root.format)
             color: Theme.foreground
             font.pixelSize: Theme.textSubtitle
-            font.family: Theme.fontFamily
+            font.family: Theme.displayFamily
             font.weight: Font.DemiBold
         }
     }

@@ -80,6 +80,28 @@ pub fn launch(
     process::spawn_detached(&argv, app.path.as_deref())
 }
 
+/// Starts a command the way apps start, so it doesn't belong to mochid
+/// either. With `terminal`, in that terminal, like `["foot", "-e"]`.
+pub fn spawn(method: Method, argv: &[String], terminal: Option<&[String]>) -> Result<(), String> {
+    let mut argv = argv.to_vec();
+    if let Some(terminal) = terminal {
+        if terminal.is_empty() {
+            return Err("no terminal is set".into());
+        }
+        argv.splice(0..0, terminal.iter().cloned());
+    }
+    let argv = match method {
+        Method::Uwsm => ["uwsm", "app", "--"]
+            .into_iter()
+            .map(String::from)
+            .chain(argv)
+            .collect(),
+        Method::SystemdRun => process::in_app_scope(&argv),
+        Method::Direct => argv,
+    };
+    process::spawn_detached(&argv, None)
+}
+
 /// Turns `Exec=` into arguments: the spec's quoting, and its field codes.
 /// Nothing is opened with the app, so the file and URL codes go away.
 pub fn command_line(exec: &str, app: &App) -> Option<Vec<String>> {

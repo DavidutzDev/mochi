@@ -21,7 +21,7 @@ use crate::daemon::{ModuleExit, ModuleSlot};
 use crate::plugins::PluginModule;
 
 /// What a generated `config.toml` turns on: the whole shell.
-pub const DEFAULT_MODULES: [&str; 17] = [
+pub const DEFAULT_MODULES: [&str; 18] = [
     "idle",
     "osd",
     "workspaces",
@@ -39,6 +39,7 @@ pub const DEFAULT_MODULES: [&str; 17] = [
     "bluetooth",
     "battery",
     "performance",
+    "widgets",
 ];
 
 /// Every module compiled into this binary, fresh: a module runs once, so a
@@ -63,6 +64,7 @@ pub fn builtin() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_bluetooth::Bluetooth),
         Box::new(mochi_module_battery::BatteryModule),
         Box::new(mochi_module_performance::Performance),
+        Box::new(mochi_module_widgets::Widgets),
     ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));
@@ -201,6 +203,8 @@ pub fn write_examples(config_file: &Path) -> io::Result<Vec<PathBuf>> {
 #[derive(Debug)]
 pub struct Runner {
     pub paths: Paths,
+    /// Where `config.toml` is, for modules that keep files next to it.
+    pub config_dir: PathBuf,
     pub mode: Mode,
     pub compositor: Compositor,
     pub ids: ActivityIds,
@@ -220,6 +224,7 @@ impl Runner {
         exits: UnboundedSender<ModuleExit>,
     ) -> Self {
         Self {
+            config_dir: paths.config_dir.clone(),
             paths,
             mode,
             compositor,
@@ -283,6 +288,7 @@ impl Runner {
             self.paths.session_dir(id),
             self.requests.clone(),
         );
+        let ctx = ctx.with_config_dir(self.config_dir.clone());
         self.generation += 1;
         let slot = ModuleSlot {
             contributions: contributions(module.as_ref()),
@@ -303,14 +309,15 @@ impl Runner {
 }
 
 /// What a module offers others, without the ones whose view it doesn't
-/// ship: those are bugs in the module, logged here.
+/// ship: those are bugs in the module, logged here. Some kinds, like a
+/// launcher provider, have no view.
 fn contributions(module: &dyn Module) -> Vec<Contribution> {
     let assets = module.assets();
     module
         .contributions()
         .into_iter()
         .filter(|spec| {
-            let found = assets.has_view(&spec.view);
+            let found = spec.view.is_empty() || assets.has_view(&spec.view);
             if !found {
                 tracing::error!(module = module.id(), view = %spec.view, "the module offers a view it doesn't have");
             }

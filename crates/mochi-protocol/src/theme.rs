@@ -181,11 +181,14 @@ impl Default for Motion {
     }
 }
 
-/// The type scale, in pixels. An empty `family` keeps the system font.
+/// The type scale, in pixels. An empty `family` keeps the system font, and
+/// an empty `display_family` keeps `family`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Text {
     pub family: String,
+    /// For the clocks, on the idle island and in the hub.
+    pub display_family: String,
     /// Badges and fine print.
     pub caption: u32,
     /// Section labels and metadata.
@@ -205,6 +208,7 @@ impl Default for Text {
     fn default() -> Self {
         Self {
             family: String::new(),
+            display_family: String::new(),
             caption: 11,
             label: 12,
             body: 13,
