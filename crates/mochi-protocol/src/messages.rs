@@ -78,7 +78,13 @@ pub enum DaemonMessage {
     /// every module, then whenever it changes.
     State { module: String, state: Value },
     /// What the island shows now. `None` when no activity exists at all.
-    Present { activity: Option<Activity> },
+    Present {
+        activity: Option<Activity>,
+        /// What islands on other monitors show while `activity` is meant
+        /// for one monitor: the idle island, when it runs.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        resting: Option<Activity>,
+    },
     /// Every bubble, in drawing order. Sent to the UI after `hello` and on
     /// every change.
     Bubbles {
@@ -301,6 +307,14 @@ mod tests {
         });
         round_trip_daemon(DaemonMessage::Present {
             activity: Some(activity()),
+            resting: None,
+        });
+        round_trip_daemon(DaemonMessage::Present {
+            activity: Some(Activity {
+                output: Some("DP-3".into()),
+                ..activity()
+            }),
+            resting: Some(activity()),
         });
         round_trip_daemon(DaemonMessage::Present {
             activity: Some(Activity {
@@ -308,6 +322,7 @@ mod tests {
                 overlay: Some("Overlay".into()),
                 ..activity()
             }),
+            resting: None,
         });
         round_trip_daemon(DaemonMessage::Present {
             activity: Some(Activity {
@@ -315,8 +330,12 @@ mod tests {
                 output: Some("DP-3".into()),
                 ..activity()
             }),
+            resting: None,
         });
-        round_trip_daemon(DaemonMessage::Present { activity: None });
+        round_trip_daemon(DaemonMessage::Present {
+            activity: None,
+            resting: None,
+        });
         round_trip_daemon(DaemonMessage::Output {
             output: "[SELECTION]/screen:DP-3".into(),
         });
@@ -395,6 +414,7 @@ mod tests {
     fn ui_facing_messages_keep_their_wire_format() {
         let present = DaemonMessage::Present {
             activity: Some(activity()),
+            resting: None,
         };
         assert_eq!(
             serde_json::to_value(&present).unwrap(),

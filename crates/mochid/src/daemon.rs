@@ -10,7 +10,7 @@ use mochi_core::compositor::Compositor;
 use mochi_core::supervisor::{Supervisor, UiEvent};
 use mochi_core::{
     Arbiter, Assets, Bubbles, CallError, ClickOutside, Config, Effect, Module, ModuleCommand,
-    ModuleError, ModuleEvent, ModuleRequest, Panels, Reply, Request,
+    ModuleError, ModuleEvent, ModuleRequest, Notices, Panels, Priority, Reply, Request,
 };
 use mochi_protocol::{
     API, ActionSpec, ClientMessage, CompositorStatus, Contribution, DaemonMessage, ErrorCode,
@@ -110,6 +110,8 @@ pub struct Daemon {
     compositor: Compositor,
     /// `[island] panels`: which monitor panels open on.
     panels: Panels,
+    /// `[island] notices`: which monitor everything else shows on.
+    notices: Notices,
     handshake_deadline: Option<Instant>,
 }
 
@@ -146,6 +148,7 @@ impl Daemon {
             offered: BTreeMap::new(),
             compositor,
             panels: Panels::default(),
+            notices: Notices::default(),
             handshake_deadline: None,
         }
     }
@@ -237,6 +240,7 @@ impl Daemon {
         self.order = wanted;
         self.listed = catalog.listed;
         self.panels = config.island.panels;
+        self.notices = config.island.notices;
         self.arbiter
             .set_outside_expanded_only(config.island.click_outside == ClickOutside::Expanded);
         self.bubbles.configure(
@@ -492,7 +496,8 @@ impl Daemon {
                 self.reply(id, DaemonMessage::State { module, state });
             }
             let activity = self.arbiter.shown();
-            self.reply(id, DaemonMessage::Present { activity });
+            let resting = self.arbiter.resting();
+            self.reply(id, DaemonMessage::Present { activity, resting });
             self.reply(id, self.bubbles_message());
         }
     }
@@ -693,8 +698,14 @@ impl Daemon {
                 if !self.has_views(module, views) {
                     return;
                 }
-                if spec.output.is_none() && spec.modal && spec.overlay.is_none() {
-                    spec.output = self.panel_output();
+                // Panels open where `[island] panels` says, and the rest
+                // where `notices` does; the idle island stays everywhere.
+                if spec.output.is_none() && spec.overlay.is_none() {
+                    if spec.modal {
+                        spec.output = self.panel_output();
+                    } else if spec.priority > Priority::IDLE {
+                        spec.output = self.notice_output();
+                    }
                 }
                 self.arbiter.submit(id, module, spec, now);
                 Ok(())
@@ -818,6 +829,17 @@ impl Daemon {
         }
     }
 
+    /// The monitor everything else shows on, from `[island] notices`;
+    /// `None` for every monitor.
+    fn notice_output(&self) -> Option<String> {
+        let focused = || self.compositor.state().focused_output;
+        match self.notices {
+            Notices::All => None,
+            Notices::Focus => focused(),
+            Notices::Pointer => self.compositor.pointer_output().or_else(focused),
+        }
+    }
+
     fn apply_effects(&mut self) {
         if self.bubbles.take_changed() {
             self.broadcast(&self.bubbles_message());
@@ -828,7 +850,8 @@ impl Daemon {
                     if let Some(activity) = &activity {
                         tracing::debug!(id = %activity.id, module = %activity.module, view = %activity.view, "present");
                     }
-                    self.broadcast(&DaemonMessage::Present { activity });
+                    let resting = self.arbiter.resting();
+                    self.broadcast(&DaemonMessage::Present { activity, resting });
                 }
                 Effect::Clicked { module, activity } => {
                     self.notify(&module, ModuleEvent::Clicked(activity));

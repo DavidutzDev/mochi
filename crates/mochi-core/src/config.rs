@@ -118,7 +118,23 @@ pub struct Config {
 #[serde(default, deny_unknown_fields)]
 pub struct IslandConfig {
     pub panels: Panels,
+    pub notices: Notices,
     pub click_outside: ClickOutside,
+}
+
+/// Which monitor everything that isn't a panel shows on: notifications,
+/// the volume, the media card, every other notice.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Notices {
+    /// Every monitor's island.
+    #[default]
+    All,
+    /// The monitor with keyboard focus.
+    Focus,
+    /// The monitor under the pointer, where the compositor says; otherwise
+    /// the focused one.
+    Pointer,
 }
 
 /// What a click outside the island closes.

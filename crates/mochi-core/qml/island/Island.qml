@@ -16,8 +16,8 @@ Item {
     // The activity on screen, or null when the daemon has nothing to show.
     property var activity: null
     readonly property bool shown: activity !== null
-    // This island's monitor. A panel meant for another one doesn't show
-    // here; this island keeps what it showed.
+    // This island's monitor. An activity meant for another one doesn't show
+    // here; this island shows the idle island meanwhile.
     property string output: ""
 
     function elsewhere(next: var): bool {
@@ -139,14 +139,22 @@ Item {
         target: Daemon
 
         function onActivityChanged(): void {
-            if (!root.waiting(Daemon.activity) && !root.elsewhere(Daemon.activity))
-                root.present(Daemon.activity);
+            root.follow();
         }
     }
 
-    Component.onCompleted: {
-        if (!elsewhere(Daemon.activity))
-            present(Daemon.activity);
+    Component.onCompleted: follow()
+
+    // Shows the daemon's activity, or the idle island when the activity is
+    // meant for another monitor.
+    function follow(): void {
+        const next = Daemon.activity;
+        if (waiting(next))
+            return;
+        if (!elsewhere(next))
+            present(next);
+        else if (Daemon.resting !== null && !elsewhere(Daemon.resting))
+            present(Daemon.resting);
     }
 
     // A soft shadow under the shape. Theme.shadow sets its strength, and
