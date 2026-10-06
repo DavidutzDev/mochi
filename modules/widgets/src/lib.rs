@@ -226,9 +226,11 @@ impl Module for Widgets {
                         None => return Ok(()),
                         Some(ModuleEvent::Command(command)) => state.command(&ctx, command),
                         Some(ModuleEvent::Offers(offers)) => state.offered(&offers),
-                        // The notice on the island opens the drawer.
+                        // The notice on the island opens the drawer. Where the
+                        // compositor gives the click to the desktop layer
+                        // instead, the layer opens it; both only open it.
                         Some(ModuleEvent::Clicked(activity)) if state.banner == Some(activity) => {
-                            state.drawer = !state.drawer;
+                            state.drawer = true;
                         }
                         Some(ModuleEvent::Ended { activity, .. }) if state.banner == Some(activity) => {
                             state.banner = None;
