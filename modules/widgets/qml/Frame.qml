@@ -213,12 +213,30 @@ Item {
         }
     }
 
+    // Pointed at, the widget or its buttons; it stays a moment after, so the
+    // pointer can cross the gap from the widget to the buttons.
+    readonly property bool pointed: drag.containsMouse || toolsHover.hovered
+    onPointedChanged: {
+        if (!pointed)
+            linger.restart();
+    }
+
+    Timer {
+        id: linger
+
+        interval: 500
+    }
+
     Row {
         anchors.right: parent.right
         anchors.bottom: parent.top
         anchors.bottomMargin: 6
         spacing: 4
-        visible: root.editing && (drag.containsMouse || root.desktop.selected === root.widget?.id)
+        visible: root.editing && (root.pointed || linger.running || root.desktop.selected === root.widget?.id)
+
+        HoverHandler {
+            id: toolsHover
+        }
 
         IconButton {
             icon: "edit"

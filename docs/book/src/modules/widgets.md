@@ -4,13 +4,13 @@ Widgets are small views on the desktop, under your windows, from any module or p
 
 ## Arranging them
 
-`mochi ipc widgets edit` brings the widgets over the windows on the focused monitor, dims the screen and shows the grid and a drawer:
+`mochi ipc widgets edit` brings the widgets over the windows on the focused monitor, dims the screen and shows the grid. In the island's place, a pill says where to find more widgets:
 
 - Drag a widget to move it. It snaps to the grid.
 - Drag its round corner handle to resize it, within the sizes it allows.
-- Click it to open its settings, a form made from the settings it declares. Changes apply at once.
-- Drag a widget from the drawer onto the screen to add it, or click its trash button to remove it.
-- "Copy as Nix" copies the layout for home-manager.
+- Click it, or its pencil, to open its settings, a form made from the settings it declares. Changes apply at once. Its trash button removes it.
+- Hover the pill and it grows into the drawer: every widget the running modules and plugins offer, a search box, and a filter per module. Drag one onto the screen to add it; the drawer folds out of the way as you drag, and again when the pointer leaves it.
+- Copy, at the bottom of the drawer, copies the layout as `widgets.toml`; its arrow has "Copy as Nix", for home-manager.
 - Done or Escape stops arranging.
 
 Bind it to a key, like the other panels:

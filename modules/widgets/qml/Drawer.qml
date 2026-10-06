@@ -1,11 +1,12 @@
 import QtQuick
-import Quickshell
 import qs.island
 import "Place.js" as Place
 
-// While arranging: every widget the running modules offer, to drag onto
-// the screen, and the buttons to copy the layout for home-manager or to
-// stop arranging.
+// While arranging, in the island's place: a pill that says where the
+// widgets are and has Done. Hovering it grows it into the drawer, with
+// every widget the running modules offer, a search and a filter by module,
+// and the buttons to copy the layout. It folds back once the pointer
+// leaves, and while a widget is dragged out of it.
 Item {
     id: root
 
@@ -16,142 +17,404 @@ Item {
     // What's being dragged out, or null: an entry of the catalog.
     property var dragging: null
     property point at
+    property string query: ""
+    // The module the list is narrowed to, or "" for all.
+    property string module: ""
+    property bool menu: false
 
-    // On the side with fewer widgets under it, so it hides as few as it can.
-    readonly property bool onLeft: {
-        const strip = 280 + 32;
-        let right = 0;
-        let left = 0;
-        for (const widget of desktop.placed) {
-            const box = Place.rect(widget, desktop.cell, desktop.width, desktop.height);
-            right += Math.max(0, box.x + box.width - (desktop.width - strip)) * box.height;
-            left += Math.max(0, strip - box.x) * box.height;
-        }
-        return left < right;
+    readonly property bool atBottom: Theme.anchor === "bottom"
+    // Open while hovered, and a moment after, so crossing a gap doesn't fold it.
+    readonly property bool open: dragging === null && (hover.hovered || linger.running || menu)
+    readonly property var modules: [...new Set(desktop.catalog.map(entry => entry.module))].sort()
+    readonly property var shown: desktop.catalog.filter(entry => {
+        if (module !== "" && entry.module !== module)
+            return false;
+        const words = query.toLowerCase().split(/\s+/).filter(word => word !== "");
+        const text = `${entry.title} ${entry.module} ${entry.widget}`.toLowerCase();
+        return words.every(word => text.includes(word));
+    })
+
+    Timer {
+        id: linger
+
+        interval: 350
     }
 
+    // The island's place and shape when folded; a panel under it when open.
     Rectangle {
-        id: panel
+        id: pill
 
-        x: root.onLeft ? 16 : parent.width - width - 16
-        anchors.top: parent.top
-        anchors.bottom: parent.bottom
-        anchors.margins: 16
-        width: 280
-        radius: Theme.radiusLarge
+        readonly property real openHeight: Math.min(root.height - 80, 560)
+
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: root.atBottom ? root.height - height - Theme.margin : Theme.margin
+        width: root.open ? 400 : folded.implicitWidth + 24
+        height: root.open ? openHeight : Theme.idleHeight
+        radius: Math.min(height / 2, Theme.maxRadius)
         color: Theme.background
         border.width: 1
         border.color: Theme.border
+        clip: true
+
+        Behavior on width {
+            SpringAnimation {
+                spring: Theme.spring
+                damping: Theme.damping
+                epsilon: 0.25
+            }
+        }
+
+        Behavior on height {
+            SpringAnimation {
+                spring: Theme.spring
+                damping: Theme.damping
+                epsilon: 0.25
+            }
+        }
+
+        HoverHandler {
+            id: hover
+
+            onHoveredChanged: {
+                if (!hovered)
+                    linger.restart();
+            }
+        }
 
         // Clicks here stay here.
         MouseArea {
             anchors.fill: parent
         }
 
-        Column {
-            id: header
+        // Folded: what it is, and Done.
+        Row {
+            id: folded
 
-            x: Theme.padding
-            y: Theme.padding
-            width: parent.width - Theme.padding * 2
-            spacing: 4
+            anchors.verticalCenter: parent.top
+            anchors.verticalCenterOffset: Theme.idleHeight / 2
+            x: 12
+            spacing: 10
+            opacity: root.open ? 0 : 1
+            visible: opacity > 0
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.fast
+                }
+            }
+
+            Symbol {
+                anchors.verticalCenter: parent.verticalCenter
+                name: "grid"
+                size: 14
+                color: Theme.accent
+            }
 
             Text {
-                text: "Widgets"
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Widgets · hover to add more"
                 color: Theme.foreground
-                font.pixelSize: Theme.textHeadline
+                font.pixelSize: Theme.textBody
                 font.family: Theme.fontFamily
                 font.weight: Font.DemiBold
             }
 
-            Text {
-                width: parent.width
-                wrapMode: Text.Wrap
-                text: "Drag one onto the screen. Drag a widget to move it, its corner to resize it; click it for its settings."
-                color: Theme.muted
-                font.pixelSize: Theme.textLabel
-                font.family: Theme.fontFamily
-            }
-        }
-
-        ListView {
-            id: list
-
-            anchors.top: header.bottom
-            anchors.topMargin: 12
-            anchors.bottom: buttons.top
-            anchors.bottomMargin: 12
-            x: 8
-            width: parent.width - 16
-            clip: true
-            spacing: 4
-            model: root.desktop.catalog
-            boundsBehavior: Flickable.StopAtBounds
-
-            delegate: ListRow {
-                id: entry
-
-                required property var modelData
-
-                width: list.width
-                title: modelData.title
-                subtitle: `${modelData.module} · ${modelData.size[0]} × ${modelData.size[1]}`
-                leadingSize: 28
-
-                leading: Symbol {
-                    anchors.centerIn: parent
-                    name: entry.modelData.icon ?? "grid"
-                    size: 18
-                    color: Theme.foreground
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
-                    onPressed: event => {
-                        root.dragging = entry.modelData;
-                        root.at = mapToItem(root, event.x, event.y);
-                    }
-                    onPositionChanged: event => root.at = mapToItem(root, event.x, event.y)
-                    onReleased: root.drop()
-                    onCanceled: root.dragging = null
-                    preventStealing: true
-                }
-            }
-        }
-
-        Column {
-            id: buttons
-
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: Theme.padding
-            x: Theme.padding
-            width: parent.width - Theme.padding * 2
-            spacing: 8
-
-            Text {
-                visible: (root.desktop.layout?.error ?? null) !== null
-                width: parent.width
-                wrapMode: Text.Wrap
-                text: root.desktop.layout?.error ?? ""
-                color: Theme.danger
-                font.pixelSize: Theme.textLabel
-                font.family: Theme.fontFamily
-            }
-
             Button {
-                width: parent.width
-                text: "Copy as Nix"
-                icon: "copy"
-                onClicked: Daemon.command("widgets", "copy", ["nix"])
-            }
-
-            Button {
-                width: parent.width
+                anchors.verticalCenter: parent.verticalCenter
+                implicitHeight: Theme.idleHeight - 10
                 text: "Done"
-                icon: "check"
                 tone: "accent"
                 onClicked: Daemon.command("widgets", "edit", ["off"])
+            }
+        }
+
+        // Open: the drawer. It stays while a widget is dragged out of it,
+        // only faded: the entry being dragged holds the pointer.
+        Item {
+            anchors.fill: parent
+            anchors.margins: Theme.padding
+            opacity: root.open ? 1 : 0
+            visible: opacity > 0 || root.dragging !== null
+
+            Behavior on opacity {
+                NumberAnimation {
+                    duration: Theme.fast
+                }
+            }
+
+            Column {
+                id: header
+
+                width: parent.width
+                spacing: 10
+
+                Text {
+                    text: "Widgets"
+                    color: Theme.foreground
+                    font.pixelSize: Theme.textTitle
+                    font.family: Theme.fontFamily
+                    font.weight: Font.DemiBold
+                }
+
+                Rectangle {
+                    width: parent.width
+                    height: 34
+                    radius: height / 2
+                    color: Theme.raised
+                    border.width: search.activeFocus ? 1 : 0
+                    border.color: Theme.accent
+
+                    Symbol {
+                        id: magnifier
+
+                        x: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "search"
+                        size: 14
+                        color: Theme.muted
+                    }
+
+                    TextInput {
+                        id: search
+
+                        anchors.left: magnifier.right
+                        anchors.leftMargin: 8
+                        anchors.right: parent.right
+                        anchors.rightMargin: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: Theme.foreground
+                        selectionColor: Theme.accent
+                        font.pixelSize: Theme.textBody
+                        font.family: Theme.fontFamily
+                        clip: true
+                        onTextChanged: root.query = text
+                        Keys.onEscapePressed: {
+                            if (text !== "")
+                                text = "";
+                            else
+                                focus = false;
+                        }
+
+                        Text {
+                            visible: search.text === ""
+                            text: "Search widgets"
+                            color: Theme.muted
+                            font: search.font
+                        }
+                    }
+                }
+
+                // One chip per module offering widgets.
+                Flow {
+                    width: parent.width
+                    spacing: 6
+
+                    Repeater {
+                        model: [""].concat(root.modules)
+
+                        Rectangle {
+                            id: chip
+
+                            required property string modelData
+                            readonly property bool chosen: root.module === modelData
+
+                            width: label.implicitWidth + 20
+                            height: 26
+                            radius: height / 2
+                            color: chosen ? Theme.foreground : chipArea.containsMouse ? Theme.highlight : Theme.raised
+
+                            Text {
+                                id: label
+
+                                anchors.centerIn: parent
+                                text: chip.modelData === "" ? "All" : chip.modelData
+                                color: chip.chosen ? Theme.background : Theme.foreground
+                                font.pixelSize: Theme.textLabel
+                                font.family: Theme.fontFamily
+                                font.weight: Font.DemiBold
+                            }
+
+                            MouseArea {
+                                id: chipArea
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.module = chip.modelData
+                            }
+                        }
+                    }
+                }
+            }
+
+            ListView {
+                id: list
+
+                anchors.top: header.bottom
+                anchors.topMargin: 10
+                anchors.bottom: buttons.top
+                anchors.bottomMargin: 10
+                width: parent.width
+                clip: true
+                spacing: 4
+                model: root.shown
+                boundsBehavior: Flickable.StopAtBounds
+                // Keeps every entry while the drawer folds under a drag.
+                cacheBuffer: 4000
+
+                delegate: ListRow {
+                    id: entry
+
+                    required property var modelData
+
+                    width: list.width
+                    title: modelData.title
+                    subtitle: `${modelData.module} · ${modelData.size[0]} × ${modelData.size[1]} · drag it out`
+                    leadingSize: 28
+
+                    leading: Symbol {
+                        anchors.centerIn: parent
+                        name: entry.modelData.icon ?? "grid"
+                        size: 18
+                        color: Theme.foreground
+                    }
+
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                        preventStealing: true
+                        onPressed: event => {
+                            search.focus = false;
+                            root.at = mapToItem(root, event.x, event.y);
+                            root.dragging = entry.modelData;
+                        }
+                        onPositionChanged: event => root.at = mapToItem(root, event.x, event.y)
+                        onReleased: root.drop()
+                        onCanceled: root.dragging = null
+                    }
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: list.count === 0
+                    text: "No widgets match"
+                    color: Theme.muted
+                    font.pixelSize: Theme.textBody
+                    font.family: Theme.fontFamily
+                }
+            }
+
+            Column {
+                id: buttons
+
+                anchors.bottom: parent.bottom
+                width: parent.width
+                spacing: 8
+
+                Text {
+                    visible: (root.desktop.layout?.error ?? null) !== null
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: root.desktop.layout?.error ?? ""
+                    color: Theme.danger
+                    font.pixelSize: Theme.textLabel
+                    font.family: Theme.fontFamily
+                }
+
+                Row {
+                    width: parent.width
+                    spacing: 8
+
+                    // Copy the layout as widgets.toml; the arrow has the other formats.
+                    Row {
+                        id: copy
+
+                        width: (parent.width - 8) / 2
+                        spacing: 2
+
+                        Button {
+                            width: parent.width - more.width - 2
+                            text: "Copy"
+                            icon: "copy"
+                            onClicked: Daemon.command("widgets", "copy", ["toml"])
+                        }
+
+                        Button {
+                            id: more
+
+                            icon: "chevron"
+                            iconSize: 12
+                            rotation: root.menu ? 270 : 90
+                            onClicked: root.menu = !root.menu
+                        }
+                    }
+
+                    Button {
+                        width: (parent.width - 8) / 2
+                        text: "Done"
+                        icon: "check"
+                        tone: "accent"
+                        onClicked: Daemon.command("widgets", "edit", ["off"])
+                    }
+                }
+            }
+
+            // The other formats, over the copy button.
+            Rectangle {
+                visible: root.menu
+                anchors.bottom: buttons.top
+                anchors.bottomMargin: 6
+                width: copy.width
+                height: formats.implicitHeight + 8
+                radius: Theme.radiusMedium
+                color: Theme.raised
+
+                Column {
+                    id: formats
+
+                    x: 4
+                    y: 4
+                    width: parent.width - 8
+
+                    Repeater {
+                        model: [
+                            { "label": "Copy as TOML", "format": "toml" },
+                            { "label": "Copy as Nix", "format": "nix" }
+                        ]
+
+                        Rectangle {
+                            id: format
+
+                            required property var modelData
+
+                            width: formats.width
+                            height: 32
+                            radius: Theme.radiusSmall
+                            color: formatArea.containsMouse ? Theme.highlight : "transparent"
+
+                            Text {
+                                x: 10
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: format.modelData.label
+                                color: Theme.foreground
+                                font.pixelSize: Theme.textBody
+                                font.family: Theme.fontFamily
+                            }
+
+                            MouseArea {
+                                id: formatArea
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    Daemon.command("widgets", "copy", [format.modelData.format]);
+                                    root.menu = false;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -182,11 +445,11 @@ Item {
         }
     }
 
-    // Placed where it was let go, unless that's over the drawer.
+    // Placed where it was let go; the drawer folded as the drag began.
     function drop(): void {
         const entry = dragging;
         dragging = null;
-        if (!entry || (at.x >= panel.x && at.x <= panel.x + panel.width))
+        if (!entry)
             return;
         const x = Math.max(0, Math.min(desktop.width - ghost.width, ghost.x));
         const y = Math.max(0, Math.min(desktop.height - ghost.height, ghost.y));
