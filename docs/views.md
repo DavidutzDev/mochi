@@ -39,7 +39,7 @@ Text sizes: `textCaption`, `textLabel`, `textBody`, `textSubtitle`, `textTitle`,
 | `Symbol` | an icon from the built-in set, or the icon theme | `name`, `size`, `color` |
 | `Button` | a pill button; round with only an icon | `text`, `icon`, `tone` (`neutral`, `accent`, `danger`, `ghost`), `clicked()` |
 | `IconButton` | a round icon button sized from its icon | `icon`, `size`, `tone`, `clicked()` |
-| `Slider` | a value from 0 to 1; thick with an icon, or thin as a seek bar | `value`, `icon`, `thickness`, `moved(value)`, `released(value)` |
+| `Slider` | a value from 0 to 1; thick with an icon, or thin as a seek bar | `value`, `icon`, `thickness`, `reset` (where a double click puts it), `moved(value)`, `released(value)` |
 | `ProgressBar` | how far along, not interactive | `value`, `fill` |
 | `Switch` | on or off | `checked`, `toggled(checked)` |
 | `Segmented` | one choice out of a few | `options` (`[{value, label, icon}]`), `current`, `picked(value)` |
