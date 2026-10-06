@@ -447,6 +447,12 @@ impl Daemon {
             }
             (Some(_), ClientMessage::ListActions { module }) => self.on_list_actions(id, module),
             (Some(_), ClientMessage::Reload) => self.on_reload(id),
+            (Some(_), ClientMessage::Dismiss) => {
+                if let Some(shown) = self.arbiter.shown() {
+                    self.arbiter.dismiss(shown.id, Instant::now());
+                }
+                self.reply(id, DaemonMessage::Ok);
+            }
         }
     }
 

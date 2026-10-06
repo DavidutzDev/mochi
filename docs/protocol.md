@@ -63,6 +63,7 @@ Control clients send one request at a time and read exactly one answer before se
 | `{"type":"command","module":"osd","action":"volume","args":["+5"]}` | `ok` or `error` |
 | `{"type":"status"}` | `status` |
 | `{"type":"reload"}` | `ok` or `error` |
+| `{"type":"dismiss"}` | `ok`: closes what the island shows, as a right click does |
 | `{"type":"list_actions"}` or `{"type":"list_actions","module":"osd"}` | `actions` |
 
 Command arguments are always strings, as typed on the command line. The daemon checks them against the action's declared arguments before the module sees them, and answers `invalid_args` with a usage line when they don't fit.
@@ -79,6 +80,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `bubble_click` | `bubble` | UI |
 | `status` | | control |
 | `reload` | | control |
+| `dismiss` | | control |
 | `list_actions` | `module` (optional) | control |
 
 ### Daemon to client

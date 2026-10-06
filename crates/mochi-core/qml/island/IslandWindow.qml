@@ -121,12 +121,16 @@ PanelWindow {
         }
     }
 
-    // Escape closes a modal activity whose view doesn't take keys itself,
-    // like a notification the user expanded. Views that do, like the
-    // launcher's search box, take the focus from it.
-    Item {
-        focus: root.modal && !root.overlaid
-        Keys.onEscapePressed: Daemon.event("dismiss")
+    // Each modal activity gets the keyboard's focus in the island, where
+    // Escape closes it; after the view's own setup, so a view that takes
+    // the focus for a field keeps it.
+    onActivityChanged: {
+        if (modal && !overlaid)
+            Qt.callLater(island.takeKeys);
+    }
+    onModalChanged: {
+        if (modal && !overlaid)
+            Qt.callLater(island.takeKeys);
     }
 
     // The activity's overlay, under the bubbles and the island. It stays

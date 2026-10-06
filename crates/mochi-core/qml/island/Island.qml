@@ -174,19 +174,34 @@ Item {
         border: Theme.border
     }
 
-    Item {
+    // The views, in a focus scope: a view that wants keys sets `focus: true`
+    // on its root or takes the focus itself. Escape that the view doesn't
+    // use comes up to here and closes the activity.
+    FocusScope {
+        id: views
+
         anchors.fill: parent
         clip: true
+        Keys.onEscapePressed: Daemon.eventFor(root.activity, "dismiss")
 
         IslandLoader {
             id: first
             current: root.front === 0
+            focus: current
         }
 
         IslandLoader {
             id: second
             current: root.front === 1
+            focus: current
         }
+    }
+
+    // While the island holds the keyboard: the focus goes into the views,
+    // unless a view already took it, so Escape always arrives.
+    function takeKeys(): void {
+        if (!views.activeFocus)
+            views.forceActiveFocus();
     }
 
     HoverHandler {
