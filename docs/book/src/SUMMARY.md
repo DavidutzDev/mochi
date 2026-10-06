@@ -31,6 +31,7 @@
 - [Clipboard](modules/clipboard.md)
 - [Tray](modules/tray.md)
 - [Widgets](modules/widgets.md)
+- [Notes](modules/notes.md)
 
 # Building on Mochi
 

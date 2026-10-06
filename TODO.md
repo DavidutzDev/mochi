@@ -535,9 +535,9 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [x] Clock widget: time zone, 12/24 hours, seconds, date
 - [x] `widgets export|copy [nix|toml]`
 - [x] home-manager `programs.mochi.widgets`, written only when the declared layout changes, taking Nix or TOML
-- [ ] Calendar widget
-- [ ] To-do and notes widgets, typed into on the desktop
-- [ ] Widgets from existing modules: now playing, performance graphs, battery, weather
+- [x] Calendar widget
+- [x] To-do and notes widgets, typed into on the desktop (the notes module)
+- [x] Widgets from existing modules: now playing, performance graphs, battery, weather
 - [ ] Alignment guides while dragging
 - [ ] Moving a widget to another monitor from its settings
 

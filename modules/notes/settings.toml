@@ -1,0 +1,3 @@
+# Notes: to-do lists and notes as desktop widgets. Each one you place has
+# its own content, kept in $XDG_STATE_HOME/mochi/notes.json.
+[module.notes]

@@ -115,6 +115,22 @@ impl Module for Widgets {
                         },
                     ],
                 })),
+            ContributionSpec::new("widgets", "widget", "calendar", "Calendar", "Calendar")
+                .icon("grid")
+                .options(json!({
+                    "size": [16, 15],
+                    "min": [11, 10],
+                    "max": [40, 38],
+                    "settings": [
+                        {
+                            "name": "first_day",
+                            "kind": "choice",
+                            "choices": ["monday", "sunday"],
+                            "default": "monday",
+                            "description": "The day weeks start on",
+                        },
+                    ],
+                })),
         ]
     }
 
@@ -635,7 +651,7 @@ mod tests {
             .map(|spec| spec.into_contribution("widgets"))
             .collect();
         let specs = catalog::read(&offers);
-        assert_eq!(specs.len(), 1);
+        assert_eq!(specs.len(), 2);
         assert_eq!(specs[0].settings.len(), 4);
     }
 }

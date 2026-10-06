@@ -96,6 +96,10 @@ impl Module for Media {
                 .icon("music")
                 .order(10)
                 .options(json!({ "span": 2 })),
+            // The same card on the desktop; it steps aside when nothing plays.
+            ContributionSpec::new("widgets", "widget", "now-playing", "Card", "Now playing")
+                .icon("music")
+                .options(json!({ "size": [24, 8], "min": [18, 7], "max": [40, 9] })),
         ]
     }
 
