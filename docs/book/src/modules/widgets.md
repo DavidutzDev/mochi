@@ -1,6 +1,6 @@
 # Widgets
 
-Widgets are small views on the desktop, under your windows: a clock, and whatever other modules and plugins offer. You can place as many as you like, the same one several times, each with its own settings, on any monitor.
+Widgets are small views on the desktop, under your windows, from any module or plugin. You can place as many as you like, the same one several times, each with its own settings, on any monitor.
 
 ## Arranging them
 
@@ -71,14 +71,20 @@ It's written as a file Mochi can change, not a link into the store, so arranging
 {{#include ../../../../modules/widgets/settings.toml}}
 ```
 
-## The clock
+## The widgets
 
-| Setting | Default | |
+| Widget | `module`, `widget` | Settings |
 |---|---|---|
-| `timezone` | `""` | A zone like `Europe/Paris`; empty for this computer's |
-| `hours` | `"24"` | `"24"` or `"12"` |
-| `seconds` | `false` | Show the seconds |
-| `date` | `true` | Show the date under the time |
+| Clock | `widgets`, `clock` | `timezone` (like `Europe/Paris`; empty for this computer's), `hours` (`"24"` or `"12"`), `seconds`, `date` |
+| Calendar | `widgets`, `calendar` | `first_day` (`monday` or `sunday`). Arrows go to the months around this one |
+| To-do | `notes`, `todo` | `title`, `done` (`show` or `hide` the done items). Click an item to tick it; type into the bottom field and press Enter to add one |
+| Note | `notes`, `note` | `title`. Click it and type; it saves a moment after you stop |
+| Now playing | `media`, `now-playing` | The hub's card: the cover, the track and the controls. It steps aside while no player has a track |
+| Battery | `battery`, `level` | The hub's card, with the power profiles. It steps aside without a battery |
+| Performance | `performance`, `graphs` | `reading` (`all`, `cpu`, `memory` or `gpu`): the readings with their last two minutes as graphs |
+| Weather | `weather`, `now` | From the example weather plugin |
+
+Each to-do list and note keeps its own content, in the [notes](notes.md) module. Typing into one gives the desktop the keyboard until you click a window; Escape lets go of the field.
 
 ## Actions
 

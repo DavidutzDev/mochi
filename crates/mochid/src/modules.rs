@@ -21,7 +21,7 @@ use crate::daemon::{ModuleExit, ModuleSlot};
 use crate::plugins::PluginModule;
 
 /// What a generated `config.toml` turns on: the whole shell.
-pub const DEFAULT_MODULES: [&str; 18] = [
+pub const DEFAULT_MODULES: [&str; 19] = [
     "idle",
     "osd",
     "workspaces",
@@ -40,6 +40,7 @@ pub const DEFAULT_MODULES: [&str; 18] = [
     "battery",
     "performance",
     "widgets",
+    "notes",
 ];
 
 /// Every module compiled into this binary, fresh: a module runs once, so a
@@ -65,6 +66,7 @@ pub fn builtin() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_battery::BatteryModule),
         Box::new(mochi_module_performance::Performance),
         Box::new(mochi_module_widgets::Widgets),
+        Box::new(mochi_module_notes::Notes),
     ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));

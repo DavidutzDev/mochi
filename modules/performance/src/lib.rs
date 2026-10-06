@@ -180,6 +180,20 @@ impl Module for Performance {
             ContributionSpec::new("hub", "page", "page", "Page", "Performance")
                 .icon("chip")
                 .order(18),
+            ContributionSpec::new("widgets", "widget", "graphs", "Widget", "Performance")
+                .icon("chip")
+                .options(json!({
+                    "size": [18, 14],
+                    "min": [12, 5],
+                    "max": [50, 40],
+                    "settings": [{
+                        "name": "reading",
+                        "kind": "choice",
+                        "choices": ["all", "cpu", "memory", "gpu"],
+                        "default": "all",
+                        "description": "One reading, or all of them",
+                    }],
+                })),
         ]
     }
 

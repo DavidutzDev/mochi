@@ -33,3 +33,12 @@ id = "now"
 view = "Card"
 title = "Weather"
 order = 70
+
+# The same card as a desktop widget.
+[[contributions]]
+target = "widgets"
+kind = "widget"
+id = "now"
+view = "Card"
+title = "Weather"
+options = { size = [18, 9], min = [14, 7], max = [36, 16] }

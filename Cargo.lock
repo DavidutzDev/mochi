@@ -892,6 +892,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-notes"
+version = "0.0.5"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-notifications"
 version = "0.0.5"
 dependencies = [
@@ -1078,6 +1090,7 @@ dependencies = [
  "mochi-module-launcher",
  "mochi-module-media",
  "mochi-module-network",
+ "mochi-module-notes",
  "mochi-module-notifications",
  "mochi-module-osd",
  "mochi-module-performance",
