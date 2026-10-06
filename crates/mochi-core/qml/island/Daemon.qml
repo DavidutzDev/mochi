@@ -125,7 +125,9 @@ Singleton {
         case "theme":
             theme = message.theme;
             break;
+        // Answers to commands views send; views don't wait for them.
         case "ok":
+        case "output":
             break;
         case "error":
             console.warn(`mochi: ${message.code}: ${message.message}`);
