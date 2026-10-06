@@ -29,6 +29,7 @@
 
 mod calc;
 mod entries;
+mod files;
 mod history;
 mod launch;
 mod providers;
@@ -50,13 +51,15 @@ use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
 use crate::entries::{App, Locale};
+use crate::files::FilesSettings;
 use crate::history::History;
 use crate::launch::Method;
-use crate::providers::{Item, Kind, Provider, ProviderSettings, Verb};
+use crate::providers::{Engine, Item, Kind, Provider, ProviderSettings, Verb};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
-/// How long typing must pause before scripts and other modules are asked.
+/// How long typing must pause before scripts are asked. Modules are asked
+/// at once: answering is cheap for them.
 const DEBOUNCE: Duration = Duration::from_millis(120);
 /// Commands the user ran, in the launch history.
 const RAN: &str = "run:";
@@ -70,6 +73,8 @@ struct Settings {
     terminal: Vec<String>,
     max_results: usize,
     providers: BTreeMap<String, ProviderSettings>,
+    engines: BTreeMap<String, Engine>,
+    files: FilesSettings,
 }
 
 impl Default for Settings {
@@ -78,6 +83,8 @@ impl Default for Settings {
             terminal: Vec::new(),
             max_results: 50,
             providers: BTreeMap::new(),
+            engines: BTreeMap::new(),
+            files: FilesSettings::default(),
         }
     }
 }
@@ -104,7 +111,11 @@ impl Module for Launcher {
     fn actions(&self) -> Vec<ActionSpec> {
         vec![
             ActionSpec::new("toggle", "Open the launcher, or close it when open"),
-            ActionSpec::new("open", "Open the launcher"),
+            ActionSpec::new("open", "Open the launcher, with something typed already").arg(
+                ArgSpec::string("query", "What's typed in it, like : for emoji")
+                    .optional()
+                    .rest(),
+            ),
             ActionSpec::new("close", "Close the launcher"),
             ActionSpec::new("search", "Search; the launcher sends this as you type").arg(
                 ArgSpec::string("query", "What to look for")
@@ -118,7 +129,13 @@ impl Module for Launcher {
                 "Pick a result; the launcher sends this on Enter or a click",
             )
             .arg(ArgSpec::string("key", "The result's key"))
-            .arg(ArgSpec::bool("terminal", "Run a command in a terminal").optional()),
+            .arg(
+                ArgSpec::bool(
+                    "alternate",
+                    "Do what Shift+Enter does: run a command in a terminal, copy an emoji, open a file's folder",
+                )
+                .optional(),
+            ),
         ]
     }
 
@@ -128,6 +145,8 @@ impl Module for Launcher {
             let method = Method::detect().await;
             tracing::info!(?method, "starting apps");
             let (sender, mut answers) = mpsc::unbounded_channel();
+            let (indexed, mut indexes) = mpsc::unbounded_channel();
+            let engines = providers::engines(&settings.engines);
             let mut state = State {
                 terminal: if settings.terminal.is_empty() {
                     default_terminal()
@@ -139,8 +158,13 @@ impl Module for Launcher {
                 history: History::default_path()
                     .map(History::load)
                     .unwrap_or_default(),
-                providers: providers::providers(&settings.providers, &[]),
+                providers: providers::providers(&settings.providers, &engines, &[]),
                 settings: settings.providers,
+                engines,
+                files: settings.files,
+                index: files::Index::default(),
+                indexing: false,
+                indexed,
                 apps: Vec::new(),
                 query: String::new(),
                 shown: None,
@@ -153,6 +177,7 @@ impl Module for Launcher {
                 listed: HashMap::new(),
                 sender,
             };
+            state.reindex();
 
             loop {
                 let due = state.due;
@@ -168,6 +193,7 @@ impl Module for Launcher {
                         Some(_) => {}
                     },
                     Some(answer) = answers.recv() => state.answered(&ctx, answer),
+                    Some(entries) = indexes.recv() => state.indexed(&ctx, entries),
                     () = wait(due) => state.ask(&ctx),
                 }
             }
@@ -197,6 +223,11 @@ struct State {
     method: Method,
     history: History,
     settings: BTreeMap<String, ProviderSettings>,
+    engines: BTreeMap<String, Engine>,
+    files: FilesSettings,
+    index: files::Index,
+    indexing: bool,
+    indexed: mpsc::UnboundedSender<Vec<files::Entry>>,
     providers: Vec<Provider>,
     /// Read again every time the launcher opens, so new installs show up.
     apps: Vec<App>,
@@ -226,7 +257,8 @@ impl State {
                 Ok(())
             }
             "toggle" | "open" => {
-                self.open(ctx).await;
+                let query = command.args.str("query").unwrap_or_default().to_owned();
+                self.open(ctx, query).await;
                 Ok(())
             }
             "close" => {
@@ -236,7 +268,7 @@ impl State {
             "search" => {
                 self.query = command.args.str("query").unwrap_or_default().to_owned();
                 if self.shown.is_some() {
-                    self.search();
+                    self.search(ctx);
                     self.refresh(ctx);
                 }
                 Ok(())
@@ -247,18 +279,18 @@ impl State {
             }
             "activate" => {
                 let key = command.args.str("key").unwrap_or_default().to_owned();
-                let terminal = command.args.bool("terminal").unwrap_or(false);
-                self.activate(ctx, &key, terminal).await
+                let alternate = command.args.bool("alternate").unwrap_or(false);
+                self.activate(ctx, &key, alternate).await
             }
             other => Err(format!("launcher has no action {other}")),
         };
         command.reply(result);
     }
 
-    async fn open(&mut self, ctx: &ModuleCtx) {
+    async fn open(&mut self, ctx: &ModuleCtx, query: String) {
         // The other panels take the keyboard too; only one can be
         // open. Not awaited: they close the launcher the same way.
-        for module in ["hub", "clipboard", "audio", "tray"] {
+        for module in ["hub", "clipboard", "audio", "tray", "emoji"] {
             let close = ctx.call(module, "close", &[]);
             tokio::spawn(async move {
                 match close.await {
@@ -269,8 +301,11 @@ impl State {
         }
 
         self.apps = read_apps().await;
-        self.query.clear();
-        self.search();
+        if self.index.stale() {
+            self.reindex();
+        }
+        self.query = query;
+        self.search(ctx);
         let spec = ActivitySpec::new("Launcher")
             .key("launcher")
             .priority(Priority::URGENT)
@@ -300,21 +335,53 @@ impl State {
         self.listed.clear();
     }
 
+    /// Builds the file index again, in the background.
+    fn reindex(&mut self) {
+        if self.indexing
+            || !self
+                .providers
+                .iter()
+                .any(|provider| provider.kind == Kind::Files)
+        {
+            return;
+        }
+        self.indexing = true;
+        let settings = self.files.clone();
+        let sender = self.indexed.clone();
+        tokio::task::spawn_blocking(move || {
+            let entries = files::build(&files::roots(&settings), &settings);
+            let _ = sender.send(entries);
+        });
+    }
+
+    fn indexed(&mut self, ctx: &ModuleCtx, entries: Vec<files::Entry>) {
+        tracing::info!(entries = entries.len(), "indexed files");
+        self.index = files::Index {
+            entries,
+            built: Some(std::time::Instant::now()),
+        };
+        self.indexing = false;
+        if self.shown.is_some() && self.query.starts_with('/') {
+            self.search(ctx);
+            self.refresh(ctx);
+        }
+    }
+
     fn offered(&mut self, ctx: &ModuleCtx, offers: &[Contribution]) {
-        self.providers = providers::providers(&self.settings, offers);
+        self.providers = providers::providers(&self.settings, &self.engines, offers);
         tracing::info!(
             providers = ?self.providers.iter().map(|provider| &provider.name).collect::<Vec<_>>(),
             "providers"
         );
         if self.shown.is_some() {
-            self.search();
+            self.search(ctx);
             self.refresh(ctx);
         }
     }
 
-    /// Answers the query: the built-ins at once, the others once typing
-    /// pauses.
-    fn search(&mut self) {
+    /// Answers the query: the built-ins and modules at once, scripts once
+    /// typing pauses.
+    fn search(&mut self, ctx: &ModuleCtx) {
         self.forget();
         let query = self.query.clone();
         for (provider, rest) in providers::route(&self.providers, &query) {
@@ -326,6 +393,8 @@ impl State {
                 Kind::Apps => self.apps(&rest),
                 Kind::Calculator => calculator(&rest, prefixed),
                 Kind::Commands => self.commands(&rest),
+                Kind::Files => self.files(&rest),
+                Kind::Web { url } => web(&provider.title, url, &rest),
                 // Without a prefix, they have nothing to say to nothing.
                 Kind::Script { .. } | Kind::Module { .. } => {
                     if prefixed || !rest.trim().is_empty() {
@@ -336,6 +405,15 @@ impl State {
             };
             self.results.insert(provider.name.clone(), items);
         }
+        // Modules now, scripts after the pause.
+        let (modules, scripts): (Vec<_>, Vec<_>) = std::mem::take(&mut self.waiting)
+            .into_iter()
+            .partition(|(provider, _)| matches!(provider.kind, Kind::Module { .. }));
+        self.waiting = modules;
+        if !self.waiting.is_empty() {
+            self.ask(ctx);
+        }
+        self.waiting = scripts;
         if !self.waiting.is_empty() {
             self.due = Some(Instant::now() + DEBOUNCE);
         }
@@ -383,7 +461,9 @@ impl State {
                         });
                     })
                 }
-                Kind::Apps | Kind::Calculator | Kind::Commands => continue,
+                Kind::Apps | Kind::Calculator | Kind::Commands | Kind::Files | Kind::Web { .. } => {
+                    continue;
+                }
             };
             self.tasks.push(task);
         }
@@ -441,6 +521,7 @@ impl State {
             subtitle: Some(subtitle.to_owned()),
             icon: Some("utilities-terminal".into()),
             verb: Some(Verb::Run(command.to_owned())),
+            alt: Some(Verb::RunInTerminal(command.to_owned())),
             ..Item::default()
         };
         let query = query.trim();
@@ -457,6 +538,40 @@ impl State {
                 .map(|command| item(command, "Ran before")),
         );
         items
+    }
+
+    /// Files and folders by name. Enter opens one, Shift+Enter the folder
+    /// it's in.
+    fn files(&self, query: &str) -> Vec<Item> {
+        self.index
+            .search(query, self.max_results)
+            .into_iter()
+            .map(|entry| {
+                let folder = entry
+                    .path
+                    .parent()
+                    .map(|parent| parent.display().to_string());
+                Item {
+                    title: entry
+                        .path
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    subtitle: entry.path.parent().map(files::short),
+                    icon: Some(
+                        if entry.folder {
+                            "folder"
+                        } else {
+                            "text-x-generic"
+                        }
+                        .into(),
+                    ),
+                    verb: Some(Verb::Open(entry.path.display().to_string())),
+                    alt: folder.map(Verb::Open),
+                    ..Item::default()
+                }
+            })
+            .collect()
     }
 
     fn payload(&mut self, ctx: &ModuleCtx) -> Value {
@@ -480,6 +595,7 @@ impl State {
                     "subtitle": item.subtitle,
                     "icon": item.icon,
                     "glyph": item.glyph,
+                    "color": item.color.as_deref().map(qml_color),
                     "small": item.small,
                     "section": provider.title,
                 }));
@@ -529,7 +645,12 @@ impl State {
 
     /// Does what a result says, then tells its provider, when it asks to
     /// know.
-    async fn activate(&mut self, ctx: &ModuleCtx, key: &str, terminal: bool) -> Result<(), String> {
+    async fn activate(
+        &mut self,
+        ctx: &ModuleCtx,
+        key: &str,
+        alternate: bool,
+    ) -> Result<(), String> {
         let (name, item) = self
             .listed
             .get(key)
@@ -540,7 +661,12 @@ impl State {
             .iter()
             .find(|provider| provider.name == name)
             .cloned();
-        match item.verb.clone() {
+        // Shift+Enter does the other thing, when the result has one.
+        let verb = match (alternate, &item.alt) {
+            (true, Some(alt)) => Some(alt.clone()),
+            _ => item.verb.clone(),
+        };
+        match verb {
             Some(Verb::Launch(id)) => return self.launch(ctx, &id).await,
             Some(Verb::Copy(text)) => {
                 self.close(ctx);
@@ -555,7 +681,11 @@ impl State {
                 launch::spawn(self.method, &["xdg-open".into(), target], None)?;
                 self.close(ctx);
             }
-            Some(Verb::Run(command)) => {
+            Some(verb @ (Verb::Run(_) | Verb::RunInTerminal(_))) => {
+                let terminal = matches!(verb, Verb::RunInTerminal(_));
+                let (Verb::Run(command) | Verb::RunInTerminal(command)) = verb else {
+                    unreachable!("matched above");
+                };
                 let argv = ["sh".into(), "-c".into(), command.clone()];
                 launch::spawn(self.method, &argv, terminal.then_some(&self.terminal[..]))?;
                 tracing::info!(%command, terminal, "ran");
@@ -569,6 +699,45 @@ impl State {
         }
         Ok(())
     }
+}
+
+/// A CSS color as QML reads it. CSS puts a hex color's alpha last
+/// (`#rrggbbaa`, `#rgba`), QML first (`#aarrggbb`); the rest is the same.
+fn qml_color(css: &str) -> String {
+    let Some(hex) = css.strip_prefix('#') else {
+        return css.to_owned();
+    };
+    if !hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return css.to_owned();
+    }
+    match hex.len() {
+        8 => format!("#{}{}", &hex[6..], &hex[..6]),
+        4 => {
+            let doubled: String = hex.chars().flat_map(|c| [c, c]).collect();
+            format!("#{}{}", &doubled[6..], &doubled[..6])
+        }
+        _ => css.to_owned(),
+    }
+}
+
+/// A web search: the query as one result that opens the engine's page.
+fn web(title: &str, url: &str, query: &str) -> Vec<Item> {
+    let query = query.trim();
+    if query.is_empty() {
+        return vec![Item {
+            title: format!("Type to search {title}"),
+            icon: Some("web-browser".into()),
+            ..Item::default()
+        }];
+    }
+    let page = providers::web_url(url, query);
+    vec![Item {
+        title: query.to_owned(),
+        subtitle: Some(format!("Search {title}")),
+        icon: Some("web-browser".into()),
+        verb: Some(Verb::Open(page)),
+        ..Item::default()
+    }]
 }
 
 /// The calculator's answer. With its prefix it says what's wrong; without,
@@ -684,6 +853,15 @@ fn now() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hex_alpha_moves_to_the_front_for_qml() {
+        assert_eq!(qml_color("#f38ba880"), "#80f38ba8");
+        assert_eq!(qml_color("#abc8"), "#88aabbcc");
+        assert_eq!(qml_color("#1e1e2e"), "#1e1e2e");
+        assert_eq!(qml_color("rebeccapurple"), "rebeccapurple");
+        assert_eq!(qml_color("#zzzzzzzz"), "#zzzzzzzz");
+    }
 
     #[test]
     fn the_calculator_answers_math_and_explains_errors_after_its_prefix() {

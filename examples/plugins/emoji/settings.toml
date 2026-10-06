@@ -1,5 +1,5 @@
 # Emoji: an emoji picker for the launcher.
-[module.emoji]
+[module.emoji-example]
 # How many results a search shows, at most 50.
 # max_results = 50
 # How many recently picked emoji to remember. They show first when nothing

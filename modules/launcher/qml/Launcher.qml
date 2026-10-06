@@ -5,7 +5,8 @@ import qs.island
 // The search box and the results. Each keystroke goes to the module, which
 // answers with new results for that query, and again as slower providers
 // answer. The selection lives here: arrows or Tab move it, Enter picks it,
-// Shift+Enter runs a command in a terminal, Escape closes, the pointer
+// Shift+Enter does the other thing a result offers (runs a command in a
+// terminal, copies an emoji, opens a file's folder), Escape closes, the pointer
 // selects on hover and picks on click.
 Item {
     id: root
@@ -39,6 +40,9 @@ Item {
     }
 
     Component.onCompleted: {
+        // Opened with something typed already, like ":" for emoji.
+        input.text = payload.query ?? "";
+        input.cursorPosition = input.text.length;
         results = payload.results ?? [];
         Qt.callLater(() => input.forceActiveFocus());
     }
@@ -176,10 +180,22 @@ Item {
                 leading: Item {
                     anchors.fill: parent
 
+                    // A color's swatch instead of an icon.
+                    Rectangle {
+                        anchors.centerIn: parent
+                        visible: row.modelData.color != null
+                        width: 26
+                        height: 26
+                        radius: 13
+                        color: row.modelData.color ?? "transparent"
+                        border.width: 1
+                        border.color: Theme.border
+                    }
+
                     // A short text instead of an icon, like an emoji or "=".
                     Text {
                         anchors.centerIn: parent
-                        visible: row.modelData.glyph != null
+                        visible: row.modelData.glyph != null && row.modelData.color == null
                         text: row.modelData.glyph ?? ""
                         color: Theme.foreground
                         font.pixelSize: 22
@@ -190,7 +206,7 @@ Item {
                         id: icon
 
                         anchors.fill: parent
-                        visible: row.modelData.glyph == null
+                        visible: row.modelData.glyph == null && row.modelData.color == null
                         // Actions get a smaller icon, a step in.
                         anchors.margins: row.modelData.small ? 6 : 0
                         source: {
@@ -208,7 +224,7 @@ Item {
                     Rectangle {
                         anchors.fill: parent
                         anchors.margins: 4
-                        visible: row.modelData.glyph == null && icon.status !== Image.Ready
+                        visible: row.modelData.glyph == null && row.modelData.color == null && icon.status !== Image.Ready
                         radius: Theme.radiusSmall
                         color: Theme.raised
                     }

@@ -2,7 +2,7 @@
 
 A plugin can add results to the [launcher](modules/launcher.md): an emoji picker, bookmarks, a password manager, anything you'd search for. The launcher asks the plugin's backend with each query and shows what it answers, under the plugin's heading. For results from a script, without a plugin, see [script providers](modules/launcher.md#script-providers).
 
-The emoji picker in `examples/plugins/emoji` is a complete one: `:cat` lists cats, Enter copies the one you pick, and the ones you picked come first next time.
+The emoji picker in `examples/plugins/emoji` is a complete one: `;cat` lists cats, Enter copies the one you pick, and the ones you picked come first next time. Mochi's own emoji module is built the same way, with `:`.
 
 ## The contribution
 
@@ -12,9 +12,9 @@ A provider is a contribution to the launcher, without a view:
 [[contributions]]
 target = "launcher"
 kind = "provider"
-id = "emoji"
+id = "emoji-example"
 title = "Emoji"
-options = { prefix = ":", search = "search", pick = "pick" }
+options = { prefix = ";", search = "search", pick = "pick" }
 
 [[actions]]
 name = "search"
@@ -58,9 +58,9 @@ ModuleEvent::Command(command) if command.action == "search" => {
 }
 ```
 
-A result is the same as a [script provider's](modules/launcher.md#script-providers): a `title`, and optionally a `subtitle`, an `icon` or a `glyph`, at most one of `copy`, `type`, `open` and `run` for what Enter does, and an `id`. A result with only an `id` leaves everything to `pick`, which can then do whatever the plugin wants. Answer with nothing for no results; an error is logged and shows no results.
+A result is the same as a [script provider's](modules/launcher.md#script-providers): a `title`, and optionally a `subtitle`, an `icon`, a `glyph` or a `color`, at most one of `copy`, `type`, `open` and `run` for what Enter does, an `alt` with what Shift+Enter does, and an `id`. A result with only an `id` leaves everything to `pick`, which can then do whatever the plugin wants. Answer with nothing for no results; an error is logged and shows no results.
 
-Answers to a query the user has typed past are dropped, so a slow provider never shows stale results. Keep the answer under 50 results; the launcher cuts the list at its `max_results`.
+The launcher asks at once, on every keystroke, so answer quickly. Answers to a query the user has typed past are dropped, so a slow provider never shows stale results. Keep the answer under 50 results; the launcher cuts the list at its `max_results`.
 
 ## Picking
 

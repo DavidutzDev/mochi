@@ -816,6 +816,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-colors"
+version = "0.0.5"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "wayland-client",
+ "wayland-protocols-wlr",
+]
+
+[[package]]
 name = "mochi-module-demo"
 version = "0.0.5"
 dependencies = [
@@ -824,6 +838,18 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "mochi-module-emoji"
+version = "0.0.5"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1084,7 +1110,9 @@ dependencies = [
  "mochi-module-bluetooth",
  "mochi-module-capture",
  "mochi-module-clipboard",
+ "mochi-module-colors",
  "mochi-module-demo",
+ "mochi-module-emoji",
  "mochi-module-hub",
  "mochi-module-idle",
  "mochi-module-launcher",

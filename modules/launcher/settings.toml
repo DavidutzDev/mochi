@@ -7,8 +7,10 @@
 # max_results = 50
 
 # Providers: where results come from. The built-ins are "apps", "calculator"
-# (prefix "=", and plain math like 2+2 without it) and "commands" (prefix
-# ">"; Shift+Enter runs one in a terminal). Plugins can offer more. A
+# (prefix "=", and plain math like 2+2 without it), "commands" (prefix ">";
+# Shift+Enter runs one in a terminal), "files" (prefix "/"; Shift+Enter opens
+# the folder) and the web searches below. Modules offer more: emoji with ":"
+# and colors with "#". A
 # [module.launcher.providers.<name>] section changes one, with any of:
 #
 #   enabled = false     # turn it off
@@ -26,3 +28,21 @@
 #   command = ["sh", "/path/to/web-search.sh"]
 #   timeout_ms = 2000   # stopped after this long
 #   pick = ["my-script", "--picked"]  # run with a result's "id" once picked
+
+# Web searches, by the word after "!": "!w rust" searches DuckDuckGo. Built
+# in are w (DuckDuckGo), g (Google), gh (GitHub), yt (YouTube), nix (NixOS
+# packages) and wiki (Wikipedia). A section adds one, or changes or removes
+# a built-in one with an empty url; %s is where the query goes:
+#
+#   [module.launcher.engines.crates]
+#   title = "crates.io"
+#   url = "https://crates.io/search?q=%s"
+
+# The files provider searches an index of your home folder, built when the
+# launcher starts and again when it opens and the index is 15 seconds old.
+# Hidden files and folders are left out, and these:
+#
+#   [module.launcher.files]
+#   roots = ["~"]
+#   ignore = ["node_modules", "target", "__pycache__", "venv", "result", "dist", "build"]
+#   max = 200000

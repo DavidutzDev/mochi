@@ -32,6 +32,8 @@
 - [Tray](modules/tray.md)
 - [Widgets](modules/widgets.md)
 - [Notes](modules/notes.md)
+- [Emoji](modules/emoji.md)
+- [Colors](modules/colors.md)
 
 # Building on Mochi
 

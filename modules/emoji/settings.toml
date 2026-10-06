@@ -1,0 +1,10 @@
+# Emoji: an emoji picker. `mochi ipc emoji toggle`, bound to a key, opens a
+# grid on the island; `:` in the launcher searches them too. The emoji you
+# pick are kept in $XDG_STATE_HOME/mochi/emoji.json and come first.
+[module.emoji]
+# How many recently picked emoji to remember. They fill the Recent tab,
+# come first in the launcher before you type, and rank a little higher in
+# searches.
+# recent = 24
+# The most results the launcher's `:` search lists, at most 50.
+# max_results = 50

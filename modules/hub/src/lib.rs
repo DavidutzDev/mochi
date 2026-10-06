@@ -153,7 +153,7 @@ fn command(
 fn open(ctx: &ModuleCtx, settings: Settings, shown: &mut Option<ActivityId>, page: &str) {
     // The other panels take the keyboard too; only one can be
     // open. Not awaited: they close the hub the same way.
-    for module in ["launcher", "clipboard", "audio", "tray"] {
+    for module in ["launcher", "clipboard", "audio", "tray", "emoji"] {
         let close = ctx.call(module, "close", &[]);
         tokio::spawn(async move {
             match close.await {
