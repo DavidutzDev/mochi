@@ -91,7 +91,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `modules` | `modules` | UI |
 | `contributions` | `contributions` | UI |
 | `state` | `module`, `state` (any JSON) | UI |
-| `present` | `activity` (object or `null`) | UI |
+| `present` | `activity` (object or `null`), `resting` (optional) | UI |
 | `bubbles` | `bubbles`, `overflow` (optional) | UI |
 | `theme` | `theme` | UI |
 | `ok` | | whoever sent `command` or `reload` |

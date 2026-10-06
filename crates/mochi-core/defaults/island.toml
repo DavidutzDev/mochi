@@ -5,6 +5,11 @@
 # "pointer" the one under the mouse (on Hyprland; elsewhere it's "focus"),
 # and "all" every monitor at once.
 # panels = "focus"
+# Which monitor everything else shows on: notifications, the volume, the
+# media card and every other notice. "all" is every monitor's island at
+# once; "focus" and "pointer" as for panels, while the other monitors keep
+# the idle island.
+# notices = "all"
 # What a click outside the island closes. "all" is whatever the island
 # shows, except the idle island and quick notices like the volume; the
 # click closes it instead of reaching the window under it. "expanded" is

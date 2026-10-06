@@ -739,3 +739,25 @@ fn fleeting_activities_end_when_interrupted() {
     bench.arbiter.dismiss(panel, bench.now);
     assert_eq!(bench.shown(), None);
 }
+
+#[test]
+fn the_idle_island_rests_under_whatever_shows() {
+    let mut bench = Bench::new();
+    assert_eq!(bench.arbiter.resting(), None);
+    let pill = bench.submit("idle", idle());
+    assert_eq!(
+        bench.arbiter.resting().map(|activity| activity.id),
+        Some(pill)
+    );
+    // A notice meant for one monitor: the others still have the pill.
+    let notice = bench.submit("osd", timed(2).output("DP-3"));
+    assert_eq!(bench.shown(), Some(notice));
+    assert_eq!(
+        bench.arbiter.resting().map(|activity| activity.id),
+        Some(pill)
+    );
+    // A low activity meant for one monitor doesn't rest everywhere.
+    let mut bench = Bench::new();
+    bench.submit("idle", idle().output("DP-3"));
+    assert_eq!(bench.arbiter.resting(), None);
+}

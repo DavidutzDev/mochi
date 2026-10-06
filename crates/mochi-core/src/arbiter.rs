@@ -96,6 +96,18 @@ impl Arbiter {
         Self::default()
     }
 
+    /// The idle island, for monitors where the shown activity isn't meant
+    /// to show: the activity at [`Priority::IDLE`] or below meant for
+    /// every monitor, shown or waiting.
+    pub fn resting(&self) -> Option<Activity> {
+        self.current
+            .iter()
+            .chain(self.suspended.iter().rev())
+            .chain(&self.queue)
+            .find(|entry| entry.spec.priority <= Priority::IDLE && entry.spec.output.is_none())
+            .map(Entry::activity)
+    }
+
     /// What the island shows now.
     pub fn shown(&self) -> Option<Activity> {
         self.current.as_ref().map(|entry| {

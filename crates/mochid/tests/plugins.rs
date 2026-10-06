@@ -313,6 +313,7 @@ fn the_python_example_runs() {
         match ui.recv() {
             DaemonMessage::Present {
                 activity: Some(activity),
+                ..
             } if activity.module == "hello" => shown = Some(activity),
             DaemonMessage::Bubbles { bubbles, .. } => {
                 if let Some(found) = bubbles.into_iter().find(|bubble| bubble.module == "hello") {

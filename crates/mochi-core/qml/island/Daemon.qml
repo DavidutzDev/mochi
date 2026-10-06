@@ -42,6 +42,9 @@ Singleton {
 
     // {id, module, view, payload, expanded, expandable}, or null.
     property var activity: null
+    // What islands on other monitors show while `activity` is meant for one
+    // monitor: the idle island, or null.
+    property var resting: null
 
     // Every bubble in drawing order: [{id, module, key, view, payload, area,
     // group}]. Consecutive bubbles with the same area and group share a pill.
@@ -115,6 +118,8 @@ Singleton {
             break;
         }
         case "present":
+            // Before the activity, which islands react to.
+            resting = message.resting ?? null;
             activity = message.activity;
             break;
         case "bubbles":

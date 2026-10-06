@@ -223,7 +223,7 @@ impl Client {
     /// Reads until the next `present`, skipping other messages.
     pub fn next_present(&mut self) -> Option<Activity> {
         loop {
-            if let DaemonMessage::Present { activity } = self.recv() {
+            if let DaemonMessage::Present { activity, .. } = self.recv() {
                 return activity;
             }
         }

@@ -26,7 +26,9 @@ pub use toml;
 pub use actions::{ArgError, ArgValue, Args};
 pub use arbiter::{ActivitySpec, Arbiter, ArbiterError, Effect, EndReason, Priority, SamePriority};
 pub use bubbles::{BubbleError, BubbleSpec, Bubbles, Placement};
-pub use config::{BubblesConfig, ClickOutside, Config, ConfigError, IslandConfig, Panels, Paths};
+pub use config::{
+    BubblesConfig, ClickOutside, Config, ConfigError, IslandConfig, Notices, Panels, Paths,
+};
 pub use contributions::ContributionSpec;
 pub use module::{
     ActivityIds, Assets, BoxFuture, CallError, Module, ModuleCommand, ModuleCtx, ModuleError,
