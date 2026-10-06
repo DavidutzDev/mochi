@@ -20,7 +20,7 @@ The first message on every connection is the client's `hello`:
 `role` is `ui` for Quickshell and `ctl` for the CLI and other control clients. The daemon answers with its own `hello`:
 
 ```json
-{"type":"hello","api":1,"version":"0.0.5"}
+{"type":"hello","api":1,"version":"0.0.6"}
 ```
 
 If the API versions differ, the daemon answers with an `unsupported_api` error and closes the connection. Any other message before `hello` gets a `hello_first` error and the connection closes.
@@ -202,7 +202,7 @@ A plugin's backend talks to `mochid` over a connection of its own, not the main 
 `mochid` speaks first:
 
 ```json
-{"type":"hello","api":1,"version":"0.0.5","module":"pomodoro","settings":{"focus_minutes":25},"data_dir":"/run/user/1000/mochi/data/pomodoro","session_dir":"/run/user/1000/mochi/session/pomodoro","compositor":{"backend":"wayland","outputs":[],"workspaces":[]}}
+{"type":"hello","api":1,"version":"0.0.6","module":"pomodoro","settings":{"focus_minutes":25},"data_dir":"/run/user/1000/mochi/data/pomodoro","session_dir":"/run/user/1000/mochi/session/pomodoro","compositor":{"backend":"wayland","outputs":[],"workspaces":[]}}
 ```
 
 `settings` is the plugin's `[module.<id>]` table from config.toml. The backend answers within 5 seconds with the API version it speaks, or mochid stops it:

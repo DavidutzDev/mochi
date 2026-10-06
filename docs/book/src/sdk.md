@@ -17,7 +17,7 @@ name = "pomodoro"
 path = "src/main.rs"
 
 [dependencies]
-mochi-sdk = { git = "https://github.com/DavidutzDev/mochi", tag = "v0.0.5" }
+mochi-sdk = { git = "https://github.com/DavidutzDev/mochi", tag = "v0.0.6" }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "time"] }
 ```
