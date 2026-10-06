@@ -357,7 +357,7 @@ impl State {
     fn open(&mut self, ctx: &ModuleCtx) {
         // The other panels take the keyboard too; only one can be
         // open. Not awaited, as they close this the same way.
-        for module in ["hub", "launcher", "audio", "tray"] {
+        for module in ["hub", "launcher", "audio", "tray", "emoji"] {
             let close = ctx.call(module, "close", &[]);
             tokio::spawn(async move {
                 match close.await {
@@ -422,16 +422,17 @@ impl State {
         clipboard.send(Request::Serve(formats))?;
         self.close(ctx);
         self.publish(ctx);
-        // Picked from the hub's page: the hub holds the keyboard.
-        let close = ctx.call("hub", "close", &[]);
-        tokio::spawn(async move {
-            match close.await {
-                Ok(()) | Err(CallError::NotEnabled(_)) => {}
-                Err(error) => tracing::warn!(%error, "could not close the hub"),
-            }
-        });
-
         if paste {
+            // Pasted from the hub's page: the hub holds the keyboard, and
+            // the window to paste into needs it back. Copying leaves it open.
+            let close = ctx.call("hub", "close", &[]);
+            tokio::spawn(async move {
+                match close.await {
+                    Ok(()) | Err(CallError::NotEnabled(_)) => {}
+                    Err(error) => tracing::warn!(%error, "could not close the hub"),
+                }
+            });
+
             // While the island holds the keyboard, this is still the window
             // that had it before.
             let app = ctx.compositor().state().focused_app;

@@ -3,7 +3,7 @@
 # come first next time.
 
 [plugin]
-id = "emoji"
+id = "emoji-example"
 name = "Emoji"
 version = "0.1.0"
 description = "Finds emoji by name in the launcher and copies the one you pick"
@@ -33,7 +33,7 @@ args = [{ name = "id", description = "The emoji", kind = "string" }]
 [[contributions]]
 target = "launcher"
 kind = "provider"
-id = "emoji"
+id = "emoji-example"
 title = "Emoji"
 icon = "face-smile"
-options = { prefix = ":", search = "search", pick = "pick" }
+options = { prefix = ";", search = "search", pick = "pick" }

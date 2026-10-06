@@ -31,6 +31,8 @@ mochi-module-media = { path = "modules/media" }
 mochi-module-network = { path = "modules/network" }
 mochi-module-notifications = { path = "modules/notifications" }
 mochi-module-performance = { path = "modules/performance" }
+mochi-module-colors = { path = "modules/colors" }
+mochi-module-emoji = { path = "modules/emoji" }
 mochi-module-notes = { path = "modules/notes" }
 mochi-module-widgets = { path = "modules/widgets" }
 mochi-module-osd = { path = "modules/osd" }

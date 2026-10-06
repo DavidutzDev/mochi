@@ -1,0 +1,12 @@
+# Colors: a color picker. `mochi ipc colors pick` freezes the screen and
+# shows a magnifier; a click copies the pixel's color and keeps it in the
+# history, in $XDG_STATE_HOME/mochi/colors.json. `#` in the launcher lists a
+# color in every format.
+[module.colors]
+# The format a pick copies: "hex", "rgb", "hsl" or "oklch". The island's
+# card copies the others.
+# format = "hex"
+# How many colors the history keeps.
+# history = 50
+# Hex in capitals: #1E1E2E.
+# uppercase = false

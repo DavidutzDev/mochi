@@ -350,7 +350,9 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] Tested on Hyprland: typing reaches the launcher, Enter starts a test app through uwsm and records it, it comes first next time, a click outside and Escape close, "private" finds Firefox's and Zen's private window actions
 - [x] Keybind examples for Hyprland's Lua config and other compositors (Getting started)
 - [x] Calculator and run-a-command results, as providers: `apps`, `calculator`, `commands`, script providers from `config.toml`, and plugin providers (`examples/plugins/emoji`)
+- [x] Built-in providers: files (`/`, an index of home), web searches (`!w` and the others), emoji (`:`, the emoji module) and colors (`#`, the colors module)
 - [ ] More built-in providers, like open windows or settings pages
+- [ ] The file index follows changes as they happen (inotify) instead of rebuilding after 15 seconds
 - [ ] Watch the application directories instead of reading them on every open, if opening ever feels slow
 
 ### Hub
@@ -540,6 +542,13 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [x] Widgets from existing modules: now playing, performance graphs, battery, weather
 - [ ] Alignment guides while dragging
 - [ ] Moving a widget to another monitor from its settings
+
+## Emoji and colors
+
+- [x] Emoji module: grid panel with search, groups and recents; paste or copy through the clipboard module; `:` provider
+- [x] Colors module: screen picker with a magnifier, exact pixels from wlr-screencopy at any scale and rotation; island card with HEX, RGB, HSL and OKLCH; history in a hub card and page; `#` provider
+- [ ] Skin tones in the emoji grid
+- [ ] Colors: a palette widget for the desktop
 
 ## Integration and docs
 

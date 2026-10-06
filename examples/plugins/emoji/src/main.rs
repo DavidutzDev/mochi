@@ -473,7 +473,10 @@ mod tests {
             .collect::<Vec<_>>()
             .join("\n");
         let mut table: toml::Table = toml::from_str(&uncommented).unwrap();
-        let section = table["module"].as_table_mut().unwrap().remove("emoji");
+        let section = table["module"]
+            .as_table_mut()
+            .unwrap()
+            .remove("emoji-example");
         let settings: Settings = section.unwrap().try_into().unwrap();
         assert_eq!(settings, Settings::default());
     }
