@@ -30,9 +30,19 @@ PanelWindow {
 
     mask: editing ? everywhere : shapes
 
+    // While arranging: all of it but the island's strip, which the
+    // desktop's view names.
     property Region everywhere: Region {
         width: root.width
         height: root.height
+
+        Region {
+            intersection: Intersection.Subtract
+            x: root.desktop?.hole?.x ?? 0
+            y: root.desktop?.hole?.y ?? 0
+            width: root.desktop?.hole?.width ?? 0
+            height: root.desktop?.hole?.height ?? 0
+        }
     }
 
     property Region shapes: Region {

@@ -32,6 +32,8 @@ Item {
 
     onWidgetChanged: moving = false
 
+    // Its layer; while it moves or its settings are open, over everything.
+    z: moving || desktop.selected === widget?.id ? 100000 : (widget?.z ?? 0)
     x: moving ? liveX : placed.x
     y: moving ? liveY : placed.y
     width: moving ? liveWidth : placed.width
@@ -236,6 +238,23 @@ Item {
 
         HoverHandler {
             id: toolsHover
+        }
+
+        // Layers: over or under the widgets it overlaps.
+        IconButton {
+            icon: "chevron"
+            rotation: 270
+            size: 12
+            tone: "neutral"
+            onClicked: Daemon.command("widgets", "layer", [root.widget.id, "up"])
+        }
+
+        IconButton {
+            icon: "chevron"
+            rotation: 90
+            size: 12
+            tone: "neutral"
+            onClicked: Daemon.command("widgets", "layer", [root.widget.id, "down"])
         }
 
         IconButton {

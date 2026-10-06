@@ -2,11 +2,10 @@ import QtQuick
 import qs.island
 import "Place.js" as Place
 
-// While arranging, in the island's place: a pill that says where the
-// widgets are and has Done. Hovering it grows it into the drawer, with
-// every widget the running modules offer, a search and a filter by module,
-// and the buttons to copy the layout. It folds back once the pointer
-// leaves, and while a widget is dragged out of it.
+// While arranging, under the island: every widget the running modules
+// offer, with a search and a filter by module, and the buttons to copy the
+// layout and to stop. A click on the island's notice opens it; it folds
+// once the pointer leaves it, and while a widget is dragged out of it.
 Item {
     id: root
 
@@ -23,8 +22,7 @@ Item {
     property bool menu: false
 
     readonly property bool atBottom: Theme.anchor === "bottom"
-    // Open while hovered, and a moment after, so crossing a gap doesn't fold it.
-    readonly property bool open: dragging === null && (hover.hovered || linger.running || menu)
+    readonly property bool open: (desktop.layout?.drawer ?? false) && dragging === null
     readonly property var modules: [...new Set(desktop.catalog.map(entry => entry.module))].sort()
     readonly property var shown: desktop.catalog.filter(entry => {
         if (module !== "" && entry.module !== module)
@@ -34,35 +32,55 @@ Item {
         return words.every(word => text.includes(word));
     })
 
-    Timer {
-        id: linger
-
-        interval: 350
+    function close(): void {
+        menu = false;
+        Daemon.command("widgets", "drawer", ["off"]);
     }
 
-    // The island's place and shape when folded; a panel under it when open.
+    onOpenChanged: {
+        if (open)
+            unvisited.restart();
+    }
+
+    // Opened but never pointed at: it goes after a while.
+    Timer {
+        id: unvisited
+
+        interval: 2500
+        onTriggered: {
+            if (!hover.hovered)
+                root.close();
+        }
+    }
+
+    // Left: it folds a moment later, so crossing a gap doesn't close it.
+    Timer {
+        id: leaving
+
+        interval: 400
+        onTriggered: {
+            if (!hover.hovered && !root.menu)
+                root.close();
+        }
+    }
+
     Rectangle {
         id: pill
 
-        readonly property real openHeight: Math.min(root.height - 80, 560)
+        readonly property real openHeight: Math.min(root.height - 140, 560)
+        // Under the island and its bubbles.
+        readonly property real gap: Theme.margin + Theme.idleHeight + 10
 
         anchors.horizontalCenter: parent.horizontalCenter
-        y: root.atBottom ? root.height - height - Theme.margin : Theme.margin
-        width: root.open ? 400 : folded.implicitWidth + 24
-        height: root.open ? openHeight : Theme.idleHeight
-        radius: Math.min(height / 2, Theme.maxRadius)
+        y: root.atBottom ? root.height - height - gap : gap
+        width: 400
+        height: root.open ? openHeight : 0
+        visible: height > 1 || root.dragging !== null
+        radius: Math.min(height / 2, Theme.radiusLarge)
         color: Theme.background
         border.width: 1
         border.color: Theme.border
         clip: true
-
-        Behavior on width {
-            SpringAnimation {
-                spring: Theme.spring
-                damping: Theme.damping
-                epsilon: 0.25
-            }
-        }
 
         Behavior on height {
             SpringAnimation {
@@ -77,55 +95,13 @@ Item {
 
             onHoveredChanged: {
                 if (!hovered)
-                    linger.restart();
+                    leaving.restart();
             }
         }
 
         // Clicks here stay here.
         MouseArea {
             anchors.fill: parent
-        }
-
-        // Folded: what it is, and Done.
-        Row {
-            id: folded
-
-            anchors.verticalCenter: parent.top
-            anchors.verticalCenterOffset: Theme.idleHeight / 2
-            x: 12
-            spacing: 10
-            opacity: root.open ? 0 : 1
-            visible: opacity > 0
-
-            Behavior on opacity {
-                NumberAnimation {
-                    duration: Theme.fast
-                }
-            }
-
-            Symbol {
-                anchors.verticalCenter: parent.verticalCenter
-                name: "grid"
-                size: 14
-                color: Theme.accent
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Widgets · hover to add more"
-                color: Theme.foreground
-                font.pixelSize: Theme.textBody
-                font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
-            }
-
-            Button {
-                anchors.verticalCenter: parent.verticalCenter
-                implicitHeight: Theme.idleHeight - 10
-                text: "Done"
-                tone: "accent"
-                onClicked: Daemon.command("widgets", "edit", ["off"])
-            }
         }
 
         // Open: the drawer. It stays while a widget is dragged out of it,
@@ -287,6 +263,7 @@ Item {
                             search.focus = false;
                             root.at = mapToItem(root, event.x, event.y);
                             root.dragging = entry.modelData;
+                            root.close();
                         }
                         onPositionChanged: event => root.at = mapToItem(root, event.x, event.y)
                         onReleased: root.drop()

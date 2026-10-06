@@ -4,12 +4,13 @@ Widgets are small views on the desktop, under your windows, from any module or p
 
 ## Arranging them
 
-`mochi ipc widgets edit` brings the widgets over the windows on the focused monitor, dims the screen and shows the grid. In the island's place, a pill says where to find more widgets:
+`mochi ipc widgets edit` brings the widgets over the windows on the focused monitor, dims the screen and shows the grid, and the island says "Arranging widgets":
 
 - Drag a widget to move it. It snaps to the grid.
 - Drag its round corner handle to resize it, within the sizes it allows.
 - Click it, or its pencil, to open its settings, a form made from the settings it declares. Changes apply at once. Its trash button removes it.
-- Hover the pill and it grows into the drawer: every widget the running modules and plugins offer, a search box, and a filter per module. Drag one onto the screen to add it; the drawer folds out of the way as you drag, and again when the pointer leaves it.
+- Where widgets overlap, the one on the higher layer is on top. The arrows over a widget move it a layer up or down.
+- Click the island to open the drawer under it: every widget the running modules and plugins offer, a search box, and a filter per module. Drag one onto the screen to add it; the drawer folds out of the way as you drag, and when the pointer leaves it.
 - Copy, at the bottom of the drawer, copies the layout as `widgets.toml`; its arrow has "Copy as Nix", for home-manager.
 - Done or Escape stops arranging.
 
@@ -34,6 +35,7 @@ x = -2                 # grid cells from that point
 y = 3
 width = 14             # in grid cells
 height = 7
+z = 1                  # its layer, 0 when left out: higher is on top
 
 [widget.settings]
 timezone = "Asia/Tokyo"
@@ -96,6 +98,8 @@ Each to-do list and note keeps its own content, in the [notes](notes.md) module.
 | `resize <id> <width> <height>` | Resizes one, in cells, within its limits |
 | `set <id> <setting> <value>`, `reset <id> <setting>` | Changes one of its settings, or puts it back to the default |
 | `remove <id>` | Removes one |
+| `layer <id> up\|down\|front\|back` | Moves one a layer up or down, or over or under all the others |
+| `drawer [on\|off\|toggle]` | Opens or closes the drawer while arranging |
 | `export [nix\|toml]`, `copy [nix\|toml]` | Prints the layout, or copies it |
 
 Modules and plugins offer widgets of their own: see [Writing widgets](../writing-widgets.md).
