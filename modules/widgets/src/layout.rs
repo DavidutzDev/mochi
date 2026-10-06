@@ -84,8 +84,16 @@ pub struct Placed {
     pub y: i32,
     pub width: u32,
     pub height: u32,
+    /// Its layer: where widgets overlap, a higher one is on top.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub z: i32,
     #[serde(default, skip_serializing_if = "toml::Table::is_empty")]
     pub settings: toml::Table,
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)]
+fn is_zero(value: &i32) -> bool {
+    *value == 0
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -170,6 +178,9 @@ impl Layout {
             ];
             for (key, value) in fields {
                 let _ = writeln!(out, "    {key} = {value};");
+            }
+            if widget.z != 0 {
+                let _ = writeln!(out, "    z = {};", widget.z);
             }
             if !widget.settings.is_empty() {
                 out.push_str("    settings = {\n");

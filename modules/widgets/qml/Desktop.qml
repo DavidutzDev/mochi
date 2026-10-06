@@ -28,6 +28,16 @@ Item {
 
     // For the window.
     property list<Item> shapes: []
+    // While arranging, the island's strip takes no clicks, so the island's
+    // notice can open the drawer.
+    readonly property rect hole: {
+        const width = 480;
+        const height = Theme.margin + Theme.idleHeight + 6;
+        const area = Theme.islandArea;
+        const x = area === "left" ? 0 : area === "right" ? root.width - width : area === "center-left" ? root.width / 2 - width : area === "center-right" ? root.width / 2 : (root.width - width) / 2;
+        const y = Theme.anchor === "bottom" ? root.height - height : 0;
+        return Qt.rect(x, y, width, height);
+    }
     property list<Item> framed: []
     property bool wantsKeyboard: false
 
@@ -112,23 +122,29 @@ Item {
         onClicked: root.selected = ""
     }
 
-    Repeater {
-        id: frames
+    // The widgets, in their own stack: their layers order them among
+    // themselves, under the settings and the drawer.
+    Item {
+        anchors.fill: parent
 
-        model: ListModel {
-            id: widgets
-        }
-        onItemAdded: Qt.callLater(root.refreshShapes)
-        onItemRemoved: Qt.callLater(root.refreshShapes)
+        Repeater {
+            id: frames
 
-        Frame {
-            required property string key
+            model: ListModel {
+                id: widgets
+            }
+            onItemAdded: Qt.callLater(root.refreshShapes)
+            onItemRemoved: Qt.callLater(root.refreshShapes)
 
-            desktop: root
-            widget: root.byId[key] ?? null
-            onVisibleChanged: Qt.callLater(root.refreshShapes)
-            onTypingChanged: Qt.callLater(root.refreshShapes)
-            onFramedChanged: Qt.callLater(root.refreshShapes)
+            Frame {
+                required property string key
+
+                desktop: root
+                widget: root.byId[key] ?? null
+                onVisibleChanged: Qt.callLater(root.refreshShapes)
+                onTypingChanged: Qt.callLater(root.refreshShapes)
+                onFramedChanged: Qt.callLater(root.refreshShapes)
+            }
         }
     }
 

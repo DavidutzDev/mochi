@@ -21,8 +21,8 @@ use std::time::{Duration, SystemTime};
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActionSpec, ArgSpec, Assets, BoxFuture, CallError, Contribution, ContributionSpec, Module,
-    ModuleCommand, ModuleCtx, ModuleError, ModuleEvent,
+    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, CallError, Contribution,
+    ContributionSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -170,6 +170,21 @@ impl Module for Widgets {
             .arg(id())
             .arg(ArgSpec::string("name", "The setting")),
             ActionSpec::new("remove", "Remove a widget").arg(id()),
+            ActionSpec::new(
+                "drawer",
+                "Open the drawer of widgets while arranging, or close it",
+            )
+            .arg(
+                ArgSpec::choice("state", "Open, close, or flip it", ["on", "off", "toggle"])
+                    .optional(),
+            ),
+            ActionSpec::new("layer", "Move a widget over or under the ones it overlaps")
+                .arg(id())
+                .arg(ArgSpec::choice(
+                    "way",
+                    "One layer up or down, or over or under all the others",
+                    ["up", "down", "front", "back"],
+                )),
             ActionSpec::new("export", "Print the layout, for home-manager").arg(
                 ArgSpec::choice("format", "Nix, the default, or TOML", ["nix", "toml"]).optional(),
             ),
@@ -194,6 +209,8 @@ impl Module for Widgets {
                 error: None,
                 specs: Vec::new(),
                 editing: None,
+                banner: None,
+                drawer: false,
                 zones: BTreeMap::new(),
                 published: Value::Null,
             };
@@ -209,6 +226,13 @@ impl Module for Widgets {
                         None => return Ok(()),
                         Some(ModuleEvent::Command(command)) => state.command(&ctx, command),
                         Some(ModuleEvent::Offers(offers)) => state.offered(&offers),
+                        // The notice on the island opens the drawer.
+                        Some(ModuleEvent::Clicked(activity)) if state.banner == Some(activity) => {
+                            state.drawer = !state.drawer;
+                        }
+                        Some(ModuleEvent::Ended { activity, .. }) if state.banner == Some(activity) => {
+                            state.banner = None;
+                        }
                         Some(_) => {}
                     },
                     _ = watch.tick() => {
@@ -248,6 +272,10 @@ struct State {
     specs: Vec<Spec>,
     /// The monitor being arranged on.
     editing: Option<String>,
+    /// The notice on the island while arranging.
+    banner: Option<ActivityId>,
+    /// Whether the drawer is open.
+    drawer: bool,
     /// UTC offsets in seconds, by time zone, for the clocks.
     zones: BTreeMap<String, i64>,
     published: Value,
@@ -265,7 +293,37 @@ impl State {
                     _ => self.editing.is_none(),
                 };
                 self.editing = on.then(|| focused(ctx));
+                self.drawer = false;
+                self.announce(ctx);
                 Ok(None)
+            }
+            "drawer" => {
+                self.drawer = match args.str("state") {
+                    Some("on") => true,
+                    Some("off") => false,
+                    _ => !self.drawer,
+                } && self.editing.is_some();
+                Ok(None)
+            }
+            "layer" => {
+                let others: Vec<i32> = self
+                    .layout
+                    .widgets
+                    .iter()
+                    .filter(|widget| widget.id != id())
+                    .map(|widget| widget.z)
+                    .collect();
+                let way = args.str("way").unwrap_or("up").to_owned();
+                self.change(&id(), |widget| {
+                    widget.z = match way.as_str() {
+                        "front" => others.iter().max().map_or(0, |top| top + 1),
+                        "back" => others.iter().min().map_or(0, |bottom| bottom - 1),
+                        "down" => widget.z - 1,
+                        _ => widget.z + 1,
+                    };
+                    Ok(())
+                })
+                .map(|()| None)
             }
             "add" => self.add(ctx, args).map(Some),
             "move" => self
@@ -371,6 +429,14 @@ impl State {
             y: int(args.int("y")),
             width: spec.size.0,
             height: spec.size.1,
+            // On top: later ones draw over earlier ones of the same layer.
+            z: self
+                .layout
+                .widgets
+                .iter()
+                .map(|widget| widget.z)
+                .max()
+                .unwrap_or(0),
             settings: toml::Table::new(),
         });
         self.save()?;
@@ -518,6 +584,7 @@ impl State {
                     "y": widget.y,
                     "width": widget.width,
                     "height": widget.height,
+                    "z": widget.z,
                     "settings": spec.map_or_else(
                         || serde_json::to_value(&widget.settings).unwrap_or_default(),
                         |spec| spec.settings_for(&widget.settings),
@@ -534,6 +601,7 @@ impl State {
         let state = json!({
             "grid": self.grid,
             "editing": self.editing.is_some(),
+            "drawer": self.drawer,
             "output": self.editing,
             "file": self.path,
             "error": self.error,
@@ -566,6 +634,29 @@ fn copy(ctx: &ModuleCtx, text: String) {
             Err(error) => tracing::warn!(%error, "the clipboard module couldn't copy it"),
         }
     });
+}
+
+impl State {
+    /// Puts the notice on the island while arranging, and takes it away
+    /// after. It lets clicks outside through, so they reach the widgets.
+    fn announce(&mut self, ctx: &ModuleCtx) {
+        match (self.editing.is_some(), self.banner) {
+            (true, None) => {
+                let spec = ActivitySpec::new("Editing")
+                    .key("editing")
+                    .priority(Priority::HIGH)
+                    .uninterruptible()
+                    .passive()
+                    .payload(json!({}));
+                self.banner = Some(ctx.present(spec));
+            }
+            (false, Some(banner)) => {
+                ctx.withdraw(banner);
+                self.banner = None;
+            }
+            _ => {}
+        }
+    }
 }
 
 fn focused(ctx: &ModuleCtx) -> String {
