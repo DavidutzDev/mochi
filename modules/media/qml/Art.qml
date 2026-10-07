@@ -35,7 +35,7 @@ ClippingRectangle {
 
         Behavior on opacity {
             NumberAnimation {
-                duration: 150
+                duration: Theme.fast
             }
         }
     }

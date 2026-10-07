@@ -23,13 +23,13 @@ Item {
         anchors.centerIn: parent
         width: 20
         height: 20
-        radius: 10
+        radius: width / 2
         color: Theme.raised
         opacity: clock.playing ? 1 : 0.5
 
         Behavior on opacity {
             NumberAnimation {
-                duration: 200
+                duration: Theme.fast
             }
         }
 

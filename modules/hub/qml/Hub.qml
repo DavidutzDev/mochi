@@ -8,10 +8,11 @@ import qs.island
 // screen, and the island's outline follows it from page to page; what's
 // taller scrolls. Each card sits in a frame the hub draws, with its icon,
 // title and a chevron inside when it opens a page. A card spans
-// `options.span` columns and `options.rows` rows, or as many rows (one or
-// two) as its view needs. A card whose view sets `hidden` to true, like
-// Bluetooth without an adapter, leaves no gap. Every card and page comes
-// from a module's contribution; this view only lays them out.
+// `options.span` columns and `options.rows` rows, and its view is sized to
+// fill them; without `rows`, it gets as many rows (one or two) as its view
+// needs. A card whose view sets `hidden` to true, like Bluetooth without an
+// adapter, leaves no gap. Every card and page comes from a module's
+// contribution; this view only lays them out.
 Item {
     id: root
 
@@ -245,7 +246,9 @@ Item {
                         x: root.inset
                         y: root.inset + root.heading
                         width: parent.width - root.inset * 2
-                        height: item ? item.implicitHeight : 0
+                        // A card that declares its rows gets the room they
+                        // leave, to fill; one that doesn't is measured.
+                        height: card.modelData.options?.rows != null ? card.height - y - root.inset : item ? item.implicitHeight : 0
                         entry: card.modelData
                     }
                 }
@@ -349,7 +352,7 @@ Item {
                             color: Theme.background
                             font.pixelSize: Theme.textBody
                             font.family: Theme.fontFamily
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.weightTitle
                         }
                     }
 

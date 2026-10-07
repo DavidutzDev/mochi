@@ -13,7 +13,7 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 10
+        spacing: Theme.spaceSmall
 
         Symbol {
             anchors.verticalCenter: parent.verticalCenter
@@ -25,7 +25,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: muted ? "Microphone muted" : "Microphone on"
             color: Theme.foreground
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
         }
     }

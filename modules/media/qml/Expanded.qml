@@ -39,16 +39,20 @@ Item {
         return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${rest}`;
     }
 
+    EdgeLight {
+        radius: Theme.radiusSurface
+    }
+
     Column {
         id: column
 
         anchors.fill: parent
         anchors.margins: Theme.padding
-        spacing: 12
+        spacing: Theme.spaceMedium
 
         Row {
             width: parent.width
-            spacing: 14
+            spacing: Theme.spaceMedium
 
             Art {
                 id: art
@@ -74,7 +78,7 @@ Item {
                     color: Theme.foreground
                     font.pixelSize: Theme.textTitle
                     font.family: Theme.fontFamily
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.weightTitle
                 }
 
                 Text {
@@ -92,7 +96,7 @@ Item {
         Row {
             width: parent.width
             visible: root.length > 0
-            spacing: 10
+            spacing: Theme.spaceSmall
 
             Text {
                 id: elapsed
@@ -104,7 +108,9 @@ Item {
                 color: Theme.muted
                 font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
-                font.features: { "tnum": 1 }
+                font.features: {
+                    "tnum": 1
+                }
             }
 
             Slider {
@@ -130,13 +136,15 @@ Item {
                 color: Theme.muted
                 font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
-                font.features: { "tnum": 1 }
+                font.features: {
+                    "tnum": 1
+                }
             }
         }
 
         Row {
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 18
+            spacing: Theme.spaceLarge
 
             IconButton {
                 anchors.verticalCenter: parent.verticalCenter
