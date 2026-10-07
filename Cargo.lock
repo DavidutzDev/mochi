@@ -985,6 +985,7 @@ name = "mochi-module-performance"
 version = "0.0.6"
 dependencies = [
  "include_dir",
+ "libc",
  "mochi-core",
  "serde",
  "serde_json",

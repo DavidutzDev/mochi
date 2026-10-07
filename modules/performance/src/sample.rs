@@ -1,8 +1,10 @@
 //! Reading the machine: CPU use and temperature from `/proc` and hwmon,
 //! memory from `/proc/meminfo`, the GPU from AMD's sysfs or NVIDIA's
-//! `nvidia-smi`, and the busiest processes.
+//! `nvidia-smi`, disk and network traffic from `/proc/diskstats` and
+//! `/proc/net/dev`, and the busiest processes.
 
 use std::collections::HashMap;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
@@ -209,6 +211,119 @@ pub fn nvidia_line(line: &str) -> Option<Gpu> {
     })
 }
 
+/// Bytes read from and written to the disks so far, from
+/// `/proc/diskstats`. `keep` picks the disks by name, so partitions and
+/// the devices stacked on a disk aren't counted twice.
+pub fn disk_bytes(diskstats: &str, keep: impl Fn(&str) -> bool) -> (u64, u64) {
+    let mut totals = (0, 0);
+    for line in diskstats.lines() {
+        let fields: Vec<&str> = line.split_whitespace().collect();
+        // major minor name, then reads, merged, sectors read, time, writes,
+        // merged, sectors written.
+        let (Some(name), Some(read), Some(written)) = (fields.get(2), fields.get(5), fields.get(9))
+        else {
+            continue;
+        };
+        if !keep(name) {
+            continue;
+        }
+        // The kernel counts 512-byte sectors here, whatever the disk's.
+        totals.0 += read.parse::<u64>().unwrap_or_default() * 512;
+        totals.1 += written.parse::<u64>().unwrap_or_default() * 512;
+    }
+    totals
+}
+
+/// A whole disk on real hardware: the kernel lists those in `/sys/block`
+/// with a `device` link. Partitions aren't in `/sys/block`, and loop,
+/// RAM, zram, device-mapper and RAID devices have no `device`.
+pub fn is_disk(name: &str) -> bool {
+    Path::new("/sys/block").join(name).join("device").exists()
+}
+
+/// Bytes received and sent so far, from `/proc/net/dev`. `keep` picks the
+/// interfaces by name.
+pub fn net_bytes(dev: &str, keep: impl Fn(&str) -> bool) -> (u64, u64) {
+    let mut totals = (0, 0);
+    // Two header lines, then `name: received ... sent ...`.
+    for line in dev.lines().skip(2) {
+        let Some((name, rest)) = line.split_once(':') else {
+            continue;
+        };
+        if !keep(name.trim()) {
+            continue;
+        }
+        let fields: Vec<u64> = rest
+            .split_whitespace()
+            .filter_map(|field| field.parse().ok())
+            .collect();
+        // Eight receive fields, bytes first, then eight transmit fields.
+        if let (Some(received), Some(sent)) = (fields.first(), fields.get(8)) {
+            totals.0 += received;
+            totals.1 += sent;
+        }
+    }
+    totals
+}
+
+/// A network card, wired or wireless: one with a `device` link in
+/// `/sys/class/net`. Loopback, bridges, containers' veths and VPN tunnels
+/// have none, and a tunnel's traffic crosses a card anyway.
+pub fn is_card(name: &str) -> bool {
+    Path::new("/sys/class/net")
+        .join(name)
+        .join("device")
+        .exists()
+}
+
+/// The bytes a process read from and wrote to storage so far, from
+/// `/proc/<pid>/io`. Only one's own processes are readable.
+pub fn process_io(io: &str) -> Option<u64> {
+    let field = |key: &str| -> Option<u64> {
+        io.lines()
+            .find_map(|line| line.strip_prefix(key)?.strip_prefix(':'))?
+            .trim()
+            .parse()
+            .ok()
+    };
+    Some(field("read_bytes")? + field("write_bytes")?)
+}
+
+/// The user a process runs as; `self` for the daemon's own.
+pub fn owner(pid: &str) -> Option<u32> {
+    std::fs::metadata(format!("/proc/{pid}"))
+        .ok()
+        .map(|metadata| metadata.uid())
+}
+
+/// Sends a signal to one of this user's processes, never to the daemon
+/// itself or to anyone else's.
+pub fn signal(pid: i64, signal: libc::c_int) -> Result<(), String> {
+    // 0 and below name groups of processes, or all of them, to kill().
+    let target = libc::pid_t::try_from(pid)
+        .ok()
+        .filter(|target| *target > 0)
+        .ok_or_else(|| format!("{pid} isn't a process"))?;
+    if pid == i64::from(std::process::id()) {
+        return Err("that's mochid itself".into());
+    }
+    match (owner(&pid.to_string()), owner("self")) {
+        (None, _) => return Err(format!("no process {pid}")),
+        (Some(theirs), Some(ours)) if theirs == ours => {}
+        _ => return Err(format!("process {pid} belongs to another user")),
+    }
+    // SAFETY: `kill` takes plain integers, and the pid is above 0, so it
+    // names one process rather than a group.
+    if unsafe { libc::kill(target, signal) } == 0 {
+        Ok(())
+    } else {
+        Err(format!(
+            "can't signal {pid}: {}",
+            std::io::Error::last_os_error()
+        ))
+    }
+}
+
 /// A process's CPU time and memory, from `/proc/<pid>/stat`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Process {
@@ -322,5 +437,63 @@ mod tests {
         assert_eq!(process.name, "Web Content (x)");
         assert_eq!(process.ticks, 200);
         assert_eq!(process.memory, 2048);
+    }
+
+    const DISKSTATS: &str = "\
+ 259       0 nvme0n1 82877 23542 8322758 40563 107758 7203 3765212 667885 0 42272 718174 10845 0 6836288 3661 1725 6063
+ 259       1 nvme0n1p1 189 8132 36878 73 14 0 12 1 0 51 75 0 0 0 0 0 0
+ 253       0 zram0 95 0 3008 0 687 0 5496 12 0 12 12 0 0 0 0 0 0
+   7       0 loop0 10 0 80 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+   8       0 sda 85 0 4776 25 3 0 24 0 0 11 25 0 0 0 0 0 0
+   8       1 sda1 21 0 1544 8 0 0 0 0 0 8 8 0 0 0 0 0 0
+ 254       0 dm-0 500 0 9000 0 400 0 7000 0 0 0 0 0 0 0 0 0 0
+";
+
+    #[test]
+    fn reads_the_disks() {
+        let disks = |name: &str| matches!(name, "nvme0n1" | "sda");
+        let (read, written) = disk_bytes(DISKSTATS, disks);
+        assert_eq!(read, (8_322_758 + 4776) * 512);
+        assert_eq!(written, (3_765_212 + 24) * 512);
+        assert_eq!(disk_bytes(DISKSTATS, |_| false), (0, 0));
+        assert_eq!(disk_bytes("garbage\n\n", |_| true), (0, 0));
+    }
+
+    const NET_DEV: &str = "\
+Inter-|   Receive                                                |  Transmit
+ face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+    lo: 3848075    8735    0    0    0     0          0         0  3848075    8735    0    0    0     0       0          0
+enp4s0: 181387442  175377    0    0    0     0          0      1159 10438646   44322    0    0    0     0       0          0
+wlan0:1000 5 0 0 0 0 0 0 2000 7 0 0 0 0 0 0
+tailscale0:      86       1    0    0    0     0          0         0      624      11    0    0    0     0       0          0
+";
+
+    #[test]
+    fn reads_the_network() {
+        let cards = |name: &str| matches!(name, "enp4s0" | "wlan0");
+        assert_eq!(
+            net_bytes(NET_DEV, cards),
+            (181_387_442 + 1000, 10_438_646 + 2000)
+        );
+        // The header lines aren't interfaces.
+        assert_eq!(net_bytes(NET_DEV, |name| name.contains('|')), (0, 0));
+    }
+
+    #[test]
+    fn reads_a_process_io() {
+        let io = "rchar: 8971\nwchar: 8\nsyscr: 12\nsyscw: 1\nread_bytes: 4096\nwrite_bytes: 8192\ncancelled_write_bytes: 0\n";
+        assert_eq!(process_io(io), Some(12288));
+        assert_eq!(process_io("rchar: 1\n"), None);
+    }
+
+    #[test]
+    fn signals_only_single_processes() {
+        assert!(signal(0, 0).is_err());
+        assert!(signal(-1, 0).is_err());
+        assert!(signal(i64::from(std::process::id()), 0).is_err());
+        assert!(signal(i64::from(i32::MAX), 0).is_err());
+        // Signal 0 only checks; the test's parent is the user's.
+        let parent = std::os::unix::process::parent_id();
+        assert_eq!(signal(i64::from(parent), 0), Ok(()));
     }
 }
