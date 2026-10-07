@@ -7,8 +7,8 @@ pkgdesc='A desktop shell built around a central island'
 arch=('x86_64')
 url='https://github.com/DavidutzDev/mochi'
 license=('MIT')
-# mochid refuses to start with another Quickshell than the one it's tested
-# against; see QUICKSHELL_VERSION in crates/mochi-core/src/supervisor.rs.
+# mochid refuses to start with a Quickshell outside 0.3.x; see
+# QUICKSHELL_SERIES in crates/mochi-core/src/supervisor.rs.
 depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder' 'sh' 'inter-font')
 makedepends=('cargo')
 # makepkg builds C with GCC's LTO by default, which leaves zstd's objects

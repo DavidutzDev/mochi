@@ -40,6 +40,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Changed
 
+- `mochid` starts with any Quickshell 0.3.x instead of only 0.3.1, so it runs on the 0.3.0 that Debian 13 backports, Ubuntu 26.10 and Guix ship. It's still tested against 0.3.1.
 - Every module view and the example plugins use Theme's scales for text, spacing, corners, heights and colors, and the design check's baseline is empty.
 - The hub's Home starts with a row of toggles (Network, Bluetooth), then Today, the latest missed notification and the battery, each one row, with Now playing two columns wide and two rows tall beside Clipboard and Colors. Hub cards that set `rows` get a view sized to fill them.
 - The Wi-Fi tile says "Ethernet · <connection>" when a cable carries the connection.

@@ -16,6 +16,10 @@ use tokio::sync::mpsc::UnboundedSender;
 /// The version pinned in flake.lock. Bump both together.
 pub const QUICKSHELL_VERSION: &str = "0.3.1";
 
+/// Quickshell is before 1.0, so a minor release may break its QML API. Any
+/// patch release of the pinned minor version is accepted.
+const QUICKSHELL_SERIES: (u32, u32) = (0, 3);
+
 /// Giving up after this many exits inside `CRASH_WINDOW`.
 const MAX_CRASHES: usize = 5;
 const CRASH_WINDOW: Duration = Duration::from_secs(30);
@@ -98,7 +102,8 @@ impl Supervisor {
     }
 }
 
-/// Returns an error unless `program --version` reports the pinned version.
+/// Returns an error unless `program --version` reports a version in
+/// `QUICKSHELL_SERIES`.
 pub fn check_version(program: &OsString) -> io::Result<()> {
     let output = Command::new(program)
         .arg("--version")
@@ -113,12 +118,21 @@ pub fn check_version(program: &OsString) -> io::Result<()> {
 
     let text = String::from_utf8_lossy(&output.stdout);
     let found = text.split_whitespace().nth(1).unwrap_or("unknown");
-    if found != QUICKSHELL_VERSION {
+    if !compatible(found) {
+        let (major, minor) = QUICKSHELL_SERIES;
         return Err(io::Error::other(format!(
-            "quickshell {found} is installed, mochi is tested against {QUICKSHELL_VERSION}"
+            "quickshell {found} is installed, mochi needs {major}.{minor}.x \
+             and is tested against {QUICKSHELL_VERSION}"
         )));
     }
     Ok(())
+}
+
+/// Whether a version such as `0.3.0` or `0.3.1-git` is in `QUICKSHELL_SERIES`.
+fn compatible(version: &str) -> bool {
+    let mut parts = version.split('.');
+    let mut number = || parts.next().and_then(|part| part.parse::<u32>().ok());
+    matches!((number(), number()), (Some(major), Some(minor)) if (major, minor) == QUICKSHELL_SERIES)
 }
 
 fn supervise(
@@ -222,4 +236,26 @@ fn forward_logs(stream: Option<impl Read + Send + 'static>) {
             }
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepts_any_patch_of_the_pinned_minor_version() {
+        assert!(compatible(QUICKSHELL_VERSION));
+        assert!(compatible("0.3.0"));
+        assert!(compatible("0.3.7-git"));
+    }
+
+    #[test]
+    fn rejects_other_minor_versions_and_garbage() {
+        assert!(!compatible("0.2.1"));
+        assert!(!compatible("0.4.0"));
+        assert!(!compatible("1.3.0"));
+        assert!(!compatible("0"));
+        assert!(!compatible("unknown"));
+        assert!(!compatible(""));
+    }
 }
