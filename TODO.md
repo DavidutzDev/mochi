@@ -159,7 +159,7 @@ Supervisor
 - [x] Island container: springs on width, height and radius, morph between views, input mask
 - [x] Two loaders taking turns, loading views through `root:/modules/<id>/<View>.qml` URLs (plain file paths break singletons and hot reload)
 - [ ] Decide whether views are revealed from the center or anchored to the top edge during a morph
-- [ ] Fall back to the builtin view when a view fails to load
+- [x] Fall back to the builtin view when a view fails to load
 - [x] Theme singleton fed by the `theme` message
 - [x] Forward hover, click and dismiss events to the daemon
 - [x] Re-send `hover_enter` for the new activity when the island changes while the pointer is still over it (the arbiter ignores events for activities that are no longer shown)
@@ -257,7 +257,7 @@ wide = true         # the module's wide views with text, in pills
 - [x] Input mask and blur region cover the island and every pill
 - [x] Demo actions `bubble <name> <area> [group]` and `pop <name>`; clicking a demo bubble names it on the island
 - [x] Tested on Hyprland: every area, a group, a click through the input mask, the island pushing pills, notch mode, the island in the left area, overflow with a maximum of 2
-- [ ] Clicking "+N" lists the hidden bubbles in the island
+- [x] Clicking "+N" lists the hidden bubbles in the island
 - [x] Pills shrink and fade out, a bubble leaving a group fades while the pill narrows, and the others slide instead of jumping when one comes or goes
 - [ ] Notch mode: fuse adjacent pills and the island into one outline instead of separate tabs whose ears overlap
 - [ ] Placement per bubble key, not only per module, for modules with several bubbles
@@ -322,7 +322,7 @@ Listens only: it shows changes made anywhere and has no actions.
 
 ### Notifications
 
-- [x] Serves `org.freedesktop.Notifications` with zbus: `Notify`, `CloseNotification`, `GetCapabilities` (`actions`, `body`, `icon-static`, `persistence`), `GetServerInformation`, and the `NotificationClosed` and `ActionInvoked` signals
+- [x] Serves `org.freedesktop.Notifications` with zbus: `Notify`, `CloseNotification`, `GetCapabilities` (`actions`, `body`, `body-markup`, `body-hyperlinks`, `icon-static`, `inline-reply`, `persistence`), `GetServerInformation`, and the `NotificationClosed`, `ActionInvoked` and `NotificationReplied` signals
 - [x] Waits in line for the name behind another daemon (swaync, mako) and takes over when it stops, without taking the name away. zbus's default flags would replace the other daemon and hand the name to the next one; the request uses none
 - [x] `replaces_id` updates a notification where it is: the popup in place, or silently in the history
 - [x] Popups laid out like the top of the media player: a 64 px icon from the icon theme, the `desktop-entry` hint or the app name, or the picture (`image-path`, or `image-data` pixels written as a PNG to the module's data directory); then the app, the summary and two lines of body. Expanded: app and time, full text, action buttons; clicking the text runs `default`
@@ -334,8 +334,8 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] A pure `Center` with unit tests for every rule above, and `note.rs` tests for odd hints and padded pixel rows
 - [x] Tested live in a private D-Bus session (`dbus-run-session`), leaving the real swaync alone: icons, a critical popup outlasting its timeout, pictures from a path and from bytes, a real click on an action button reaching `notify-send`, replacement, the history and its bubble, do not disturb, clear, and one daemon queueing behind another
 - [x] Persist the history across daemon restarts, without the actions
-- [ ] Body markup (`body-markup`): sanitize to the subset Qt's styled text handles
-- [ ] Inline replies (`inline-reply`)
+- [x] Body markup (`body-markup`): sanitize to the subset Qt's styled text handles
+- [x] Inline replies (`inline-reply`)
 - [ ] Sounds (`sound-file`, `sound-name`)
 
 ### Launcher
@@ -352,7 +352,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] Calculator and run-a-command results, as providers: `apps`, `calculator`, `commands`, script providers from `config.toml`, and plugin providers (`examples/plugins/emoji`)
 - [x] Built-in providers: files (`/`, an index of home), web searches (`!w` and the others), emoji (`:`, the emoji module) and colors (`#`, the colors module)
 - [ ] More built-in providers, like open windows or settings pages
-- [ ] The file index follows changes as they happen (inotify) instead of rebuilding after 15 seconds
+- [x] The file index follows changes as they happen (inotify) instead of rebuilding after 15 seconds
 - [ ] Watch the application directories instead of reading them on every open, if opening ever feels slow
 
 ### Hub
@@ -434,9 +434,9 @@ After capture, reusing its pickers.
 - [x] A hub page: the history with search, paste, copy, delete, pause and clear
 - [x] Tested end to end: copies, secrets skipped, a restart, disk mode against a private gnome-keyring, and pasting into `wev` in a headless Sway
 - [ ] `wlr-data-control` for compositors without the ext protocol
-- [ ] Pinned entries
-- [ ] Ignored apps, by the focused window's class
-- [ ] A larger preview of the selected image or long text
+- [x] Pinned entries
+- [x] Ignored apps, by the focused window's app id, the password manager hint, and a pause
+- [x] A larger preview of the selected image or long text
 - [x] Clicking an image entry, in the picker or the hub page, opens it in the capture module's preview card through its new `show` action: copy and edit as for a screenshot, no folder, and delete removes the entry
 - [ ] Check the paste on Hyprland with a non-QWERTY layout
 
@@ -449,10 +449,10 @@ A new module, `audio`: the volume mixer. Players stay in the media module and no
 - [x] Output and input device switch
 - [x] The mixer is both a hub page (Sound) and an island view (`mochi ipc audio toggle`), with `volume`, `mute`, `output` and `input` actions for keybinds
 - [x] Fleeting activities: the volume and workspace notices never queue behind a panel, so they don't show late once it closes
-- [ ] Move an app to another output, like Discord on the headset and Spotify on the speakers
+- [x] Move an app to another output, like Discord on the headset and Spotify on the speakers
 - [ ] Recording apps: a slider per app using the microphone (source outputs)
-- [ ] Group an app's streams into one row, with a way to open them
-- [ ] Peak meters next to the sliders
+- [x] Group an app's streams into one row, with a way to open them
+- [x] Peak meters next to the sliders
 - [ ] App icons in the mixer: Chromium, Zen and WebRTC streams name icons the theme lacks; look the app up by its desktop entry or process instead
 - [x] Scroll on the OSD to change the volume (there's no volume bubble)
 
@@ -499,8 +499,8 @@ A new module: the apps' tray icons.
 - [x] CPU use and temperature, memory and swap, GPU use, video memory and temperature (AMD from sysfs, NVIDIA from one long-running nvidia-smi)
 - [x] Notices when a reading stays over a level, naming the busiest process; a red bubble while one stays critical; a hub page with graphs and the busiest processes
 - [ ] Intel GPUs
-- [ ] Disk and network throughput
-- [ ] End a process from the page
+- [x] Disk and network throughput
+- [x] End a process from the page
 
 ## Plugins
 
@@ -540,14 +540,14 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [x] Calendar widget
 - [x] To-do and notes widgets, typed into on the desktop (the notes module)
 - [x] Widgets from existing modules: now playing, performance graphs, battery, weather
-- [ ] Alignment guides while dragging
+- [x] Alignment guides while dragging
 - [ ] Moving a widget to another monitor from its settings
 
 ## Emoji and colors
 
 - [x] Emoji module: grid panel with search, groups and recents; paste or copy through the clipboard module; `:` provider
 - [x] Colors module: screen picker with a magnifier, exact pixels from wlr-screencopy at any scale and rotation; island card with HEX, RGB, HSL and OKLCH; history in a hub card and page; `#` provider
-- [ ] Skin tones in the emoji grid
+- [x] Skin tones in the emoji grid
 - [ ] Colors: a palette widget for the desktop
 
 ## Integration and docs

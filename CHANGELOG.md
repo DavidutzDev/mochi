@@ -2,6 +2,35 @@
 
 Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor release may change the config format, the protocol or the module interface; the changelog says when.
 
+## Unreleased
+
+### Added
+
+- Notifications show markup in the body (`body-markup`, `body-hyperlinks`): bold, italic, underline, line breaks and links to http, https, mailto and file URLs. Other tags show as text, and an image shows its `alt` text. A click on a link opens it with `xdg-open` and closes the notification, in the popup, the history and the hub. `mochi ipc notifications open <id> <url>` does the same.
+- Inline replies (`inline-reply`): a notification from an app that takes a reply has a Reply button that opens a text field. Enter sends the text back as `NotificationReplied`, and Escape goes back. `mochi ipc notifications reply <id> <text>` does the same.
+- `ListRow` has `subtitleFormat` and `linkActivated`, for a subtitle with markup.
+- Clicking an area's "+N" lists its hidden bubbles on the island, each drawn as its module draws it. A click on one does what a click on the bubble does, and Escape or a click outside closes the list. The protocol has a new UI message, `overflow_click`, and no plugin may take the id `mochi`.
+- Alignment guides while arranging widgets: accent lines show where a widget's edges or middle meet another widget's or the screen's middle, and it snaps to them within 6 pixels.
+- Emoji skin tones: six swatches by the picker's search box set the tone of every emoji of a person or a hand, in the grid, the Recent tab and the launcher's `:`. Holding an emoji opens its tones; the one you pick is pasted and that emoji keeps it. Emoji of two people take the same tone for both. `mochi ipc emoji tone <tone> [emoji]` sets either, and `emoji.json` keeps them with the recents.
+- The launcher's file index follows your files through inotify: files and folders you make, delete, rename or move show up in `/` results, or leave them, right away, even with the launcher open. When the system runs out of inotify watches, it logs it once and rebuilds the index on open as before.
+- Pinned clipboard entries: `pin` and `unpin`, Ctrl+P in the picker, and a pin button on each row of the picker and the hub page. Pins stay at the top under "Pinned", and clearing the history and its limits leave them. They're kept in `$XDG_STATE_HOME/mochi/clipboard/pins`, encrypted with the history's key from the Secret Service even with `storage = "memory"`, so they last across logouts.
+- The clipboard module's `ignore` lists apps whose copies aren't kept, matched against the focused window's app id (the class on Hyprland): KeePassXC, Bitwarden and 1Password by default. `skip_secrets = false` keeps copies marked with `x-kde-passwordManagerHint`.
+- The clipboard module's `pause` pauses without an argument, `resume` starts again, and a bubble shows while paused; clicking it resumes.
+- The clipboard picker is wider, with a pane showing the selected entry in full: the text, scrolled with Page Up and Page Down, or the image scaled to fit.
+- The Performance page shows disk read and write speeds and network download and upload speeds, each pair with a graph of the last two minutes, in B/s up to GB/s. Disks are whole disks only and network cards are real cards only, so partitions, loop, zram, device-mapper, loopback, bridges and VPN tunnels don't count twice. `mochi ipc performance status` prints them.
+- The Performance page's process list sorts by CPU, memory or disk use, with a column for each. Disk use is read from `/proc/<pid>/io`, so only your own processes have one.
+- End a process from the Performance page: hovering one of yours shows End, a click asks to confirm, the next sends SIGTERM, and after 3 seconds one still running offers Force, for SIGKILL. `mochi ipc performance end <pid>` and `kill <pid>` do the same, and refuse other users' processes.
+- The performance widget has a setting per graph, `cpu`, `memory`, `gpu`, `disk` and `network`, in place of `reading`; an older `reading` still picks one graph.
+- The mixer shows one row per app: its slider and mute act on every stream of the app, and a chevron opens it to show each stream with its own slider. `volume` and `mute` take an app's name for all its streams.
+- A button on each app row in the mixer moves the app to another output, and in an opened row each stream has its own. `mochi ipc audio move <app> <device>` does it from a keybind. PipeWire remembers the output for the app's next streams.
+- Peak meters in the mixer: while it shows on the island or as the hub's Sound page, each slider's fill dims and the part the sound reaches stays lit. Mochi asks the audio server for peak levels only while a mixer is open, and the input's meter moves only while an app records. The `Slider` control has an optional `level`.
+- The protocol has a `live` message for values a module sends many times a second, like the meters' levels: `ModuleCtx::publish_live` sends one, views get it from `Daemon`'s `live` signal, and the daemon doesn't keep it.
+
+### Fixed
+
+- A plugin's override that fails to load gives way to the builtin view, on the island and in bubbles, and `mochid`'s log has the error.
+- A widget in the middle or far third of a screen that isn't a whole number of cells no longer jumps a few pixels when you let go of it.
+
 ## 0.0.6 - 2026-10-07
 
 ### Added
