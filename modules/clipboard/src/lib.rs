@@ -6,9 +6,11 @@
 //!
 //! The history stays in the runtime directory by default, a tmpfs gone at
 //! logout. With `storage = "disk"` it's kept in `$XDG_STATE_HOME/mochi`,
-//! encrypted with a key from the Secret Service. Copies password managers
-//! mark as secret are never read.
+//! encrypted with a key from the Secret Service. Pinned entries are always
+//! kept there, encrypted the same way (see [`history`]). Copies password
+//! managers mark as secret, and copies made in ignored apps, are never read.
 
+mod history;
 mod search;
 mod secret;
 mod store;
@@ -22,16 +24,18 @@ use std::time::{Duration, SystemTime};
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, CallError, ContributionSpec,
-    Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, BubbleId, BubbleSpec,
+    CallError, ContributionSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent,
+    Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use zeroize::Zeroizing;
 
-use crate::store::{Clip, Kind, Store};
-use crate::wayland::{Formats, Request, Watcher};
+use crate::history::History;
+use crate::store::{Clip, Key, Kind, Store};
+use crate::wayland::{Formats, Request, Skip, Watcher};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
@@ -42,6 +46,8 @@ const REFOCUS: Duration = Duration::from_millis(150);
 const EXPIRY_CHECK: Duration = Duration::from_secs(600);
 /// The most characters of a text the picker shows.
 const SHOWN: usize = 300;
+/// The most bytes of a text the picker's side pane shows.
+const DETAIL: usize = 256 * 1024;
 
 #[derive(Debug, Default)]
 pub struct Clipboard;
@@ -64,6 +70,8 @@ struct Settings {
     max_results: usize,
     paste: bool,
     terminals: Vec<String>,
+    skip_secrets: bool,
+    ignore: Vec<String>,
 }
 
 impl Default for Settings {
@@ -75,6 +83,10 @@ impl Default for Settings {
             max_item_mb: 16,
             max_results: 50,
             paste: true,
+            skip_secrets: true,
+            ignore: ["org.keepassxc.KeePassXC", "Bitwarden", "1Password"]
+                .map(String::from)
+                .to_vec(),
             terminals: [
                 "kitty",
                 "foot",
@@ -157,15 +169,28 @@ impl Module for Clipboard {
                 "Open an image entry in the preview card a screenshot gets",
             )
             .arg(id()),
+            ActionSpec::new(
+                "preview",
+                "Show an entry in full beside the list; the picker sends this as you move",
+            )
+            .arg(id()),
             ActionSpec::new("delete", "Remove an entry from the history").arg(id()),
-            ActionSpec::new("clear", "Remove everything from the history"),
+            ActionSpec::new("clear", "Remove everything from the history but the pins"),
+            ActionSpec::new(
+                "pin",
+                "Keep an entry at the top, through clearing and restarts",
+            )
+            .arg(id()),
+            ActionSpec::new("unpin", "Put a pinned entry back in the history").arg(id()),
             ActionSpec::new("pause", "Stop keeping what you copy, or start again").arg(
                 ArgSpec::choice(
                     "state",
-                    "Pause, resume, or flip it",
+                    "Pause, the default, resume, or flip it",
                     ["on", "off", "toggle"],
-                ),
+                )
+                .optional(),
             ),
+            ActionSpec::new("resume", "Keep what you copy again"),
         ]
     }
 
@@ -174,10 +199,16 @@ impl Module for Clipboard {
             let settings: Settings = ctx.settings()?;
             let mut state = State::load(&ctx, settings).await;
             let (sender, mut copied) = mpsc::unbounded_channel();
+            let skip = Skip {
+                secrets: state.settings.skip_secrets,
+                apps: state.settings.ignore.clone(),
+            };
             state.clipboard = match wayland::start(
                 sender,
                 state.listening.clone(),
                 state.settings.max_item_mb.saturating_mul(1 << 20),
+                skip,
+                ctx.compositor().clone(),
             ) {
                 Ok(clipboard) => Some(clipboard),
                 Err(error) => {
@@ -198,7 +229,10 @@ impl Module for Clipboard {
                         Some(ModuleEvent::Command(command)) => state.command(&ctx, command).await,
                         Some(ModuleEvent::Ended { activity, .. }) if state.shown == Some(activity) => {
                             state.shown = None;
+                            state.detail = None;
                         }
+                        // The bubble only shows while paused.
+                        Some(ModuleEvent::BubbleClicked(_)) => state.pause(&ctx, false),
                         Some(_) => {}
                     },
                     clip = copied.recv(), if watching => match clip {
@@ -215,12 +249,17 @@ impl Module for Clipboard {
 #[derive(Debug)]
 struct State {
     settings: Settings,
-    store: Store,
+    history: History,
     /// Where the history actually is: memory when the disk had no key.
     storage: Storage,
+    /// The key from the Secret Service, once asked for: for the history on
+    /// disk, and for the pins.
+    key: Option<Key>,
     clipboard: Option<Watcher>,
     /// False while paused.
     listening: Arc<AtomicBool>,
+    /// Shown while paused.
+    bubble: Option<BubbleId>,
     /// Why something doesn't work, for the hub card.
     warning: Option<String>,
     /// Where images are written for the picker to show.
@@ -228,18 +267,24 @@ struct State {
     written: HashSet<u64>,
     query: String,
     shown: Option<ActivityId>,
+    /// The text entry the picker shows in full: its id and text.
+    detail: Option<(u64, Zeroizing<String>)>,
 }
 
 impl State {
     /// Opens the history where the settings say, or in memory when the disk
-    /// has no key, or empty when even that fails.
+    /// has no key, or empty when even that fails. Then the pins, if any.
     async fn load(ctx: &ModuleCtx, settings: Settings) -> Self {
         let memory = ctx.session_dir().join("history");
         let mut warning = None;
+        let mut disk_key = None;
         let (path, key, storage) = match settings.storage {
             Storage::Memory => (memory.clone(), None, Storage::Memory),
-            Storage::Disk => match (disk_path(), secret::key().await) {
-                (Some(path), Ok(key)) => (path, Some(key), Storage::Disk),
+            Storage::Disk => match (state_path("history"), secret::key().await) {
+                (Some(path), Ok(key)) => {
+                    disk_key = Some(key.clone());
+                    (path, Some(key), Storage::Disk)
+                }
                 (None, _) => {
                     warning = Some("no home directory; kept in memory".to_owned());
                     (memory.clone(), None, Storage::Memory)
@@ -265,23 +310,73 @@ impl State {
                 }
             }
         };
-        tracing::info!(
-            entries = store.entries().len(),
-            storage = ?storage,
-            "clipboard history ready"
-        );
-        Self {
+        let mut state = Self {
             settings,
-            store,
+            history: History::new(store),
             storage,
+            key: disk_key,
             clipboard: None,
             listening: Arc::new(AtomicBool::new(true)),
+            bubble: None,
             warning,
             pictures: ctx.data_dir().to_owned(),
             written: HashSet::new(),
             query: String::new(),
             shown: None,
+            detail: None,
+        };
+        if let Err(error) = state.open_pins(ctx, false).await {
+            tracing::warn!(%error, "cannot open the clipboard pins");
+            state.warning = Some(error);
         }
+        tracing::info!(
+            entries = state.history.recent().len(),
+            pins = state.history.pinned().len(),
+            storage = ?state.storage,
+            "clipboard history ready"
+        );
+        state
+    }
+
+    /// Opens the pins: on disk, encrypted with the key from the Secret
+    /// Service whatever `storage` says, so they last across logouts. With
+    /// no key they go in the runtime directory instead, until logout.
+    /// Unless `create`, only pins that exist already are opened.
+    async fn open_pins(&mut self, ctx: &ModuleCtx, create: bool) -> Result<(), String> {
+        if self.history.has_pins() {
+            return Ok(());
+        }
+        let disk = state_path("pins");
+        let memory = ctx.session_dir().join("pins");
+        let on_disk = disk.as_ref().is_some_and(|path| path.exists());
+        if !create && !on_disk && !memory.exists() {
+            return Ok(());
+        }
+        if let Some(path) = disk.filter(|_| create || on_disk) {
+            let key = match &self.key {
+                Some(key) => Ok(key.clone()),
+                None => secret::key().await,
+            };
+            match key {
+                Ok(key) => {
+                    self.key = Some(key.clone());
+                    let pins = Store::open(&path, Some(key))
+                        .map_err(|error| format!("cannot open the pins: {error}"))?;
+                    self.history.set_pins(pins);
+                    return Ok(());
+                }
+                // Never in memory over pins the key would open later.
+                Err(error) if on_disk => return Err(format!("{error}; the pins can't be read")),
+                Err(error) => {
+                    tracing::warn!(%error, "no key for the clipboard pins; keeping them in memory");
+                }
+            }
+        }
+        let pins =
+            Store::open(&memory, None).map_err(|error| format!("cannot open the pins: {error}"))?;
+        self.history.set_pins(pins);
+        self.warning = Some("no keyring: pins last until you log out".to_owned());
+        Ok(())
     }
 
     async fn command(&mut self, ctx: &ModuleCtx, command: ModuleCommand) {
@@ -320,38 +415,119 @@ impl State {
                 Ok(id) => self.show(ctx, id).await,
                 Err(error) => Err(error),
             },
+            "preview" => id().map(|id| {
+                self.preview(id);
+                self.refresh(ctx);
+            }),
             "delete" => id().and_then(|id| {
-                self.store.remove(id).map_err(|error| error.to_string())?;
+                self.history.remove(id).map_err(|error| error.to_string())?;
                 self.forget(id);
                 self.changed(ctx);
                 Ok(())
             }),
             "clear" => self
-                .store
+                .history
                 .clear()
                 .map_err(|error| error.to_string())
                 .map(|()| {
-                    for id in std::mem::take(&mut self.written) {
-                        let _ = std::fs::remove_file(self.picture(id));
+                    let gone: Vec<u64> = self
+                        .written
+                        .iter()
+                        .copied()
+                        .filter(|id| !self.history.is_pinned(*id))
+                        .collect();
+                    for id in gone {
+                        self.forget(id);
                     }
                     tracing::info!("cleared the clipboard history");
                     self.changed(ctx);
                 }),
-            "pause" => {
-                let paused = !self.listening.load(Ordering::Relaxed);
-                let paused = match command.args.str("state") {
-                    Some("on") => true,
-                    Some("off") => false,
-                    _ => !paused,
-                };
-                self.listening.store(!paused, Ordering::Relaxed);
-                tracing::info!(paused, "clipboard history");
+            "pin" => match id() {
+                Ok(id) => match self.open_pins(ctx, true).await {
+                    Ok(()) => self
+                        .history
+                        .pin(id, now())
+                        .map_err(|error| error.to_string())
+                        .map(|()| self.changed(ctx)),
+                    Err(error) => {
+                        self.warning = Some(error.clone());
+                        self.publish(ctx);
+                        Err(error)
+                    }
+                },
+                Err(error) => Err(error),
+            },
+            "unpin" => id().and_then(|id| {
+                self.history
+                    .unpin(id, now())
+                    .map_err(|error| error.to_string())?;
                 self.changed(ctx);
+                Ok(())
+            }),
+            "pause" => {
+                let paused = match command.args.str("state") {
+                    Some("off") => false,
+                    Some("toggle") => self.listening.load(Ordering::Relaxed),
+                    _ => true,
+                };
+                self.pause(ctx, paused);
+                Ok(())
+            }
+            "resume" => {
+                self.pause(ctx, false);
                 Ok(())
             }
             other => Err(format!("clipboard has no action {other}")),
         };
         command.reply(result);
+    }
+
+    /// Stops keeping copies, with a bubble that resumes on a click, or
+    /// starts again.
+    fn pause(&mut self, ctx: &ModuleCtx, paused: bool) {
+        self.listening.store(!paused, Ordering::Relaxed);
+        tracing::info!(paused, "clipboard history");
+        match (paused, self.bubble) {
+            (true, None) => {
+                let spec = BubbleSpec::new("Paused").key("paused").order(10);
+                self.bubble = Some(ctx.show_bubble(spec));
+            }
+            (false, Some(bubble)) => {
+                ctx.hide_bubble(bubble);
+                self.bubble = None;
+            }
+            _ => {}
+        }
+        self.changed(ctx);
+    }
+
+    /// Reads a text entry in full for the picker's side pane, up to
+    /// [`DETAIL`] bytes. Images show from their picture.
+    fn preview(&mut self, id: u64) {
+        if self.detail.as_ref().is_some_and(|(shown, _)| *shown == id) {
+            return;
+        }
+        self.detail = None;
+        if self.history.get(id).map(|entry| entry.kind) != Some(Kind::Text) {
+            return;
+        }
+        let content = match self.history.content(id) {
+            Ok(content) => content,
+            Err(error) => {
+                tracing::warn!(%error, "cannot read a clipboard entry");
+                return;
+            }
+        };
+        let Some((_, data)) = content.first() else {
+            return;
+        };
+        let mut end = data.len().min(DETAIL);
+        while end > 0 && end < data.len() && (data[end] & 0xC0) == 0x80 {
+            // Inside a character: step back to its start.
+            end -= 1;
+        }
+        let text = Zeroizing::new(String::from_utf8_lossy(&data[..end]).into_owned());
+        self.detail = Some((id, text));
     }
 
     fn open(&mut self, ctx: &ModuleCtx) {
@@ -367,6 +543,7 @@ impl State {
             });
         }
         self.query.clear();
+        self.detail = None;
         let spec = ActivitySpec::new("Picker")
             .key("clipboard")
             .priority(Priority::URGENT)
@@ -393,7 +570,7 @@ impl State {
                 formats: vec![(wayland::TEXT[0].to_owned(), bytes)],
             };
             let id = self
-                .store
+                .history
                 .add(&clip, now())
                 .map_err(|error| error.to_string())?;
             self.changed(ctx);
@@ -406,7 +583,7 @@ impl State {
     fn pick(&mut self, ctx: &ModuleCtx, id: u64, paste: bool) -> Result<(), String> {
         let formats = self.formats(id)?;
         // Mochi's own selection isn't read back; move the entry up here.
-        self.store
+        self.history
             .touch(id, now())
             .map_err(|error| error.to_string())?;
         self.serve(ctx, formats, paste)
@@ -453,7 +630,7 @@ impl State {
     /// Opens an image entry in the capture module's preview card, with its
     /// copy, edit and delete buttons, and closes the picker and the hub.
     async fn show(&mut self, ctx: &ModuleCtx, id: u64) -> Result<(), String> {
-        let entry = self.store.get(id).ok_or("no such entry")?;
+        let entry = self.history.get(id).ok_or("no such entry")?;
         if entry.kind != Kind::Image {
             return Err("only images open in the preview".into());
         }
@@ -483,8 +660,11 @@ impl State {
     /// What to serve for an entry: text under every text format, and the
     /// other formats it was copied with.
     fn formats(&mut self, id: u64) -> Result<Formats, String> {
-        let kind = self.store.get(id).ok_or("no such entry")?.kind;
-        let content = self.store.content(id).map_err(|error| error.to_string())?;
+        let kind = self.history.get(id).ok_or("no such entry")?.kind;
+        let content = self
+            .history
+            .content(id)
+            .map_err(|error| error.to_string())?;
         let mut formats = Formats::new();
         for (index, (mime, data)) in content.into_iter().enumerate() {
             let data = Arc::new(data);
@@ -501,7 +681,7 @@ impl State {
         if !self.listening.load(Ordering::Relaxed) {
             return;
         }
-        match self.store.add(clip, now()) {
+        match self.history.add(clip, now()) {
             Ok(id) => tracing::debug!(id, "kept a copy"),
             Err(error) => {
                 tracing::warn!(%error, "cannot keep a copy");
@@ -509,7 +689,7 @@ impl State {
             }
         }
         self.expire(ctx);
-        if let Err(error) = self.store.tidy() {
+        if let Err(error) = self.history.tidy() {
             tracing::warn!(%error, "cannot rewrite the clipboard history");
         }
         self.changed(ctx);
@@ -517,7 +697,10 @@ impl State {
 
     fn expire(&mut self, ctx: &ModuleCtx) {
         let max_age = self.settings.max_age_hours.saturating_mul(3600);
-        match self.store.expire(self.settings.max_entries, max_age, now()) {
+        match self
+            .history
+            .expire(self.settings.max_entries, max_age, now())
+        {
             Ok(removed) if !removed.is_empty() => {
                 for id in removed {
                     self.forget(id);
@@ -546,7 +729,7 @@ impl State {
         if self.written.contains(&id) {
             return Some(path);
         }
-        let content = self.store.content(id).ok()?;
+        let content = self.history.content(id).ok()?;
         let (_, data) = content.first()?;
         if let Err(error) = write_private(&path, data) {
             tracing::warn!(%error, "cannot write a clipboard image");
@@ -573,7 +756,8 @@ impl State {
         let entries = self.results("");
         ctx.publish_state(json!({
             "entries": entries,
-            "count": self.store.entries().len(),
+            "count": self.history.recent().len(),
+            "pins": self.history.pinned().len(),
             "paused": !self.listening.load(Ordering::Relaxed),
             "storage": match self.storage {
                 Storage::Memory => "memory",
@@ -586,6 +770,11 @@ impl State {
     fn payload(&mut self, ctx: &ModuleCtx) -> Value {
         let query = self.query.clone();
         let results = self.results(&query);
+        let detail = self
+            .detail
+            .as_ref()
+            .filter(|(id, _)| self.history.get(*id).is_some())
+            .map(|(id, text)| json!({ "id": id, "text": text.as_str() }));
         json!({
             // Only the island on this monitor takes the keyboard.
             "output": ctx.compositor().state().focused_output,
@@ -593,23 +782,30 @@ impl State {
             "paused": !self.listening.load(Ordering::Relaxed),
             "now": now(),
             "results": results,
+            "detail": detail,
         })
     }
 
-    /// The entries matching `query`, as the views show them.
+    /// The entries matching `query`, as the views show them: the pins
+    /// first, then the history.
     fn results(&mut self, query: &str) -> Vec<Value> {
-        let hits: Vec<(u64, Kind)> =
-            search::rank(self.store.entries(), query, self.settings.max_results)
-                .iter()
-                .map(|entry| (entry.id, entry.kind))
-                .collect();
+        let limit = self.settings.max_results;
+        let hits: Vec<(u64, Kind, bool)> = search::rank(self.history.pinned(), query, limit)
+            .iter()
+            .map(|entry| (entry.id, entry.kind, true))
+            .chain(
+                search::rank(self.history.recent(), query, limit)
+                    .iter()
+                    .map(|entry| (entry.id, entry.kind, false)),
+            )
+            .collect();
         let mut results = Vec::with_capacity(hits.len());
-        for (id, kind) in hits {
+        for (id, kind, pinned) in hits {
             let picture = match kind {
                 Kind::Image => self.show_picture(id),
                 Kind::Text => None,
             };
-            let Some(entry) = self.store.get(id) else {
+            let Some(entry) = self.history.get(id) else {
                 continue;
             };
             let text: String = entry.preview.chars().take(SHOWN).collect();
@@ -619,6 +815,7 @@ impl State {
                     Kind::Text => "text",
                     Kind::Image => "image",
                 },
+                "pinned": pinned,
                 "text": text,
                 "lines": entry.preview.lines().count(),
                 "size": entry.size(),
@@ -632,14 +829,14 @@ impl State {
     }
 }
 
-/// `$XDG_STATE_HOME/mochi/clipboard/history`, falling back to
+/// `$XDG_STATE_HOME/mochi/clipboard/<name>`, falling back to
 /// `~/.local/state`.
-fn disk_path() -> Option<PathBuf> {
+fn state_path(name: &str) -> Option<PathBuf> {
     let state = std::env::var_os("XDG_STATE_HOME")
         .filter(|value| !value.is_empty())
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join(".local/state")))?;
-    Some(state.join("mochi").join("clipboard").join("history"))
+    Some(state.join("mochi").join("clipboard").join(name))
 }
 
 /// Writes a file only the user can read.

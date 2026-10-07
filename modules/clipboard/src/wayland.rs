@@ -12,6 +12,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use mochi_core::compositor::Compositor;
 use tokio::io::AsyncReadExt;
 use tokio::io::unix::AsyncFd;
 use tokio::sync::mpsc;
@@ -51,6 +52,36 @@ const READ_TIMEOUT: Duration = Duration::from_secs(5);
 /// The formats of the selection Mochi serves, by MIME type.
 pub type Formats = Vec<(String, Arc<Zeroizing<Vec<u8>>>)>;
 
+/// Which copies are never read.
+#[derive(Debug, Clone, Default)]
+pub struct Skip {
+    /// Copies offered with [`SECRET_HINT`], as password managers mark
+    /// passwords.
+    pub secrets: bool,
+    /// App ids of windows whose copies aren't kept, in any case: on
+    /// Hyprland the window's class.
+    pub apps: Vec<String>,
+}
+
+impl Skip {
+    /// Why a copy offered with `mimes`, made while `app` had the keyboard,
+    /// isn't read, or None when it is.
+    pub fn reason(&self, mimes: &[String], app: Option<&str>) -> Option<&'static str> {
+        if self.secrets && mimes.iter().any(|mime| mime == SECRET_HINT) {
+            return Some("marked secret");
+        }
+        if let Some(app) = app
+            && self
+                .apps
+                .iter()
+                .any(|ignored| ignored.eq_ignore_ascii_case(app))
+        {
+            return Some("copied in an ignored app");
+        }
+        None
+    }
+}
+
 #[derive(Debug)]
 pub enum Request {
     /// Take the selection over and serve these.
@@ -74,11 +105,14 @@ impl Watcher {
 }
 
 /// Connects and starts watching. New copies go to `copied`; nothing is read
-/// while `listening` is false, or when a copy is larger than `limit` bytes.
+/// while `listening` is false, when a copy is larger than `limit` bytes, or
+/// when `skip` says so, asking `compositor` which app copied.
 pub fn start(
     copied: mpsc::UnboundedSender<Clip>,
     listening: Arc<AtomicBool>,
     limit: usize,
+    skip: Skip,
+    compositor: Compositor,
 ) -> Result<Watcher, String> {
     let connection = Connection::connect_to_env()
         .map_err(|error| format!("cannot connect to the Wayland display: {error}"))?;
@@ -108,6 +142,8 @@ pub fn start(
         copied,
         listening,
         limit,
+        skip,
+        compositor,
         finished: false,
     };
     tokio::spawn(run(connection, queue, client, receiver));
@@ -190,6 +226,9 @@ struct Client {
     copied: mpsc::UnboundedSender<Clip>,
     listening: Arc<AtomicBool>,
     limit: usize,
+    skip: Skip,
+    /// Says which window has the keyboard, for `skip`.
+    compositor: Compositor,
     finished: bool,
 }
 
@@ -224,7 +263,7 @@ impl Client {
         keyboard.modifiers(0, 0, 0, 0);
     }
 
-    /// A new selection: read it, unless it's Mochi's own, a secret, or
+    /// A new selection: read it, unless it's Mochi's own, skipped, or
     /// nothing worth keeping.
     fn selection(&mut self, offer: Option<ExtDataControlOfferV1>) {
         if let Some(old) = std::mem::replace(&mut self.offer, offer.clone()) {
@@ -238,10 +277,14 @@ impl Client {
             .data::<Mutex<Vec<String>>>()
             .and_then(|mimes| mimes.lock().ok().map(|mimes| mimes.clone()))
             .unwrap_or_default();
+        // The selection comes right after the copy, so the window with the
+        // keyboard is still the one that copied.
+        let app = self.compositor.state().focused_app;
+        if let Some(reason) = self.skip.reason(&mimes, app.as_deref()) {
+            tracing::debug!(reason, app, "skipped a copy");
+            return;
+        }
         let Some((kind, wanted)) = wanted(&mimes) else {
-            if mimes.iter().any(|mime| mime == SECRET_HINT) {
-                tracing::debug!("skipped a copy marked secret");
-            }
             return;
         };
 
@@ -279,10 +322,10 @@ impl Client {
 
 /// What to read from an offer with these MIME types, if anything: the best
 /// text format and HTML alongside, or else an image, PNG first. Nothing for
-/// Mochi's own selection or a secret.
+/// Mochi's own selection.
 fn wanted(mimes: &[String]) -> Option<(Kind, Vec<String>)> {
     let has = |wanted: &str| mimes.iter().any(|mime| mime == wanted);
-    if has(MARKER) || has(SECRET_HINT) {
+    if has(MARKER) {
         return None;
     }
     if let Some(text) = TEXT.iter().find(|text| has(text)) {
@@ -593,8 +636,36 @@ mod tests {
     }
 
     #[test]
-    fn skips_secrets_and_its_own_selection() {
-        assert_eq!(wanted(&mimes(&["text/plain", SECRET_HINT])), None);
+    fn skips_its_own_selection() {
         assert_eq!(wanted(&mimes(&["text/plain", MARKER])), None);
+    }
+
+    #[test]
+    fn skips_secrets_and_ignored_apps() {
+        let skip = Skip {
+            secrets: true,
+            apps: vec!["org.keepassxc.KeePassXC".into(), "Bitwarden".into()],
+        };
+        let secret = mimes(&["text/plain", SECRET_HINT]);
+        let plain = mimes(&["text/plain"]);
+        assert_eq!(skip.reason(&secret, Some("kitty")), Some("marked secret"));
+        assert_eq!(skip.reason(&secret, None), Some("marked secret"));
+        assert_eq!(skip.reason(&plain, Some("kitty")), None);
+        assert_eq!(skip.reason(&plain, None), None);
+        assert_eq!(
+            skip.reason(&plain, Some("org.keepassxc.KeePassXC")),
+            Some("copied in an ignored app")
+        );
+        // Classes change case between versions.
+        assert_eq!(
+            skip.reason(&plain, Some("bitwarden")),
+            Some("copied in an ignored app")
+        );
+        assert_eq!(skip.reason(&plain, Some("Bitwarden-dev")), None);
+
+        // With the hint off, a secret is read like any copy.
+        let off = Skip::default();
+        assert_eq!(off.reason(&secret, Some("kitty")), None);
+        assert_eq!(off.reason(&plain, Some("org.keepassxc.KeePassXC")), None);
     }
 }
