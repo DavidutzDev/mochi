@@ -30,8 +30,12 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 - Mochi builds plugins in any of its languages with Nix, without their authors writing Nix: Rust, Node, Python and Go (with `vendor/`) from the lock file they already have, and scripts and release archives as they are, with release binaries patched to run on NixOS. The language comes from the plugin's files, or `[backend] kind`. `[backend] needs` lists the programs the backend runs: Nix puts them on its PATH, `mochi plugins install` lists the missing ones, and mochid warns about them. With Nix installed, `mochi plugins install` builds with Nix when the build's tools or the needed programs aren't there. home-manager's `plugins.<id>.runtimeInputs` adds programs.
 - A failed plugin build names the tools missing and the ways around it: installing them, home-manager's `src`, a `git-release:` source when the plugin has releases, or a flake.
 
+- The idle module's `hover` runs an action when the pointer rests on the clock for `hover_delay_ms` (350 by default), like `hover = ["workspaces", "show"]`; a quick click still runs `click`. Modules hear the pointer come onto their activities and leave as `ModuleEvent::Hovered`, in `mochi-core` and `mochi-sdk` (the plugin protocol's `hovered` message), and an activity the island stops showing under the pointer hears it leave.
+- `mochi ipc workspaces show` shows a monitor's workspace dots on the island, the one under the pointer by default: clicks switch, and they stay while the pointer is on them. Scrolling on the dots switches to the previous or next workspace.
+
 ### Fixed
 
+- When `mochi reload` restarted the idle module, it left a second clock waiting behind the shown one, and its `hover` then watched the hidden one.
 - Discord's notifications showed their Markdown as typed, like `**TEST**`. The notifications module reads it now: `**bold**`, `*italic*`, `__underline__`, `~~strike~~`, `` `code` ``, `[text](url)` links, and `||spoilers||`, shown as "spoiler". Plain `https://` links in any app's notifications become links, and `<s>`, `<strong>`, `<em>`, `<del>` and `<strike>` are kept. `markdown = false` in `[module.notifications]` turns it off.
 - A plugin's override that fails to load gives way to the builtin view, on the island and in bubbles, and `mochid`'s log has the error.
 - A widget in the middle or far third of a screen that isn't a whole number of cells no longer jumps a few pixels when you let go of it.

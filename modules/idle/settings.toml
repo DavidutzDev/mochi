@@ -5,3 +5,9 @@
 # What a click runs: a module, its action, then the action's arguments.
 # [] does nothing.
 # click = ["hub", "toggle"]
+# What resting the pointer on it runs, the same way, like
+# ["workspaces", "show"] for the workspace dots. [] does nothing.
+# hover = []
+# How long the pointer rests on it before `hover` runs, in milliseconds,
+# so passing over it or clicking it doesn't.
+# hover_delay_ms = 350
