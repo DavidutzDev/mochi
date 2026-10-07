@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 include_dir.workspace = true
+libc.workspace = true
 mochi-core.workspace = true
 serde.workspace = true
 serde_json.workspace = true

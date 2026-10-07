@@ -2,8 +2,9 @@ import QtQuick
 import qs.island
 
 // The performance widget: the readings with their last two minutes as
-// graphs, stacked, sharing the widget's height. `reading` picks one, or
-// all of them; a reading over its critical level turns red.
+// graphs, stacked, sharing the widget's height. A setting for each graph
+// turns it on or off: CPU, memory and GPU show unless set, disk and network
+// only when set. A reading over its critical level turns red.
 Item {
     id: root
 
@@ -14,6 +15,9 @@ Item {
     readonly property var cpu: payload?.cpu ?? null
     readonly property var memory: payload?.memory ?? null
     readonly property var gpu: payload?.gpu ?? null
+    readonly property var disk: payload?.disk ?? null
+    readonly property var network: payload?.network ?? null
+    // Before these settings, `reading` picked one graph, or "all".
     readonly property string reading: settings.reading ?? "all"
     readonly property var rows: [
         {
@@ -39,8 +43,30 @@ Item {
             "value": `${gpu?.usage ?? 0}%`,
             "detail": gpu?.temperature != null ? `${gpu.temperature} °C` : "",
             "values": gpu?.history ?? []
+        },
+        {
+            "key": "disk",
+            "icon": "disk",
+            "label": "Disk",
+            "speeds": [["Read", disk?.in ?? ""], ["Write", disk?.out ?? ""]],
+            "values": disk?.in_history ?? [],
+            "others": disk?.out_history ?? []
+        },
+        {
+            "key": "network",
+            "icon": "ethernet",
+            "label": "Network",
+            "speeds": [["Down", network?.in ?? ""], ["Up", network?.out ?? ""]],
+            "values": network?.in_history ?? [],
+            "others": network?.out_history ?? []
         }
-    ].filter(row => (reading === "all" || row.key === reading) && (row.key !== "gpu" || gpu !== null))
+    ].filter(row => shown(row.key) && (row.key !== "gpu" || gpu !== null))
+
+    function shown(key: string): bool {
+        if (reading !== "all")
+            return key === reading;
+        return settings[key] ?? (key !== "disk" && key !== "network");
+    }
 
     function hot(label: string): bool {
         return (payload?.critical ?? []).some(entry => entry.label === label);
@@ -68,6 +94,7 @@ Item {
 
                 required property var modelData
                 readonly property bool hot: root.hot(modelData.label)
+                readonly property var speeds: modelData.speeds ?? []
 
                 width: parent.width
                 height: (root.height - 10 * (root.rows.length - 1)) / root.rows.length
@@ -95,7 +122,8 @@ Item {
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: row.modelData.value
+                        visible: row.speeds.length === 0
+                        text: row.modelData.value ?? ""
                         color: row.hot ? Theme.danger : Theme.foreground
                         font.pixelSize: Theme.textSubtitle
                         font.family: Theme.fontFamily
@@ -107,10 +135,35 @@ Item {
                 Text {
                     anchors.right: parent.right
                     anchors.verticalCenter: label.verticalCenter
-                    text: row.modelData.detail
+                    visible: row.speeds.length === 0
+                    text: row.modelData.detail ?? ""
                     color: Theme.muted
                     font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily
+                }
+
+                // A disk's or network's two speeds, colored like their lines.
+                Row {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: label.verticalCenter
+                    visible: row.speeds.length > 0
+                    spacing: 10
+
+                    Repeater {
+                        model: row.speeds
+
+                        Text {
+                            required property var modelData
+                            required property int index
+
+                            text: `${modelData[0]} ${modelData[1]}`
+                            color: index === 0 ? Theme.accent : Theme.success
+                            font.pixelSize: Theme.textCaption
+                            font.family: Theme.fontFamily
+                            font.weight: Font.DemiBold
+                            font.features: { "tnum": 1 }
+                        }
+                    }
                 }
 
                 Graph {
@@ -119,6 +172,8 @@ Item {
                     anchors.bottom: parent.bottom
                     width: parent.width
                     values: row.modelData.values
+                    others: row.modelData.others ?? []
+                    floor: row.speeds.length > 0 ? 64 * 1024 : 0
                     color: row.hot ? Theme.danger : Theme.accent
                 }
             }

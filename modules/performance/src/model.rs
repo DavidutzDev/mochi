@@ -105,9 +105,48 @@ impl History {
     }
 }
 
+/// Two byte counts that only grow, like a disk's reads and writes, as
+/// speeds in bytes a second, with their last readings for a graph.
+#[derive(Debug, Default)]
+pub struct Flow {
+    before: Option<((u64, u64), Instant)>,
+    pub speeds: (f64, f64),
+    pub histories: (History, History),
+}
+
+impl Flow {
+    pub fn update(&mut self, totals: (u64, u64), now: Instant) {
+        if let Some((before, then)) = self.before {
+            let seconds = now.duration_since(then).as_secs_f64();
+            if seconds > 0.0 {
+                // A count that went back, from a disk or card going away,
+                // reads as nothing rather than a huge number.
+                let speed = |after: u64, before: u64| after.saturating_sub(before) as f64 / seconds;
+                self.speeds = (speed(totals.0, before.0), speed(totals.1, before.1));
+                self.histories.0.push(self.speeds.0);
+                self.histories.1.push(self.speeds.1);
+            }
+        }
+        self.before = Some((totals, now));
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn turns_counts_into_speeds() {
+        let mut flow = Flow::default();
+        let start = Instant::now();
+        flow.update((1000, 5000), start);
+        assert!(flow.histories.0.values().is_empty());
+        flow.update((5000, 5000), start + 2 * SECOND);
+        assert_eq!(flow.speeds, (2000.0, 0.0));
+        flow.update((10, 6000), start + 4 * SECOND);
+        assert_eq!(flow.speeds, (0.0, 500.0));
+        assert_eq!(flow.histories.0.values(), [2000.0, 0.0]);
+    }
 
     const SECOND: Duration = Duration::from_secs(1);
 

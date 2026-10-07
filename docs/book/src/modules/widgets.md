@@ -84,7 +84,7 @@ It's written as a file Mochi can change, not a link into the store, so arranging
 | Note | `notes`, `note` | `title`. Click it and type; it saves a moment after you stop |
 | Now playing | `media`, `now-playing` | The hub's card: the cover, the track and the controls. It steps aside while no player has a track |
 | Battery | `battery`, `level` | The hub's card, with the power profiles. It steps aside without a battery |
-| Performance | `performance`, `graphs` | `reading` (`all`, `cpu`, `memory` or `gpu`): the readings with their last two minutes as graphs |
+| Performance | `performance`, `graphs` | `cpu`, `memory`, `gpu` (on unless set off), `disk`, `network` (off unless set on): which readings show, each with its last two minutes as a graph. An older widget with `reading` set to one reading in `widgets.toml` shows only that one until you remove the line |
 | Weather | `weather`, `now` | From the example weather plugin |
 
 Each to-do list and note keeps its own content, in the [notes](notes.md) module. Typing into one gives the desktop the keyboard until you click a window; Escape lets go of the field.

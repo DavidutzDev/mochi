@@ -1,7 +1,9 @@
-//! Performance: CPU, memory and GPU use, and their temperatures.
+//! Performance: CPU, memory and GPU use, their temperatures, and disk and
+//! network speeds.
 //!
 //! The hub has a Performance page with each reading, a graph of the last
-//! two minutes and the busiest processes. A reading that stays over its
+//! two minutes and the busiest processes, which it can end. A reading that
+//! stays over its
 //! notice level shows a short notice on the island, naming the busiest
 //! process; one that stays over its critical level puts a red bubble next
 //! to the island until it comes down. A spike says nothing: a reading must
@@ -27,14 +29,14 @@ use std::time::{Duration, Instant};
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActionSpec, ActivitySpec, Area, Assets, BoxFuture, BubbleId, BubbleSpec, ContributionSpec,
-    Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    ActionSpec, ActivitySpec, Area, ArgSpec, Assets, BoxFuture, BubbleId, BubbleSpec,
+    ContributionSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::watch;
 
-use crate::model::{Change, History, Limits, Watch};
+use crate::model::{Change, Flow, History, Limits, Watch};
 use crate::sample::{AmdGpu, CpuTimes, Gpu, Memory, Process};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
@@ -45,6 +47,50 @@ const CRITICAL_NOTICE: Duration = Duration::from_secs(6);
 const DETAIL: Duration = Duration::from_secs(30);
 /// How many processes the page lists.
 const TOP: usize = 6;
+/// The widget's graphs: its setting, the graph's name, and whether it
+/// shows unless set.
+const GRAPHS: [(&str, &str, bool); 5] = [
+    ("cpu", "CPU", true),
+    ("memory", "memory", true),
+    ("gpu", "GPU", true),
+    ("disk", "disk", false),
+    ("network", "network", false),
+];
+
+/// What the page orders its processes by.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum Sort {
+    #[default]
+    Cpu,
+    Memory,
+    Disk,
+}
+
+impl Sort {
+    const ALL: [Self; 3] = [Self::Cpu, Self::Memory, Self::Disk];
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::Cpu => "cpu",
+            Self::Memory => "memory",
+            Self::Disk => "disk",
+        }
+    }
+}
+
+/// One process for the page.
+#[derive(Debug, Clone)]
+struct Row {
+    pid: u32,
+    name: String,
+    /// Percent of the whole machine since the last reading.
+    cpu: f64,
+    /// Resident memory, in KiB.
+    memory: u64,
+    /// Bytes a second read from and written to storage; `None` when
+    /// `/proc/<pid>/io` isn't readable, as for other users' processes.
+    disk: Option<f64>,
+}
 
 #[derive(Debug, Default)]
 pub struct Performance;
@@ -186,24 +232,31 @@ impl Module for Performance {
                     "size": [18, 14],
                     "min": [12, 5],
                     "max": [50, 40],
-                    "settings": [{
-                        "name": "reading",
-                        "kind": "choice",
-                        "choices": ["all", "cpu", "memory", "gpu"],
-                        "default": "all",
-                        "description": "One reading, or all of them",
-                    }],
+                    "settings": GRAPHS.map(|(name, title, default)| json!({
+                        "name": name,
+                        "kind": "bool",
+                        "default": default,
+                        "description": format!("Show the {title} graph"),
+                    })),
                 })),
         ]
     }
 
     fn actions(&self) -> Vec<ActionSpec> {
+        let pid = || ArgSpec::int("pid", "The process, one of yours");
         vec![
             ActionSpec::new("status", "Print the readings now"),
             ActionSpec::new(
                 "detail",
                 "List the busiest processes for a while; the page sends this",
             ),
+            ActionSpec::new("sort", "Order the page's processes").arg(ArgSpec::choice(
+                "by",
+                "What they use most of",
+                Sort::ALL.map(Sort::name),
+            )),
+            ActionSpec::new("end", "Ask a process to quit, with SIGTERM").arg(pid()),
+            ActionSpec::new("kill", "Stop a process at once, with SIGKILL").arg(pid()),
         ]
     }
 
@@ -269,11 +322,22 @@ struct State {
     reading: Reading,
     watches: HashMap<Metric, Watch>,
     histories: HashMap<Metric, History>,
+    /// Reads and writes on the disks, and bytes in and out on the cards.
+    disk: Flow,
+    network: Flow,
     /// Each process's CPU ticks at the last reading, and the machine's.
     process_ticks: HashMap<u32, u64>,
     total_before: u64,
-    /// The busiest processes: name, CPU percent, memory in KiB.
-    top: Vec<(String, f64, u64)>,
+    /// Each process's storage bytes at the last reading, and when that was.
+    process_io: HashMap<u32, u64>,
+    io_before: Option<Instant>,
+    /// Every process at the last reading.
+    rows: Vec<Row>,
+    /// The few the page shows, in `sort` order, with their full names.
+    top: Vec<Row>,
+    sort: Sort,
+    /// The user the daemon runs as, whose processes the page can end.
+    uid: Option<u32>,
     detail_until: Option<Instant>,
     bubble: Option<BubbleId>,
     /// The critical readings the bubble shows, to tell news from new values.
@@ -288,7 +352,7 @@ impl State {
             .then(|| sample::follow_nvidia(settings.interval_ms))
             .flatten();
         let stat = std::fs::read_to_string("/proc/stat").unwrap_or_default();
-        Self {
+        let mut state = Self {
             cores: sample::cores(&stat),
             cpu_before: sample::cpu_times(&stat),
             cpu_sensor: sample::cpu_sensor(),
@@ -298,13 +362,36 @@ impl State {
             reading: Reading::default(),
             watches: HashMap::new(),
             histories: HashMap::new(),
+            disk: Flow::default(),
+            network: Flow::default(),
             process_ticks: HashMap::new(),
             total_before: 0,
+            process_io: HashMap::new(),
+            io_before: None,
+            rows: Vec::new(),
             top: Vec::new(),
+            sort: Sort::default(),
+            uid: sample::owner("self"),
             detail_until: None,
             bubble: None,
             critical_shown: Vec::new(),
-        }
+        };
+        // The first reading then has counts to compare with.
+        state.traffic(Instant::now());
+        state
+    }
+
+    /// Reads the disks' and the cards' byte counts.
+    fn traffic(&mut self, now: Instant) {
+        let read = |path: &str| std::fs::read_to_string(path).unwrap_or_default();
+        self.disk.update(
+            sample::disk_bytes(&read("/proc/diskstats"), sample::is_disk),
+            now,
+        );
+        self.network.update(
+            sample::net_bytes(&read("/proc/net/dev"), sample::is_card),
+            now,
+        );
     }
 
     fn command(&mut self, ctx: &ModuleCtx, command: ModuleCommand) {
@@ -327,6 +414,13 @@ impl State {
                         ))
                     })
                     .collect();
+                let (read, written) = self.disk.speeds;
+                let (down, up) = self.network.speeds;
+                let lines = [
+                    lines.join("\n"),
+                    format!("Disk read\t{}\nDisk write\t{}", speed(read), speed(written)),
+                    format!("Download\t{}\nUpload\t{}", speed(down), speed(up)),
+                ];
                 command.answer(Ok(lines.join("\n")));
             }
             "detail" => {
@@ -338,6 +432,30 @@ impl State {
                     self.publish(ctx);
                 }
                 command.reply(Ok(()));
+            }
+            "sort" => {
+                let by = command.args.str("by").unwrap_or_default();
+                self.sort = Sort::ALL
+                    .into_iter()
+                    .find(|sort| sort.name() == by)
+                    .unwrap_or_default();
+                self.rank();
+                self.publish(ctx);
+                command.reply(Ok(()));
+            }
+            "end" | "kill" => {
+                let pid = command.args.int("pid").unwrap_or_default();
+                let signal = if action == "end" {
+                    libc::SIGTERM
+                } else {
+                    libc::SIGKILL
+                };
+                let result = sample::signal(pid, signal);
+                match &result {
+                    Ok(()) => tracing::info!(pid, action, "signalled a process"),
+                    Err(error) => tracing::info!(pid, action, %error, "can't signal a process"),
+                }
+                command.reply(result);
             }
             other => command.reply(Err(format!("performance has no action {other}"))),
         }
@@ -359,6 +477,7 @@ impl State {
             (None, Some(nvidia)) => nvidia.borrow().clone(),
             (None, None) => None,
         };
+        self.traffic(now);
 
         if self.detail_until.is_some_and(|until| until < now) {
             self.detail_until = None;
@@ -372,6 +491,9 @@ impl State {
             self.processes();
         } else {
             self.process_ticks.clear();
+            self.process_io.clear();
+            self.io_before = None;
+            self.rows.clear();
             self.top.clear();
         }
 
@@ -396,15 +518,23 @@ impl State {
         self.publish(ctx);
     }
 
-    /// Reads every process, and keeps the busiest by CPU since the last
-    /// reading.
+    /// Reads every process: its CPU since the last reading, its memory,
+    /// and, while the page is open, its disk use.
     fn processes(&mut self) {
+        let now = Instant::now();
         let total = self.cpu_before.map_or(0, |times| times.total);
         let elapsed = total.saturating_sub(self.total_before);
         self.total_before = total;
+        // Disk use costs one more file per process, so only for the page.
+        let io_seconds = self.detail_until.is_some().then(|| {
+            self.io_before
+                .replace(now)
+                .map_or(0.0, |then| now.duration_since(then).as_secs_f64())
+        });
         let processes: Vec<Process> = sample::processes();
         let mut ticks = HashMap::with_capacity(processes.len());
-        let mut top: Vec<(u32, String, f64, u64)> = processes
+        let mut io = HashMap::new();
+        self.rows = processes
             .into_iter()
             .map(|process| {
                 let before = self.process_ticks.get(&process.pid).copied();
@@ -416,16 +546,54 @@ impl State {
                     }
                     _ => 0.0,
                 };
-                (process.pid, process.name, cpu, process.memory)
+                let disk = io_seconds.and_then(|seconds| {
+                    let bytes = std::fs::read_to_string(format!("/proc/{}/io", process.pid))
+                        .ok()
+                        .as_deref()
+                        .and_then(sample::process_io)?;
+                    let before = self.process_io.get(&process.pid).copied();
+                    io.insert(process.pid, bytes);
+                    Some(match before {
+                        Some(before) if seconds > 0.0 => {
+                            bytes.saturating_sub(before) as f64 / seconds
+                        }
+                        _ => 0.0,
+                    })
+                });
+                Row {
+                    pid: process.pid,
+                    name: process.name,
+                    cpu,
+                    memory: process.memory,
+                    disk,
+                }
             })
             .collect();
         self.process_ticks = ticks;
-        top.sort_by(|a, b| b.2.total_cmp(&a.2).then(b.3.cmp(&a.3)));
-        top.truncate(TOP);
+        self.process_io = io;
+        self.rank();
+    }
+
+    /// Picks the page's processes from the last reading, in `sort` order.
+    fn rank(&mut self) {
+        let mut rows: Vec<&Row> = self.rows.iter().collect();
+        let by_cpu = |a: &Row, b: &Row| b.cpu.total_cmp(&a.cpu).then(b.memory.cmp(&a.memory));
+        match self.sort {
+            Sort::Cpu => rows.sort_by(|a, b| by_cpu(a, b)),
+            Sort::Memory => rows.sort_by_key(|row| std::cmp::Reverse(row.memory)),
+            Sort::Disk => rows.sort_by(|a, b| {
+                let disk = |row: &Row| row.disk.unwrap_or(-1.0);
+                disk(b).total_cmp(&disk(a)).then_with(|| by_cpu(a, b))
+            }),
+        }
         // Full names only for the few shown: each costs a file read.
-        self.top = top
+        self.top = rows
             .into_iter()
-            .map(|(pid, name, cpu, memory)| (sample::display_name(pid, &name), cpu, memory))
+            .take(TOP)
+            .map(|row| Row {
+                name: sample::display_name(row.pid, &row.name),
+                ..row.clone()
+            })
             .collect();
     }
 
@@ -433,10 +601,11 @@ impl State {
     fn culprit(&self, metric: Metric) -> Option<String> {
         match metric {
             Metric::Cpu | Metric::CpuTemperature => self
-                .top
-                .first()
-                .filter(|(_, cpu, _)| *cpu >= 1.0)
-                .map(|(name, ..)| name.clone()),
+                .rows
+                .iter()
+                .max_by(|a, b| a.cpu.total_cmp(&b.cpu))
+                .filter(|row| row.cpu >= 1.0)
+                .map(|row| sample::display_name(row.pid, &row.name)),
             Metric::Memory => {
                 let mut processes = sample::processes();
                 processes.sort_by_key(|process| std::cmp::Reverse(process.memory));
@@ -518,10 +687,16 @@ impl State {
                 "history": history(Metric::Memory),
             },
             "gpu": gpu,
-            "processes": self.top.iter().map(|(name, cpu, memory)| json!({
-                "name": name,
-                "cpu": (cpu * 10.0).round() / 10.0,
-                "memory": gigabytes(*memory),
+            "disk": flow(&self.disk),
+            "network": flow(&self.network),
+            "sort": self.sort.name(),
+            "processes": self.top.iter().map(|row| json!({
+                "pid": row.pid,
+                "name": row.name,
+                "cpu": (row.cpu * 10.0).round() / 10.0,
+                "memory": gigabytes(row.memory),
+                "disk": row.disk.map(speed),
+                "own": self.uid.is_some() && sample::owner(&row.pid.to_string()) == self.uid,
             })).collect::<Vec<_>>(),
             "critical": critical,
         }));
@@ -543,6 +718,33 @@ impl State {
             let spec = if news { spec.news() } else { spec };
             self.bubble = Some(ctx.show_bubble(spec));
         }
+    }
+}
+
+/// A disk's or a card's two speeds for the page: `in` is read or
+/// received, `out` written or sent; histories in bytes a second.
+fn flow(flow: &Flow) -> Value {
+    json!({
+        "in": speed(flow.speeds.0),
+        "out": speed(flow.speeds.1),
+        "in_history": flow.histories.0.values(),
+        "out_history": flow.histories.1.values(),
+    })
+}
+
+/// `512 B/s`, `3.4 KB/s`, `120 MB/s`, from bytes a second.
+fn speed(bytes: f64) -> String {
+    let mut value = bytes.max(0.0);
+    let mut unit = 0;
+    let units = ["B/s", "KB/s", "MB/s", "GB/s"];
+    while value >= 1024.0 && unit < units.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 || value >= 100.0 {
+        format!("{} {}", value.round(), units[unit])
+    } else {
+        format!("{value:.1} {}", units[unit])
     }
 }
 
@@ -574,5 +776,14 @@ mod settings_example {
         assert!(super::Settings::load(&table("cpu = { warning = 70 }")).is_err());
         assert_eq!(super::gigabytes(512 * 1024), "512 MB");
         assert_eq!(super::gigabytes(3 * 1024 * 1024 + 100 * 1024), "3.1 GB");
+    }
+
+    #[test]
+    fn scales_speeds() {
+        assert_eq!(super::speed(0.0), "0 B/s");
+        assert_eq!(super::speed(512.4), "512 B/s");
+        assert_eq!(super::speed(3.4 * 1024.0), "3.4 KB/s");
+        assert_eq!(super::speed(120.0 * 1024.0 * 1024.0), "120 MB/s");
+        assert_eq!(super::speed(1.2 * 1024.0 * 1024.0 * 1024.0), "1.2 GB/s");
     }
 }

@@ -1,8 +1,11 @@
 import QtQuick
 import qs.island
 
-// The hub's Performance page: CPU, memory and GPU, each with its graph of
-// the last two minutes, then the busiest processes.
+// The hub's Performance page: CPU, memory and GPU, then disk and network,
+// each with its graph of the last two minutes, then the busiest processes,
+// in the order the switch picks. Hovering one of the user's own processes
+// shows End: a click asks to confirm, the next sends SIGTERM, and after
+// 3 seconds one still running offers Force, for SIGKILL.
 Item {
     id: root
 
@@ -10,8 +13,17 @@ Item {
     readonly property var cpu: payload?.cpu ?? null
     readonly property var memory: payload?.memory ?? null
     readonly property var gpu: payload?.gpu ?? null
+    readonly property var disk: payload?.disk ?? null
+    readonly property var network: payload?.network ?? null
     readonly property var processes: payload?.processes ?? []
     readonly property var critical: payload?.critical ?? []
+    readonly property string sort: payload?.sort ?? "cpu"
+
+    // The process whose End button asks to confirm, and when each process
+    // was asked to quit, by pid.
+    property int confirming: -1
+    property var ending: ({})
+    property real now: Date.now()
 
     implicitHeight: column.implicitHeight
 
@@ -25,8 +37,49 @@ Item {
         onTriggered: Daemon.command("performance", "detail", [])
     }
 
+    // A confirm not taken goes back to End.
+    Timer {
+        id: confirmTimer
+
+        interval: 4000
+        onTriggered: root.confirming = -1
+    }
+
+    // Ticks while a process is ending, to offer Force on time.
+    Timer {
+        interval: 250
+        repeat: true
+        running: Object.keys(root.ending).length > 0
+        onTriggered: root.now = Date.now()
+    }
+
+    // Forgets the processes that are gone.
+    onProcessesChanged: {
+        const kept = {};
+        for (const process of processes) {
+            if (ending[process.pid] !== undefined)
+                kept[process.pid] = ending[process.pid];
+        }
+        if (Object.keys(kept).length !== Object.keys(ending).length)
+            ending = kept;
+    }
+
     function hot(label: string): bool {
         return root.critical.some(entry => entry.label === label);
+    }
+
+    function end(pid: int): void {
+        Daemon.command("performance", "end", [`${pid}`]);
+        root.confirming = -1;
+        root.now = Date.now();
+        root.ending = Object.assign({}, root.ending, { [pid]: root.now });
+    }
+
+    function force(pid: int): void {
+        Daemon.command("performance", "kill", [`${pid}`]);
+        // Counting again keeps it on "Ending" until it goes.
+        root.now = Date.now();
+        root.ending = Object.assign({}, root.ending, { [pid]: root.now });
     }
 
     Column {
@@ -81,6 +134,31 @@ Item {
             }
         }
 
+        Row {
+            width: parent.width
+            spacing: 10
+
+            readonly property real tileWidth: (width - spacing) / 2
+
+            Meter {
+                width: parent.tileWidth
+                icon: "disk"
+                title: "Disk"
+                speeds: [["Read", root.disk?.in ?? ""], ["Write", root.disk?.out ?? ""]]
+                values: root.disk?.in_history ?? []
+                others: root.disk?.out_history ?? []
+            }
+
+            Meter {
+                width: parent.tileWidth
+                icon: "ethernet"
+                title: "Network"
+                speeds: [["Download", root.network?.in ?? ""], ["Upload", root.network?.out ?? ""]]
+                values: root.network?.in_history ?? []
+                others: root.network?.out_history ?? []
+            }
+        }
+
         Text {
             visible: root.memory?.swap_total && root.memory.swap_total !== "0 MB"
             text: `Swap ${root.memory?.swap_used ?? ""} of ${root.memory?.swap_total ?? ""}${root.gpu ? ` · ${root.gpu.name}` : ""}`
@@ -89,9 +167,29 @@ Item {
             font.family: Theme.fontFamily
         }
 
-        SectionLabel {
-            topPadding: 4
-            text: "Busiest processes"
+        Item {
+            width: parent.width
+            height: sorter.height
+
+            SectionLabel {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Busiest processes"
+            }
+
+            Segmented {
+                id: sorter
+
+                anchors.right: parent.right
+                width: 240
+                height: 32
+                options: [
+                    { "value": "cpu", "label": "CPU" },
+                    { "value": "memory", "label": "Memory" },
+                    { "value": "disk", "label": "Disk" }
+                ]
+                current: root.sort
+                onPicked: value => Daemon.command("performance", "sort", [value])
+            }
         }
 
         Text {
@@ -112,9 +210,16 @@ Item {
 
                 required property int index
                 readonly property var entry: root.processes[index] ?? {}
+                readonly property int pid: entry.pid ?? -1
+                readonly property var since: root.ending[pid]
+                readonly property string stage: since !== undefined ? (root.now - since >= 3000 ? "force" : "ending") : root.confirming === pid ? "confirm" : "end"
 
                 width: column.width
                 height: 30
+
+                HoverHandler {
+                    id: hover
+                }
 
                 Rectangle {
                     anchors.fill: parent
@@ -135,40 +240,87 @@ Item {
                     font.family: Theme.fontFamily
                 }
 
-                Text {
+                Cell {
                     id: cpuText
 
                     anchors.right: memoryText.left
-                    anchors.rightMargin: 16
-                    anchors.verticalCenter: parent.verticalCenter
                     width: 60
-                    horizontalAlignment: Text.AlignRight
                     text: `${(process.entry.cpu ?? 0).toFixed(1)}%`
-                    color: Theme.muted
-                    font.pixelSize: Theme.textLabel
-                    font.family: Theme.fontFamily
-                    font.features: { "tnum": 1 }
+                    sorted: root.sort === "cpu"
                 }
 
-                Text {
+                Cell {
                     id: memoryText
 
-                    anchors.right: parent.right
-                    anchors.rightMargin: 12
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 70
-                    horizontalAlignment: Text.AlignRight
+                    anchors.right: diskText.left
+                    width: 76
                     text: process.entry.memory ?? ""
-                    color: Theme.muted
-                    font.pixelSize: Theme.textLabel
-                    font.family: Theme.fontFamily
-                    font.features: { "tnum": 1 }
+                    sorted: root.sort === "memory"
+                }
+
+                Cell {
+                    id: diskText
+
+                    anchors.right: endSlot.left
+                    width: 86
+                    text: process.entry.disk ?? ""
+                    sorted: root.sort === "disk"
+                }
+
+                // Room for the button, so the columns don't move.
+                Item {
+                    id: endSlot
+
+                    anchors.right: parent.right
+                    anchors.rightMargin: 4
+                    width: 84
+                    height: parent.height
+
+                    Button {
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        height: 24
+                        visible: process.entry.own === true && (hover.hovered || process.stage !== "end")
+                        enabled: process.stage !== "ending"
+                        tone: process.stage === "end" ? "neutral" : "danger"
+                        text: ({ "end": "End", "confirm": "Confirm", "ending": "Ending", "force": "Force" })[process.stage]
+                        onClicked: {
+                            switch (process.stage) {
+                            case "end":
+                                root.confirming = process.pid;
+                                confirmTimer.restart();
+                                break;
+                            case "confirm":
+                                root.end(process.pid);
+                                break;
+                            case "force":
+                                root.force(process.pid);
+                                break;
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
-    // One reading: its name, value, a detail line and the graph.
+    // A number in the process list; the column the list is sorted by is
+    // brighter.
+    component Cell: Text {
+        property bool sorted: false
+
+        anchors.verticalCenter: parent.verticalCenter
+        horizontalAlignment: Text.AlignRight
+        rightPadding: 12
+        color: sorted ? Theme.foreground : Theme.muted
+        font.pixelSize: Theme.textLabel
+        font.family: Theme.fontFamily
+        font.features: { "tnum": 1 }
+    }
+
+    // One reading: its name, value, a detail line and the graph. With
+    // `speeds`, two named speeds instead, [[name, speed], [name, speed]],
+    // the first drawn in the accent color and the second in green.
     component Meter: Rectangle {
         id: meter
 
@@ -176,7 +328,9 @@ Item {
         property string title: ""
         property string value: ""
         property string detail: ""
+        property var speeds: []
         property var values: []
+        property var others: []
         property bool hot: false
 
         height: 128
@@ -208,6 +362,7 @@ Item {
         }
 
         Text {
+            visible: meter.speeds.length === 0
             x: 12
             y: 32
             text: meter.value
@@ -219,6 +374,7 @@ Item {
         }
 
         Text {
+            visible: meter.speeds.length === 0
             x: 12
             y: 60
             width: parent.width - 24
@@ -229,12 +385,50 @@ Item {
             font.family: Theme.fontFamily
         }
 
+        Row {
+            visible: meter.speeds.length > 0
+            x: 12
+            y: 32
+            spacing: 28
+
+            Repeater {
+                model: meter.speeds
+
+                Column {
+                    required property var modelData
+                    required property int index
+
+                    spacing: 2
+
+                    Text {
+                        text: parent.modelData[1]
+                        color: parent.index === 0 ? Theme.accent : Theme.success
+                        font.pixelSize: Theme.textTitle
+                        font.family: Theme.fontFamily
+                        font.weight: Font.DemiBold
+                        font.features: { "tnum": 1 }
+                    }
+
+                    Text {
+                        text: parent.modelData[0]
+                        color: Theme.muted
+                        font.pixelSize: Theme.textCaption
+                        font.family: Theme.fontFamily
+                    }
+                }
+            }
+        }
+
         Graph {
             x: 1
             y: parent.height - height - 1
             width: parent.width - 2
             height: 40
             values: meter.values
+            others: meter.others
+            // Speeds scale to the busiest moment, but 64 KB/s at least, so
+            // a quiet disk draws a flat line.
+            floor: meter.speeds.length > 0 ? 64 * 1024 : 0
             color: meter.hot ? Theme.danger : Theme.accent
         }
     }
