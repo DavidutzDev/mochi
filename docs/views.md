@@ -66,7 +66,7 @@ A test in `mochi-core` (`tests/design.rs`) reads every view and rejects new raw 
 | `ListRow` | a row with something at the start and controls at the end | `icon` or `image` or `leading`, `title`, `subtitle` (`subtitleFormat: Text.StyledText` for markup, with `linkActivated(link)`), `trailing`, `selected`, `flat`, `marker`, `clicked()` |
 | `Badge` | a count in an accent circle | `count` |
 | `SectionLabel` | the label above a group of controls | `text` |
-| `PanelHeader` | the top of a page or panel: a back button, the title, and items put inside on the right | `title`, `back`, `backClicked()` |
+| `PanelHeader` | the top of a page or panel: a back button, an icon, the title, and items put inside on the right | `title`, `back`, `icon`, `iconColor`, `backClicked()` |
 | `SwitchRow` | a setting that is on or off, as a row whose click flips it | `icon`, `title`, `subtitle`, `checked`, `toggled(checked)` |
 | `SliderRow` | a level on a tile: an icon to click, a thin slider, the percentage and a chevron | `icon`, `value`, `maximum` (the percentage at 1), `reset`, `level`, `opens`, `moved(value)`, `released(value)`, `iconClicked()`, `opened()` |
 | `RollingText` | text whose digits roll when they change, for clocks, percentages and timers | `text`, `pixelSize`, `weight`, `family`, `color`, `animated` |

@@ -33,6 +33,8 @@ Item {
         PanelHeader {
             width: parent.width
             title: root.powered ? "Bluetooth is on" : "Bluetooth is off"
+            icon: "bluetooth"
+            iconColor: root.powered ? Theme.accent : Theme.muted
 
             Switch {
                 anchors.verticalCenter: parent.verticalCenter

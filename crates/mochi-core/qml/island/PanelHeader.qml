@@ -1,12 +1,15 @@
 import QtQuick
 
-// The top of a page or panel: a back button when `back` is set, the title,
-// and anything put inside on the right, like icon buttons.
+// The top of a page or panel: a back button when `back` is set, an icon
+// when `icon` is, the title, and anything put inside on the right, like
+// icon buttons.
 Item {
     id: root
 
     property string title: ""
     property bool back: false
+    property string icon: ""
+    property color iconColor: Theme.foreground
     default property alias actions: trailing.data
     signal backClicked
 
@@ -25,6 +28,14 @@ Item {
             icon: "chevron"
             rotation: 180
             onClicked: root.backClicked()
+        }
+
+        Symbol {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.icon !== ""
+            name: root.icon
+            size: Theme.textTitle + Theme.spaceTiny
+            color: root.iconColor
         }
 
         Text {
