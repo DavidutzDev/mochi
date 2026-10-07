@@ -21,7 +21,7 @@ Rectangle {
 
     implicitWidth: vertical ? 120 : 220
     implicitHeight: vertical ? 112 : 64
-    radius: Theme.radiusLarge
+    radius: Theme.radiusSurface
     color: checked ? fill : hovered ? Theme.raised : Theme.surface
     scale: area.pressed ? 0.97 : 1
 
@@ -106,7 +106,7 @@ Rectangle {
                 elide: Text.ElideRight
                 color: root.checked ? root.ink : Theme.muted
                 opacity: root.checked ? 0.75 : 1
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
             }
         }

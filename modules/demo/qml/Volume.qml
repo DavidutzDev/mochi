@@ -12,7 +12,7 @@ Item {
 
     Row {
         anchors.centerIn: parent
-        spacing: 12
+        spacing: Theme.spaceMedium
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
@@ -22,26 +22,19 @@ Item {
             font.family: Theme.fontFamily
         }
 
-        Rectangle {
+        ProgressBar {
             anchors.verticalCenter: parent.verticalCenter
             width: 150
             height: 6
-            radius: 3
-            color: Theme.raised
+            value: level
+            fill: Theme.accent
+        }
 
-            Rectangle {
-                width: parent.width * level
-                height: parent.height
-                radius: 3
-                color: Theme.accent
-
-                Behavior on width {
-                    NumberAnimation {
-                        duration: 150
-                        easing.type: Easing.OutCubic
-                    }
-                }
-            }
+        RollingText {
+            anchors.verticalCenter: parent.verticalCenter
+            text: `${Math.round(level * 100)}%`
+            pixelSize: Theme.textBody
+            weight: Theme.weightLabel
         }
     }
 }

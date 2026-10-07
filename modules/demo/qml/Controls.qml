@@ -16,15 +16,15 @@ Item {
     property int selected: 0
 
     implicitWidth: 640
-    implicitHeight: column.implicitHeight + 32
+    implicitHeight: column.implicitHeight + Theme.spaceLarge * 2
 
     Column {
         id: column
 
-        x: 16
-        y: 16
-        width: parent.width - 32
-        spacing: 12
+        x: Theme.spaceLarge
+        y: Theme.spaceLarge
+        width: parent.width - Theme.spaceLarge * 2
+        spacing: Theme.spaceMedium
 
         SectionLabel {
             text: "Tiles"
@@ -32,10 +32,10 @@ Item {
 
         Row {
             width: parent.width
-            spacing: 10
+            spacing: Theme.spaceSmall
 
             Tile {
-                width: (parent.width - 10) / 2
+                width: (parent.width - parent.spacing) / 2
                 vertical: false
                 icon: "wifi"
                 title: "Wi-Fi"
@@ -45,7 +45,7 @@ Item {
             }
 
             Tile {
-                width: (parent.width - 10) / 2
+                width: (parent.width - parent.spacing) / 2
                 vertical: false
                 icon: "bluetooth"
                 title: "Bluetooth"
@@ -75,7 +75,7 @@ Item {
 
         Row {
             width: parent.width
-            spacing: 12
+            spacing: Theme.spaceMedium
 
             Slider {
                 anchors.verticalCenter: parent.verticalCenter
@@ -174,7 +174,7 @@ Item {
         }
 
         Row {
-            spacing: 8
+            spacing: Theme.spaceSmall
 
             Button {
                 text: "Neutral"

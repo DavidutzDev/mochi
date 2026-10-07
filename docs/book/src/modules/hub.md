@@ -9,7 +9,9 @@ Clicking the clock opens it, and Escape or a click elsewhere closes it. A card w
 | `toggle`, `close` | Shows or hides the hub |
 | `open [page]` | Opens it, on a page like `power/power` |
 
-Every page, the home included, has the same size, so the panel doesn't jump when you switch: a shorter page leaves room below, a longer one scrolls, and the navbar stays in place. It never grows past the screen.
+The home is a grid of three columns. The hub draws each card's frame, with the card's icon and title at the top, and places the cards in order, each in the first spot where it fits. A card is one or more columns wide and one or two rows tall. With the default modules, the first row has the Network toggles (two columns) and Bluetooth, the second Today, the latest missed notification and the battery, then Now playing takes two columns and two rows beside Clipboard and Colors. Plugin cards, like the weather, come after.
+
+The panel takes the height of what it shows, up to `height` and the screen; a longer page scrolls, and the navbar stays in place.
 
 ```toml
 {{#include ../../../../modules/hub/settings.toml}}

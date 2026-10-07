@@ -64,7 +64,7 @@ Rectangle {
             visible: root.text !== ""
             text: root.text
             color: root.ink
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
             font.weight: Font.DemiBold
         }

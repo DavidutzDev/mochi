@@ -16,48 +16,39 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: 40
         height: 40
-        radius: 8
+        radius: Theme.radiusControl
         gradient: Gradient {
             GradientStop {
                 position: 0
-                color: "#bf5af2"
+                color: Theme.accent
             }
             GradientStop {
                 position: 1
-                color: "#0a84ff"
+                color: Theme.highlight
             }
         }
     }
 
     Column {
         anchors.left: cover.right
-        anchors.leftMargin: 12
+        anchors.leftMargin: Theme.spaceMedium
         anchors.right: parent.right
         anchors.rightMargin: Theme.padding
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 6
+        spacing: Theme.spaceSmall
 
         Text {
             width: parent.width
             text: payload.text || "Some song - Some artist"
             color: Theme.foreground
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
             elide: Text.ElideRight
         }
 
-        Rectangle {
+        ProgressBar {
             width: parent.width
-            height: 4
-            radius: 2
-            color: Theme.raised
-
-            Rectangle {
-                width: parent.width * 0.4
-                height: parent.height
-                radius: 2
-                color: Theme.foreground
-            }
+            value: 0.4
         }
     }
 }

@@ -107,7 +107,7 @@ What the plugin offers other modules, like a card or a page for the hub. The vie
 | `title` | required | Its heading. |
 | `icon` | | A Mochi symbol, like `clock`, or an icon theme name. |
 | `order` | `0` | Lower comes first. |
-| `options` | | Anything else the target reads, like `{ span = 2 }` for a hub card two columns wide. A hub card opens its plugin's page when clicked; `{ page = "<id>" }` picks which, when there are several. A launcher provider takes `prefix`, `search` and `pick`: see [Launcher providers](launcher-providers.md). |
+| `options` | | Anything else the target reads, like `{ span = 2, rows = 1 }` for a hub card two columns wide and one row tall. A card with `rows` gets a view sized to fill them, about 45 pixels tall for one row and 153 for two; without it, the hub measures the view. A hub card opens its plugin's page when clicked; `{ page = "<id>" }` picks which, when there are several. A launcher provider takes `prefix`, `search` and `pick`: see [Launcher providers](launcher-providers.md). |
 
 ## `settings.toml`
 

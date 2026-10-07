@@ -38,7 +38,7 @@ Item {
                 width: list.width
                 implicitWidth: view.width + label.implicitWidth + 3 * 12
                 height: Math.max(Theme.idleHeight, view.height) + 8
-                radius: Theme.radiusMedium
+                radius: Theme.radiusField
                 color: area.containsMouse ? Theme.raised : Theme.surface
 
                 Behavior on color {
@@ -90,7 +90,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: row.modelData.module
                     color: Theme.muted
-                    font.pixelSize: Theme.textLabel
+                    font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily
                 }
             }
