@@ -28,7 +28,7 @@ Leave it out for a plugin of views only, like one that only replaces a builtin v
 |---|---|---|
 | `exec` | required | The program mochid starts, relative to the plugin's directory. |
 | `args` | | Its arguments. |
-| `build` | | A shell command that builds `exec` from source. `mochi plugins install` runs it with `sh` in the plugin's directory for `git:` and `path:` sources, with `MOCHI_PLUGIN_DIR` set; never for `git-release:`. |
+| `build` | | A shell command that builds `exec` from source. `mochi plugins install` runs it with `sh` in the plugin's directory for `git:` and `path:` sources, with `MOCHI_PLUGIN_DIR` set; never for `git-release:`, nor when the plugin has a `flake.nix` and Nix is installed, which builds it with `nix build` instead. |
 
 The backend starts in the plugin's directory, with the socket to mochid as file descriptor 3. See [the plugin protocol](protocol.md#plugin-backends).
 

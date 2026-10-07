@@ -26,6 +26,9 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 - Peak meters in the mixer: while it shows on the island or as the hub's Sound page, each slider's fill dims and the part the sound reaches stays lit. Mochi asks the audio server for peak levels only while a mixer is open, and the input's meter moves only while an app records. The `Slider` control has an optional `level`.
 - The protocol has a `live` message for values a module sends many times a second, like the meters' levels: `ModuleCtx::publish_live` sends one, views get it from `Daemon`'s `live` signal, and the daemon doesn't keep it.
 
+- Plugins without build tools. `programs.mochi.plugins.<id>.src` in home-manager has Nix build a Rust plugin during the switch, from its `Cargo.lock` with no hash to write, and `package` takes one already built. `mochi plugins install` builds a plugin with its `flake.nix` when it has one and Nix is installed, and `mochi.lib.buildPlugin` and `examples/plugins/flake.nix` give plugin authors that flake. A plugin in the Nix store isn't built again.
+- A failed plugin build names the tools missing and the ways around it: installing them, home-manager's `src`, a `git-release:` source when the plugin has releases, or a flake.
+
 ### Fixed
 
 - Discord's notifications showed their Markdown as typed, like `**TEST**`. The notifications module reads it now: `**bold**`, `*italic*`, `__underline__`, `~~strike~~`, `` `code` ``, `[text](url)` links, and `||spoilers||`, shown as "spoiler". Plain `https://` links in any app's notifications become links, and `<s>`, `<strong>`, `<em>`, `<del>` and `<strike>` are kept. `markdown = false` in `[module.notifications]` turns it off.

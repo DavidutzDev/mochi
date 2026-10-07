@@ -63,6 +63,25 @@ focus_minutes = 50
 
 A plugin's settings go in its `[module.<id>]` section, like a builtin's. The plugin's `settings.toml` lists them.
 
+### Without build tools
+
+A `git:` plugin builds on your machine, with whatever its `build` command runs, often `cargo`. When the plugin's repository has a `flake.nix` and Nix is installed, `install` runs `nix build` on the flake instead, and nothing else needs to be installed. The build stays in the Nix store, kept from garbage collection by a link in `~/.local/share/mochi/plugins/.nix/`.
+
+When a build fails, `install` names the tools missing and the ways around it that apply to the plugin:
+
+```
+mochi: chrono: the build failed (exit status: 127): cargo build --release ...
+  `cargo` isn't installed. Ways around it:
+  - install it, then run `mochi plugins install chrono` again
+  - with home-manager, let Nix build it during the switch, with no tools here:
+      programs.mochi.plugins.chrono.src = <a flake input of its repository>;
+  - use its prebuilt releases, if it publishes them:
+      chrono = { source = "git-release:github.com/Someone/mochi-clock" }
+  - ask its author for a flake.nix: with Nix installed, Mochi builds a plugin's flake instead
+```
+
+On NixOS, a prebuilt release only runs if it's a static binary or `programs.nix-ld` is on, since a usual Linux binary looks for its loader in `/lib64`.
+
 ## Pinning and updating
 
 `install` records what each plugin resolved to in `plugins.lock`, next to plugins.toml: the commit for `git:`, the tag and the asset's hash for `git-release:`. From then on, `install` installs exactly that, on this machine or another one with the same files, until you update:
@@ -103,4 +122,23 @@ programs.mochi = {
 };
 ```
 
-Installing stays your step: run `mochi plugins install` after switching. Nix doesn't fetch or build plugins.
+With a string, installing stays your step: run `mochi plugins install` after switching.
+
+Nix can build the plugin during the switch instead, so the machine needs no build tools and there's no install step. Add the plugin's repository as a flake input and give it as `src`:
+
+```nix
+# flake.nix
+inputs.mochi-pomodoro = {
+  url = "github:User/mochi-pomodoro";
+  flake = false;
+};
+
+# home-manager
+programs.mochi.plugins.pomodoro = {
+  src = inputs.mochi-pomodoro;
+  # Native libraries its backend links, if any.
+  buildInputs = [ pkgs.alsa-lib ];
+};
+```
+
+This works for Rust plugins with a `Cargo.lock`, git dependencies included, and needs no hash. plugins.toml then points at the build in the Nix store, and `nix flake update mochi-pomodoro` moves it to the latest commit. A plugin with its own flake can be given as `package` instead: `programs.mochi.plugins.pomodoro.package = inputs.mochi-pomodoro.packages.${pkgs.system}.default;`.

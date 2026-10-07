@@ -522,7 +522,9 @@ A new module: the apps' tray icons.
 - [ ] `git-release:` for Forgejo, Gitea and GitLab
 - [ ] Archive sources (`https://…/plugin.tar.gz` with a hash)
 - [ ] A plugin replacing a builtin module entirely
-- [ ] Building plugins with Nix, for declarative setups
+- [x] Building plugins with Nix, for declarative setups: home-manager's `plugins.<id>.src` and `package`, `lib.buildPlugin`, and flakes in `mochi plugins install`
+- [ ] `lib.buildPlugin` for plugins in other languages than Rust
+- [ ] Static musl binaries in `examples/plugins/release.yml`, so `git-release:` plugins run on NixOS without nix-ld
 - [x] Release workflow template for plugin repositories: `examples/plugins/release.yml`
 - [x] Settings checks for plugins, from their `settings.toml`
 
