@@ -80,6 +80,9 @@ pub enum DaemonMessage {
     /// The latest state a module published. Sent to the UI after `hello` for
     /// every module, then whenever it changes.
     State { module: String, state: Value },
+    /// A passing value a module sends many times a second, like an audio
+    /// meter's level. The daemon doesn't keep it or send it again.
+    Live { module: String, value: Value },
     /// What the island shows now. `None` when no activity exists at all.
     Present {
         activity: Option<Activity>,
@@ -308,6 +311,10 @@ mod tests {
         round_trip_daemon(DaemonMessage::State {
             module: "idle".into(),
             state: json!({ "unread": 2 }),
+        });
+        round_trip_daemon(DaemonMessage::Live {
+            module: "audio".into(),
+            value: json!({ "output": 0.5 }),
         });
         round_trip_daemon(DaemonMessage::Present {
             activity: Some(activity()),

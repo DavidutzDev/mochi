@@ -2,8 +2,9 @@ import QtQuick
 import qs.island
 
 // The mixer, for the hub page and the island: the output and the input,
-// each with a list of devices to switch to, then every app playing sound.
-// The width comes from the parent.
+// each with a list of devices to switch to, then every app playing sound,
+// one row per app with its streams inside. Every slider has a peak meter
+// while the mixer shows. The width comes from the parent.
 Column {
     id: root
 
@@ -13,10 +14,63 @@ Column {
     readonly property bool connected: payload?.connected ?? false
     readonly property int maxVolume: payload?.max_volume ?? 100
     readonly property var apps: payload?.apps ?? []
+    readonly property var outputs: payload?.outputs ?? []
     // Which device list is open: "output", "input" or "".
     property string choosing: ""
+    // The apps showing their streams, by name.
+    property var opened: ({})
+    // Whose list of outputs to move to is open: app:<name>, stream:<id>
+    // or "".
+    property string routing: ""
+    // The meters' levels, from the module's live values: {output, input,
+    // streams, apps}. Null until the first come.
+    property var levels: null
+    // Names this view to the module, which runs the meters while any view
+    // asks for them.
+    readonly property string viewer: `mixer-${Math.random().toString(36).slice(2)}`
+
+    Component.onCompleted: Daemon.command("audio", "meters", [viewer, "on"])
+    Component.onDestruction: Daemon.command("audio", "meters", [viewer, "off"])
+
+    // Each ask lasts 10 seconds.
+    Timer {
+        interval: 4000
+        running: true
+        repeat: true
+        onTriggered: Daemon.command("audio", "meters", [root.viewer, "on"])
+    }
+
+    Connections {
+        target: Daemon
+
+        function onLive(module: string, value: var): void {
+            if (module === "audio")
+                root.levels = value;
+        }
+    }
 
     spacing: 6
+
+    function toggleOpen(app: string): void {
+        const next = Object.assign({}, opened);
+        if (next[app])
+            delete next[app];
+        else
+            next[app] = true;
+        opened = next;
+    }
+
+    function toggleRouting(key: string): void {
+        routing = routing === key ? "" : key;
+    }
+
+    // The icon of the output an app plays through, for its button; none
+    // when there's nowhere else to move it.
+    function routeIcon(output: var): string {
+        if (outputs.length < 2)
+            return "";
+        return outputs.find(device => device.name === output)?.icon ?? "speakers";
+    }
 
     function level(device: var): string {
         if (device.muted || device.volume === 0)
@@ -86,6 +140,7 @@ Column {
                 choosable: section.modelData.devices.length > 1
                 choosing: root.choosing === section.modelData.kind
                 onChoose: root.choosing = choosing ? "" : section.modelData.kind
+                level: root.levels === null ? -1 : (root.levels[section.modelData.kind] ?? 0)
             }
 
             Repeater {
@@ -128,27 +183,121 @@ Column {
         font.family: Theme.fontFamily
     }
 
+    // The outputs to move an app or one of its streams to, under its row.
+    component Routes: Column {
+        id: routes
+
+        // What `move` names: an app's name or a stream's id.
+        property string target: ""
+        property string key: ""
+        // The output it plays through now.
+        property var current: null
+
+        Repeater {
+            model: root.routing === routes.key ? root.outputs.length : 0
+
+            delegate: ListRow {
+                required property int index
+                readonly property var modelData: root.outputs[index] ?? {}
+
+                width: routes.width
+                height: 40
+                flat: true
+                marker: true
+                selected: modelData.name === routes.current
+                leadingSize: 22
+                icon: modelData.icon ?? ""
+                title: modelData.description ?? ""
+                onClicked: {
+                    Daemon.command("audio", "move", [routes.target, modelData.name]);
+                    root.routing = "";
+                }
+            }
+        }
+    }
+
     ListView {
         width: parent.width
-        height: Math.min(root.apps.length, root.appRows) * 52
+        height: Math.min(contentHeight, root.appRows * 52)
         visible: root.connected && root.apps.length > 0
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         model: root.apps.length
 
-        delegate: Volume {
+        delegate: Column {
+            id: group
+
             required property int index
             readonly property var modelData: root.apps[index] ?? {}
+            readonly property string app: modelData.id ?? ""
+            readonly property var streams: modelData.streams ?? []
+            readonly property bool open: streams.length > 1 && root.opened[app] === true
 
             width: ListView.view.width
-            opacity: (modelData.playing ?? true) ? 1 : 0.6
-            target: modelData.id ?? ""
-            title: modelData.name ?? ""
-            subtitle: modelData.title ?? ""
-            appIcon: modelData.icon ?? (modelData.name ?? "").toLowerCase()
-            volume: modelData.volume ?? 0
-            muted: modelData.muted ?? false
-            maxVolume: root.maxVolume
+
+            Volume {
+                width: parent.width
+                opacity: (group.modelData.playing ?? true) ? 1 : 0.6
+                target: group.app
+                title: group.modelData.name ?? ""
+                subtitle: group.streams.length > 1 ? `${group.streams.length} streams` : (group.modelData.title ?? "")
+                appIcon: group.modelData.icon ?? group.app.toLowerCase()
+                volume: group.modelData.volume ?? 0
+                muted: group.modelData.muted ?? false
+                maxVolume: root.maxVolume
+                choosable: group.streams.length > 1
+                choosing: group.open
+                onChoose: root.toggleOpen(group.app)
+                routeIcon: root.routeIcon(group.modelData.output)
+                routing: root.routing === `app:${group.app}`
+                onRoute: root.toggleRouting(`app:${group.app}`)
+                level: root.levels === null ? -1 : (root.levels.apps?.[group.app] ?? 0)
+            }
+
+            Routes {
+                width: parent.width
+                target: group.app
+                key: `app:${group.app}`
+                current: group.modelData.output ?? null
+            }
+
+            Repeater {
+                model: group.open ? group.streams.length : 0
+
+                delegate: Column {
+                    id: single
+
+                    required property int index
+                    readonly property var stream: group.streams[index] ?? {}
+                    readonly property string streamId: stream.id ?? ""
+
+                    x: 24
+                    width: group.width - 24
+
+                    Volume {
+                        width: parent.width
+                        opacity: (single.stream.playing ?? true) ? 1 : 0.6
+                        target: single.streamId
+                        title: (single.stream.title ?? "") !== "" ? single.stream.title : (group.modelData.name ?? "")
+                        symbol: "music"
+                        mutedSymbol: "volume-muted"
+                        volume: single.stream.volume ?? 0
+                        muted: single.stream.muted ?? false
+                        maxVolume: root.maxVolume
+                        routeIcon: root.routeIcon(single.stream.output)
+                        routing: root.routing === `stream:${single.streamId}`
+                        onRoute: root.toggleRouting(`stream:${single.streamId}`)
+                        level: root.levels === null ? -1 : (root.levels.streams?.[single.streamId] ?? 0)
+                    }
+
+                    Routes {
+                        width: parent.width
+                        target: single.streamId
+                        key: `stream:${single.streamId}`
+                        current: single.stream.output ?? null
+                    }
+                }
+            }
         }
     }
 }

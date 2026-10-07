@@ -135,6 +135,8 @@ pub struct ModuleRequest {
 #[derive(Debug)]
 pub enum Request {
     PublishState(Value),
+    /// A passing value for the views; see [`ModuleCtx::publish_live`].
+    PublishLive(Value),
     Present {
         id: ActivityId,
         spec: ActivitySpec,
@@ -328,6 +330,15 @@ impl ModuleCtx {
     /// Replaces the module's state, which the UI can read from any view.
     pub fn publish_state(&self, state: Value) {
         self.send(Request::PublishState(state));
+    }
+
+    /// Sends the views a passing value that changes many times a second,
+    /// like an audio meter's level. Unlike [`publish_state`](Self::publish_state)
+    /// the daemon doesn't keep it, a reconnecting UI doesn't get it again, and
+    /// the module's state stays as it was. Views read it from the `live`
+    /// signal of `Daemon`.
+    pub fn publish_live(&self, value: Value) {
+        self.send(Request::PublishLive(value));
     }
 
     /// Submits an activity to the arbiter and returns its id at once. Whether

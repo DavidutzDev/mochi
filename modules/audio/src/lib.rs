@@ -3,8 +3,14 @@
 //! audio server over the PulseAudio protocol.
 //!
 //! It shows as a hub page, and `mochi ipc audio toggle`, bound to a key,
-//! opens the same mixer on the island. The `volume`, `mute`, `output` and
-//! `input` actions change things from keybinds and scripts.
+//! opens the same mixer on the island. The `volume`, `mute`, `output`,
+//! `input` and `move` actions change things from keybinds and scripts.
+//!
+//! The streams of one app share a row. Each slider shows a peak meter while
+//! a view of the mixer is open: the view sends `meters on` every few
+//! seconds and `meters off` when it closes, and only then does the audio
+//! thread open its peak-detecting streams. The levels go to the views as
+//! live values, 20 times a second, so they never touch the module's state.
 //!
 //! Settings in `config.toml`, all optional:
 //!
@@ -13,8 +19,12 @@
 //! max_volume = 100   # the top of the sliders and the OSD's bar, up to 300
 //! ```
 
+mod meter;
 mod mixer;
 mod pulse;
+
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
@@ -25,12 +35,18 @@ use serde::Deserialize;
 use serde_json::Value;
 use tokio::sync::mpsc;
 
+use crate::meter::Peaks;
 use crate::pulse::{Command, Handle, Report, Snapshot, Target};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
 /// The loudest a slider goes; past it, sound distorts.
 const LOUDEST: u32 = 300;
+/// How often the meters' levels go to the views.
+const METER_TICK: Duration = Duration::from_millis(50);
+/// How long a view's `meters on` lasts; views send it again before then, so
+/// meters stop on their own when the UI goes away without saying so.
+const METER_LEASE: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Default)]
 pub struct Audio;
@@ -89,7 +105,7 @@ impl Module for Audio {
         let target = || {
             ArgSpec::string(
                 "target",
-                "output, input, an app's id from the mixer, or a device's name",
+                "output, input, a device's name, an app's name for all its streams, or a stream's id",
             )
         };
         vec![
@@ -114,6 +130,25 @@ impl Module for Audio {
                 "name",
                 "The device's name, as the mixer lists it",
             )),
+            ActionSpec::new("move", "Play an app through another output")
+                .arg(ArgSpec::string(
+                    "app",
+                    "An app's name for all its streams, or a stream's id",
+                ))
+                .arg(ArgSpec::string(
+                    "device",
+                    "The output's name or description, or output for the one in use",
+                )),
+            ActionSpec::new(
+                "meters",
+                "Run the level meters for a view of the mixer; the mixer sends this",
+            )
+            .arg(ArgSpec::string("view", "A name the view picks for itself"))
+            .arg(ArgSpec::choice(
+                "state",
+                "on for the next 10 seconds, or off",
+                ["on", "off"],
+            )),
         ]
     }
 
@@ -122,14 +157,21 @@ impl Module for Audio {
             // check_settings already refused anything out of range.
             let settings: Settings = ctx.settings()?;
             let (sender, mut reports) = mpsc::unbounded_channel();
-            let handle = pulse::spawn(sender)?;
+            let peaks = Peaks::default();
+            let handle = pulse::spawn(sender, peaks.clone())?;
             let mut state = State {
                 max_volume: settings.max_volume.clamp(1, LOUDEST),
                 handle,
                 snapshot: None,
                 shown: None,
+                peaks,
+                viewers: HashMap::new(),
+                levels: HashMap::new(),
+                sent: Value::Null,
             };
             state.publish(&ctx);
+            let mut ticks = tokio::time::interval(METER_TICK);
+            ticks.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
             loop {
                 tokio::select! {
@@ -148,6 +190,7 @@ impl Module for Audio {
                         };
                         state.publish(&ctx);
                     }
+                    _ = ticks.tick(), if !state.viewers.is_empty() => state.meter(&ctx),
                 }
             }
         })
@@ -161,6 +204,14 @@ struct State {
     /// `None` while the audio server isn't connected.
     snapshot: Option<Snapshot>,
     shown: Option<ActivityId>,
+    /// What the audio thread's meters measured since the last tick.
+    peaks: Peaks,
+    /// The views that want meters, and until when.
+    viewers: HashMap<String, Instant>,
+    /// Each meter's level as last sent, to let it fall.
+    levels: HashMap<String, f32>,
+    /// The levels last sent, to send nothing while they stay the same.
+    sent: Value,
 }
 
 impl State {
@@ -178,19 +229,33 @@ impl State {
                 self.close(ctx);
                 Ok(())
             }
-            "volume" => self.target(&command).and_then(|(target, (now, _))| {
+            "volume" => self.targets(&command).and_then(|(targets, (now, _))| {
                 let level = command.args.str("level").unwrap_or_default();
                 let level = mixer::level(level, now, self.max_volume.max(now))?;
-                self.handle.send(Command::Volume(target, level))
+                targets
+                    .into_iter()
+                    .try_for_each(|target| self.handle.send(Command::Volume(target, level)))
             }),
-            "mute" => self.target(&command).and_then(|(target, (_, muted))| {
+            "mute" => self.targets(&command).and_then(|(targets, (_, muted))| {
                 let muted = match command.args.str("state") {
                     Some("on") => true,
                     Some("off") => false,
                     _ => !muted,
                 };
-                self.handle.send(Command::Mute(target, muted))
+                targets
+                    .into_iter()
+                    .try_for_each(|target| self.handle.send(Command::Mute(target, muted)))
             }),
+            "move" => self.move_app(&command),
+            "meters" => {
+                let view = command.args.str("view").unwrap_or_default().to_owned();
+                if command.args.str("state") == Some("off") {
+                    self.viewers.remove(&view);
+                } else {
+                    self.viewers.insert(view, Instant::now() + METER_LEASE);
+                }
+                self.follow_viewers()
+            }
             "output" | "input" => {
                 let name = command.args.str("name").unwrap_or_default().to_owned();
                 let snapshot = self.snapshot.as_ref();
@@ -219,14 +284,71 @@ impl State {
     }
 
     /// What a command names, with its volume and mute now.
-    fn target(&self, command: &ModuleCommand) -> Result<(Target, (u32, bool)), String> {
-        let snapshot = self
-            .snapshot
+    fn targets(&self, command: &ModuleCommand) -> Result<(Vec<Target>, (u32, bool)), String> {
+        let snapshot = self.connected()?;
+        let targets = mixer::targets(snapshot, command.args.str("target").unwrap_or_default())?;
+        let current = mixer::current(snapshot, &targets).ok_or("it just went away")?;
+        Ok((targets, current))
+    }
+
+    fn connected(&self) -> Result<&Snapshot, String> {
+        self.snapshot
             .as_ref()
-            .ok_or("the audio server isn't connected")?;
-        let target = mixer::target(snapshot, command.args.str("target").unwrap_or_default())?;
-        let current = mixer::current(snapshot, &target).ok_or("it just went away")?;
-        Ok((target, current))
+            .ok_or_else(|| "the audio server isn't connected".to_owned())
+    }
+
+    /// Moves every stream of an app, or one stream, to another output.
+    /// PipeWire remembers it for the app the next time it plays.
+    fn move_app(&self, command: &ModuleCommand) -> Result<(), String> {
+        let snapshot = self.connected()?;
+        let streams = mixer::streams(snapshot, command.args.str("app").unwrap_or_default())?;
+        let sink = mixer::sink(snapshot, command.args.str("device").unwrap_or_default())?;
+        streams
+            .into_iter()
+            .try_for_each(|stream| self.handle.send(Command::Move(stream, sink.to_owned())))
+    }
+
+    /// Drops the views that stopped asking, and tells the audio thread
+    /// whether the meters should run.
+    fn follow_viewers(&mut self) -> Result<(), String> {
+        let now = Instant::now();
+        self.viewers.retain(|_, until| *until > now);
+        let metering = !self.viewers.is_empty();
+        if !metering {
+            self.levels.clear();
+            self.sent = Value::Null;
+        }
+        self.handle.send(Command::Meters(metering))
+    }
+
+    /// Sends the views the meters' levels, when they changed.
+    fn meter(&mut self, ctx: &ModuleCtx) {
+        let now = Instant::now();
+        if self.viewers.values().any(|until| *until <= now) {
+            let _ = self.follow_viewers();
+            if self.viewers.is_empty() {
+                return;
+            }
+        }
+        let Some(snapshot) = self.snapshot.as_ref() else {
+            return;
+        };
+        let peaks = meter::take(&self.peaks);
+        for (key, level) in &mut self.levels {
+            if !peaks.contains_key(key) {
+                *level = mixer::fall(*level, None);
+            }
+        }
+        for (key, peak) in peaks {
+            let level = self.levels.entry(key).or_default();
+            *level = mixer::fall(*level, Some(peak));
+        }
+        self.levels.retain(|_, level| *level > 0.0);
+        let levels = mixer::levels(snapshot, &self.levels);
+        if levels != self.sent {
+            ctx.publish_live(levels.clone());
+            self.sent = levels;
+        }
     }
 
     fn open(&mut self, ctx: &ModuleCtx) {

@@ -98,6 +98,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `modules` | `modules` | UI |
 | `contributions` | `contributions` | UI |
 | `state` | `module`, `state` (any JSON) | UI |
+| `live` | `module`, `value` (any JSON): a value that changes many times a second, like an audio meter's level. The daemon doesn't keep it, so a reconnecting UI doesn't get it again | UI |
 | `present` | `activity` (object or `null`), `resting` (optional) | UI |
 | `bubbles` | `bubbles`, `overflow` (optional) | UI |
 | `theme` | `theme` | UI |
