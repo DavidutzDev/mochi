@@ -164,6 +164,7 @@ impl Module for Launcher {
                 files: settings.files,
                 index: files::Index::default(),
                 indexing: false,
+                watching: true,
                 indexed,
                 apps: Vec::new(),
                 query: String::new(),
@@ -193,7 +194,7 @@ impl Module for Launcher {
                         Some(_) => {}
                     },
                     Some(answer) = answers.recv() => state.answered(&ctx, answer),
-                    Some(entries) = indexes.recv() => state.indexed(&ctx, entries),
+                    Some(update) = indexes.recv() => state.indexed(&ctx, update),
                     () = wait(due) => state.ask(&ctx),
                 }
             }
@@ -227,7 +228,10 @@ struct State {
     files: FilesSettings,
     index: files::Index,
     indexing: bool,
-    indexed: mpsc::UnboundedSender<Vec<files::Entry>>,
+    /// Whether to follow changes with inotify. Turned off for good when
+    /// the system runs out of watches.
+    watching: bool,
+    indexed: mpsc::UnboundedSender<files::Update>,
     providers: Vec<Provider>,
     /// Read again every time the launcher opens, so new installs show up.
     apps: Vec<App>,
@@ -335,7 +339,8 @@ impl State {
         self.listed.clear();
     }
 
-    /// Builds the file index again, in the background.
+    /// Builds the file index again, in the background. While its watches
+    /// follow changes, only the first time.
     fn reindex(&mut self) {
         if self.indexing
             || !self
@@ -346,21 +351,26 @@ impl State {
             return;
         }
         self.indexing = true;
-        let settings = self.files.clone();
-        let sender = self.indexed.clone();
-        tokio::task::spawn_blocking(move || {
-            let entries = files::build(&files::roots(&settings), &settings);
-            let _ = sender.send(entries);
-        });
+        files::spawn(self.files.clone(), self.watching, self.indexed.clone());
     }
 
-    fn indexed(&mut self, ctx: &ModuleCtx, entries: Vec<files::Entry>) {
-        tracing::info!(entries = entries.len(), "indexed files");
-        self.index = files::Index {
-            entries,
-            built: Some(std::time::Instant::now()),
-        };
-        self.indexing = false;
+    fn indexed(&mut self, ctx: &ModuleCtx, update: files::Update) {
+        match update {
+            files::Update::Built { entries, live } => {
+                tracing::info!(entries = entries.len(), live, "indexed files");
+                self.index = files::Index::new(entries, live, self.files.max);
+                self.watching = live;
+                self.indexing = false;
+            }
+            files::Update::Changed(changes) => {
+                tracing::debug!(changes = changes.len(), "files changed");
+                self.index.apply(changes);
+            }
+            files::Update::Lost => {
+                self.index.lost();
+                self.watching = false;
+            }
+        }
         if self.shown.is_some() && self.query.starts_with('/') {
             self.search(ctx);
             self.refresh(ctx);

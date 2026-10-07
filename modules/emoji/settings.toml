@@ -1,6 +1,7 @@
 # Emoji: an emoji picker. `mochi ipc emoji toggle`, bound to a key, opens a
 # grid on the island; `:` in the launcher searches them too. The emoji you
-# pick are kept in $XDG_STATE_HOME/mochi/emoji.json and come first.
+# pick are kept in $XDG_STATE_HOME/mochi/emoji.json and come first, with the
+# skin tones you set in the picker.
 [module.emoji]
 # How many recently picked emoji to remember. They fill the Recent tab,
 # come first in the launcher before you type, and rank a little higher in

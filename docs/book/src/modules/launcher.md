@@ -24,7 +24,7 @@ A query that starts with a provider's prefix asks only that provider, with the r
 
 `mochi ipc launcher open :` opens the launcher with `:` typed, so a key can go straight to a provider.
 
-The file index covers your home folder without hidden files and folders and build folders like `node_modules` and `target`, up to 200 000 entries. It's built when the launcher starts, and again in the background when you open the launcher and the index is more than 15 seconds old; the results update when it's ready.
+The file index covers your home folder without hidden files and folders and build folders like `node_modules` and `target`, up to 200 000 entries. It's built when the launcher starts, and then follows your files through inotify: a file or folder you make, delete, rename or move shows up in the results, or leaves them, right away, even with the launcher open. Every indexed folder takes one inotify watch. When the system runs out (the `fs.inotify.max_user_watches` sysctl, 8192 on older kernels), mochid logs it once and goes back to building the index again in the background when you open the launcher and it's more than 15 seconds old.
 
 The calculator knows `+ - * / % ^`, parentheses, `!`, `pi`, `e`, `tau`, and the functions `sqrt cbrt abs floor ceil round sin cos tan asin acos atan sinh cosh tanh ln log log2 exp min max pow`, with trig in radians. A number before a name or a parenthesis multiplies, so `2pi` works.
 

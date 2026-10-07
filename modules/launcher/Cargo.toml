@@ -9,6 +9,8 @@ publish.workspace = true
 
 [dependencies]
 include_dir.workspace = true
+inotify.workspace = true
+libc.workspace = true
 mochi-core.workspace = true
 nucleo-matcher.workspace = true
 serde.workspace = true

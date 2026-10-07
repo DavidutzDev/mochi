@@ -39,7 +39,9 @@
 #   url = "https://crates.io/search?q=%s"
 
 # The files provider searches an index of your home folder, built when the
-# launcher starts and again when it opens and the index is 15 seconds old.
+# launcher starts and kept up to date through inotify, one watch per folder.
+# Without enough watches (fs.inotify.max_user_watches), it's built again
+# when the launcher opens and the index is 15 seconds old.
 # Hidden files and folders are left out, and these:
 #
 #   [module.launcher.files]

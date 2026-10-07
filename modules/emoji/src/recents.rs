@@ -1,7 +1,19 @@
-//! The emoji picked last, most recent first, kept in
-//! `$XDG_STATE_HOME/mochi/emoji.json` as a JSON list.
+//! The emoji picked last, most recent first, and the skin tones, kept in
+//! `$XDG_STATE_HOME/mochi/emoji.json`:
+//!
+//! ```json
+//! {"recent": ["👍", "🐱"], "tone": "medium", "tones": {"👋": "dark"}}
+//! ```
+//!
+//! The recents are the emoji without a tone. Before tones, the file was the
+//! list alone, which still reads.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+use serde::{Deserialize, Serialize};
+
+use crate::tones::{Tone, Tones};
 
 #[derive(Debug)]
 pub struct Recents {
@@ -31,26 +43,50 @@ impl Recents {
         self.list.insert(0, id.to_owned());
         self.list.truncate(self.cap);
     }
+}
 
-    /// Reads the file. A missing or broken one leaves the list empty.
-    pub fn load(&mut self, file: &Path) {
-        self.list = std::fs::read_to_string(file)
-            .ok()
-            .and_then(|text| serde_json::from_str::<Vec<String>>(&text).ok())
-            .unwrap_or_default();
-        self.list.truncate(self.cap);
-    }
+/// The file's contents.
+#[derive(Debug, Default, Serialize, Deserialize)]
+#[serde(default)]
+struct Saved {
+    recent: Vec<String>,
+    tone: Tone,
+    tones: BTreeMap<String, Tone>,
+}
 
-    /// Writes the file through a temporary one, so it's never half written.
-    pub fn save(&self, file: &Path) -> std::io::Result<()> {
-        if let Some(dir) = file.parent() {
-            std::fs::create_dir_all(dir)?;
-        }
-        let temporary = file.with_extension("json.tmp");
-        let text = serde_json::to_string(&self.list).map_err(std::io::Error::other)?;
-        std::fs::write(&temporary, text)?;
-        std::fs::rename(&temporary, file)
+/// Reads the file. A missing or broken one leaves both empty.
+pub fn load(file: &Path, recents: &mut Recents, tones: &mut Tones) {
+    let text = std::fs::read_to_string(file).unwrap_or_default();
+    let saved = serde_json::from_str::<Saved>(&text)
+        .or_else(|_| {
+            serde_json::from_str::<Vec<String>>(&text).map(|recent| Saved {
+                recent,
+                ..Saved::default()
+            })
+        })
+        .unwrap_or_default();
+    recents.list = saved.recent;
+    recents.list.truncate(recents.cap);
+    *tones = Tones {
+        default: saved.tone,
+        chosen: saved.tones,
+    };
+}
+
+/// Writes the file through a temporary one, so it's never half written.
+pub fn save(file: &Path, recents: &Recents, tones: &Tones) -> std::io::Result<()> {
+    if let Some(dir) = file.parent() {
+        std::fs::create_dir_all(dir)?;
     }
+    let temporary = file.with_extension("json.tmp");
+    let saved = Saved {
+        recent: recents.list.clone(),
+        tone: tones.default,
+        tones: tones.chosen.clone(),
+    };
+    let text = serde_json::to_string(&saved).map_err(std::io::Error::other)?;
+    std::fs::write(&temporary, text)?;
+    std::fs::rename(&temporary, file)
 }
 
 /// `$XDG_STATE_HOME/mochi/emoji.json`, falling back to `~/.local/state`.
@@ -91,17 +127,41 @@ mod tests {
         let mut recents = Recents::new(8);
         recents.push("🐱");
         recents.push("😀");
-        recents.save(&file).unwrap();
-        assert_eq!(std::fs::read_to_string(&file).unwrap(), r#"["😀","🐱"]"#);
+        let mut tones = Tones {
+            default: Tone::MediumLight,
+            ..Tones::default()
+        };
+        tones.chosen.insert("👋".into(), Tone::Dark);
+        save(&file, &recents, &tones).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&file).unwrap(),
+            r#"{"recent":["😀","🐱"],"tone":"medium-light","tones":{"👋":"dark"}}"#
+        );
         assert!(!file.with_extension("json.tmp").exists());
 
         let mut again = Recents::new(8);
-        again.load(&file);
+        let mut tones_again = Tones::default();
+        load(&file, &mut again, &mut tones_again);
         assert_eq!(again.list(), ["😀", "🐱"]);
+        assert_eq!(tones_again, tones);
         // A smaller cap than before keeps the newest.
         let mut fewer = Recents::new(1);
-        fewer.load(&file);
+        load(&file, &mut fewer, &mut tones_again);
         assert_eq!(fewer.list(), ["😀"]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn the_old_list_still_reads() {
+        let dir = std::env::temp_dir().join(format!("mochi-emoji-old-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("emoji.json");
+        std::fs::write(&file, r#"["😀","🐱"]"#).unwrap();
+        let mut recents = Recents::new(8);
+        let mut tones = Tones::default();
+        load(&file, &mut recents, &mut tones);
+        assert_eq!(recents.list(), ["😀", "🐱"]);
+        assert_eq!(tones, Tones::default());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -112,9 +172,10 @@ mod tests {
         let file = dir.join("emoji.json");
         std::fs::write(&file, "not json").unwrap();
         let mut recents = Recents::new(8);
-        recents.load(&file);
+        let mut tones = Tones::default();
+        load(&file, &mut recents, &mut tones);
         assert!(recents.list().is_empty());
-        recents.load(&dir.join("missing.json"));
+        load(&dir.join("missing.json"), &mut recents, &mut tones);
         assert!(recents.list().is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
     }
