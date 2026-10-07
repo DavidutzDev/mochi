@@ -112,7 +112,7 @@ impl Module for BatteryModule {
             ContributionSpec::new("hub", "card", "level", "Card", "Battery")
                 .icon("bolt")
                 .order(17)
-                .options(json!({ "span": 1 })),
+                .options(json!({ "span": 1, "rows": 1 })),
             // The same card on the desktop; it steps aside without a battery.
             ContributionSpec::new("widgets", "widget", "level", "Card", "Battery")
                 .icon("bolt")

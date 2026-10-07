@@ -16,7 +16,7 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 4
+        spacing: Theme.spaceTiny
 
         Gauge {
             anchors.verticalCenter: parent.verticalCenter
@@ -25,14 +25,12 @@ Item {
             size: 13
         }
 
-        Text {
+        RollingText {
             anchors.verticalCenter: parent.verticalCenter
             text: `${root.payload.level ?? 0}%`
             color: root.tint
-            font.pixelSize: Theme.textCaption
-            font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
-            font.features: { "tnum": 1 }
+            pixelSize: Theme.textCaption
+            weight: Theme.weightTitle
         }
     }
 

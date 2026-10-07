@@ -27,7 +27,7 @@ Item {
         visible: !root.available
         text: "NetworkManager isn't running"
         color: Theme.muted
-        font.pixelSize: Theme.textSubtitle
+        font.pixelSize: Theme.textBody
         font.family: Theme.fontFamily
     }
 
@@ -36,77 +36,51 @@ Item {
 
         visible: root.available
         width: parent.width
-        spacing: 10
+        spacing: Theme.spaceSmall
 
         // The connection, and the switches.
-        Item {
+        PanelHeader {
             width: parent.width
-            height: 34
-
-            Symbol {
-                id: statusIcon
-
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                name: root.payload?.status?.icon ?? "offline"
-                size: 18
+            title: {
+                const status = root.payload?.status;
+                if (!status)
+                    return "";
+                return status.vpn ? `${status.label} · ${status.vpn}` : status.label;
             }
 
             Text {
-                anchors.left: statusIcon.right
-                anchors.leftMargin: 10
-                anchors.right: switches.left
-                anchors.rightMargin: 12
                 anchors.verticalCenter: parent.verticalCenter
-                text: {
-                    const status = root.payload?.status;
-                    if (!status)
-                        return "";
-                    return status.vpn ? `${status.label} · ${status.vpn}` : status.label;
-                }
-                elide: Text.ElideRight
-                color: Theme.foreground
-                font.pixelSize: Theme.textSubtitle
+                visible: root.wifi
+                text: "Wi-Fi"
+                color: Theme.muted
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
             }
 
-            Row {
-                id: switches
-
-                anchors.right: parent.right
+            Switch {
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 8
+                visible: root.wifi
+                checked: root.wifiOn
+                onToggled: Daemon.command("network", "wifi", ["toggle"])
+            }
 
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: root.wifi
-                    text: "Wi-Fi"
-                    color: Theme.muted
-                    font.pixelSize: Theme.textLabel
-                    font.family: Theme.fontFamily
-                }
+            Item {
+                width: Theme.spaceSmall
+                height: 1
+            }
 
-                Switch {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: root.wifi
-                    checked: root.wifiOn
-                    onToggled: Daemon.command("network", "wifi", ["toggle"])
-                }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Airplane"
+                color: Theme.muted
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+            }
 
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "Airplane"
-                    color: Theme.muted
-                    font.pixelSize: Theme.textLabel
-                    font.family: Theme.fontFamily
-                }
-
-                Switch {
-                    anchors.verticalCenter: parent.verticalCenter
-                    checked: root.payload?.airplane ?? false
-                    onToggled: Daemon.command("network", "airplane", ["toggle"])
-                }
+            Switch {
+                anchors.verticalCenter: parent.verticalCenter
+                checked: root.payload?.airplane ?? false
+                onToggled: Daemon.command("network", "airplane", ["toggle"])
             }
         }
 
@@ -145,12 +119,16 @@ Item {
 
             visible: root.wifi && root.wifiOn && root.networks.length > 0
             width: parent.width
-            height: root.rows * 52 + Math.max(root.rows - 1, 0) * 6
+            height: root.rows * 52 + Math.max(root.rows - 1, 0) * spacing
             clip: true
-            spacing: 6
+            spacing: Theme.spaceSmall
             boundsBehavior: Flickable.StopAtBounds
             // A count, not the array: a new array would rebuild every row.
             model: root.wifiOn ? root.networks.length : 0
+
+            ScrollFade {
+                view: list
+            }
 
             delegate: ListRow {
                 id: row
@@ -247,7 +225,7 @@ Item {
         Repeater {
             model: root.vpns.length
 
-            ListRow {
+            SwitchRow {
                 id: vpnRow
 
                 required property int index
@@ -255,17 +233,13 @@ Item {
 
                 width: column.width
                 height: 52
+                flat: false
                 leadingSize: 22
-                icon: "lock"
+                icon: "vpn_lock"
                 title: vpn.id ?? ""
                 subtitle: vpn.active ? "On" : vpn.connecting ? "Connecting…" : "Off"
-                onClicked: Daemon.command("network", "vpn", [vpnRow.vpn.id, "toggle"])
-                trailing: [
-                    Switch {
-                        checked: vpnRow.vpn.active ?? false
-                        onToggled: Daemon.command("network", "vpn", [vpnRow.vpn.id, "toggle"])
-                    }
-                ]
+                checked: vpn.active ?? false
+                onToggled: Daemon.command("network", "vpn", [vpnRow.vpn.id, "toggle"])
             }
         }
     }

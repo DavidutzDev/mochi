@@ -84,8 +84,8 @@ impl Module for Bluetooth {
         vec![
             ContributionSpec::new("hub", "card", "status", "Card", "Bluetooth")
                 .icon("bluetooth")
-                .order(16)
-                .options(json!({ "span": 1 })),
+                .order(2)
+                .options(json!({ "span": 1, "rows": 1 })),
             ContributionSpec::new("hub", "page", "page", "Page", "Bluetooth")
                 .icon("bluetooth")
                 .order(16),

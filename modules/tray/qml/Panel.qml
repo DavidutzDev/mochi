@@ -39,7 +39,7 @@ Item {
         return label;
     }
 
-    implicitWidth: columns * tileWidth + (columns - 1) * 8 + Theme.padding * 2
+    implicitWidth: columns * tileWidth + (columns - 1) * Theme.spaceSmall + Theme.padding * 2
     implicitHeight: column.implicitHeight + Theme.padding * 2
 
     // A new menu starts at its top.
@@ -73,53 +73,24 @@ Item {
         }
     }
 
+    EdgeLight {
+        radius: Theme.radiusSurface
+    }
+
     Column {
         id: column
 
         x: Theme.padding
         y: Theme.padding
         width: root.width - Theme.padding * 2
-        spacing: 10
+        spacing: Theme.spaceSmall
 
         // The heading: the tray, or the menu's app and submenu.
-        Item {
+        PanelHeader {
             width: parent.width
-            height: 28
-
-            IconButton {
-                id: backButton
-
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                visible: root.menu !== null
-                icon: "chevron"
-                rotation: 180
-                size: 14
-                onClicked: root.back()
-            }
-
-            Symbol {
-                id: traySymbol
-
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                visible: root.menu === null
-                name: "tray"
-                size: 16
-            }
-
-            Text {
-                anchors.left: root.menu !== null ? backButton.right : traySymbol.right
-                anchors.leftMargin: 8
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.menu !== null ? root.heading : "Tray"
-                elide: Text.ElideRight
-                color: Theme.foreground
-                font.pixelSize: Theme.textSubtitle
-                font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
-            }
+            title: root.menu !== null ? root.heading : "Tray"
+            back: root.menu !== null
+            onBackClicked: root.back()
         }
 
         // The apps.
@@ -138,7 +109,7 @@ Item {
         Grid {
             visible: root.menu === null
             columns: root.columns
-            spacing: 8
+            spacing: Theme.spaceSmall
 
             Repeater {
                 model: root.menu === null ? root.items : []
@@ -150,7 +121,7 @@ Item {
 
                     width: root.tileWidth
                     height: 86
-                    radius: Theme.radiusMedium
+                    radius: Theme.radiusField
                     // Unimportant for now, its app says.
                     opacity: tile.modelData.passive ? 0.6 : 1
                     color: area.containsMouse ? Theme.raised : Theme.surface
@@ -172,20 +143,20 @@ Item {
                         anchors.margins: -3
                         width: 9
                         height: 9
-                        radius: 4.5
+                        radius: height / 2
                         color: Theme.accent
                     }
 
                     Text {
                         anchors.top: tileIcon.bottom
-                        anchors.topMargin: 8
+                        anchors.topMargin: Theme.spaceSmall
                         x: 6
                         width: parent.width - 12
                         horizontalAlignment: Text.AlignHCenter
                         text: tile.modelData.title ?? ""
                         elide: Text.ElideRight
                         color: Theme.foreground
-                        font.pixelSize: Theme.textLabel
+                        font.pixelSize: Theme.textCaption
                         font.family: Theme.fontFamily
                     }
 
@@ -224,12 +195,18 @@ Item {
         }
 
         Flickable {
+            id: menuList
+
             visible: root.menu !== null
             width: parent.width
             height: Math.min(entryColumn.implicitHeight, 420)
             contentHeight: entryColumn.implicitHeight
             clip: true
             boundsBehavior: Flickable.StopAtBounds
+
+            ScrollFade {
+                view: menuList
+            }
 
             Column {
                 id: entryColumn
@@ -260,7 +237,7 @@ Item {
                         Rectangle {
                             visible: !row.separator
                             anchors.fill: parent
-                            radius: Theme.radiusSmall
+                            radius: Theme.radiusControl
                             color: entryArea.containsMouse && row.modelData.enabled ? Theme.raised : "transparent"
                             opacity: row.modelData.enabled ? 1 : 0.45
 
@@ -290,7 +267,7 @@ Item {
                                 anchors.left: parent.left
                                 anchors.leftMargin: entryIcon.visible ? 58 : 34
                                 anchors.right: chevron.left
-                                anchors.rightMargin: 8
+                                anchors.rightMargin: Theme.spaceSmall
                                 anchors.verticalCenter: parent.verticalCenter
                                 text: row.modelData.label ?? ""
                                 elide: Text.ElideRight
@@ -304,7 +281,7 @@ Item {
                                 id: chevron
 
                                 anchors.right: parent.right
-                                anchors.rightMargin: 10
+                                anchors.rightMargin: Theme.spaceSmall
                                 anchors.verticalCenter: parent.verticalCenter
                                 visible: row.modelData.submenu ?? false
                                 name: "chevron"

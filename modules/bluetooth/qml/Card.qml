@@ -12,7 +12,7 @@ Item {
     // No adapter: nothing worth a card.
     readonly property bool hidden: !available
 
-    implicitHeight: 64
+    implicitHeight: Theme.rowHeight
 
     Tile {
         anchors.fill: parent

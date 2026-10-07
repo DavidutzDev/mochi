@@ -21,7 +21,6 @@ Item {
     Symbol {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.margins: 1
         visible: (root.payload.vpn ?? null) !== null
         name: "lock"
         size: 10

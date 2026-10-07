@@ -82,8 +82,10 @@ Item {
     }
 
     Column {
+        id: graphs
+
         anchors.fill: parent
-        spacing: 10
+        spacing: Theme.spaceSmall
         visible: root.payload !== null
 
         Repeater {
@@ -97,12 +99,12 @@ Item {
                 readonly property var speeds: modelData.speeds ?? []
 
                 width: parent.width
-                height: (root.height - 10 * (root.rows.length - 1)) / root.rows.length
+                height: (root.height - graphs.spacing * (root.rows.length - 1)) / root.rows.length
 
                 Row {
                     id: label
 
-                    spacing: 6
+                    spacing: Theme.spaceSmall
 
                     Symbol {
                         anchors.verticalCenter: parent.verticalCenter
@@ -115,20 +117,18 @@ Item {
                         anchors.verticalCenter: parent.verticalCenter
                         text: row.modelData.label
                         color: Theme.muted
-                        font.pixelSize: Theme.textLabel
+                        font.pixelSize: Theme.textCaption
                         font.family: Theme.fontFamily
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.weightTitle
                     }
 
-                    Text {
+                    RollingText {
                         anchors.verticalCenter: parent.verticalCenter
                         visible: row.speeds.length === 0
                         text: row.modelData.value ?? ""
                         color: row.hot ? Theme.danger : Theme.foreground
-                        font.pixelSize: Theme.textSubtitle
-                        font.family: Theme.fontFamily
-                        font.weight: Font.DemiBold
-                        font.features: { "tnum": 1 }
+                        pixelSize: Theme.textBody
+                        weight: Theme.weightTitle
                     }
                 }
 
@@ -147,7 +147,7 @@ Item {
                     anchors.right: parent.right
                     anchors.verticalCenter: label.verticalCenter
                     visible: row.speeds.length > 0
-                    spacing: 10
+                    spacing: Theme.spaceSmall
 
                     Repeater {
                         model: row.speeds
@@ -160,15 +160,17 @@ Item {
                             color: index === 0 ? Theme.accent : Theme.success
                             font.pixelSize: Theme.textCaption
                             font.family: Theme.fontFamily
-                            font.weight: Font.DemiBold
-                            font.features: { "tnum": 1 }
+                            font.weight: Theme.weightTitle
+                            font.features: {
+                                "tnum": 1
+                            }
                         }
                     }
                 }
 
                 Graph {
                     anchors.top: label.bottom
-                    anchors.topMargin: 4
+                    anchors.topMargin: Theme.spaceTiny
                     anchors.bottom: parent.bottom
                     width: parent.width
                     values: row.modelData.values
