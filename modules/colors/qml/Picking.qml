@@ -12,7 +12,7 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 8
+        spacing: Theme.spaceSmall
 
         Symbol {
             anchors.verticalCenter: parent.verticalCenter
@@ -25,7 +25,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: "Click to pick a color · Esc cancels"
             color: Theme.foreground
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
         }
     }

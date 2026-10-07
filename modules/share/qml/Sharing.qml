@@ -11,7 +11,7 @@ Item {
 
     Symbol {
         anchors.centerIn: parent
-        name: "display"
+        name: "screen_share"
         size: 16
         color: Theme.accent
 

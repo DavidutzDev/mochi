@@ -24,7 +24,7 @@ Item {
     // Up to five rows show; more scroll.
     readonly property int rows: Math.min(shown.length, 5)
 
-    implicitHeight: toolbar.height + 12 + (shown.length === 0 ? 60 : rows * 60 + (rows - 1) * 8 + (hasPins ? 2 * headingHeight : 0))
+    implicitHeight: toolbar.height + Theme.spaceMedium + (shown.length === 0 ? 60 : rows * 60 + (rows - 1) * 8 + (hasPins ? 2 * headingHeight : 0))
 
     // "now", "5 min ago", "3 h ago", "2 d ago".
     function ago(time: real): string {
@@ -66,7 +66,7 @@ Item {
         Rectangle {
             anchors.left: parent.left
             anchors.right: buttons.left
-            anchors.rightMargin: 12
+            anchors.rightMargin: Theme.spaceMedium
             height: parent.height
             radius: height / 2
             color: Theme.surface
@@ -85,9 +85,9 @@ Item {
                 id: search
 
                 anchors.left: magnifier.right
-                anchors.leftMargin: 8
+                anchors.leftMargin: Theme.spaceSmall
                 anchors.right: parent.right
-                anchors.rightMargin: 12
+                anchors.rightMargin: Theme.spaceMedium
                 anchors.verticalCenter: parent.verticalCenter
                 color: Theme.foreground
                 selectionColor: Theme.accent
@@ -109,7 +109,7 @@ Item {
 
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 8
+            spacing: Theme.spaceSmall
 
             Button {
                 text: root.paused ? "Resume" : "Pause"
@@ -129,7 +129,7 @@ Item {
         visible: root.shown.length === 0
         text: search.text === "" ? "Nothing copied yet" : "No matches"
         color: Theme.muted
-        font.pixelSize: Theme.textSubtitle
+        font.pixelSize: Theme.textBody
         font.family: Theme.fontFamily
     }
 
@@ -137,13 +137,17 @@ Item {
         id: list
 
         anchors.top: toolbar.bottom
-        anchors.topMargin: 12
+        anchors.topMargin: Theme.spaceMedium
         width: parent.width
         height: root.rows * 60 + Math.max(root.rows - 1, 0) * 8 + (root.hasPins ? 2 * root.headingHeight : 0)
         clip: true
-        spacing: 8
+        spacing: Theme.spaceSmall
         boundsBehavior: Flickable.StopAtBounds
         model: root.shown
+
+        ScrollFade {
+            view: list
+        }
 
         delegate: Column {
             id: item
@@ -164,7 +168,7 @@ Item {
                 color: Theme.muted
                 font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
+                font.weight: Theme.weightTitle
             }
 
             ListRow {
@@ -201,7 +205,7 @@ Item {
 
                     Rectangle {
                         anchors.fill: parent
-                        radius: Theme.radiusSmall
+                        radius: Theme.radiusControl
                         color: Theme.raised
                         visible: !row.image || picture.status !== Image.Ready
                     }

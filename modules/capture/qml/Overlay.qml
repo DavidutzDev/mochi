@@ -329,7 +329,7 @@ Item {
             y: (onBottom ? area.y + area.height : area.y) - height / 2
             width: 12
             height: 12
-            radius: 6
+            radius: height / 2
             color: Theme.foreground
             border.color: Theme.accent
             border.width: 2
@@ -373,7 +373,7 @@ Item {
         readonly property rect area: root.shownRegion ?? Qt.rect(0, 0, 0, 0)
 
         visible: root.mode === "region" && root.picking && root.holdsRegion
-        spacing: 8
+        spacing: Theme.spaceSmall
         x: Math.max(8, Math.min(root.width - width - 8, area.x + (area.width - width) / 2))
         y: area.y + area.height + 12 + height > root.height ? area.y - height - 12 : area.y + area.height + 12
 
@@ -381,7 +381,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             width: size.implicitWidth + 20
             height: 30
-            radius: 15
+            radius: height / 2
             color: Theme.background
 
             Text {
@@ -390,7 +390,7 @@ Item {
                 anchors.centerIn: parent
                 text: `${Math.round(parent.parent.area.width)} × ${Math.round(parent.parent.area.height)}`
                 color: Theme.foreground
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
                 font.features: {
                     "tnum": 1
@@ -414,15 +414,15 @@ Item {
         y: Math.max(8, Math.min(root.height - height - 8, (root.hoveredWindow?.y ?? 0) + ((root.hoveredWindow?.height ?? 0) - height) / 2))
         width: Math.min(title.implicitWidth + 28, 420)
         height: 34
-        radius: 17
+        radius: height / 2
         color: Theme.background
 
         Text {
             id: title
 
             anchors.fill: parent
-            anchors.leftMargin: 14
-            anchors.rightMargin: 14
+            anchors.leftMargin: Theme.spaceMedium
+            anchors.rightMargin: Theme.spaceMedium
             verticalAlignment: Text.AlignVCenter
             text: root.hoveredWindow?.title || root.hoveredWindow?.app_id || ""
             elide: Text.ElideRight

@@ -16,20 +16,31 @@ Item {
     implicitWidth: 440
     implicitHeight: row.implicitHeight + Theme.padding * 2
 
+    // A capture saved, or copied again: the edge lights up.
+    EdgeLight {
+        id: light
+
+        radius: Theme.radiusSurface
+        Component.onCompleted: {
+            if (!root.failed)
+                flash();
+        }
+    }
+
     Row {
         id: row
 
         x: Theme.padding
         y: Theme.padding
         width: parent.width - Theme.padding * 2
-        spacing: 14
+        spacing: Theme.spaceMedium
 
         ClippingRectangle {
             id: thumbnail
 
             width: 128
             height: 80
-            radius: Theme.radiusMedium
+            radius: Theme.radiusField
             color: Theme.raised
 
             Symbol {
@@ -55,7 +66,7 @@ Item {
 
         Column {
             width: parent.width - thumbnail.width - parent.spacing
-            spacing: 4
+            spacing: Theme.spaceTiny
 
             Text {
                 width: parent.width
@@ -67,9 +78,9 @@ Item {
                 }
                 elide: Text.ElideRight
                 color: Theme.foreground
-                font.pixelSize: Theme.textSubtitle
+                font.pixelSize: Theme.textBody
                 font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
+                font.weight: Theme.weightTitle
             }
 
             Text {
@@ -79,23 +90,26 @@ Item {
                 maximumLineCount: root.failed ? 3 : 1
                 wrapMode: root.failed ? Text.Wrap : Text.NoWrap
                 color: Theme.muted
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
             }
 
             Item {
                 width: 1
-                height: 4
+                height: Theme.spaceTiny
             }
 
             Row {
                 visible: !root.failed
-                spacing: 6
+                spacing: Theme.spaceSmall
 
                 IconButton {
                     icon: "copy"
                     tone: "neutral"
-                    onClicked: Daemon.command("capture", "copy", [])
+                    onClicked: {
+                        Daemon.command("capture", "copy", []);
+                        light.flash();
+                    }
                 }
 
                 IconButton {

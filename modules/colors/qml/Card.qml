@@ -1,17 +1,21 @@
 import QtQuick
 import qs.island
 
-// The hub card: the latest colors as dots and a button to pick one.
-// Clicking a dot copies it in the default format; hovering shows its text.
+// The hub card: the latest colors as dots, as many as fit, with a line
+// under them and a button to pick one. Clicking a dot copies it in the
+// default format; hovering shows its text.
 Item {
     id: root
 
     property var payload: null
-    readonly property var colors: (payload?.history ?? []).slice(0, 8)
+    readonly property int dot: Theme.textTitle + Theme.spaceTiny
+    // As many dots as fit beside the button.
+    readonly property int fits: Math.max(1, Math.floor((width - pick.width - Theme.spaceSmall + Theme.spaceTiny) / (dot + Theme.spaceTiny)))
+    readonly property var colors: (payload?.history ?? []).slice(0, fits)
     property var hovered: null
     property bool copied: false
 
-    implicitHeight: 64
+    implicitHeight: Theme.rowHeight
 
     Timer {
         id: forget
@@ -24,8 +28,8 @@ Item {
         id: dots
 
         anchors.left: parent.left
-        anchors.top: parent.top
-        spacing: 6
+        anchors.bottom: parent.verticalCenter
+        spacing: Theme.spaceTiny
 
         Repeater {
             model: root.colors
@@ -35,9 +39,9 @@ Item {
 
                 required property var modelData
 
-                width: 24
-                height: 24
-                radius: 12
+                width: root.dot
+                height: root.dot
+                radius: height / 2
                 color: modelData.swatch
                 border.color: area.containsMouse ? Theme.foreground : Theme.border
                 border.width: area.containsMouse ? 2 : 1
@@ -74,8 +78,10 @@ Item {
     Text {
         anchors.left: parent.left
         anchors.right: pick.left
-        anchors.rightMargin: 8
-        anchors.verticalCenter: pick.verticalCenter
+        anchors.rightMargin: Theme.spaceSmall
+        anchors.top: root.colors.length > 0 ? parent.verticalCenter : undefined
+        anchors.topMargin: Theme.spaceTiny
+        anchors.verticalCenter: root.colors.length > 0 ? undefined : parent.verticalCenter
         text: {
             if (root.copied)
                 return "Copied";
@@ -86,7 +92,7 @@ Item {
         }
         elide: Text.ElideRight
         color: root.hovered || root.copied ? Theme.foreground : Theme.muted
-        font.pixelSize: Theme.textLabel
+        font.pixelSize: Theme.textCaption
         font.family: Theme.fontFamily
     }
 
@@ -94,8 +100,9 @@ Item {
         id: pick
 
         anchors.right: parent.right
-        anchors.bottom: parent.bottom
+        anchors.verticalCenter: parent.verticalCenter
         tone: "accent"
+        icon: "colorize"
         text: "Pick"
         onClicked: Daemon.command("colors", "start", [])
     }

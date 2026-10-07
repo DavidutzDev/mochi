@@ -11,7 +11,7 @@ Item {
     // "color/format" copied last, for the check mark.
     property string copied: ""
 
-    implicitHeight: toolbar.height + 12 + (colors.length === 0 ? 80 : list.implicitHeight)
+    implicitHeight: toolbar.height + Theme.spaceMedium + (colors.length === 0 ? 80 : list.implicitHeight)
 
     Timer {
         id: forget
@@ -20,47 +20,34 @@ Item {
         onTriggered: root.copied = ""
     }
 
-    Item {
+    PanelHeader {
         id: toolbar
 
         width: parent.width
-        height: 32
+        title: root.colors.length === 1 ? "1 color" : `${root.colors.length} colors`
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.colors.length === 1 ? "1 color" : `${root.colors.length} colors`
-            color: Theme.muted
-            font.pixelSize: Theme.textBody
-            font.family: Theme.fontFamily
+        Button {
+            tone: "accent"
+            icon: "colorize"
+            text: "Pick a color"
+            onClicked: Daemon.command("colors", "start", [])
         }
 
-        Row {
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 8
-
-            Button {
-                tone: "accent"
-                text: "Pick a color"
-                onClicked: Daemon.command("colors", "start", [])
-            }
-
-            Button {
-                visible: root.colors.length > 0
-                text: "Clear"
-                onClicked: Daemon.command("colors", "clear", [])
-            }
+        Button {
+            visible: root.colors.length > 0
+            text: "Clear"
+            onClicked: Daemon.command("colors", "clear", [])
         }
     }
 
     Text {
         anchors.top: toolbar.bottom
-        anchors.topMargin: 40
+        anchors.topMargin: Theme.spaceHuge
         anchors.horizontalCenter: parent.horizontalCenter
         visible: root.colors.length === 0
         text: "No colors yet"
         color: Theme.muted
-        font.pixelSize: Theme.textSubtitle
+        font.pixelSize: Theme.textBody
         font.family: Theme.fontFamily
     }
 
@@ -68,9 +55,9 @@ Item {
         id: list
 
         anchors.top: toolbar.bottom
-        anchors.topMargin: 12
+        anchors.topMargin: Theme.spaceMedium
         width: parent.width
-        spacing: 8
+        spacing: Theme.spaceSmall
 
         Repeater {
             model: root.colors
@@ -82,7 +69,7 @@ Item {
 
                 width: list.width
                 height: 56
-                radius: Theme.radiusMedium
+                radius: Theme.radiusField
                 color: Theme.surface
 
                 Rectangle {
@@ -92,7 +79,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 36
                     height: 36
-                    radius: Theme.radiusSmall
+                    radius: Theme.radiusControl
                     color: row.modelData.swatch
                     border.color: Theme.border
                     border.width: 1
@@ -100,11 +87,11 @@ Item {
 
                 Flow {
                     anchors.left: swatch.right
-                    anchors.leftMargin: 12
+                    anchors.leftMargin: Theme.spaceMedium
                     anchors.right: remove.left
-                    anchors.rightMargin: 8
+                    anchors.rightMargin: Theme.spaceSmall
                     anchors.verticalCenter: parent.verticalCenter
-                    spacing: 6
+                    spacing: Theme.spaceSmall
 
                     Repeater {
                         model: row.modelData.formats
@@ -129,7 +116,7 @@ Item {
                     id: remove
 
                     anchors.right: parent.right
-                    anchors.rightMargin: 8
+                    anchors.rightMargin: Theme.spaceSmall
                     anchors.verticalCenter: parent.verticalCenter
                     icon: "trash"
                     size: 14
