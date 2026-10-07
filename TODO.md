@@ -558,7 +558,7 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 ### Frontend
 
 - [x] A design system in `Theme`: a type scale (four sizes and display), a spacing scale, radii for surfaces, fields and controls, heights, Inter and Material Symbols; the core controls and the hub use it
-- [ ] Every module's views moved onto the scale, emptying `crates/mochi-core/tests/design-baseline.txt`
+- [x] Every module's views moved onto the scale, emptying `crates/mochi-core/tests/design-baseline.txt`
 - [x] A check in `nix flake check` that rejects raw pixel sizes and colors in module QML, so views can't drift from the scale again (`crates/mochi-core/tests/design.rs`)
 - [ ] The hub's Home as a control center: tiles of one height with their label inside, slider tiles (volume, brightness) with a `›` to their page, and an icon-only footer instead of the labelled tab
 - [x] The hub sized to its content, its outline animating between pages instead of one fixed size for all of them

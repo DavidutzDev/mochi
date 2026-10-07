@@ -40,6 +40,14 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Changed
 
+- Every module view and the example plugins use Theme's scales for text, spacing, corners, heights and colors, and the design check's baseline is empty.
+- The hub's Home starts with a row of toggles (Network, Bluetooth), then Today, the latest missed notification and the battery, each one row, with Now playing two columns wide and two rows tall beside Clipboard and Colors. Hub cards that set `rows` get a view sized to fill them.
+- The Wi-Fi tile says "Ethernet · <connection>" when a cable carries the connection.
+- The battery card and widget fit in one row with the power profiles at the end; the widget no longer spills out of its frame.
+- Clocks, percentages, timers and counts roll their digits: the idle clock, Today, the widgets clock, the volume OSD, the mixer, battery and Bluetooth levels, the recording time, the pomodoro timer and performance readings.
+- Island panels and widget frames have an edge light: it sweeps while a capture saves, a Wi-Fi password is tried or pairing waits, and flashes when a capture is saved, a color picked or copied, an emoji or clipboard entry copied, or the widget layout copied.
+- Lists that scroll fade at their edges, and page and panel headers share one `PanelHeader`, which takes an optional `icon` and `iconColor`; the Bluetooth page shows its symbol in the accent color while powered.
+- Bluetooth devices show icons by kind, and the power profiles use the eco, balance and speed icons.
 - The type scale has four sizes and one for big numbers: `label` and `subtitle` are gone from `[text]` in `theme.toml`, and `title` is 15 instead of 16. Old files still work: `label` is read as `caption` and `subtitle` as `body`, with a note from `mochi config check`. `Theme.textLabel` and `Theme.textSubtitle` give `textCaption` and `textBody` for views and plugins that still use them.
 
 ### Fixed
