@@ -47,6 +47,7 @@ Anything else lists the colors in the history and the CSS names that start with 
 |---|---|
 | `pick` | Opens the picker |
 | `cancel` | Closes the picker |
+| `add <color>` | Adds a color to the history |
 | `copy <color> [format]` | Copies a color, like `#1e1e2e`, in the default format or in `hex`, `rgb`, `hsl` or `oklch` |
 | `remove <color>` | Removes a color from the history |
 | `clear` | Removes every color from the history |
