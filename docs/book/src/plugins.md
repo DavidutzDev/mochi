@@ -65,7 +65,7 @@ A plugin's settings go in its `[module.<id>]` section, like a builtin's. The plu
 
 ### Without build tools
 
-A `git:` plugin builds on your machine, with whatever its `build` command runs, often `cargo`. When the plugin's repository has a `flake.nix` and Nix is installed, `install` runs `nix build` on the flake instead, and nothing else needs to be installed. The build stays in the Nix store, kept from garbage collection by a link in `~/.local/share/mochi/plugins/.nix/`.
+A `git:` plugin builds on your machine, with whatever its `build` command runs, often `cargo`. With Nix installed, `install` builds with Nix instead when it can't build it there: when the build's tools aren't installed, when the programs the plugin `needs` aren't, or when the plugin has a `flake.nix`, which it always uses. Rust, Node, Python and Go plugins build this way from their lock files, without their authors writing any Nix. The build stays in the Nix store, kept from garbage collection by a link in `~/.local/share/mochi/plugins/.nix/`.
 
 When a build fails, `install` names the tools missing and the ways around it that apply to the plugin:
 
@@ -141,4 +141,4 @@ programs.mochi.plugins.pomodoro = {
 };
 ```
 
-This works for Rust plugins with a `Cargo.lock`, git dependencies included, and needs no hash. plugins.toml then points at the build in the Nix store, and `nix flake update mochi-pomodoro` moves it to the latest commit. A plugin with its own flake can be given as `package` instead: `programs.mochi.plugins.pomodoro.package = inputs.mochi-pomodoro.packages.${pkgs.system}.default;`.
+This works for plugins in Rust, Node, Python and Go (with `vendor/`), from the lock file they already have, and for scripts and release archives as they are, see [Building with Nix](plugin-manifest.md#building-with-nix). It needs no hash. Programs the backend runs come from the manifest's `needs`; `runtimeInputs = [ pkgs.ffmpeg ];` adds others, and `buildInputs` native libraries it links. plugins.toml then points at the build in the Nix store, and `nix flake update mochi-pomodoro` moves it to the latest commit. A plugin with its own flake can be given as `package` instead: `programs.mochi.plugins.pomodoro.package = inputs.mochi-pomodoro.packages.${pkgs.system}.default;`.

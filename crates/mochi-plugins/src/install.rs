@@ -68,6 +68,10 @@ pub enum Build {
     /// `nix build` on the plugin's `flake.nix`, whose default package has
     /// the backend at the manifest's `exec`, or in `bin/` by its name.
     Flake,
+    /// `nix build` with Mochi's own builder, `lib.buildPlugin`, from the
+    /// plugin's lock file: for when the tools to build it, or the programs
+    /// it needs, aren't installed but Nix is.
+    Nix,
 }
 
 impl fmt::Display for Build {
@@ -75,6 +79,7 @@ impl fmt::Display for Build {
         match self {
             Self::Command(command) => f.write_str(command),
             Self::Flake => f.write_str("nix build .#default, from its flake.nix"),
+            Self::Nix => f.write_str("nix build, with Mochi's plugin builder"),
         }
     }
 }
@@ -102,7 +107,20 @@ impl fmt::Display for Plan {
             writeln!(f, "          in {}", dir.display())?;
         }
         match &self.manifest.backend {
-            Some(backend) => writeln!(f, "  starts  {} with mochid", backend.exec)?,
+            Some(backend) => {
+                writeln!(f, "  starts  {} with mochid", backend.exec)?;
+                if !backend.needs.is_empty() {
+                    let missing = self.manifest.missing_needs();
+                    write!(f, "  needs   {}", backend.needs.join(", "))?;
+                    if missing.is_empty()
+                        || matches!(self.build, Some((Build::Nix | Build::Flake, _)))
+                    {
+                        writeln!(f)?;
+                    } else {
+                        writeln!(f, " (not installed: {})", missing.join(", "))?;
+                    }
+                }
+            }
             None => writeln!(f, "  views only, no backend")?,
         }
         if !self.manifest.uses.state.is_empty() {
@@ -467,14 +485,56 @@ fn check_manifest_id(id: &str, manifest: &Manifest) -> Result<(), InstallError> 
     Ok(())
 }
 
-/// How the plugin in `dir` builds: with its flake when it has one and Nix
-/// is installed, else with its build command, if it has a backend at all.
+/// How the plugin in `dir` builds, when it has a backend: with its flake
+/// when it has one and Nix is installed; with Mochi's Nix builder when Nix
+/// is installed but the build's tools or the programs the plugin needs
+/// aren't, or there's no backend and nothing to build it with; else with
+/// its build command.
 fn how_to_build(manifest: &Manifest, dir: &Path) -> Option<Build> {
     let backend = manifest.backend.as_ref()?;
-    if dir.join("flake.nix").is_file() && installed("nix") {
+    let nix = crate::on_path("nix");
+    if dir.join("flake.nix").is_file() && nix {
         return Some(Build::Flake);
     }
+    let lacking = backend
+        .build
+        .as_deref()
+        .is_some_and(|command| !missing_tools(command).is_empty())
+        || !manifest.missing_needs().is_empty()
+        || (backend.build.is_none() && !dir.join(&backend.exec).exists());
+    if nix && lacking {
+        return Some(Build::Nix);
+    }
     backend.build.clone().map(Build::Command)
+}
+
+/// The Mochi flake whose `lib.buildPlugin` builds plugins: this version's
+/// tag, or `MOCHI_FLAKE`.
+fn mochi_flake() -> String {
+    std::env::var("MOCHI_FLAKE")
+        .ok()
+        .filter(|flake| !flake.is_empty())
+        .unwrap_or_else(|| format!("github:DavidutzDev/mochi/v{}", env!("CARGO_PKG_VERSION")))
+}
+
+/// The Nix expression building the plugin in `dir` with Mochi's builder,
+/// against the nixpkgs Mochi's flake pins.
+fn builder_expression(dir: &Path) -> String {
+    let quote = |text: &str| serde_json::to_string(text).expect("strings serialize");
+    format!(
+        r#"let
+  mochi = builtins.getFlake {flake};
+  pkgs = mochi.inputs.nixpkgs.legacyPackages.${{builtins.currentSystem}};
+  src = builtins.path {{
+    path = {dir};
+    name = "source";
+    filter = path: _: baseNameOf path != ".git";
+  }};
+in
+mochi.lib.buildPlugin pkgs {{ inherit src; }}"#,
+        flake = quote(&mochi_flake()),
+        dir = quote(&dir.display().to_string()),
+    )
 }
 
 impl Installer<'_> {
@@ -493,20 +553,28 @@ impl Installer<'_> {
                 if !status.success() {
                     return Err(InstallError(format!(
                         "the build failed ({status}): {command}{}",
-                        advice(plan, dir, command)
+                        advice(plan, command)
                     )));
                 }
             }
-            Some(Build::Flake) => self.build_flake(plan, dir)?,
+            Some(Build::Flake) => {
+                let flake = format!("{}#default", dir.display());
+                self.build_with_nix(plan, dir, &[flake])?
+            }
+            Some(Build::Nix) => self.build_with_nix(
+                plan,
+                dir,
+                &["--impure".into(), "--expr".into(), builder_expression(dir)],
+            )?,
             None => {}
         }
         check_exec(&plan.manifest, dir)
     }
 
-    /// `nix build` on the plugin's flake. The result stays alive through a
+    /// `nix build` with `what` to build. The result stays alive through a
     /// garbage collector root in the installs' `.nix` directory, and the
     /// backend in the plugin's directory links into it.
-    fn build_flake(&self, plan: &Plan, dir: &Path) -> Result<(), InstallError> {
+    fn build_with_nix(&self, plan: &Plan, dir: &Path, what: &[String]) -> Result<(), InstallError> {
         let exec = plan
             .manifest
             .backend
@@ -517,7 +585,6 @@ impl Installer<'_> {
         if let Some(parent) = root.parent() {
             std::fs::create_dir_all(parent)?;
         }
-        let flake = format!("{}#default", dir.display());
         let status = Command::new("nix")
             .args([
                 "--extra-experimental-features",
@@ -526,13 +593,13 @@ impl Installer<'_> {
                 "--out-link",
             ])
             .arg(&root)
-            .arg(&flake)
+            .args(what)
             .stdin(Stdio::null())
             .status()
             .map_err(|error| InstallError(format!("cannot run nix: {error}")))?;
         if !status.success() {
             return Err(InstallError(format!(
-                "nix build {flake} failed ({status}); its output is above"
+                "nix build failed ({status}); its output is above"
             )));
         }
         let output = std::fs::canonicalize(&root)?;
@@ -542,7 +609,7 @@ impl Installer<'_> {
             .find(|path| path.is_file())
             .ok_or_else(|| {
                 InstallError(format!(
-                    "the flake's package {} has neither {exec} nor bin/{}",
+                    "the built package {} has neither {exec} nor bin/{}",
                     output.display(),
                     name.to_string_lossy()
                 ))
@@ -559,7 +626,7 @@ impl Installer<'_> {
 
 /// What to try when a build command failed: the tools it lacks, and the
 /// ways around building it here.
-fn advice(plan: &Plan, dir: &Path, command: &str) -> String {
+fn advice(plan: &Plan, command: &str) -> String {
     let missing = missing_tools(command);
     let mut text = String::new();
     if missing.is_empty() {
@@ -587,12 +654,10 @@ fn advice(plan: &Plan, dir: &Path, command: &str) -> String {
             "\n  - use its prebuilt releases, if it publishes them:\n      {id} = {{ source = \"git-release:github.com/{repo}\" }}"
         ));
     }
-    if !dir.join("flake.nix").is_file() {
+    if !crate::on_path("nix") {
         text.push_str(
-            "\n  - ask its author for a flake.nix: with Nix installed, Mochi builds a plugin's flake instead",
+            "\n  - install Nix: with it, Mochi builds plugins from their lock files, with no other tools",
         );
-    } else if !installed("nix") {
-        text.push_str("\n  - install Nix: the plugin has a flake.nix, which Mochi builds with it");
     }
     text
 }
@@ -612,20 +677,11 @@ fn missing_tools(command: &str) -> Vec<String> {
             program,
             "cd" | "export" | "set" | "test" | "[" | "true" | "false" | "echo"
         );
-        if !builtin && !installed(program) && !missing.iter().any(|tool| tool == program) {
+        if !builtin && !crate::on_path(program) && !missing.iter().any(|tool| tool == program) {
             missing.push(program.to_owned());
         }
     }
     missing
-}
-
-/// Whether `program` is on the PATH, or is a path that exists.
-fn installed(program: &str) -> bool {
-    if program.contains('/') {
-        return Path::new(program).is_file();
-    }
-    std::env::var_os("PATH")
-        .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(program).is_file()))
 }
 
 /// `owner/repo` from a GitHub clone URL.
@@ -921,7 +977,7 @@ mod tests {
                 .into_iter()
                 .filter(|tool| tool == "cargo")
                 .count(),
-            usize::from(!installed("cargo"))
+            usize::from(!crate::on_path("cargo"))
         );
         assert_eq!(
             missing_tools(
@@ -990,7 +1046,11 @@ mod tests {
             error.contains("git-release:github.com/Someone/mochi-clock"),
             "{error}"
         );
-        assert!(error.contains("flake.nix"), "{error}");
+        assert_eq!(
+            error.contains("install Nix"),
+            !crate::on_path("nix"),
+            "{error}"
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -1007,13 +1067,48 @@ mod tests {
         let root = scratch("flake");
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("flake.nix"), "{}").unwrap();
-        let expected = if installed("nix") {
+        let expected = if crate::on_path("nix") {
             Build::Flake
         } else {
             Build::Command("cargo build".into())
         };
         assert_eq!(how_to_build(&manifest, &root), Some(expected));
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn builds_with_nix_when_the_tools_are_missing() {
+        let manifest = Manifest::parse(
+            "[plugin]\nid = \"x\"\nname = \"X\"\nversion = \"1\"\napi = 1\n[backend]\nexec = \"x.py\"\nbuild = \"mochi-no-such-tool build\"\n",
+        )
+        .unwrap();
+        let expected = if crate::on_path("nix") {
+            Build::Nix
+        } else {
+            Build::Command("mochi-no-such-tool build".into())
+        };
+        assert_eq!(
+            how_to_build(&manifest, Path::new("/nonexistent")),
+            Some(expected)
+        );
+
+        let needs = Manifest::parse(
+            "[plugin]\nid = \"x\"\nname = \"X\"\nversion = \"1\"\napi = 1\n[backend]\nexec = \"x.py\"\nneeds = [\"sh\", \"mochi-no-such-tool\"]\nkind = \"python\"\n",
+        )
+        .unwrap();
+        assert_eq!(needs.missing_needs(), ["mochi-no-such-tool"]);
+        assert_eq!(
+            how_to_build(&needs, Path::new("/nonexistent")),
+            crate::on_path("nix").then_some(Build::Nix)
+        );
+        let bad = Manifest::parse(
+            "[plugin]\nid = \"x\"\nname = \"X\"\nversion = \"1\"\napi = 1\n[backend]\nexec = \"x\"\nneeds = [\"/usr/bin/python3\"]\n",
+        );
+        assert!(bad.unwrap_err().contains("command names"));
+        assert!(Manifest::parse(
+            "[plugin]\nid = \"x\"\nname = \"X\"\nversion = \"1\"\napi = 1\n[backend]\nexec = \"x\"\nkind = \"cobol\"\n",
+        )
+        .is_err());
     }
 
     #[test]

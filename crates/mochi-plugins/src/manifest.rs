@@ -56,6 +56,25 @@ pub struct Backend {
     /// directory by `mochi plugins install`.
     #[serde(default)]
     pub build: Option<String>,
+    /// How Nix builds it, when the plugin's files don't tell.
+    #[serde(default)]
+    pub kind: Option<Kind>,
+    /// Programs the backend runs, by command name, like `python3`: Nix puts
+    /// them on its PATH, and elsewhere Mochi warns when one is missing.
+    #[serde(default)]
+    pub needs: Vec<String>,
+}
+
+/// How Nix builds a backend, after the lock file it follows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Kind {
+    Rust,
+    Node,
+    Python,
+    Go,
+    /// As it is: a script, or a binary from a release.
+    Files,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -168,6 +187,16 @@ pub enum ManifestError {
 }
 
 impl Manifest {
+    /// The commands in the backend's `needs` that aren't on the PATH.
+    pub fn missing_needs(&self) -> Vec<&str> {
+        self.backend
+            .iter()
+            .flat_map(|backend| &backend.needs)
+            .filter(|command| !crate::on_path(command))
+            .map(String::as_str)
+            .collect()
+    }
+
     /// Reads and checks the manifest in a plugin's directory.
     pub fn load(dir: &Path) -> Result<Self, ManifestError> {
         let path = dir.join(FILE);
@@ -207,10 +236,19 @@ impl Manifest {
                 ));
             }
         }
-        if let Some(backend) = &self.backend
-            && (backend.exec.is_empty() || Path::new(&backend.exec).is_absolute())
-        {
-            return Err("backend.exec should be a path inside the plugin".into());
+        if let Some(backend) = &self.backend {
+            if backend.exec.is_empty() || Path::new(&backend.exec).is_absolute() {
+                return Err("backend.exec should be a path inside the plugin".into());
+            }
+            if let Some(command) = backend
+                .needs
+                .iter()
+                .find(|command| command.is_empty() || command.contains(['/', ' ']))
+            {
+                return Err(format!(
+                    "backend.needs takes command names, like \"python3\", not {command:?}"
+                ));
+            }
         }
         Ok(())
     }

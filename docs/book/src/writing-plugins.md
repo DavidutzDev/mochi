@@ -114,7 +114,9 @@ done
 
 ## A flake for Nix users
 
-With a `flake.nix` in the repository, people install the plugin without cargo: `mochi plugins install` builds the flake with `nix build` when Nix is installed, and home-manager can take its package. Copy this next to `mochi-plugin.toml`; `mochi.lib.buildPlugin` builds a Rust plugin from its `Cargo.lock`, with no hash to update, and puts the backend at the manifest's `exec`:
+You don't need one: Mochi builds Rust, Node, Python and Go plugins with Nix from their lock files by itself, see [Building with Nix](plugin-manifest.md#building-with-nix). List the programs your backend runs in `[backend] needs`, so they're there wherever it's built.
+
+A flake is for a build Mochi's builder can't guess, like extra native libraries. `mochi plugins install` uses it when Nix is installed, and home-manager can take its package. Copy this next to `mochi-plugin.toml` and adjust it; `mochi.lib.buildPlugin` is the same builder:
 
 ```nix
 {{#include ../../../examples/plugins/flake.nix}}
