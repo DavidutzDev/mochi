@@ -78,6 +78,11 @@ Singleton {
         send({ type: "bubble_click", bubble: id });
     }
 
+    // A click on an area's "+N": the daemon lists its hidden bubbles.
+    function overflowClick(area: string): void {
+        send({ type: "overflow_click", area: area });
+    }
+
     // Runs a module action, for example from a button in a view.
     function command(module: string, action: string, args: var): void {
         send({ type: "command", module: module, action: action, args: args ?? [] });

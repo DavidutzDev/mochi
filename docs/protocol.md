@@ -52,6 +52,12 @@ A click on a bubble is a `bubble_click`, also never answered. The daemon passes 
 {"type":"bubble_click","bubble":12}
 ```
 
+A click on an area's "+N" pill is an `overflow_click`, never answered either. The daemon shows the area's hidden bubbles in the island as an activity of its own, from the module `mochi`, with the view `HiddenBubbles` and the payload `{"area", "bubbles"}`, where `bubbles` are the hidden ones in the shape `bubbles` uses. The UI loads the views of module `mochi` from `root:/island/<view>.qml`. No plugin may take the id `mochi`.
+
+```json
+{"type":"overflow_click","area":"right"}
+```
+
 The UI may also send `command` to run module actions, for example from a button in a view.
 
 ## Control connections
@@ -78,6 +84,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `command` | `module`, `action`, `args` (optional, defaults to `[]`) | UI and control |
 | `event` | `activity`, `kind` | UI |
 | `bubble_click` | `bubble` | UI |
+| `overflow_click` | `area` | UI |
 | `status` | | control |
 | `reload` | | control |
 | `dismiss` | | control |

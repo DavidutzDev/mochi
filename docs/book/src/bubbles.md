@@ -8,6 +8,10 @@ Each module places its bubbles where it thinks best. These settings, in `config.
 {{#include ../../../crates/mochi-core/defaults/bubbles.toml}}
 ```
 
+## Hidden bubbles
+
+Past `max_per_area`, an area leaves out its least important bubbles and shows a "+N" pill with how many. Click it and the island lists them, each drawn as its module draws the bubble, with text when the module has a wide view. Click one to do what a click on the bubble does; the list closes. Escape, a click outside or a second click on "+N" closes it too. The list follows changes while it's open, and closes when the area has room for everything again.
+
 ## Stacking
 
 With `stack = true`, each area shows one bubble instead of a row: the most important in front, and up to two more peeking out behind it, smaller, on the side away from the island. Hover the stack and it fans out into the row, each bubble clickable; it folds back a moment after the pointer leaves.

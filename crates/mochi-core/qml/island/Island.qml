@@ -113,11 +113,23 @@ Item {
     function load(next: var): bool {
         // root: URLs keep views inside Quickshell's config tree. A plain file
         // path would break singletons like Theme and hot reload.
-        const url = `root:/modules/${next.module}/${next.view}.qml`;
+        // What the daemon shows itself, like the list of hidden bubbles,
+        // comes from the "mochi" module, whose views sit here in island/.
+        const url = next.module === "mochi" ? `root:/island/${next.view}.qml` : `root:/modules/${next.module}/${next.view}.qml`;
         backLoader.source = "";
         backLoader.setSource(url, {
             payload: next.payload
         });
+        // A plugin's override that fails gives way to the module's own view,
+        // which the daemon keeps in builtin/<module>/ next to it.
+        if (backLoader.status !== Loader.Ready) {
+            const builtin = `root:/builtin/${next.module}/${next.view}.qml`;
+            console.warn(`mochi: could not load ${url}, trying ${builtin}`);
+            backLoader.source = "";
+            backLoader.setSource(builtin, {
+                payload: next.payload
+            });
+        }
         if (backLoader.status !== Loader.Ready) {
             console.warn(`mochi: could not load ${url}, keeping the current view`);
             backLoader.source = "";

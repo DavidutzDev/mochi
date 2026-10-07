@@ -8,6 +8,7 @@ Widgets are small views on the desktop, under your windows, from any module or p
 
 - Drag a widget to move it. It snaps to the grid.
 - Drag its round corner handle to resize it, within the sizes it allows.
+- While you drag or resize, thin accent lines show where the widget's edges or middle line up with another widget's edges or middle, or with the middle of the screen. Within 6 pixels of such a line, the widget snaps to it instead of the nearest grid cell. Positions are saved as whole cells from the widget's anchor, so it only snaps to lines it can be saved on: a widget whose middle is in the middle third of the screen counts its cells from the screen's middle, so it can center on the screen but not always line up its edge with a widget on the left.
 - Click it, or its pencil, to open its settings, a form made from the settings it declares. Changes apply at once. Its trash button removes it.
 - Where widgets overlap, the one on the higher layer is on top. The arrows over a widget move it a layer up or down.
 - Click the island to open the drawer under it: every widget the running modules and plugins offer, a search box, and a filter per module. Drag one onto the screen to add it; the drawer folds out of the way as you drag, and when the pointer leaves it.

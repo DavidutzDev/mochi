@@ -46,6 +46,21 @@ Item {
     // The widget whose settings are open.
     property string selected: ""
 
+    // The alignment guides of the widget being moved or resized:
+    // [{x, y, length, axis}], from Place.guides.
+    property var guides: []
+
+    // Where the other widgets are, for lining one up with them.
+    function others(frame: Item): var {
+        const all = [];
+        for (let index = 0; index < frames.count; index++) {
+            const other = frames.itemAt(index);
+            if (other && other !== frame && other.visible)
+                all.push(other.placed);
+        }
+        return all;
+    }
+
     onPlacedChanged: Place.sync(widgets, placed.map(widget => widget.id))
     Component.onCompleted: Place.sync(widgets, placed.map(widget => widget.id))
     onEditingChanged: {
@@ -163,6 +178,22 @@ Item {
                 onTypingChanged: Qt.callLater(root.refreshShapes)
                 onFramedChanged: Qt.callLater(root.refreshShapes)
             }
+        }
+    }
+
+    // Thin accent lines where the moving widget lines up, over the widgets.
+    Repeater {
+        model: root.editing ? root.guides : []
+
+        Rectangle {
+            required property var modelData
+
+            x: modelData.axis === 0 ? Math.round(modelData.x) : modelData.x
+            y: modelData.axis === 1 ? Math.round(modelData.y) : modelData.y
+            width: modelData.axis === 0 ? 1 : modelData.length
+            height: modelData.axis === 0 ? modelData.length : 1
+            z: 1
+            color: Theme.accent
         }
     }
 
