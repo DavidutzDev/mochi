@@ -16,7 +16,7 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 10
+        spacing: Theme.spaceSmall
 
         Art {
             anchors.verticalCenter: parent.verticalCenter
@@ -30,13 +30,13 @@ Item {
             text: root.payload.title ?? ""
             elide: Text.ElideRight
             color: root.playing ? Theme.foreground : Theme.muted
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
+            font.weight: Theme.weightTitle
 
             Behavior on color {
                 ColorAnimation {
-                    duration: 200
+                    duration: Theme.fast
                 }
             }
         }

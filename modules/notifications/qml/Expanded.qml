@@ -62,16 +62,20 @@ Item {
         return new Date(received).toLocaleDateString(Qt.locale(), Locale.ShortFormat);
     }
 
+    EdgeLight {
+        radius: Theme.radiusSurface
+    }
+
     Column {
         id: column
 
         anchors.fill: parent
         anchors.margins: Theme.padding
-        spacing: 10
+        spacing: Theme.spaceSmall
 
         Row {
             width: parent.width
-            spacing: 8
+            spacing: Theme.spaceSmall
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
@@ -107,7 +111,7 @@ Item {
                 id: content
 
                 width: parent.width
-                spacing: 12
+                spacing: Theme.spaceMedium
 
                 AppIcon {
                     id: icon
@@ -118,7 +122,7 @@ Item {
 
                 Column {
                     width: parent.width - icon.width - parent.spacing
-                    spacing: 3
+                    spacing: Theme.spaceTiny
 
                     Text {
                         width: parent.width
@@ -130,7 +134,7 @@ Item {
                         color: root.payload.urgency === "critical" ? Theme.accent : Theme.foreground
                         font.pixelSize: Theme.textTitle
                         font.family: Theme.fontFamily
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.weightTitle
                     }
 
                     Text {
@@ -161,7 +165,7 @@ Item {
         Flow {
             width: parent.width
             visible: !root.replying && ((root.payload.actions ?? []).length > 0 || root.reply !== "")
-            spacing: 8
+            spacing: Theme.spaceSmall
 
             Button {
                 visible: root.reply !== ""
@@ -203,9 +207,9 @@ Item {
                 id: input
 
                 anchors.left: parent.left
-                anchors.leftMargin: 16
+                anchors.leftMargin: Theme.spaceLarge
                 anchors.right: send.left
-                anchors.rightMargin: 8
+                anchors.rightMargin: Theme.spaceSmall
                 anchors.verticalCenter: parent.verticalCenter
                 color: Theme.foreground
                 selectionColor: Theme.accent
@@ -230,7 +234,7 @@ Item {
                 id: send
 
                 anchors.right: parent.right
-                anchors.rightMargin: 5
+                anchors.rightMargin: Theme.spaceTiny
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Send"
                 tone: "accent"

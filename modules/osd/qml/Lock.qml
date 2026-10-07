@@ -14,7 +14,7 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 10
+        spacing: Theme.spaceSmall
 
         Symbol {
             anchors.verticalCenter: parent.verticalCenter
@@ -26,7 +26,7 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: caps ? "Caps Lock" : "Num Lock"
             color: Theme.foreground
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
         }
 
@@ -34,9 +34,9 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: on ? "on" : "off"
             color: on ? Theme.accent : Theme.muted
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
+            font.weight: Theme.weightTitle
         }
     }
 }

@@ -12,7 +12,7 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 10
+        spacing: Theme.spaceSmall
 
         Symbol {
             anchors.verticalCenter: parent.verticalCenter
@@ -24,7 +24,7 @@ Item {
             width: Math.min(implicitWidth, 280)
             text: payload.description ?? ""
             color: Theme.foreground
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
             elide: Text.ElideRight
         }

@@ -41,20 +41,20 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 12
+        spacing: Theme.spaceMedium
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
             visible: root.payload.label != null
             text: root.payload.label ?? ""
             color: Theme.muted
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
         }
 
         Row {
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 6
+            spacing: Theme.spaceSmall
 
             Repeater {
                 // A count rather than the array, so a payload update keeps
@@ -70,7 +70,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     width: workspace.active ? 22 : 8
                     height: 8
-                    radius: 4
+                    radius: height / 2
                     color: workspace.active ? Theme.foreground : workspace.urgent ? Theme.accent : Theme.muted
 
                     Behavior on width {
@@ -83,7 +83,7 @@ Item {
 
                     Behavior on color {
                         ColorAnimation {
-                            duration: 200
+                            duration: Theme.fast
                         }
                     }
 
@@ -102,9 +102,9 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: root.payload.active ?? ""
             color: Theme.foreground
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
+            font.weight: Theme.weightTitle
         }
     }
 }

@@ -1,38 +1,52 @@
 import QtQuick
+import Quickshell
 import qs.island
 
-// The hub's own card: the time, large, and the date.
+// The hub's own card: the time, large, with the weekday and the date beside
+// it. Its digits roll as the minutes change.
 Item {
     id: root
 
     property var payload: null
-    property date now: new Date()
 
-    implicitHeight: column.implicitHeight
+    implicitHeight: time.implicitHeight
 
-    Timer {
-        interval: 1000
-        repeat: true
-        running: true
-        onTriggered: root.now = new Date()
+    SystemClock {
+        id: clock
+
+        precision: SystemClock.Minutes
+    }
+
+    RollingText {
+        id: time
+
+        anchors.verticalCenter: parent.verticalCenter
+        text: Qt.formatTime(clock.date, "HH:mm")
+        pixelSize: Theme.textDisplay
+        family: Theme.displayFamily
+        weight: Theme.weightTitle
     }
 
     Column {
-        id: column
-
-        spacing: 2
+        anchors.left: time.right
+        anchors.leftMargin: Theme.spaceMedium
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
 
         Text {
-            text: root.now.toLocaleTimeString(Qt.locale(), "HH:mm")
+            width: parent.width
+            text: clock.date.toLocaleDateString(Qt.locale(), "dddd")
+            elide: Text.ElideRight
             color: Theme.foreground
-            font.pixelSize: Theme.textDisplay
-            font.family: Theme.displayFamily
-            font.weight: Font.DemiBold
-            font.features: { "tnum": 1 }
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
+            font.weight: Theme.weightLabel
         }
 
         Text {
-            text: root.now.toLocaleDateString(Qt.locale(), "dddd d MMMM")
+            width: parent.width
+            text: clock.date.toLocaleDateString(Qt.locale(), "d MMMM")
+            elide: Text.ElideRight
             color: Theme.muted
             font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily

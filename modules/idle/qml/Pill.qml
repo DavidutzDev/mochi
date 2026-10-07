@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import qs.island
 
+// The resting island: a dot and the time, whose digits roll as it changes.
 Item {
     id: root
 
@@ -22,23 +23,22 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 8
+        spacing: Theme.spaceSmall
 
         Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: 7
             height: 7
-            radius: 3.5
+            radius: height / 2
             color: Theme.accent
         }
 
-        Text {
+        RollingText {
             anchors.verticalCenter: parent.verticalCenter
             text: Qt.formatTime(clock.date, root.format)
-            color: Theme.foreground
-            font.pixelSize: Theme.textSubtitle
-            font.family: Theme.displayFamily
-            font.weight: Font.DemiBold
+            pixelSize: Theme.textBody
+            family: Theme.displayFamily
+            weight: Theme.weightTitle
         }
     }
 }

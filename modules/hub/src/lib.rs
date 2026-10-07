@@ -98,7 +98,8 @@ impl Module for Hub {
         vec![
             ContributionSpec::new("hub", "card", "clock", "Clock", "Today")
                 .icon("clock")
-                .options(json!({ "span": 1 })),
+                .order(3)
+                .options(json!({ "span": 1, "rows": 1 })),
         ]
     }
 

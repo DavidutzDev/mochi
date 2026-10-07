@@ -9,7 +9,7 @@ Row {
     property var payload: ({})
     readonly property bool playing: payload.status === "playing"
 
-    spacing: 8
+    spacing: Theme.spaceSmall
 
     Art {
         anchors.verticalCenter: parent.verticalCenter
@@ -25,11 +25,11 @@ Row {
         color: root.playing ? Theme.foreground : Theme.muted
         font.pixelSize: Theme.textBody
         font.family: Theme.fontFamily
-        font.weight: Font.DemiBold
+        font.weight: Theme.weightTitle
 
         Behavior on color {
             ColorAnimation {
-                duration: 200
+                duration: Theme.fast
             }
         }
     }
