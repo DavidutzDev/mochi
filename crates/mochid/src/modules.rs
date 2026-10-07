@@ -263,7 +263,8 @@ impl Runner {
             })
             .collect();
         let dir = self.paths.shell_dir();
-        let written = assets::write_shell(&dir, &mochi_core::QML, &views, self.mode)
+        let fonts = assets::find_fonts();
+        let written = assets::write_shell(&dir, &mochi_core::QML, &views, &fonts, self.mode)
             .with_context(|| format!("cannot write {}", dir.display()))?;
         tracing::info!(mode = ?self.mode, written, dir = %dir.display(), "wrote the shell");
         Ok(())

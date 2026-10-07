@@ -49,7 +49,7 @@ Item {
             color: Theme.accent
             font.pixelSize: root.text * 1.1
             font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
+            font.weight: Theme.weightTitle
         }
 
         Row {
@@ -80,7 +80,7 @@ Item {
 
     Grid {
         anchors.top: header.bottom
-        anchors.topMargin: 8
+        anchors.topMargin: Theme.spaceSmall
         anchors.horizontalCenter: parent.horizontalCenter
         columns: 7
 
@@ -98,7 +98,7 @@ Item {
                 color: Theme.muted
                 font.pixelSize: root.text * 0.9
                 font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
+                font.weight: Theme.weightTitle
             }
         }
 
@@ -132,7 +132,9 @@ Item {
                     font.pixelSize: root.text
                     font.family: Theme.fontFamily
                     font.weight: day.isToday ? Font.DemiBold : Font.Normal
-                    font.features: { "tnum": 1 }
+                    font.features: {
+                        "tnum": 1
+                    }
                 }
             }
         }

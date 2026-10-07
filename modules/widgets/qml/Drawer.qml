@@ -76,7 +76,7 @@ Item {
         width: 400
         height: root.open ? openHeight : 0
         visible: height > 1 || root.dragging !== null
-        radius: Math.min(height / 2, Theme.radiusLarge)
+        radius: Math.min(height / 2, Theme.radiusSurface)
         color: Theme.background
         border.width: 1
         border.color: Theme.border
@@ -104,6 +104,13 @@ Item {
             anchors.fill: parent
         }
 
+        // Flashes when the layout is copied.
+        EdgeLight {
+            id: light
+
+            radius: pill.radius
+        }
+
         // Open: the drawer. It stays while a widget is dragged out of it,
         // only faded: the entry being dragged holds the pointer.
         Item {
@@ -122,14 +129,11 @@ Item {
                 id: header
 
                 width: parent.width
-                spacing: 10
+                spacing: Theme.spaceSmall
 
-                Text {
-                    text: "Widgets"
-                    color: Theme.foreground
-                    font.pixelSize: Theme.textTitle
-                    font.family: Theme.fontFamily
-                    font.weight: Font.DemiBold
+                PanelHeader {
+                    width: parent.width
+                    title: "Widgets"
                 }
 
                 Rectangle {
@@ -154,9 +158,9 @@ Item {
                         id: search
 
                         anchors.left: magnifier.right
-                        anchors.leftMargin: 8
+                        anchors.leftMargin: Theme.spaceSmall
                         anchors.right: parent.right
-                        anchors.rightMargin: 12
+                        anchors.rightMargin: Theme.spaceMedium
                         anchors.verticalCenter: parent.verticalCenter
                         color: Theme.foreground
                         selectionColor: Theme.accent
@@ -183,7 +187,7 @@ Item {
                 // One chip per module offering widgets.
                 Flow {
                     width: parent.width
-                    spacing: 6
+                    spacing: Theme.spaceSmall
 
                     Repeater {
                         model: [""].concat(root.modules)
@@ -205,9 +209,9 @@ Item {
                                 anchors.centerIn: parent
                                 text: chip.modelData === "" ? "All" : chip.modelData
                                 color: chip.chosen ? Theme.background : Theme.foreground
-                                font.pixelSize: Theme.textLabel
+                                font.pixelSize: Theme.textCaption
                                 font.family: Theme.fontFamily
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.weightTitle
                             }
 
                             MouseArea {
@@ -227,16 +231,20 @@ Item {
                 id: list
 
                 anchors.top: header.bottom
-                anchors.topMargin: 10
+                anchors.topMargin: Theme.spaceSmall
                 anchors.bottom: buttons.top
-                anchors.bottomMargin: 10
+                anchors.bottomMargin: Theme.spaceSmall
                 width: parent.width
                 clip: true
-                spacing: 4
+                spacing: Theme.spaceTiny
                 model: root.shown
                 boundsBehavior: Flickable.StopAtBounds
                 // Keeps every entry while the drawer folds under a drag.
                 cacheBuffer: 4000
+
+                ScrollFade {
+                    view: list
+                }
 
                 delegate: ListRow {
                     id: entry
@@ -286,7 +294,7 @@ Item {
 
                 anchors.bottom: parent.bottom
                 width: parent.width
-                spacing: 8
+                spacing: Theme.spaceSmall
 
                 Text {
                     visible: (root.desktop.layout?.error ?? null) !== null
@@ -294,13 +302,13 @@ Item {
                     wrapMode: Text.Wrap
                     text: root.desktop.layout?.error ?? ""
                     color: Theme.danger
-                    font.pixelSize: Theme.textLabel
+                    font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily
                 }
 
                 Row {
                     width: parent.width
-                    spacing: 8
+                    spacing: Theme.spaceSmall
 
                     // Copy the layout as widgets.toml; the arrow has the other formats.
                     Row {
@@ -313,7 +321,10 @@ Item {
                             width: parent.width - more.width - 2
                             text: "Copy"
                             icon: "copy"
-                            onClicked: Daemon.command("widgets", "copy", ["toml"])
+                            onClicked: {
+                                Daemon.command("widgets", "copy", ["toml"]);
+                                light.flash();
+                            }
                         }
 
                         Button {
@@ -340,10 +351,10 @@ Item {
             Rectangle {
                 visible: root.menu
                 anchors.bottom: buttons.top
-                anchors.bottomMargin: 6
+                anchors.bottomMargin: Theme.spaceSmall
                 width: copy.width
                 height: formats.implicitHeight + 8
-                radius: Theme.radiusMedium
+                radius: Theme.radiusField
                 color: Theme.raised
 
                 Column {
@@ -355,8 +366,14 @@ Item {
 
                     Repeater {
                         model: [
-                            { "label": "Copy as TOML", "format": "toml" },
-                            { "label": "Copy as Nix", "format": "nix" }
+                            {
+                                "label": "Copy as TOML",
+                                "format": "toml"
+                            },
+                            {
+                                "label": "Copy as Nix",
+                                "format": "nix"
+                            }
                         ]
 
                         Rectangle {
@@ -366,7 +383,7 @@ Item {
 
                             width: formats.width
                             height: 32
-                            radius: Theme.radiusSmall
+                            radius: Theme.radiusControl
                             color: formatArea.containsMouse ? Theme.highlight : "transparent"
 
                             Text {
@@ -386,6 +403,7 @@ Item {
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: {
                                     Daemon.command("widgets", "copy", [format.modelData.format]);
+                                    light.flash();
                                     root.menu = false;
                                 }
                             }
@@ -407,8 +425,8 @@ Item {
         height: (root.dragging?.size[1] ?? 0) * cell
         x: Place.snap(root.at.x - width / 2, cell)
         y: Place.snap(root.at.y - height / 2, cell)
-        radius: Theme.radiusLarge
-        color: Qt.rgba(1, 1, 1, 0.08)
+        radius: Theme.radiusSurface
+        color: Qt.alpha(Theme.foreground, 0.08)
         border.width: 2
         border.color: Theme.accent
 
@@ -416,9 +434,9 @@ Item {
             anchors.centerIn: parent
             text: root.dragging?.title ?? ""
             color: Theme.foreground
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
+            font.weight: Theme.weightTitle
         }
     }
 

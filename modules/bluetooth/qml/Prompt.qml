@@ -34,32 +34,23 @@ Item {
         }
     }
 
+    // Pairing waits on the answer.
+    EdgeLight {
+        radius: Theme.radiusSurface
+        working: true
+    }
+
     Column {
         id: column
 
         x: Theme.padding
         y: Theme.padding
         width: root.width - Theme.padding * 2
-        spacing: 14
+        spacing: Theme.spaceMedium
 
-        Row {
-            spacing: 10
-
-            Symbol {
-                anchors.verticalCenter: parent.verticalCenter
-                name: "bluetooth"
-                size: 16
-                color: Theme.accent
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: `Pair ${root.device}`
-                color: Theme.foreground
-                font.pixelSize: Theme.textSubtitle
-                font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
-            }
+        PanelHeader {
+            width: parent.width
+            title: `Pair ${root.device}`
         }
 
         Text {
@@ -87,11 +78,13 @@ Item {
             anchors.horizontalCenter: parent.horizontalCenter
             text: root.payload.code ?? ""
             color: Theme.foreground
-            font.pixelSize: 34
+            font.pixelSize: Theme.textDisplay
             font.family: Theme.fontFamily
-            font.weight: Font.Bold
+            font.weight: Theme.weightTitle
             font.letterSpacing: 6
-            font.features: { "tnum": 1 }
+            font.features: {
+                "tnum": 1
+            }
         }
 
         Rectangle {
@@ -105,9 +98,9 @@ Item {
                 id: input
 
                 anchors.left: parent.left
-                anchors.leftMargin: 16
+                anchors.leftMargin: Theme.spaceLarge
                 anchors.right: parent.right
-                anchors.rightMargin: 16
+                anchors.rightMargin: Theme.spaceLarge
                 anchors.verticalCenter: parent.verticalCenter
                 color: Theme.foreground
                 selectionColor: Theme.accent
@@ -123,7 +116,7 @@ Item {
 
         Row {
             anchors.right: parent.right
-            spacing: 8
+            spacing: Theme.spaceSmall
 
             Button {
                 visible: root.kind !== "show"

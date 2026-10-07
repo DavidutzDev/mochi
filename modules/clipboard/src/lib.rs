@@ -129,7 +129,7 @@ impl Module for Clipboard {
             ContributionSpec::new("hub", "card", "history", "Card", "Clipboard")
                 .icon("clipboard")
                 .order(30)
-                .options(json!({ "span": 1 })),
+                .options(json!({ "span": 1, "rows": 1 })),
             ContributionSpec::new("hub", "page", "history", "Page", "Clipboard")
                 .icon("clipboard")
                 .order(30),

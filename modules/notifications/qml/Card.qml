@@ -1,75 +1,98 @@
 import QtQuick
 import qs.island
 
-// The hub card: the latest two missed notifications.
+// The hub card: the latest missed notification, and how many there are.
 Item {
     id: root
 
     property var payload: null
     readonly property var notes: payload?.notes ?? []
+    readonly property var latest: notes[0] ?? null
 
-    implicitHeight: notes.length === 0 ? 40 : column.implicitHeight
+    implicitHeight: Theme.controlHeight
 
-    Text {
-        anchors.centerIn: parent
-        visible: root.notes.length === 0
-        text: "Nothing missed"
-        color: Theme.muted
-        font.pixelSize: Theme.textBody
-        font.family: Theme.fontFamily
+    Row {
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.latest === null
+        spacing: Theme.spaceSmall
+
+        Symbol {
+            anchors.verticalCenter: parent.verticalCenter
+            name: root.payload?.dnd ? "do_not_disturb_on" : "notifications_off"
+            size: Theme.textTitle
+            color: Theme.muted
+        }
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.payload?.dnd ? "Nothing missed, do not disturb" : "Nothing missed"
+            color: Theme.muted
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
+        }
     }
 
-    Column {
-        id: column
+    Row {
+        anchors.fill: parent
+        visible: root.latest !== null
+        spacing: Theme.spaceSmall
 
-        width: parent.width
-        spacing: 10
+        AppIcon {
+            id: icon
 
-        Repeater {
-            model: root.notes.slice(0, 2)
+            anchors.verticalCenter: parent.verticalCenter
+            note: root.latest ?? ({})
+            size: Theme.controlHeight
+        }
 
-            Row {
-                id: entry
+        Column {
+            anchors.verticalCenter: parent.verticalCenter
+            width: parent.width - icon.width - (count.visible ? count.width + Theme.spaceSmall : 0) - Theme.spaceSmall
 
-                required property var modelData
-
+            Text {
                 width: parent.width
-                spacing: 10
+                text: root.latest ? root.latest.summary || root.latest.app : ""
+                elide: Text.ElideRight
+                textFormat: Text.PlainText
+                color: Theme.foreground
+                font.pixelSize: Theme.textBody
+                font.family: Theme.fontFamily
+                font.weight: Theme.weightLabel
+            }
 
-                AppIcon {
-                    anchors.verticalCenter: parent.verticalCenter
-                    note: entry.modelData
-                    size: 26
-                }
+            Text {
+                width: parent.width
+                visible: text !== ""
+                text: root.latest?.line ?? ""
+                elide: Text.ElideRight
+                textFormat: Text.StyledText
+                color: Theme.muted
+                linkColor: Theme.accent
+                onLinkActivated: link => Daemon.command("notifications", "open", [String(root.latest.id), link])
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+            }
+        }
 
-                Column {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: parent.width - 36
+        // How many in all, when there's more than this one.
+        Rectangle {
+            id: count
 
-                    Text {
-                        width: parent.width
-                        text: entry.modelData.summary || entry.modelData.app
-                        elide: Text.ElideRight
-                        textFormat: Text.PlainText
-                        color: Theme.foreground
-                        font.pixelSize: Theme.textBody
-                        font.family: Theme.fontFamily
-                        font.weight: Font.DemiBold
-                    }
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.notes.length > 1
+            width: Math.max(height, number.width + Theme.spaceSmall * 2)
+            height: Theme.textCaption * 2
+            radius: height / 2
+            color: Theme.raised
 
-                    Text {
-                        width: parent.width
-                        visible: text !== ""
-                        text: entry.modelData.line ?? ""
-                        elide: Text.ElideRight
-                        textFormat: Text.StyledText
-                        color: Theme.muted
-                        linkColor: Theme.accent
-                        onLinkActivated: link => Daemon.command("notifications", "open", [String(entry.modelData.id), link])
-                        font.pixelSize: Theme.textLabel
-                        font.family: Theme.fontFamily
-                    }
-                }
+            RollingText {
+                id: number
+
+                anchors.centerIn: parent
+                text: String(root.notes.length)
+                color: Theme.foreground
+                pixelSize: Theme.textCaption
+                weight: Theme.weightTitle
             }
         }
     }

@@ -17,10 +17,19 @@ Item {
     implicitHeight: column.implicitHeight
 
     readonly property var profileLooks: ({
-        "power-saver": { "label": "Power saver", "icon": "leaf" },
-        "balanced": { "label": "Balanced", "icon": "scale" },
-        "performance": { "label": "Performance", "icon": "bolt" }
-    })
+            "power-saver": {
+                "label": "Power saver",
+                "icon": "eco"
+            },
+            "balanced": {
+                "label": "Balanced",
+                "icon": "balance"
+            },
+            "performance": {
+                "label": "Performance",
+                "icon": "speed"
+            }
+        })
 
     Timer {
         id: disarm
@@ -44,7 +53,7 @@ Item {
         id: column
 
         width: parent.width
-        spacing: 10
+        spacing: Theme.spaceSmall
 
         SectionLabel {
             text: "Session"
@@ -54,7 +63,7 @@ Item {
             id: tiles
 
             width: parent.width
-            spacing: 10
+            spacing: Theme.spaceSmall
 
             Repeater {
                 model: root.buttons
@@ -75,7 +84,7 @@ Item {
 
         Item {
             width: 1
-            height: 8
+            height: Theme.spaceSmall
         }
 
         SectionLabel {
@@ -87,7 +96,12 @@ Item {
             visible: root.profiles.length > 0
             width: parent.width
             height: 52
-            options: root.profiles.map(name => Object.assign({ "value": name }, root.profileLooks[name] ?? { "label": name, "icon": "" }))
+            options: root.profiles.map(name => Object.assign({
+                    "value": name
+                }, root.profileLooks[name] ?? {
+                    "label": name,
+                    "icon": ""
+                }))
             current: root.payload?.profile ?? ""
             onPicked: value => Daemon.command("power", "profile", [value])
         }

@@ -10,11 +10,17 @@ Item {
     implicitWidth: row.implicitWidth + Theme.padding * 2
     implicitHeight: 40
 
+    // A session or a break just finished.
+    EdgeLight {
+        radius: root.height / 2
+        Component.onCompleted: flash()
+    }
+
     Row {
         id: row
 
         anchors.centerIn: parent
-        spacing: 10
+        spacing: Theme.spaceSmall
 
         Symbol {
             anchors.verticalCenter: parent.verticalCenter
@@ -29,7 +35,7 @@ Item {
             color: Theme.foreground
             font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
+            font.weight: Theme.weightTitle
         }
     }
 }

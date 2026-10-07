@@ -13,37 +13,25 @@ Item {
     // Up to five rows show; more scroll.
     readonly property int rows: Math.min(notes.length, 5)
 
-    implicitHeight: toolbar.height + 12 + (notes.length === 0 ? 60 : rows * 60 + (rows - 1) * 8)
+    implicitHeight: toolbar.height + Theme.spaceMedium + (notes.length === 0 ? 60 : rows * 60 + (rows - 1) * 8)
 
-    Item {
+    PanelHeader {
         id: toolbar
 
         width: parent.width
-        height: 32
+        title: root.notes.length === 1 ? "1 missed" : `${root.notes.length} missed`
 
-        Text {
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.notes.length === 1 ? "1 missed" : `${root.notes.length} missed`
-            color: Theme.muted
-            font.pixelSize: Theme.textBody
-            font.family: Theme.fontFamily
+        Button {
+            text: root.dnd ? "Do not disturb is on" : "Do not disturb"
+            icon: root.dnd ? "do_not_disturb_on" : ""
+            tone: root.dnd ? "accent" : "neutral"
+            onClicked: Daemon.command("notifications", "dnd", ["toggle"])
         }
 
-        Row {
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 8
-
-            Button {
-                text: root.dnd ? "Do not disturb is on" : "Do not disturb"
-                onClicked: Daemon.command("notifications", "dnd", ["toggle"])
-            }
-
-            Button {
-                visible: root.notes.length > 0
-                text: "Clear all"
-                onClicked: Daemon.command("notifications", "clear", [])
-            }
+        Button {
+            visible: root.notes.length > 0
+            text: "Clear all"
+            onClicked: Daemon.command("notifications", "clear", [])
         }
     }
 
@@ -52,7 +40,7 @@ Item {
         visible: root.notes.length === 0
         text: "Nothing missed"
         color: Theme.muted
-        font.pixelSize: Theme.textSubtitle
+        font.pixelSize: Theme.textBody
         font.family: Theme.fontFamily
     }
 
@@ -60,13 +48,17 @@ Item {
         id: list
 
         anchors.top: toolbar.bottom
-        anchors.topMargin: 12
+        anchors.topMargin: Theme.spaceMedium
         width: parent.width
         height: root.rows * 60 + Math.max(root.rows - 1, 0) * 8
         clip: true
-        spacing: 8
+        spacing: Theme.spaceSmall
         boundsBehavior: Flickable.StopAtBounds
         model: root.notes
+
+        ScrollFade {
+            view: list
+        }
 
         delegate: ListRow {
             id: row

@@ -27,7 +27,36 @@ The source says where the plugin comes from and how it's installed:
 | `git-release:github.com/<user>/<repo>:<tag>` | Downloads the release asset the plugin's manifest names, already built: nothing to compile. Without `:<tag>`, the latest release. GitHub only for now. |
 | `path:<dir>` | Uses the directory where it is, building it in place. For writing a plugin: its views hot-reload. `~` is your home directory, and a relative path starts next to plugins.toml. |
 
-Building from `git:` needs what the plugin builds with, usually `cargo`, plus `git`. The Nix package brings `git`, `curl` and `tar`, not a Rust toolchain.
+## Which source to pick
+
+A `git:` source builds the plugin on your machine, so it needs the plugin's own build environment: the compiler or runtime of its language, like `cargo`, `go`, `node` or `python3`, the libraries it links, and the programs its backend runs. Mochi brings none of these. The Nix package only brings `git`, `curl` and `tar`, which `install` itself uses. A release needs none of it, since the plugin comes built.
+
+| You have | Use |
+|---|---|
+| The plugin's build tools | `git:`, or a release if it has them |
+| No build tools, and the plugin publishes releases | `git-release:` |
+| NixOS, or Nix on another system | `git:` or home-manager's `src` for the languages below; a release for the others |
+
+### On NixOS, and with Nix
+
+NixOS has no build tools installed by default, and doesn't put libraries where a build looks for them. So with Nix installed, Mochi builds plugins with Nix itself, from the lock file the plugin already has, without its author writing any Nix:
+
+| Language | Built from |
+|---|---|
+| Rust | `Cargo.lock` |
+| Node | `package-lock.json` |
+| Python | `pyproject.toml` or `requirements.txt`, with packages from nixpkgs |
+| Go | `go.mod` with `vendor/` committed |
+| Scripts, and release archives | The files as they are; release binaries are patched to find NixOS's libraries |
+
+`mochi plugins install` does this when the plugin's build tools, or the programs it `needs`, aren't installed, and always when the plugin has a `flake.nix`. Home-manager does it for `src`, see [With home-manager](#with-home-manager). The build stays in the Nix store, kept from garbage collection by a link in `~/.local/share/mochi/plugins/.nix/`. [Building with Nix](plugin-manifest.md#building-with-nix) has the details.
+
+This covers most plugins, not all of them. Mochi guesses the build from the plugin's files, and a plugin that does more than its language's usual build can fail, like one that generates code, links a library its manifest doesn't name, or downloads things while building. Go without `vendor/`, Java, and other languages without a lock file Nix can read aren't built at all, since Nix would need a hash for their downloads. For those, use the plugin's releases:
+
+- With `mochi plugins install`: a `git-release:` source. A usual Linux binary looks for its loader in `/lib64`, which NixOS doesn't have, so it runs only if the binary is static or `programs.nix-ld` is on.
+- With home-manager: the release archive as `src`, as a flake input like `url = "https://github.com/User/repo/releases/download/v1.0/plugin-1.0-x86_64-linux.tar.gz"; flake = false;`. Mochi patches its binaries to run on NixOS, and `flake.lock` pins the archive, with no hash to write.
+
+If a plugin has no releases and doesn't build, ask its author for releases or a `flake.nix`.
 
 ## Installing
 
@@ -63,11 +92,9 @@ focus_minutes = 50
 
 A plugin's settings go in its `[module.<id>]` section, like a builtin's. The plugin's `settings.toml` lists them.
 
-### Without build tools
+### When a build fails
 
-A `git:` plugin builds on your machine, with whatever its `build` command runs, often `cargo`. When the plugin's repository has a `flake.nix` and Nix is installed, `install` runs `nix build` on the flake instead, and nothing else needs to be installed. The build stays in the Nix store, kept from garbage collection by a link in `~/.local/share/mochi/plugins/.nix/`.
-
-When a build fails, `install` names the tools missing and the ways around it that apply to the plugin:
+`install` names the tools missing and the ways around it that apply to the plugin:
 
 ```
 mochi: chrono: the build failed (exit status: 127): cargo build --release ...
@@ -77,10 +104,8 @@ mochi: chrono: the build failed (exit status: 127): cargo build --release ...
       programs.mochi.plugins.chrono.src = <a flake input of its repository>;
   - use its prebuilt releases, if it publishes them:
       chrono = { source = "git-release:github.com/Someone/mochi-clock" }
-  - ask its author for a flake.nix: with Nix installed, Mochi builds a plugin's flake instead
+  - install Nix: with it, Mochi builds plugins from their lock files, with no other tools
 ```
-
-On NixOS, a prebuilt release only runs if it's a static binary or `programs.nix-ld` is on, since a usual Linux binary looks for its loader in `/lib64`.
 
 ## Pinning and updating
 
@@ -141,4 +166,4 @@ programs.mochi.plugins.pomodoro = {
 };
 ```
 
-This works for Rust plugins with a `Cargo.lock`, git dependencies included, and needs no hash. plugins.toml then points at the build in the Nix store, and `nix flake update mochi-pomodoro` moves it to the latest commit. A plugin with its own flake can be given as `package` instead: `programs.mochi.plugins.pomodoro.package = inputs.mochi-pomodoro.packages.${pkgs.system}.default;`.
+This works for the languages in [On NixOS, and with Nix](#on-nixos-and-with-nix), and needs no hash. For a plugin it can't build, give its release archive as `src` instead. Programs the backend runs come from the manifest's `needs`; `runtimeInputs = [ pkgs.ffmpeg ];` adds others, and `buildInputs` native libraries it links. plugins.toml then points at the build in the Nix store, and `nix flake update mochi-pomodoro` moves it to the latest commit. A plugin with its own flake can be given as `package` instead: `programs.mochi.plugins.pomodoro.package = inputs.mochi-pomodoro.packages.${pkgs.system}.default;`.

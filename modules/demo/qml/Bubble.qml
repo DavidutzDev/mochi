@@ -8,15 +8,15 @@ Rectangle {
 
     implicitWidth: 22
     implicitHeight: 22
-    radius: 11
+    radius: height / 2
     color: Theme.accent
 
     Text {
         anchors.centerIn: parent
         text: (payload.text ?? "?").charAt(0).toUpperCase()
         color: Theme.onAccent
-        font.pixelSize: Theme.textLabel
+        font.pixelSize: Theme.textCaption
         font.family: Theme.fontFamily
-        font.weight: Font.Bold
+        font.weight: Theme.weightTitle
     }
 }

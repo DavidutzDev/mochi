@@ -1,5 +1,5 @@
 # An example plugin with a backend in Python, and a tiny Python SDK in
-# mochi_plugin.py. Python 3 needs to be installed.
+# mochi_plugin.py. `needs` asks for Python 3.
 
 [plugin]
 id = "hello"
@@ -11,6 +11,7 @@ api = 1
 
 [backend]
 exec = "hello.py"
+needs = ["python3"]
 
 [[actions]]
 name = "say"

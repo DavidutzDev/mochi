@@ -14,7 +14,7 @@ Item {
         anchors.centerIn: parent
         width: 12
         height: 12
-        radius: 6
+        radius: height / 2
         color: Theme.danger
 
         SequentialAnimation on opacity {

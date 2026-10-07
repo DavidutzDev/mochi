@@ -1,13 +1,16 @@
 import QtQuick
 import qs.island
 
-// The hub's home card: the battery's level, and how long until empty or
-// full, and the power module's profiles under them when it has some.
-// Without a battery, it says so.
+// The hub's home card and a desktop widget, in one row: the battery's
+// level, how long until empty or full, and the power module's profiles at
+// the end when it has some. Without a battery, it steps aside.
 Item {
     id: root
 
     property var payload: null
+    // What the desktop gives a widget; this one has no settings.
+    property var settings: ({})
+    property string instance: ""
     readonly property bool present: payload?.present ?? false
     // A desktop: nothing worth a card.
     readonly property bool hidden: !present
@@ -15,63 +18,57 @@ Item {
     readonly property var power: Daemon.state("power")
     readonly property var profiles: power?.profiles ?? []
     readonly property var profileIcons: ({
-            "power-saver": "leaf",
-            "balanced": "scale",
-            "performance": "bolt"
+            "power-saver": "eco",
+            "balanced": "balance",
+            "performance": "speed"
         })
 
-    implicitHeight: profiles.length > 0 ? 64 + 10 + switcher.height : 64
+    implicitWidth: 240
+    implicitHeight: Theme.rowHeight
 
-    Text {
-        anchors.centerIn: parent
-        visible: !root.present
-        text: "No battery"
-        color: Theme.muted
-        font.pixelSize: Theme.textBody
-        font.family: Theme.fontFamily
+    Gauge {
+        id: gauge
+
+        anchors.verticalCenter: parent.verticalCenter
+        visible: root.present
+        level: root.payload?.level ?? 0
+        charging: root.payload?.charging ?? false
+        color: root.tint
+        size: 26
     }
 
-    Row {
-        y: (64 - height) / 2
+    Column {
+        anchors.left: gauge.right
+        anchors.leftMargin: Theme.spaceMedium
+        anchors.right: switcher.visible ? switcher.left : parent.right
+        anchors.rightMargin: switcher.visible ? Theme.spaceSmall : 0
+        anchors.verticalCenter: parent.verticalCenter
         visible: root.present
-        spacing: 14
 
-        Gauge {
-            anchors.verticalCenter: parent.verticalCenter
-            level: root.payload?.level ?? 0
-            charging: root.payload?.charging ?? false
+        RollingText {
+            text: `${root.payload?.level ?? 0}%`
             color: root.tint
-            size: 26
+            pixelSize: Theme.textTitle
+            weight: Theme.weightTitle
         }
 
-        Column {
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 2
-
-            Text {
-                text: `${root.payload?.level ?? 0}%`
-                color: root.tint
-                font.pixelSize: Theme.textTitle
-                font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
-                font.features: { "tnum": 1 }
-            }
-
-            Text {
-                text: root.payload?.state ?? ""
-                color: Theme.muted
-                font.pixelSize: Theme.textLabel
-                font.family: Theme.fontFamily
-            }
+        Text {
+            width: parent.width
+            text: root.payload?.state ?? ""
+            elide: Text.ElideRight
+            color: Theme.muted
+            font.pixelSize: Theme.textCaption
+            font.family: Theme.fontFamily
         }
     }
 
     Segmented {
         id: switcher
 
-        y: 64 + 10
-        width: parent.width
-        height: 36
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        width: Theme.controlHeight * root.profiles.length
+        height: Theme.controlHeight
         visible: root.present && root.profiles.length > 0
         color: Theme.raised
         options: root.profiles.map(name => ({

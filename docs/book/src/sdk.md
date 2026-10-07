@@ -82,6 +82,7 @@ With `deny_unknown_fields`, a typo in `config.toml` makes the backend exit with 
 |---|---|
 | `Command(command)` | `mochi ipc <id> <action>`, a button in a view running `Daemon.command`, or another module's `call` |
 | `Clicked(activity)` | A click on one of its activities that has no expanded view |
+| `Hovered { activity, hovered }` | The pointer came onto one of its activities on the island, or left it |
 | `Ended { activity, reason }` | One of its activities is gone: `Expired`, `Dismissed`, `Withdrawn`, `Replaced` or `Outside` |
 | `BubbleClicked(bubble)` | A click on one of its bubbles |
 | `State { module, state }` | A module from `[uses] state` published state |

@@ -288,10 +288,24 @@ pub fn load_theme(path: &Path) -> Result<Theme, ConfigError> {
 
 /// `path` only labels errors.
 pub fn parse_theme(text: &str, path: &Path) -> Result<Theme, ConfigError> {
-    let theme: Theme =
+    let mut theme: Theme =
         toml::from_str(text).map_err(|error| ConfigError::invalid(path, error.to_string()))?;
+    for note in theme.text.migrate() {
+        tracing::warn!(file = %path.display(), "{note}; the old name still works for now");
+    }
     check_theme(&theme).map_err(|message| ConfigError::invalid(path, message))?;
     Ok(theme)
+}
+
+/// The renamed keys `theme.toml` still uses, for `mochi config check`.
+pub fn theme_notes(path: &Path) -> Result<Vec<String>, ConfigError> {
+    Ok(match read_optional(path)? {
+        Some(text) => toml::from_str::<Theme>(&text)
+            .map_err(|error| ConfigError::invalid(path, error.to_string()))?
+            .text
+            .migrate(),
+        None => Vec::new(),
+    })
 }
 
 /// Rejects values the UI can't use, naming the key.

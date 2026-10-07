@@ -16,7 +16,7 @@ Item {
     Row {
         anchors.fill: parent
         anchors.margins: Theme.padding
-        spacing: 14
+        spacing: Theme.spaceMedium
 
         AppIcon {
             id: icon
@@ -51,7 +51,7 @@ Item {
                 color: root.critical ? Theme.accent : Theme.foreground
                 font.pixelSize: Theme.textTitle
                 font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
+                font.weight: Theme.weightTitle
             }
 
             Text {

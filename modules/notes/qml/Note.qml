@@ -43,9 +43,9 @@ Item {
         visible: root.title !== ""
         text: root.title.toUpperCase()
         color: Theme.accent
-        font.pixelSize: Theme.textLabel
+        font.pixelSize: Theme.textCaption
         font.family: Theme.fontFamily
-        font.weight: Font.DemiBold
+        font.weight: Theme.weightTitle
         font.letterSpacing: 1
     }
 
@@ -53,12 +53,16 @@ Item {
         id: scroll
 
         anchors.top: heading.visible ? heading.bottom : parent.top
-        anchors.topMargin: heading.visible ? 10 : 0
+        anchors.topMargin: heading.visible ? Theme.spaceSmall : 0
         anchors.bottom: parent.bottom
         width: parent.width
         clip: true
         contentHeight: edit.implicitHeight
         boundsBehavior: Flickable.StopAtBounds
+
+        ScrollFade {
+            view: scroll
+        }
 
         TextEdit {
             id: edit

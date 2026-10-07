@@ -95,7 +95,7 @@ impl Module for Colors {
             ContributionSpec::new("hub", "card", "recent", "Card", "Colors")
                 .icon("palette")
                 .order(45)
-                .options(json!({ "span": 1 })),
+                .options(json!({ "span": 1, "rows": 1 })),
             ContributionSpec::new("hub", "page", "history", "Page", "Colors")
                 .icon("palette")
                 .order(45),

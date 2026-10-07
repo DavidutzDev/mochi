@@ -65,7 +65,7 @@ PanelWindow {
             required property Item modelData
 
             item: modelData
-            radius: Theme.radiusLarge
+            radius: Theme.radiusSurface
         }
     }
 

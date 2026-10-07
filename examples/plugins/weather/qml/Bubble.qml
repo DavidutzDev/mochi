@@ -14,7 +14,7 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 4
+        spacing: Theme.spaceTiny
 
         WeatherIcon {
             anchors.verticalCenter: parent.verticalCenter
@@ -23,14 +23,11 @@ Item {
             size: 14
         }
 
-        Text {
+        RollingText {
             anchors.verticalCenter: parent.verticalCenter
             text: `${root.payload.temperature ?? "–"}°`
-            color: Theme.foreground
-            font.pixelSize: Theme.textCaption
-            font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
-            font.features: { "tnum": 1 }
+            pixelSize: Theme.textCaption
+            weight: Theme.weightTitle
         }
     }
 }

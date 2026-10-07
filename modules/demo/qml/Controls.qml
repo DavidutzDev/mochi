@@ -16,15 +16,15 @@ Item {
     property int selected: 0
 
     implicitWidth: 640
-    implicitHeight: column.implicitHeight + 32
+    implicitHeight: column.implicitHeight + Theme.spaceLarge * 2
 
     Column {
         id: column
 
-        x: 16
-        y: 16
-        width: parent.width - 32
-        spacing: 12
+        x: Theme.spaceLarge
+        y: Theme.spaceLarge
+        width: parent.width - Theme.spaceLarge * 2
+        spacing: Theme.spaceMedium
 
         SectionLabel {
             text: "Tiles"
@@ -32,10 +32,10 @@ Item {
 
         Row {
             width: parent.width
-            spacing: 10
+            spacing: Theme.spaceSmall
 
             Tile {
-                width: (parent.width - 10) / 2
+                width: (parent.width - parent.spacing) / 2
                 vertical: false
                 icon: "wifi"
                 title: "Wi-Fi"
@@ -45,7 +45,7 @@ Item {
             }
 
             Tile {
-                width: (parent.width - 10) / 2
+                width: (parent.width - parent.spacing) / 2
                 vertical: false
                 icon: "bluetooth"
                 title: "Bluetooth"
@@ -75,7 +75,7 @@ Item {
 
         Row {
             width: parent.width
-            spacing: 12
+            spacing: Theme.spaceMedium
 
             Slider {
                 anchors.verticalCenter: parent.verticalCenter
@@ -110,9 +110,21 @@ Item {
         Segmented {
             width: parent.width
             options: [
-                { "value": "power-saver", "label": "Saver", "icon": "leaf" },
-                { "value": "balanced", "label": "Balanced", "icon": "scale" },
-                { "value": "performance", "label": "Performance", "icon": "bolt" }
+                {
+                    "value": "power-saver",
+                    "label": "Saver",
+                    "icon": "leaf"
+                },
+                {
+                    "value": "balanced",
+                    "label": "Balanced",
+                    "icon": "scale"
+                },
+                {
+                    "value": "performance",
+                    "label": "Performance",
+                    "icon": "bolt"
+                }
             ]
             current: root.profile
             onPicked: value => root.profile = value
@@ -124,8 +136,16 @@ Item {
 
         Repeater {
             model: [
-                { "icon": "headset", "title": "Earbuds", "subtitle": "Connected · 80%" },
-                { "icon": "speakers", "title": "Speakers", "subtitle": "Not connected" }
+                {
+                    "icon": "headset",
+                    "title": "Earbuds",
+                    "subtitle": "Connected · 80%"
+                },
+                {
+                    "icon": "speakers",
+                    "title": "Speakers",
+                    "subtitle": "Not connected"
+                }
             ]
 
             ListRow {
@@ -154,7 +174,7 @@ Item {
         }
 
         Row {
-            spacing: 8
+            spacing: Theme.spaceSmall
 
             Button {
                 text: "Neutral"
@@ -189,6 +209,108 @@ Item {
             Button {
                 text: "Disabled"
                 enabled: false
+            }
+        }
+
+        PanelHeader {
+            width: parent.width
+            title: "Panel header"
+            back: true
+
+            IconButton {
+                icon: "search"
+            }
+
+            IconButton {
+                icon: "edit"
+            }
+        }
+
+        SwitchRow {
+            width: parent.width
+            icon: "wifi"
+            title: "Switch row"
+            subtitle: root.wifi ? "On" : "Off"
+            checked: root.wifi
+            onToggled: checked => root.wifi = checked
+        }
+
+        SliderRow {
+            width: parent.width
+            icon: "volume"
+            value: root.volume
+            reset: 1
+            opens: true
+            onMoved: value => root.volume = value
+        }
+
+        // Rolling digits, an edge light that sweeps while working and
+        // flashes when done, and a list with fading edges.
+        Rectangle {
+            id: lit
+
+            property bool working: false
+            property int seconds: 0
+
+            width: parent.width
+            height: Theme.tileHeight
+            radius: Theme.radiusSurface
+            color: Theme.surface
+
+            EdgeLight {
+                id: light
+
+                radius: lit.radius
+                working: lit.working
+            }
+
+            Timer {
+                interval: 1000
+                running: true
+                repeat: true
+                onTriggered: lit.seconds++
+            }
+
+            Row {
+                anchors.centerIn: parent
+                spacing: Theme.spaceLarge
+
+                RollingText {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: `${Math.floor(lit.seconds / 60)}:${String(lit.seconds % 60).padStart(2, "0")}`
+                    pixelSize: Theme.textHeadline
+                    weight: Theme.weightTitle
+                }
+
+                Button {
+                    text: lit.working ? "Done" : "Work"
+                    onClicked: {
+                        if (lit.working)
+                            light.flash();
+                        lit.working = !lit.working;
+                    }
+                }
+            }
+        }
+
+        ListView {
+            id: faded
+
+            width: parent.width
+            height: Theme.rowHeight * 3
+            clip: true
+            model: 12
+            delegate: ListRow {
+                required property int index
+
+                width: faded.width
+                flat: true
+                icon: "music"
+                title: `Row ${index + 1}`
+            }
+
+            ScrollFade {
+                view: faded
             }
         }
     }

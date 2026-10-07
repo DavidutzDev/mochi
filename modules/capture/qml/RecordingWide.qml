@@ -15,7 +15,7 @@ Row {
         return minutes >= 60 ? `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
     }
 
-    spacing: 8
+    spacing: Theme.spaceSmall
 
     Timer {
         interval: 1000
@@ -30,14 +30,9 @@ Row {
         implicitWidth: 12
     }
 
-    Text {
+    RollingText {
         anchors.verticalCenter: parent.verticalCenter
         text: root.time
-        color: Theme.foreground
-        font.pixelSize: Theme.textBody
-        font.family: Theme.fontFamily
-        font.features: {
-            "tnum": 1
-        }
+        pixelSize: Theme.textBody
     }
 }

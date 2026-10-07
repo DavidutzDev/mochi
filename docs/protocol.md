@@ -246,6 +246,7 @@ An activity `spec` needs only `compact`, the view's name. The rest are optional:
 |---|---|---|
 | `command` | `id`, `action`, `args` | An action to run, with `args` checked against the manifest, as an object like `{"minutes": 5}`. Answer with `reply` and the same `id` |
 | `clicked` | `activity` | A click on an activity without an expanded view |
+| `hovered` | `activity`, `hovered` | The pointer came onto an activity on the island (`true`), or left it or the island stopped showing it (`false`) |
 | `ended` | `activity`, `reason` | An activity is gone: `expired`, `dismissed`, `withdrawn`, `replaced` or `outside` |
 | `bubble_clicked` | `bubble` | A click on a bubble |
 | `state` | `module`, `state` | A module from the manifest's `[uses] state` published state; `null` when it stopped |

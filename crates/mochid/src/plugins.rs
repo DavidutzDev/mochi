@@ -554,6 +554,13 @@ fn on_event(event: ModuleEvent, link: &mut Link, outgoing: &mpsc::UnboundedSende
             Some(ours) => ToPlugin::Clicked { activity: ours },
             None => return,
         },
+        ModuleEvent::Hovered { activity, hovered } => match link.activity(activity) {
+            Some(ours) => ToPlugin::Hovered {
+                activity: ours,
+                hovered,
+            },
+            None => return,
+        },
         ModuleEvent::Ended { activity, reason } => match link.activity(activity) {
             Some(ours) => {
                 link.activities.remove(&ours);
@@ -647,6 +654,24 @@ fn start(
     plugin: &PluginModule,
     backend: &mochi_plugins::manifest::Backend,
 ) -> io::Result<(UnixStream, Child)> {
+    // A backend Nix built has what it needs on its own PATH, also when the
+    // plugin's directory links to it.
+    let built_by_nix = std::fs::canonicalize(plugin.dir.join(&backend.exec))
+        .is_ok_and(|path| path.starts_with("/nix/store"));
+    let missing: Vec<&str> = backend
+        .needs
+        .iter()
+        .filter(|_| !built_by_nix)
+        .filter(|command| !mochi_plugins::on_path(command))
+        .map(String::as_str)
+        .collect();
+    if !missing.is_empty() {
+        tracing::warn!(
+            plugin = %plugin.id,
+            missing = %missing.join(", "),
+            "the plugin needs programs that aren't installed"
+        );
+    }
     let (ours, theirs) = std::os::unix::net::UnixStream::pair()?;
     let theirs = OwnedFd::from(theirs);
     let fd = theirs.as_raw_fd();

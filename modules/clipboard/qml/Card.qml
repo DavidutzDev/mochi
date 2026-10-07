@@ -10,26 +10,22 @@ Item {
     readonly property int count: payload?.count ?? 0
     readonly property bool paused: payload?.paused ?? false
 
-    implicitHeight: 44
+    implicitHeight: Theme.rowHeight
 
     Column {
         anchors.left: parent.left
         anchors.right: buttons.left
-        anchors.rightMargin: 8
+        anchors.rightMargin: Theme.spaceSmall
         anchors.verticalCenter: parent.verticalCenter
 
-        Text {
-            width: parent.width
+        RollingText {
             text: {
                 const pins = root.payload?.pins ?? 0;
                 const count = root.paused ? "Paused" : root.count === 1 ? "1 entry" : `${root.count} entries`;
                 return pins > 0 ? `${count} · ${pins} pinned` : count;
             }
-            elide: Text.ElideRight
-            color: Theme.foreground
-            font.pixelSize: Theme.textBody
-            font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
+            pixelSize: Theme.textBody
+            weight: Theme.weightTitle
         }
 
         Text {
@@ -37,7 +33,7 @@ Item {
             text: root.payload?.warning ?? (root.payload?.storage === "disk" ? "Encrypted on disk" : "In memory until you log out")
             elide: Text.ElideRight
             color: root.payload?.warning ? Theme.danger : Theme.muted
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
         }
     }

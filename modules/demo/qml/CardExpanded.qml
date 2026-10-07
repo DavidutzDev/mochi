@@ -9,21 +9,31 @@ Item {
     implicitWidth: 460
     implicitHeight: column.implicitHeight + Theme.padding * 2
 
+    EdgeLight {
+        radius: Theme.radiusSurface
+    }
+
     Column {
         id: column
 
         anchors.fill: parent
         anchors.margins: Theme.padding
-        spacing: 12
+        spacing: Theme.spaceMedium
 
         Row {
-            spacing: 10
+            spacing: Theme.spaceSmall
 
             Rectangle {
                 width: 36
                 height: 36
-                radius: 9
-                color: "#0a84ff"
+                radius: Theme.radiusControl
+                color: Theme.accent
+
+                Symbol {
+                    anchors.centerIn: parent
+                    name: "chat"
+                    color: Theme.onAccent
+                }
             }
 
             Column {
@@ -35,13 +45,13 @@ Item {
                     color: Theme.foreground
                     font.pixelSize: Theme.textTitle
                     font.family: Theme.fontFamily
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.weightTitle
                 }
 
                 Text {
                     text: "Messages · click to collapse, right click to close"
                     color: Theme.muted
-                    font.pixelSize: Theme.textLabel
+                    font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily
                 }
             }
@@ -51,34 +61,21 @@ Item {
             width: parent.width
             text: payload.text || "The island grows to fit this text. A longer text makes a taller card."
             color: Theme.foreground
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
             wrapMode: Text.Wrap
         }
 
         Row {
-            spacing: 8
+            spacing: Theme.spaceSmall
 
             Repeater {
                 model: ["Reply", "Mark as read"]
 
-                Rectangle {
+                Button {
                     required property string modelData
 
-                    width: label.implicitWidth + 24
-                    height: 30
-                    radius: 15
-                    color: Theme.raised
-
-                    Text {
-                        id: label
-
-                        anchors.centerIn: parent
-                        text: parent.modelData
-                        color: Theme.foreground
-                        font.pixelSize: Theme.textBody
-                        font.family: Theme.fontFamily
-                    }
+                    text: modelData
                 }
             }
         }

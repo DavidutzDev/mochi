@@ -17,17 +17,21 @@ Item {
         return new Date(`${date}T12:00:00`).toLocaleDateString(Qt.locale(), "ddd");
     }
 
+    EdgeLight {
+        radius: Theme.radiusSurface
+    }
+
     Column {
         id: column
 
         anchors.centerIn: parent
-        spacing: 12
+        spacing: Theme.spaceMedium
 
         Row {
             id: now
 
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 12
+            spacing: Theme.spaceMedium
 
             WeatherIcon {
                 anchors.verticalCenter: parent.verticalCenter
@@ -46,13 +50,13 @@ Item {
                     color: Theme.foreground
                     font.pixelSize: Theme.textTitle
                     font.family: Theme.fontFamily
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.weightTitle
                 }
 
                 Text {
                     text: `${root.payload.place ?? ""} · feels like ${root.payload.feels_like}° · wind ${root.payload.wind} ${root.payload.wind_unit ?? ""}`
                     color: Theme.muted
-                    font.pixelSize: Theme.textLabel
+                    font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily
                 }
             }
@@ -62,7 +66,7 @@ Item {
             id: week
 
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 22
+            spacing: Theme.spaceHuge
 
             Repeater {
                 model: root.days
@@ -71,13 +75,13 @@ Item {
                     required property var modelData
                     required property int index
 
-                    spacing: 4
+                    spacing: Theme.spaceTiny
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: root.dayName(modelData.date, index)
                         color: Theme.muted
-                        font.pixelSize: Theme.textLabel
+                        font.pixelSize: Theme.textCaption
                         font.family: Theme.fontFamily
                     }
 
@@ -91,9 +95,11 @@ Item {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: `${modelData.min}° ${modelData.max}°`
                         color: Theme.foreground
-                        font.pixelSize: Theme.textLabel
+                        font.pixelSize: Theme.textCaption
                         font.family: Theme.fontFamily
-                        font.features: { "tnum": 1 }
+                        font.features: {
+                            "tnum": 1
+                        }
                     }
                 }
             }
