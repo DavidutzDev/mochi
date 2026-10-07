@@ -3,6 +3,10 @@
 //!
 //! - A popup shows the app icon or picture, the summary and the body.
 //!   Clicking it expands it: the whole text and the app's action buttons.
+//! - The body may have bold, italic, underline and links ([`markup`]). A
+//!   click on a link opens it with `xdg-open` and closes the notification.
+//! - A notification with an `inline-reply` action gets a Reply button,
+//!   which opens a text field; Enter sends the text back to the app.
 //! - A new popup from an app replaces that app's popup in place, so a burst
 //!   of messages shows only the latest; the others count as missed. Popups
 //!   from different apps stack: the newest on top, older ones after it.
@@ -31,6 +35,7 @@
 //! ```
 
 mod center;
+mod markup;
 mod note;
 mod saved;
 mod server;
@@ -51,7 +56,7 @@ use tokio::sync::mpsc;
 use zbus::Connection;
 
 use crate::center::{Center, Effect, PopupEnd, Reason};
-use crate::note::{Image, Note, Urgency};
+use crate::note::{Image, Note, REPLY, Urgency};
 use crate::server::Incoming;
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
@@ -139,6 +144,12 @@ impl Module for Notifications {
             ActionSpec::new("invoke", "Run one of a notification's actions")
                 .arg(id())
                 .arg(ArgSpec::string("action", "The action's key, like default")),
+            ActionSpec::new("reply", "Answer a notification that takes a reply")
+                .arg(id())
+                .arg(ArgSpec::string("text", "The reply")),
+            ActionSpec::new("open", "Open a link in a notification's text, and close it")
+                .arg(id())
+                .arg(ArgSpec::string("url", "The link, as in its href")),
         ]
     }
 
@@ -318,6 +329,7 @@ impl Daemon {
                     Ok(())
                 }
                 Effect::Invoked(id, action) => server::invoked(&self.connection, id, &action).await,
+                Effect::Replied(id, text) => server::replied(&self.connection, id, &text).await,
             };
             if let Err(error) = result {
                 tracing::warn!(%error, "could not tell the app");
@@ -398,6 +410,11 @@ impl Daemon {
                 let action = command.args.str("action").unwrap_or_default().to_owned();
                 self.center.invoke(id(), &action)
             }
+            "reply" => {
+                let text = command.args.str("text").unwrap_or_default().to_owned();
+                self.center.reply(id(), &text)
+            }
+            "open" => self.open(id(), command.args.str("url").unwrap_or_default()),
             other => Err(format!("notifications has no action {other}")),
         };
         match result {
@@ -407,6 +424,24 @@ impl Daemon {
             }
             Err(message) => command.reply(Err(message)),
         }
+    }
+
+    /// Opens a link from a notification's body in the browser, detached
+    /// like the launcher's apps, and closes the notification. Only links
+    /// the markup kept: the views can't open anything else through this.
+    fn open(&mut self, id: u32, url: &str) -> Result<Vec<Effect>, String> {
+        let note = self
+            .center
+            .get(id)
+            .ok_or_else(|| format!("no notification {id}"))?;
+        if !markup::links(&note.body).iter().any(|link| link == url) {
+            return Err(format!("notification {id} has no link {url:?}"));
+        }
+        mochi_core::process::spawn_detached(
+            &mochi_core::process::in_app_scope(&["xdg-open".into(), url.to_owned()]),
+            None,
+        )?;
+        Ok(self.center.close(id, Reason::Dismissed))
     }
 
     fn show_history(&mut self, ctx: &ModuleCtx) {
@@ -502,15 +537,22 @@ fn payload(note: &Note) -> Value {
         "icon": note.icon,
         "image": image,
         "summary": note.summary,
-        "body": note.body,
-        // `default` is what a click on the text does, not a button.
+        // StyledText: the whole body, and its first line for one-line rows.
+        "body": markup::markup(&note.body),
+        "line": markup::first_line(&note.body),
+        // `default` is what a click on the text does, and `inline-reply`
+        // opens a text field: neither is a plain button.
         "actions": note
             .actions
             .iter()
-            .filter(|action| action.key != "default")
+            .filter(|action| action.key != "default" && action.key != REPLY)
             .map(|action| json!({ "key": action.key, "label": action.label }))
             .collect::<Vec<_>>(),
         "default": note.action("default").is_some(),
+        // The Reply button's label, when it takes a reply.
+        "reply": note.action(REPLY).map(|action| {
+            if action.label.trim().is_empty() { "Reply" } else { action.label.as_str() }
+        }),
         "urgency": note.urgency.as_str(),
         "received_ms": u64::try_from(received.as_millis()).unwrap_or(u64::MAX),
     })

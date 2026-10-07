@@ -61,8 +61,11 @@ Item {
                 wrapMode: Text.Wrap
                 maximumLineCount: 2
                 elide: Text.ElideRight
-                textFormat: Text.PlainText
+                textFormat: Text.StyledText
                 color: Theme.muted
+                linkColor: Theme.accent
+                // A link opens in the browser and closes the notification.
+                onLinkActivated: link => Daemon.command("notifications", "open", [String(root.payload.id), link])
                 font.pixelSize: Theme.textBody
                 font.family: Theme.fontFamily
             }
