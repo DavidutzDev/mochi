@@ -7,6 +7,10 @@ import qs.island
 // pastes the selected emoji into the window you were in, Shift+Enter
 // copies it, Escape closes. A click pastes; a right click or Shift+click
 // copies. The name of the emoji under the pointer shows at the bottom.
+//
+// The swatches by the search box set the skin tone of every emoji of a
+// person or a hand. Holding one of those for a moment opens its tones;
+// picking one pastes it, and that emoji keeps that tone from then on.
 Item {
     id: root
 
@@ -15,14 +19,24 @@ Item {
     readonly property var table: Daemon.state("emoji")
     readonly property var groups: table?.groups ?? []
     readonly property var recent: table?.recent ?? []
-    // Each emoji as {glyph, name, group, words, subgroup, index}, from the
-    // published [glyph, name, group, name words, subgroup words].
+    // The default skin tone, 0 for none and 1 to 5 from light to dark, and
+    // the emoji with a tone of their own, by the emoji without one.
+    readonly property int tone: table?.tone ?? 0
+    readonly property var chosenTones: table?.tones ?? ({})
+    // As the module's action takes them, in the same order.
+    readonly property var toneNames: ["none", "light", "medium-light", "medium", "medium-dark", "dark"]
+    // The swatches: the yellow of emoji without a tone, then the five.
+    readonly property var toneColors: ["#ffcc4d", "#f7dece", "#f3d2a2", "#d5ab88", "#af7e57", "#7c533e"]
+    // Each emoji as {glyph, name, group, words, subgroup, tones, index},
+    // from the published [glyph, name, group, name words, subgroup words,
+    // tones]. Tones is the five toned emoji, or null.
     readonly property var entries: (table?.emoji ?? []).map((entry, index) => ({
                 "glyph": entry[0],
                 "name": entry[1],
                 "group": entry[2],
                 "words": entry[3].split(" "),
                 "subgroup": entry[4].split(" "),
+                "tones": entry[5] ?? null,
                 "index": index
             }))
     readonly property var groupWords: groups.map(group => group.words.split(" "))
@@ -43,6 +57,10 @@ Item {
     property var hovered: null
     // A tab's title while the pointer is on it.
     property string hoveredTab: ""
+    // The emoji whose tones show in the popup after a long press, or null.
+    property var choosing: null
+    // Where the popup points, in this item's coordinates.
+    property point choosingAt: Qt.point(0, 0)
 
     readonly property var query: input.text.toLowerCase().split(/\s+/).filter(word => word !== "")
     readonly property var shown: {
@@ -61,6 +79,7 @@ Item {
 
     onShownChanged: {
         hovered = null;
+        choosing = null;
         grid.currentIndex = 0;
         grid.positionViewAtBeginning();
     }
@@ -98,7 +117,7 @@ Item {
     function score(entry: var, query: var): int {
         let total = 0;
         for (const word of query) {
-            if (entry.glyph === word || entry.glyph.replace(/️+$/, "") === word) {
+            if (entry.glyph === word || entry.glyph.replace(/️+$/, "") === word || (entry.tones?.includes(word) ?? false)) {
                 total += 6;
                 continue;
             }
@@ -155,10 +174,39 @@ Item {
         input.text = "";
     }
 
+    // The tone an emoji shows in: its own, or the default.
+    function toneOf(entry: var): int {
+        return root.chosenTones[entry.glyph] ?? root.tone;
+    }
+
+    // The emoji in its tone.
+    function toned(entry: var): string {
+        const tone = entry.tones ? toneOf(entry) : 0;
+        return tone > 0 ? entry.tones[tone - 1] : entry.glyph;
+    }
+
     // Pastes the emoji into the window you were in, or only copies it.
     function send(entry: var, copy: bool): void {
         if (entry)
-            Daemon.command("emoji", copy ? "copy" : "paste", [entry.glyph]);
+            Daemon.command("emoji", copy ? "copy" : "paste", [toned(entry)]);
+    }
+
+    // Opens the tones of an emoji over its tile.
+    function choose(entry: var, tile: Item): void {
+        if (!entry?.tones)
+            return;
+        choosingAt = tile.mapToItem(root, tile.width / 2, 0);
+        choosing = entry;
+    }
+
+    // Gives the emoji being chosen a tone of its own, and pastes or copies
+    // it in that tone.
+    function pickTone(tone: int, copy: bool): void {
+        const entry = choosing;
+        choosing = null;
+        Daemon.command("emoji", "tone", [toneNames[tone], entry.glyph]);
+        const glyph = tone > 0 ? entry.tones[tone - 1] : entry.glyph;
+        Daemon.command("emoji", copy ? "copy" : "paste", [glyph]);
     }
 
     Column {
@@ -187,8 +235,8 @@ Item {
 
                 anchors.left: magnifier.right
                 anchors.leftMargin: 12
-                anchors.right: parent.right
-                anchors.rightMargin: Theme.padding
+                anchors.right: swatches.left
+                anchors.rightMargin: 12
                 anchors.verticalCenter: parent.verticalCenter
                 focus: true
                 color: Theme.foreground
@@ -206,13 +254,69 @@ Item {
                 Keys.onBacktabPressed: root.changeTab(-1)
                 Keys.onReturnPressed: event => root.send(root.selected, (event.modifiers & Qt.ShiftModifier) !== 0)
                 Keys.onEnterPressed: event => root.send(root.selected, (event.modifiers & Qt.ShiftModifier) !== 0)
-                Keys.onEscapePressed: Daemon.event("dismiss")
+                Keys.onEscapePressed: {
+                    if (root.choosing)
+                        root.choosing = null;
+                    else
+                        Daemon.event("dismiss");
+                }
 
                 Text {
                     visible: input.text === ""
                     text: "Search emoji…"
                     color: Theme.muted
                     font: input.font
+                }
+            }
+
+            // The default skin tone.
+            Row {
+                id: swatches
+
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.padding
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2
+
+                Repeater {
+                    model: root.toneColors
+
+                    Item {
+                        id: swatch
+
+                        required property string modelData
+                        required property int index
+                        readonly property bool current: root.tone === index
+
+                        width: 22
+                        height: 22
+
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: width / 2
+                            color: "transparent"
+                            border.width: swatch.current ? 2 : swatchArea.containsMouse ? 1 : 0
+                            border.color: swatch.current ? Theme.accent : Theme.muted
+                        }
+
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 14
+                            height: 14
+                            radius: 7
+                            color: swatch.modelData
+                        }
+
+                        MouseArea {
+                            id: swatchArea
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onContainsMouseChanged: root.hoveredTab = containsMouse ? (swatch.index === 0 ? "No skin tone" : `Skin tone: ${root.toneNames[swatch.index]}`) : ""
+                            onClicked: Daemon.command("emoji", "tone", [root.toneNames[swatch.index]])
+                        }
+                    }
                 }
             }
         }
@@ -336,9 +440,21 @@ Item {
 
                     Text {
                         anchors.centerIn: parent
-                        text: tile.modelData.glyph
+                        text: root.toned(tile.modelData)
                         font.pixelSize: 26
                         font.family: Theme.fontFamily
+                    }
+
+                    // A dot in the corner of emoji that come in tones.
+                    Rectangle {
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        anchors.margins: 6
+                        visible: tile.modelData.tones !== null && (area.containsMouse || tile.current)
+                        width: 4
+                        height: 4
+                        radius: 2
+                        color: Theme.muted
                     }
 
                     MouseArea {
@@ -348,11 +464,20 @@ Item {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        pressAndHoldInterval: 400
                         onContainsMouseChanged: {
                             if (containsMouse)
                                 root.hovered = tile.modelData;
                             else if (root.hovered === tile.modelData)
                                 root.hovered = null;
+                        }
+                        // A long press opens the tones instead of pasting;
+                        // MouseArea sends no click after it.
+                        onPressAndHold: mouse => {
+                            if (mouse.button === Qt.LeftButton && tile.modelData.tones)
+                                root.choose(tile.modelData, tile);
+                            else
+                                mouse.accepted = false;
                         }
                         onClicked: mouse => root.send(tile.modelData, mouse.button === Qt.RightButton || (mouse.modifiers & Qt.ShiftModifier) !== 0)
                     }
@@ -374,8 +499,8 @@ Item {
                 text: {
                     if (root.hoveredTab !== "")
                         return root.hoveredTab;
-                    const entry = root.hovered ?? root.selected;
-                    return entry ? `${entry.glyph}  ${entry.name}` : "";
+                    const entry = root.choosing ?? root.hovered ?? root.selected;
+                    return entry ? `${root.toned(entry)}  ${entry.name}` : "";
                 }
                 elide: Text.ElideRight
                 textFormat: Text.PlainText
@@ -390,10 +515,88 @@ Item {
                 anchors.right: parent.right
                 anchors.rightMargin: Theme.padding + 2
                 anchors.verticalCenter: parent.verticalCenter
-                text: "Enter pastes · Shift+Enter copies"
+                text: {
+                    if (root.choosing)
+                        return "It keeps the tone you pick";
+                    if (root.hovered?.tones)
+                        return "Hold for skin tones";
+                    return "Enter pastes · Shift+Enter copies";
+                }
                 color: Theme.muted
                 font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
+            }
+        }
+    }
+
+    // While the tones show, a click anywhere else closes them.
+    MouseArea {
+        anchors.fill: parent
+        visible: root.choosing !== null
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: root.choosing = null
+    }
+
+    // An emoji's tones after a long press, over its tile, or under it on
+    // the top row. A click pastes one; a right click or Shift+click copies.
+    Rectangle {
+        id: tones
+
+        readonly property bool below: root.choosingAt.y - height - 4 < 0
+
+        visible: root.choosing !== null
+        width: toneRow.width + 8
+        height: root.cell + 8
+        x: Math.max(4, Math.min(root.width - width - 4, root.choosingAt.x - width / 2))
+        y: below ? root.choosingAt.y + root.cell + 4 : root.choosingAt.y - height - 4
+        radius: Theme.radiusMedium
+        color: Theme.raised
+        border.width: 1
+        border.color: Theme.border
+
+        Row {
+            id: toneRow
+
+            anchors.centerIn: parent
+
+            Repeater {
+                model: root.toneNames
+
+                Item {
+                    id: choice
+
+                    required property int index
+                    readonly property bool current: root.choosing !== null && root.toneOf(root.choosing) === index
+
+                    width: root.cell
+                    height: root.cell
+
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: 2
+                        radius: Theme.radiusSmall
+                        color: choiceArea.containsMouse ? Theme.highlight : "transparent"
+                        border.width: choice.current ? 1 : 0
+                        border.color: Theme.accent
+                    }
+
+                    Text {
+                        anchors.centerIn: parent
+                        text: root.choosing ? (choice.index > 0 ? root.choosing.tones[choice.index - 1] : root.choosing.glyph) : ""
+                        font.pixelSize: 26
+                        font.family: Theme.fontFamily
+                    }
+
+                    MouseArea {
+                        id: choiceArea
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
+                        onClicked: mouse => root.pickTone(choice.index, mouse.button === Qt.RightButton || (mouse.modifiers & Qt.ShiftModifier) !== 0)
+                    }
+                }
             }
         }
     }

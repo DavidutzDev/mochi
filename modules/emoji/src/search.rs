@@ -1,13 +1,15 @@
 //! The emoji table and the search over it. A query is words; an emoji
 //! matches when every word starts a word of its name, its subgroup or its
-//! group, or is the emoji itself. The panel's view searches the same way in
-//! JavaScript, from the words the module publishes; keep the two in step.
+//! group, or is the emoji itself in any skin tone. The panel's view
+//! searches the same way in JavaScript, from the words the module
+//! publishes; keep the two in step.
 
 use std::collections::HashSet;
 
 use crate::recents::Recents;
 
-/// Every emoji, made by `data/generate.sh`: emoji, name, group, subgroup.
+/// Every emoji, made by `data/generate.sh`: emoji, name, group, subgroup,
+/// and its five skin tones when it has them.
 pub const TABLE: &str = include_str!("../data/emoji.tsv");
 
 /// Unicode's groups, in the table's order: the group as the table spells
@@ -30,6 +32,8 @@ pub struct Emoji {
     pub glyph: &'static str,
     pub name: &'static str,
     pub group: &'static str,
+    /// The emoji in the skin tones from light to dark, when it has them.
+    pub tones: Option<[&'static str; 5]>,
     /// The words of the name, lowercase, in order.
     pub name_words: Vec<String>,
     pub subgroup_words: Vec<String>,
@@ -44,7 +48,8 @@ pub fn parse(table: &'static str) -> Result<Vec<Emoji>, &'static str> {
         .filter(|line| !line.is_empty() && !line.starts_with("# "))
         .map(|line| {
             let mut fields = line.split('\t');
-            let (Some(glyph), Some(name), Some(group), Some(subgroup), None) = (
+            let (Some(glyph), Some(name), Some(group), Some(subgroup), Some(tones), None) = (
+                fields.next(),
                 fields.next(),
                 fields.next(),
                 fields.next(),
@@ -56,10 +61,17 @@ pub fn parse(table: &'static str) -> Result<Vec<Emoji>, &'static str> {
             if glyph.is_empty() || name.is_empty() {
                 return Err(line);
             }
+            let tones = if tones.is_empty() {
+                None
+            } else {
+                let toned: Vec<&str> = tones.split(' ').collect();
+                Some(<[&str; 5]>::try_from(toned).map_err(|_| line)?)
+            };
             Ok(Emoji {
                 glyph,
                 name,
                 group,
+                tones,
                 name_words: words(name),
                 subgroup_words: words(subgroup),
                 group_words: words(group),
@@ -116,7 +128,12 @@ fn score(emoji: &Emoji, query: &[String]) -> Option<u32> {
         let points = |words: &[String], exact, prefix| {
             best(word, words).map(|found| if found == Match::Exact { exact } else { prefix })
         };
-        total += if emoji.glyph == word || emoji.glyph.trim_end_matches('\u{fe0f}') == word {
+        let itself = emoji.glyph == word
+            || emoji.glyph.trim_end_matches('\u{fe0f}') == word
+            || emoji
+                .tones
+                .is_some_and(|toned| toned.contains(&word.as_str()));
+        total += if itself {
             6
         } else {
             points(&emoji.name_words, 6, 4)
@@ -266,6 +283,8 @@ mod tests {
         assert_eq!(find("🐱")[0], "🐱");
         // Without its variation selector, as some keyboards type it.
         assert_eq!(find("❤")[0], "❤\u{fe0f}");
+        // In a skin tone.
+        assert_eq!(find("👍🏽")[0], "👍");
     }
 
     #[test]

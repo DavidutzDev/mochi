@@ -8,9 +8,13 @@
 //! the panel filters as you type without asking. The emoji picked last are
 //! kept in `$XDG_STATE_HOME/mochi/emoji.json` and come first. Pasting and
 //! copying go through the clipboard module.
+//!
+//! Emoji of people and hands come in a skin tone: a default one, or one
+//! chosen for that emoji, see [`tones`]. The same file keeps them.
 
 mod recents;
 mod search;
+mod tones;
 
 use std::path::PathBuf;
 
@@ -24,6 +28,7 @@ use serde_json::{Value, json};
 
 use crate::recents::Recents;
 use crate::search::{Emoji as Entry, GROUPS, TABLE};
+use crate::tones::{Tone, Tones};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
@@ -104,6 +109,12 @@ impl Module for Emoji {
                 "Remember an emoji as picked, so it comes first next time",
             )
             .arg(ArgSpec::string("id", "The emoji")),
+            ActionSpec::new(
+                "tone",
+                "Set the skin tone emoji of people and hands show in, or one emoji's own",
+            )
+            .arg(ArgSpec::choice("tone", "The tone", Tone::NAMES))
+            .arg(ArgSpec::string("emoji", "Only for this emoji, from then on").optional()),
         ]
     }
 
@@ -114,13 +125,15 @@ impl Module for Emoji {
                 search::parse(TABLE).map_err(|line| format!("bad line in emoji.tsv: {line}"))?;
             let file = recents::file();
             let mut recents = Recents::new(settings.recent);
+            let mut tones = Tones::default();
             if let Some(file) = &file {
-                recents.load(file);
+                recents::load(file, &mut recents, &mut tones);
             }
             let mut picker = Picker {
                 table: table_state(&emoji),
                 emoji,
                 recents,
+                tones,
                 max_results: settings.max_results.min(MAX_RESULTS),
                 file,
                 shown: None,
@@ -147,6 +160,7 @@ struct Picker {
     /// The table as the panel gets it, made once.
     table: Value,
     recents: Recents,
+    tones: Tones,
     max_results: usize,
     /// Where the recents are kept. `None` without a home directory.
     file: Option<PathBuf>,
@@ -171,7 +185,7 @@ impl Picker {
             "search" => {
                 let query = command.args.str("query").unwrap_or_default();
                 let found = search::search(&self.emoji, query, &self.recents, self.max_results);
-                command.answer(Ok(lines(&found)));
+                command.answer(Ok(lines(&found, &self.tones)));
                 return;
             }
             "pick" => {
@@ -189,6 +203,11 @@ impl Picker {
                     };
                     clipboard(ctx, action, glyph);
                 })
+            }
+            "tone" => {
+                let tone = command.args.str("tone").unwrap_or_default().to_owned();
+                let emoji = command.args.str("emoji").map(str::to_owned);
+                self.tone(ctx, &tone, emoji.as_deref())
             }
             other => Err(format!("emoji has no action {other}")),
         };
@@ -223,31 +242,65 @@ impl Picker {
         }
     }
 
-    /// Puts an emoji first in the recents, and saves them.
+    /// Puts an emoji first in the recents, without its tone, and saves
+    /// them.
     fn picked(&mut self, ctx: &ModuleCtx, glyph: &str) -> Result<(), String> {
-        if !self.emoji.iter().any(|emoji| emoji.glyph == glyph) {
+        let Some((emoji, _)) = tones::find(&self.emoji, glyph) else {
             return Err(format!("no emoji {glyph}"));
+        };
+        self.recents.push(emoji.glyph);
+        self.save();
+        self.publish(ctx);
+        Ok(())
+    }
+
+    /// Sets the default tone, or with an emoji, that emoji's own.
+    fn tone(&mut self, ctx: &ModuleCtx, name: &str, glyph: Option<&str>) -> Result<(), String> {
+        let tone = Tone::parse(name).ok_or_else(|| format!("no skin tone {name}"))?;
+        match glyph {
+            None => self.tones.default = tone,
+            Some(glyph) => {
+                let Some((emoji, _)) = tones::find(&self.emoji, glyph) else {
+                    return Err(format!("no emoji {glyph}"));
+                };
+                if emoji.tones.is_none() {
+                    return Err(format!("{glyph} has no skin tones"));
+                }
+                self.tones.chosen.insert(emoji.glyph.to_owned(), tone);
+            }
         }
-        self.recents.push(glyph);
+        self.save();
+        self.publish(ctx);
+        Ok(())
+    }
+
+    fn save(&self) {
         if let Some(file) = &self.file
-            && let Err(error) = self.recents.save(file)
+            && let Err(error) = recents::save(file, &self.recents, &self.tones)
         {
             tracing::warn!(%error, file = %file.display(), "could not save the recent emoji");
         }
-        self.publish(ctx);
-        Ok(())
     }
 
     fn publish(&self, ctx: &ModuleCtx) {
         let mut state = self.table.clone();
         state["recent"] = json!(self.recents.list());
+        state["tone"] = json!(self.tones.default.index());
+        let chosen: serde_json::Map<String, Value> = self
+            .tones
+            .chosen
+            .iter()
+            .map(|(glyph, tone)| (glyph.clone(), json!(tone.index())))
+            .collect();
+        state["tones"] = Value::Object(chosen);
         ctx.publish_state(state);
     }
 }
 
 /// The table for the panel: the groups, with where each starts in the
 /// list, and every emoji as `[glyph, name, group, name words, subgroup
-/// words]`, words lowercase and joined by spaces.
+/// words, tones]`, words lowercase and joined by spaces, tones the five
+/// toned emoji or null.
 fn table_state(emoji: &[Entry]) -> Value {
     let groups: Vec<Value> = GROUPS
         .iter()
@@ -275,6 +328,7 @@ fn table_state(emoji: &[Entry]) -> Value {
                 group,
                 emoji.name_words.join(" "),
                 emoji.subgroup_words.join(" "),
+                emoji.tones,
             ])
         })
         .collect();
@@ -300,17 +354,19 @@ struct Alt<'a> {
     copy: &'a str,
 }
 
-/// The search action's answer: a JSON object per line.
-fn lines(found: &[&Entry]) -> String {
+/// The search action's answer: a JSON object per line. Each emoji is in
+/// its skin tone; the id, which `pick` gets back, is without it.
+fn lines(found: &[&Entry], tones: &Tones) -> String {
     found
         .iter()
         .map(|emoji| {
+            let glyph = tones.apply(emoji);
             let line = Line {
                 title: emoji.name,
                 subtitle: emoji.group,
-                glyph: emoji.glyph,
-                paste: emoji.glyph,
-                alt: Alt { copy: emoji.glyph },
+                glyph,
+                paste: glyph,
+                alt: Alt { copy: glyph },
                 id: emoji.glyph,
             };
             serde_json::to_string(&line).unwrap_or_default()
@@ -352,13 +408,31 @@ mod tests {
     fn a_result_is_one_json_line() {
         let emoji = table();
         let found = search::search(&emoji, "cat face", &Recents::new(8), 2);
-        let text = lines(&found);
+        let text = lines(&found, &Tones::default());
         assert_eq!(
             text.lines().next().unwrap(),
             r#"{"title":"cat face","subtitle":"animals & nature","glyph":"🐱","type":"🐱","alt":{"copy":"🐱"},"id":"🐱"}"#
         );
         assert_eq!(text.lines().count(), 2);
-        assert_eq!(lines(&[]), "");
+        assert_eq!(lines(&[], &Tones::default()), "");
+    }
+
+    #[test]
+    fn results_come_in_their_skin_tone() {
+        let emoji = table();
+        let mut tones = Tones {
+            default: Tone::Medium,
+            ..Tones::default()
+        };
+        tones.chosen.insert("👎".into(), Tone::None);
+        let found = search::search(&emoji, "thumbs", &Recents::new(8), 2);
+        let text = lines(&found, &tones);
+        let mut text = text.lines();
+        assert_eq!(
+            text.next().unwrap(),
+            r#"{"title":"thumbs up","subtitle":"people & body","glyph":"👍🏽","type":"👍🏽","alt":{"copy":"👍🏽"},"id":"👍"}"#
+        );
+        assert!(text.next().unwrap().contains(r#""glyph":"👎","#));
     }
 
     #[test]
@@ -369,8 +443,17 @@ mod tests {
         assert_eq!(list.len(), emoji.len());
         assert_eq!(
             list[0],
-            json!(["😀", "grinning face", 0, "grinning face", "face smiling"])
+            json!([
+                "😀",
+                "grinning face",
+                0,
+                "grinning face",
+                "face smiling",
+                null
+            ])
         );
+        let thumbs = list.iter().find(|entry| entry[0] == "👍").unwrap();
+        assert_eq!(thumbs[5], json!(["👍🏻", "👍🏼", "👍🏽", "👍🏾", "👍🏿"]));
         let groups = state["groups"].as_array().unwrap();
         assert_eq!(groups.len(), 9);
         let mut next = 0;
