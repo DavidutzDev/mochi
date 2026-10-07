@@ -756,6 +756,13 @@ impl Daemon {
                 self.broadcast(&message);
                 Ok(())
             }
+            Request::PublishLive(value) => {
+                self.broadcast(&DaemonMessage::Live {
+                    module: module.to_owned(),
+                    value,
+                });
+                Ok(())
+            }
             Request::Present { id, mut spec } => {
                 let views = std::iter::once(&spec.compact).chain(spec.expanded.as_ref());
                 if !self.has_views(module, views) {

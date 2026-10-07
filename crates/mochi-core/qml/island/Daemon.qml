@@ -57,6 +57,10 @@ Singleton {
     // Design tokens from theme.toml, or null until the daemon sends them.
     property var theme: null
 
+    // A passing value from a module, like the audio meters' levels, many
+    // times a second. Not kept: views that want it listen for it.
+    signal live(string module, var value)
+
     function state(module: string): var {
         return states[module] ?? null;
     }
@@ -122,6 +126,9 @@ Singleton {
             states = next;
             break;
         }
+        case "live":
+            live(message.module, message.value);
+            break;
         case "present":
             // Before the activity, which islands react to.
             resting = message.resting ?? null;

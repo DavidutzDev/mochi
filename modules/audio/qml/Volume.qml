@@ -5,7 +5,9 @@ import qs.island
 // One volume in the mixer: an icon that mutes on click, the name, a slider
 // and the percent. `symbol` is a built-in icon, `appIcon` an icon theme
 // name for apps. With `choosable`, clicking the name sends `choose`, for
-// picking another device.
+// picking another device or opening an app's streams. With `routeIcon`, a
+// button with that icon at the end sends `route`, for the app's output.
+// `level` is the meter's, from 0 to 1 on the scale of 100%; below 0, none.
 Item {
     id: root
 
@@ -20,7 +22,11 @@ Item {
     property int maxVolume: 100
     property bool choosable: false
     property bool choosing: false
+    property string routeIcon: ""
+    property bool routing: false
+    property real level: -1
     signal choose
+    signal route
 
     implicitWidth: 360
     implicitHeight: 52
@@ -95,7 +101,8 @@ Item {
 
         anchors.left: mute.right
         anchors.leftMargin: 10
-        anchors.right: parent.right
+        anchors.right: routeButton.visible ? routeButton.left : parent.right
+        anchors.rightMargin: routeButton.visible ? 4 : 0
         anchors.top: parent.top
         anchors.topMargin: 4
         height: 20
@@ -149,6 +156,18 @@ Item {
         }
     }
 
+    IconButton {
+        id: routeButton
+
+        anchors.right: parent.right
+        anchors.verticalCenter: heading.verticalCenter
+        visible: root.routeIcon !== ""
+        icon: root.routeIcon
+        size: 14
+        tone: root.routing ? "neutral" : "ghost"
+        onClicked: root.route()
+    }
+
     Slider {
         id: slider
 
@@ -164,6 +183,7 @@ Item {
         value: root.volume / root.maxVolume
         // A double click puts it back to 100%.
         reset: 100 / root.maxVolume
+        level: root.level < 0 ? -1 : root.level * 100 / root.maxVolume
 
         readonly property int shownPercent: dragging ? Math.round(shown * root.maxVolume) : root.volume
 

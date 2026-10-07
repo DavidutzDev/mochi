@@ -7,13 +7,17 @@
 //! after each change, and takes [`Command`]s through a channel; a byte on a
 //! socket wakes the mainloop to read them. When the server goes away, the
 //! thread reports [`Report::Lost`] and reconnects with backoff.
+//!
+//! While a view of the mixer is open, it also runs the peak meters of
+//! [`crate::meter`], which leave what they measure in a shared map.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::net::UnixStream;
 use std::rc::{Rc, Weak};
+use std::sync::Arc;
 use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -22,12 +26,15 @@ use libpulse_binding::callbacks::ListResult;
 use libpulse_binding::context::introspect::{SinkInfo, SinkInputInfo, SourceInfo};
 use libpulse_binding::context::subscribe::{Facility, InterestMaskSet};
 use libpulse_binding::context::{Context, FlagSet, State};
+use libpulse_binding::def::{SinkState, SourceState};
 use libpulse_binding::mainloop::api::Mainloop as _;
 use libpulse_binding::mainloop::events::io::FlagSet as IoFlags;
 use libpulse_binding::mainloop::standard::{IterateResult, Mainloop};
 use libpulse_binding::proplist::{Proplist, properties};
 use libpulse_binding::volume::{ChannelVolumes, Volume};
 use tokio::sync::mpsc::UnboundedSender;
+
+use crate::meter::{Meters, Peaks};
 
 const FIRST_RETRY: Duration = Duration::from_secs(1);
 const MAX_RETRY: Duration = Duration::from_secs(30);
@@ -48,6 +55,7 @@ pub struct Snapshot {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Device {
+    pub index: u32,
     pub name: String,
     pub description: String,
     /// Percent, 100 for the device's normal level.
@@ -55,11 +63,17 @@ pub struct Device {
     pub muted: bool,
     /// What it plugs into, for the icon: `headset`, `display` or `speakers`.
     pub kind: &'static str,
+    /// The source that hears what an output plays; `None` for inputs.
+    pub monitor: Option<String>,
+    /// Playing or recording for some app now, rather than idle.
+    pub running: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stream {
     pub index: u32,
+    /// The index of the output it plays through.
+    pub sink: u32,
     /// The app's name, like "Spotify" or "Firefox".
     pub app: String,
     /// What it plays, like a tab's title.
@@ -94,6 +108,10 @@ pub enum Command {
     Mute(Target, bool),
     DefaultSink(String),
     DefaultSource(String),
+    /// Moves an app's stream to the output with this name.
+    Move(u32, String),
+    /// Runs the peak meters, or stops them.
+    Meters(bool),
 }
 
 /// Sends commands to the audio thread.
@@ -114,14 +132,19 @@ impl Handle {
     }
 }
 
-pub fn spawn(reports: UnboundedSender<Report>) -> std::io::Result<Handle> {
+pub fn spawn(reports: UnboundedSender<Report>, peaks: Peaks) -> std::io::Result<Handle> {
     let (wake, woken) = UnixStream::pair()?;
     wake.set_nonblocking(true)?;
     woken.set_nonblocking(true)?;
     let (commands, received) = mpsc::channel();
-    thread::Builder::new()
-        .name("audio".into())
-        .spawn(move || run(&reports, &Rc::new(Inbox { received, woken })))?;
+    thread::Builder::new().name("audio".into()).spawn(move || {
+        let inbox = Rc::new(Inbox {
+            received,
+            woken,
+            metering: Cell::new(false),
+        });
+        run(&reports, &inbox, &peaks);
+    })?;
     Ok(Handle { commands, wake })
 }
 
@@ -129,6 +152,8 @@ pub fn spawn(reports: UnboundedSender<Report>) -> std::io::Result<Handle> {
 struct Inbox {
     received: mpsc::Receiver<Command>,
     woken: UnixStream,
+    /// Whether the meters should run, kept across connections.
+    metering: Cell<bool>,
 }
 
 impl Inbox {
@@ -139,11 +164,11 @@ impl Inbox {
     }
 }
 
-fn run(reports: &UnboundedSender<Report>, inbox: &Rc<Inbox>) {
+fn run(reports: &UnboundedSender<Report>, inbox: &Rc<Inbox>, peaks: &Peaks) {
     let mut retry = FIRST_RETRY;
     loop {
         let started = Instant::now();
-        match session(reports, inbox) {
+        match session(reports, inbox, peaks) {
             Ok(()) => return,
             Err(error) => {
                 if started.elapsed() > STABLE {
@@ -155,8 +180,13 @@ fn run(reports: &UnboundedSender<Report>, inbox: &Rc<Inbox>) {
                 }
                 thread::sleep(retry);
                 retry = (retry * 2).min(MAX_RETRY);
-                // Commands for the old connection are stale.
-                inbox.drain();
+                // Commands for the old connection are stale, but the next
+                // one should still meter or not.
+                for command in inbox.drain() {
+                    if let Command::Meters(on) = command {
+                        inbox.metering.set(on);
+                    }
+                }
             }
         }
     }
@@ -170,6 +200,10 @@ struct Link {
     /// The channel volumes of the last snapshot, to keep the balance when
     /// setting a level.
     volumes: RefCell<HashMap<Target, ChannelVolumes>>,
+    /// The last snapshot, for the meters to follow.
+    last: RefCell<Snapshot>,
+    meters: RefCell<Meters>,
+    inbox: Rc<Inbox>,
 }
 
 #[derive(Default)]
@@ -184,7 +218,11 @@ struct Building {
 
 /// One connection. Returns `Ok` when the module stopped listening, and `Err`
 /// when the connection failed or dropped.
-fn session(reports: &UnboundedSender<Report>, inbox: &Rc<Inbox>) -> Result<(), String> {
+fn session(
+    reports: &UnboundedSender<Report>,
+    inbox: &Rc<Inbox>,
+    peaks: &Peaks,
+) -> Result<(), String> {
     let mut mainloop = Mainloop::new().ok_or("cannot create a libpulse mainloop")?;
     let mut proplist = Proplist::new().ok_or("cannot create a proplist")?;
     let _ = proplist.set_str(properties::APPLICATION_NAME, "Mochi");
@@ -216,6 +254,9 @@ fn session(reports: &UnboundedSender<Report>, inbox: &Rc<Inbox>) -> Result<(), S
         reports: reports.clone(),
         building: RefCell::default(),
         volumes: RefCell::default(),
+        last: RefCell::default(),
+        meters: RefCell::new(Meters::new(Arc::clone(peaks))),
+        inbox: Rc::clone(inbox),
     });
 
     let subscribed = Rc::clone(&link);
@@ -362,10 +403,24 @@ fn answered(link: &Rc<Link>) {
         (building.snapshot, building.volumes, building.again)
     };
     *link.volumes.borrow_mut() = volumes;
+    *link.last.borrow_mut() = snapshot.clone();
+    meter(link);
     let _ = link.reports.send(Report::Snapshot(snapshot));
     if again {
         refresh(link);
     }
+}
+
+/// Opens or closes meters to match the last snapshot, or stops them all.
+fn meter(link: &Link) {
+    let Some(context) = link.context.upgrade() else {
+        return;
+    };
+    let last = link.last.borrow();
+    let snapshot = link.inbox.metering.get().then_some(&*last);
+    link.meters
+        .borrow_mut()
+        .follow(&mut context.borrow_mut(), snapshot);
 }
 
 fn apply(link: &Link, command: Command) {
@@ -409,6 +464,13 @@ fn apply(link: &Link, command: Command) {
         Command::DefaultSource(name) => {
             context.borrow_mut().set_default_source(&name, |_| {});
         }
+        Command::Move(index, sink) => {
+            introspect.move_sink_input_by_name(index, &sink, None);
+        }
+        Command::Meters(on) => {
+            link.inbox.metering.set(on);
+            meter(link);
+        }
     }
 }
 
@@ -421,6 +483,9 @@ fn sink_device(sink: &SinkInfo) -> Device {
         .unwrap_or_default();
     let form_factor = sink.proplist.get_str("device.form_factor");
     Device {
+        index: sink.index,
+        monitor: sink.monitor_source_name.as_deref().map(str::to_owned),
+        running: sink.state == SinkState::Running,
         kind: kind(form_factor.as_deref(), port, &name),
         description: sink.description.as_deref().unwrap_or(&name).to_owned(),
         volume: percent(sink.volume.max()),
@@ -441,6 +506,9 @@ fn source_device(source: &SourceInfo) -> Option<Device> {
         _ => "mic",
     };
     Some(Device {
+        index: source.index,
+        monitor: None,
+        running: source.state == SourceState::Running,
         kind,
         description: source.description.as_deref().unwrap_or(&name).to_owned(),
         volume: percent(source.volume.max()),
@@ -471,6 +539,7 @@ fn stream(input: &SinkInputInfo) -> Option<Stream> {
         .unwrap_or_default();
     Some(Stream {
         index: input.index,
+        sink: input.sink,
         icon: property(properties::APPLICATION_ICON_NAME)
             .or_else(|| binary.map(|binary| binary.to_lowercase())),
         // Apps often name the stream after themselves; that says nothing.
