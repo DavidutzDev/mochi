@@ -18,7 +18,7 @@ Rectangle {
     visible: frame !== null && desktop.editing
     width: 300
     height: column.implicitHeight + Theme.padding * 2
-    radius: Theme.radiusLarge
+    radius: Theme.radiusSurface
     color: Theme.background
     border.width: 1
     border.color: Theme.border
@@ -37,20 +37,21 @@ Rectangle {
         anchors.fill: parent
     }
 
+    EdgeLight {
+        radius: root.radius
+    }
+
     Column {
         id: column
 
         x: Theme.padding
         y: Theme.padding
         width: parent.width - Theme.padding * 2
-        spacing: 12
+        spacing: Theme.spaceMedium
 
-        Text {
-            text: root.spec?.title ?? ""
-            color: Theme.foreground
-            font.pixelSize: Theme.textTitle
-            font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
+        PanelHeader {
+            width: parent.width
+            title: root.spec?.title ?? ""
         }
 
         Text {
@@ -73,7 +74,7 @@ Rectangle {
                 readonly property var value: root.widget?.settings?.[modelData.name] ?? modelData.default
 
                 width: column.width
-                spacing: 6
+                spacing: Theme.spaceSmall
 
                 function set(value: string): void {
                     Daemon.command("widgets", "set", [root.widget.id, modelData.name, value]);
@@ -94,7 +95,7 @@ Rectangle {
                             color: Theme.foreground
                             font.pixelSize: Theme.textBody
                             font.family: Theme.fontFamily
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.weightTitle
                         }
 
                         Text {
@@ -103,7 +104,7 @@ Rectangle {
                             wrapMode: Text.Wrap
                             text: field.modelData.description ?? ""
                             color: Theme.muted
-                            font.pixelSize: Theme.textLabel
+                            font.pixelSize: Theme.textCaption
                             font.family: Theme.fontFamily
                         }
                     }
@@ -124,7 +125,10 @@ Rectangle {
                     width: parent.width
                     height: 34
                     color: Theme.raised
-                    options: (field.modelData.choices ?? []).map(choice => ({ "value": choice, "label": choice }))
+                    options: (field.modelData.choices ?? []).map(choice => ({
+                                "value": choice,
+                                "label": choice
+                            }))
                     current: `${field.value}`
                     onPicked: value => field.set(value)
                 }
@@ -133,7 +137,7 @@ Rectangle {
                     visible: ["string", "int", "float"].includes(field.modelData.kind)
                     width: parent.width
                     height: 34
-                    radius: Theme.radiusSmall
+                    radius: Theme.radiusControl
                     color: Theme.raised
                     border.width: input.activeFocus ? 1 : 0
                     border.color: Theme.accent
@@ -142,8 +146,8 @@ Rectangle {
                         id: input
 
                         anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 10
+                        anchors.leftMargin: Theme.spaceSmall
+                        anchors.rightMargin: Theme.spaceSmall
                         verticalAlignment: TextInput.AlignVCenter
                         text: `${field.value ?? ""}`
                         color: Theme.foreground

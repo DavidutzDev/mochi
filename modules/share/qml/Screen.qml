@@ -55,7 +55,7 @@ Item {
         anchors.centerIn: parent
         visible: root.source !== null && copy.captureSource === null
         text: "Nothing to show: pick something else from Mochi's sharing bubble"
-        color: "#8a8a8a"
-        font.pixelSize: 28
+        color: "#8a8a8a" // design: drawn into the shared video, always on black
+        font.pixelSize: 28 // design: read from a whole screen shared in a call
     }
 }

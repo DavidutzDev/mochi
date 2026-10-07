@@ -16,7 +16,7 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 6
+        spacing: Theme.spaceSmall
 
         Repeater {
             model: root.critical
@@ -25,7 +25,7 @@ Item {
                 required property var modelData
 
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 3
+                spacing: Theme.spaceTiny
 
                 Symbol {
                     anchors.verticalCenter: parent.verticalCenter
@@ -34,14 +34,12 @@ Item {
                     color: Theme.danger
                 }
 
-                Text {
+                RollingText {
                     anchors.verticalCenter: parent.verticalCenter
                     text: modelData.value
                     color: Theme.danger
-                    font.pixelSize: Theme.textCaption
-                    font.family: Theme.fontFamily
-                    font.weight: Font.DemiBold
-                    font.features: { "tnum": 1 }
+                    pixelSize: Theme.textCaption
+                    weight: Theme.weightTitle
                 }
             }
         }

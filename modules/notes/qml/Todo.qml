@@ -15,33 +15,34 @@ Item {
 
     readonly property var items: payload?.pages?.[instance]?.items ?? []
     // With their place in the whole list, which the actions take.
-    readonly property var shown: items.map((item, index) => Object.assign({ index: index }, item)).filter(item => settings.done !== "hide" || !item.done)
+    readonly property var shown: items.map((item, index) => Object.assign({
+            index: index
+        }, item)).filter(item => settings.done !== "hide" || !item.done)
     readonly property int done: items.filter(item => item.done).length
 
     Row {
         id: header
 
         width: parent.width
-        spacing: 8
+        spacing: Theme.spaceSmall
 
         Text {
-            anchors.baseline: count.baseline
+            anchors.verticalCenter: count.verticalCenter
             text: (root.settings.title ?? "To-do").toUpperCase()
             color: Theme.accent
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
+            font.weight: Theme.weightTitle
             font.letterSpacing: 1
         }
 
-        Text {
+        RollingText {
             id: count
 
             visible: root.items.length > 0
             text: `${root.done} of ${root.items.length} done`
             color: Theme.muted
-            font.pixelSize: Theme.textCaption
-            font.family: Theme.fontFamily
+            pixelSize: Theme.textCaption
         }
     }
 
@@ -69,14 +70,18 @@ Item {
         id: list
 
         anchors.top: header.bottom
-        anchors.topMargin: 10
+        anchors.topMargin: Theme.spaceSmall
         anchors.bottom: add.top
-        anchors.bottomMargin: 8
+        anchors.bottomMargin: Theme.spaceSmall
         width: parent.width
         clip: true
         spacing: 2
         model: root.shown
         boundsBehavior: Flickable.StopAtBounds
+
+        ScrollFade {
+            view: list
+        }
 
         delegate: Item {
             id: row
@@ -101,7 +106,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 16
                 height: 16
-                radius: 8
+                radius: height / 2
                 color: row.modelData.done ? Theme.accent : "transparent"
                 border.width: row.modelData.done ? 0 : 1.5
                 border.color: Theme.muted
@@ -119,9 +124,9 @@ Item {
                 id: label
 
                 anchors.left: box.right
-                anchors.leftMargin: 10
+                anchors.leftMargin: Theme.spaceSmall
                 anchors.right: remove.left
-                anchors.rightMargin: 6
+                anchors.rightMargin: Theme.spaceSmall
                 anchors.verticalCenter: parent.verticalCenter
                 text: row.modelData.text
                 wrapMode: Text.Wrap
@@ -175,7 +180,7 @@ Item {
             id: input
 
             anchors.left: plus.right
-            anchors.leftMargin: 10
+            anchors.leftMargin: Theme.spaceSmall
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             color: Theme.foreground

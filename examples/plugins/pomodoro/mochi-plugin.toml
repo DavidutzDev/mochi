@@ -53,3 +53,4 @@ view = "Card"
 title = "Focus"
 icon = "clock"
 order = 60
+options = { span = 1, rows = 1 }

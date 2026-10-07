@@ -52,11 +52,17 @@ Item {
     implicitWidth: row.implicitWidth + 12
     implicitHeight: row.implicitHeight + 8
 
+    // Sweeps while the capture is being saved.
+    EdgeLight {
+        radius: root.height / 2
+        working: root.saving
+    }
+
     Row {
         id: row
 
         anchors.centerIn: parent
-        spacing: 4
+        spacing: Theme.spaceTiny
 
         Repeater {
             model: root.payload.modes ?? []
@@ -84,7 +90,7 @@ Item {
         }
 
         Item {
-            width: 4
+            width: Theme.spaceTiny
             height: 1
         }
 
@@ -92,12 +98,12 @@ Item {
             anchors.verticalCenter: parent.verticalCenter
             text: root.hint
             color: Theme.muted
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
         }
 
         Item {
-            width: 4
+            width: Theme.spaceTiny
             height: 1
         }
 

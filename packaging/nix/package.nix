@@ -14,6 +14,7 @@
   libpulseaudio,
   quickshell,
   gpu-screen-recorder,
+  callPackage,
   # The capture module records through gpu-screen-recorder. Turn this off
   # when `recorder` in [module.capture] names another one.
   withGpuScreenRecorder ? true,
@@ -21,6 +22,7 @@
 
 let
   workspace = (lib.importTOML ../../Cargo.toml).workspace.package;
+  fonts = callPackage ./fonts.nix { };
 in
 rustPlatform.buildRustPackage {
   pname = "mochi";
@@ -86,6 +88,7 @@ rustPlatform.buildRustPackage {
       }
     wrapProgram $out/bin/mochid \
       --prefix PATH : ${lib.makeBinPath [ quickshell ]} \
+      --set-default MOCHI_FONTS ${fonts} \
       ${lib.optionalString withGpuScreenRecorder "--suffix PATH : ${
         lib.makeBinPath [ gpu-screen-recorder ]
       }"}

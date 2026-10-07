@@ -72,25 +72,29 @@ Item {
         Daemon.command("performance", "end", [`${pid}`]);
         root.confirming = -1;
         root.now = Date.now();
-        root.ending = Object.assign({}, root.ending, { [pid]: root.now });
+        root.ending = Object.assign({}, root.ending, {
+            [pid]: root.now
+        });
     }
 
     function force(pid: int): void {
         Daemon.command("performance", "kill", [`${pid}`]);
         // Counting again keeps it on "Ending" until it goes.
         root.now = Date.now();
-        root.ending = Object.assign({}, root.ending, { [pid]: root.now });
+        root.ending = Object.assign({}, root.ending, {
+            [pid]: root.now
+        });
     }
 
     Column {
         id: column
 
         width: parent.width
-        spacing: 10
+        spacing: Theme.spaceSmall
 
         Row {
             width: parent.width
-            spacing: 10
+            spacing: Theme.spaceSmall
 
             readonly property int count: root.gpu ? 3 : 2
             readonly property real tileWidth: (width - spacing * (count - 1)) / count
@@ -136,7 +140,7 @@ Item {
 
         Row {
             width: parent.width
-            spacing: 10
+            spacing: Theme.spaceSmall
 
             readonly property real tileWidth: (width - spacing) / 2
 
@@ -163,7 +167,7 @@ Item {
             visible: root.memory?.swap_total && root.memory.swap_total !== "0 MB"
             text: `Swap ${root.memory?.swap_used ?? ""} of ${root.memory?.swap_total ?? ""}${root.gpu ? ` · ${root.gpu.name}` : ""}`
             color: Theme.muted
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
         }
 
@@ -183,9 +187,18 @@ Item {
                 width: 240
                 height: 32
                 options: [
-                    { "value": "cpu", "label": "CPU" },
-                    { "value": "memory", "label": "Memory" },
-                    { "value": "disk", "label": "Disk" }
+                    {
+                        "value": "cpu",
+                        "label": "CPU"
+                    },
+                    {
+                        "value": "memory",
+                        "label": "Memory"
+                    },
+                    {
+                        "value": "disk",
+                        "label": "Disk"
+                    }
                 ]
                 current: root.sort
                 onPicked: value => Daemon.command("performance", "sort", [value])
@@ -223,15 +236,15 @@ Item {
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: Theme.radiusSmall
+                    radius: Theme.radiusControl
                     color: process.index % 2 === 0 ? Theme.surface : "transparent"
                 }
 
                 Text {
                     anchors.left: parent.left
-                    anchors.leftMargin: 12
+                    anchors.leftMargin: Theme.spaceMedium
                     anchors.right: cpuText.left
-                    anchors.rightMargin: 12
+                    anchors.rightMargin: Theme.spaceMedium
                     anchors.verticalCenter: parent.verticalCenter
                     text: process.entry.name ?? ""
                     elide: Text.ElideRight
@@ -272,7 +285,7 @@ Item {
                     id: endSlot
 
                     anchors.right: parent.right
-                    anchors.rightMargin: 4
+                    anchors.rightMargin: Theme.spaceTiny
                     width: 84
                     height: parent.height
 
@@ -283,7 +296,12 @@ Item {
                         visible: process.entry.own === true && (hover.hovered || process.stage !== "end")
                         enabled: process.stage !== "ending"
                         tone: process.stage === "end" ? "neutral" : "danger"
-                        text: ({ "end": "End", "confirm": "Confirm", "ending": "Ending", "force": "Force" })[process.stage]
+                        text: ({
+                                "end": "End",
+                                "confirm": "Confirm",
+                                "ending": "Ending",
+                                "force": "Force"
+                            })[process.stage]
                         onClicked: {
                             switch (process.stage) {
                             case "end":
@@ -313,9 +331,11 @@ Item {
         horizontalAlignment: Text.AlignRight
         rightPadding: 12
         color: sorted ? Theme.foreground : Theme.muted
-        font.pixelSize: Theme.textLabel
+        font.pixelSize: Theme.textCaption
         font.family: Theme.fontFamily
-        font.features: { "tnum": 1 }
+        font.features: {
+            "tnum": 1
+        }
     }
 
     // One reading: its name, value, a detail line and the graph. With
@@ -334,15 +354,20 @@ Item {
         property bool hot: false
 
         height: 128
-        radius: Theme.radiusLarge
+        radius: Theme.radiusSurface
         color: Theme.surface
         border.width: hot ? 1 : 0
         border.color: Theme.danger
 
+        EdgeLight {
+            radius: meter.radius
+            color: meter.hot ? Theme.danger : Theme.accent
+        }
+
         Row {
             x: 12
             y: 12
-            spacing: 6
+            spacing: Theme.spaceSmall
 
             Symbol {
                 anchors.verticalCenter: parent.verticalCenter
@@ -355,22 +380,20 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: meter.title
                 color: Theme.muted
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
+                font.weight: Theme.weightTitle
             }
         }
 
-        Text {
+        RollingText {
             visible: meter.speeds.length === 0
             x: 12
             y: 32
             text: meter.value
             color: meter.hot ? Theme.danger : Theme.foreground
-            font.pixelSize: Theme.textTitle
-            font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
-            font.features: { "tnum": 1 }
+            pixelSize: Theme.textTitle
+            weight: Theme.weightTitle
         }
 
         Text {
@@ -389,7 +412,7 @@ Item {
             visible: meter.speeds.length > 0
             x: 12
             y: 32
-            spacing: 28
+            spacing: Theme.spaceHuge
 
             Repeater {
                 model: meter.speeds
@@ -400,13 +423,11 @@ Item {
 
                     spacing: 2
 
-                    Text {
+                    RollingText {
                         text: parent.modelData[1]
                         color: parent.index === 0 ? Theme.accent : Theme.success
-                        font.pixelSize: Theme.textTitle
-                        font.family: Theme.fontFamily
-                        font.weight: Font.DemiBold
-                        font.features: { "tnum": 1 }
+                        pixelSize: Theme.textTitle
+                        weight: Theme.weightTitle
                     }
 
                     Text {

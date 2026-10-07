@@ -95,7 +95,7 @@ impl Module for Media {
             ContributionSpec::new("hub", "card", "now-playing", "Card", "Now playing")
                 .icon("music")
                 .order(10)
-                .options(json!({ "span": 2 })),
+                .options(json!({ "span": 2, "rows": 2 })),
             // The same card on the desktop; it steps aside when nothing plays.
             ContributionSpec::new("widgets", "widget", "now-playing", "Card", "Now playing")
                 .icon("music")

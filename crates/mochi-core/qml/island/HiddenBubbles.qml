@@ -20,7 +20,7 @@ Item {
         x: Theme.padding
         y: Theme.padding
         width: root.width - Theme.padding * 2
-        spacing: 4
+        spacing: Theme.spaceTiny
 
         SectionLabel {
             text: root.bubbles.length === 1 ? "1 more bubble" : `${root.bubbles.length} more bubbles`
@@ -38,7 +38,7 @@ Item {
                 width: list.width
                 implicitWidth: view.width + label.implicitWidth + 3 * 12
                 height: Math.max(Theme.idleHeight, view.height) + 8
-                radius: Theme.radiusMedium
+                radius: Theme.radiusField
                 color: area.containsMouse ? Theme.raised : Theme.surface
 
                 Behavior on color {
@@ -86,11 +86,11 @@ Item {
                     id: label
 
                     anchors.right: parent.right
-                    anchors.rightMargin: 12
+                    anchors.rightMargin: Theme.spaceMedium
                     anchors.verticalCenter: parent.verticalCenter
                     text: row.modelData.module
                     color: Theme.muted
-                    font.pixelSize: Theme.textLabel
+                    font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily
                 }
             }

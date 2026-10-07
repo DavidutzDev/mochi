@@ -41,6 +41,10 @@ static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
 /// One slot: a new indicator replaces the shown one in place.
 const KEY: &str = "workspaces";
+/// The dots `show` brings up, apart from the indicator: a switch made from
+/// them updates them in place instead of replacing them with the
+/// indicator, which lets clicks through.
+const SHOW_KEY: &str = "workspaces-show";
 
 #[derive(Debug, Default)]
 pub struct Workspaces;
@@ -105,6 +109,17 @@ impl Module for Workspaces {
                     "Monitor connector name, like DP-3",
                 ))
                 .arg(ArgSpec::string("workspace", "Workspace name").rest()),
+            ActionSpec::new(
+                "show",
+                "Show a monitor's workspaces on the island, to click or scroll through",
+            )
+            .arg(
+                ArgSpec::string(
+                    "output",
+                    "Monitor connector name; the one under the pointer when left out",
+                )
+                .optional(),
+            ),
         ]
     }
 
@@ -119,6 +134,8 @@ impl Module for Workspaces {
             let mut receiver = compositor.subscribe();
             tracker.apply(&receiver.borrow_and_update());
             let mut updates = Some(receiver);
+            // The dots `show` brought up, and their monitor.
+            let mut shown: Option<(mochi_core::ActivityId, String)> = None;
             if compositor.state().backend == Backend::Unsupported {
                 tracing::info!("no workspace information from the compositor; staying idle");
             }
@@ -128,8 +145,17 @@ impl Module for Workspaces {
                     event = ctx.next_event() => match event {
                         None => return Ok(()),
                         Some(ModuleEvent::Command(command)) => {
-                            let result = switch(&compositor, &command.args);
+                            let result = match command.action.as_str() {
+                                "show" => show(&ctx, &compositor, &command.args, &settings, timeout)
+                                    .map(|activity| shown = Some(activity)),
+                                _ => switch(&compositor, &command.args),
+                            };
                             command.reply(result);
+                        }
+                        Some(ModuleEvent::Ended { activity, .. })
+                            if shown.as_ref().is_some_and(|(id, _)| *id == activity) =>
+                        {
+                            shown = None;
                         }
                         Some(_) => {}
                     },
@@ -141,7 +167,13 @@ impl Module for Workspaces {
                         }
                         let Some(receiver) = &mut updates else { continue };
                         let state = receiver.borrow_and_update().clone();
-                        if let Some(notice) = tracker.apply(&state)
+                        let notice = tracker.apply(&state);
+                        // While the dots show, they follow the switches.
+                        if let Some((activity, output)) = &shown {
+                            ctx.update(*activity, overview(output, &state, &settings.labels));
+                            continue;
+                        }
+                        if let Some(notice) = notice
                             && settings.shows(&notice)
                         {
                             tracing::debug!(?notice, "workspaces");
@@ -164,6 +196,60 @@ impl Module for Workspaces {
             }
         })
     }
+}
+
+/// What `show` shows: a monitor's workspaces, as the indicator has them.
+fn overview(
+    output: &str,
+    state: &mochi_core::compositor::State,
+    labels: &BTreeMap<String, String>,
+) -> serde_json::Value {
+    let notice = Notice {
+        output: output.to_owned(),
+        reason: Reason::Focus,
+        urgent: None,
+    };
+    notice::payload(&notice, state, labels)
+}
+
+/// Shows a monitor's workspaces on the island: the given one, or the one
+/// under the pointer, else the focused one. They stay while the pointer is
+/// on them, take clicks, and go a moment after it leaves.
+fn show(
+    ctx: &ModuleCtx,
+    compositor: &Compositor,
+    args: &Args,
+    settings: &Settings,
+    timeout: Duration,
+) -> Result<(mochi_core::ActivityId, String), String> {
+    let state = compositor.state();
+    if state.backend == Backend::Unsupported {
+        return Err("no workspace information from the compositor".into());
+    }
+    let output = args
+        .str("output")
+        .map(str::to_owned)
+        .or_else(|| compositor.pointer_output())
+        .or_else(|| state.focused_output.clone())
+        .or_else(|| state.outputs.first().map(|output| output.name.clone()))
+        .ok_or("no monitors")?;
+    if !state
+        .outputs
+        .iter()
+        .any(|candidate| candidate.name == output)
+    {
+        return Err(format!("no monitor named {output:?}"));
+    }
+    let activity = ctx.present(
+        ActivitySpec::new("Workspaces")
+            .key(SHOW_KEY)
+            .priority(Priority::HIGH)
+            .fleeting()
+            .output(output.clone())
+            .timeout(timeout)
+            .payload(overview(&output, &state, &settings.labels)),
+    );
+    Ok((activity, output))
 }
 
 /// Waits for the next snapshot. Returns `false` once no more will come, and

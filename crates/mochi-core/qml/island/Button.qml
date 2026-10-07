@@ -49,7 +49,7 @@ Rectangle {
         id: content
 
         anchors.centerIn: parent
-        spacing: 6
+        spacing: Theme.spaceSmall
 
         Symbol {
             anchors.verticalCenter: parent.verticalCenter
@@ -64,7 +64,7 @@ Rectangle {
             visible: root.text !== ""
             text: root.text
             color: root.ink
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
             font.weight: Font.DemiBold
         }

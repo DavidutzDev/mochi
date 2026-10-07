@@ -11,6 +11,9 @@
 //!
 //! In [`Mode::Link`] the entries are symlinks into the source tree instead,
 //! so editing QML in the repository hot-reloads the running shell.
+//!
+//! The fonts Mochi's packages bring are linked into `fonts/`, where `Theme`
+//! loads them, see [`find_fonts`].
 
 use std::fs;
 use std::io::{self, ErrorKind};
@@ -28,6 +31,33 @@ const MODULES_FILE: &str = "Modules.qml";
 
 /// Where the builtin views of overridden modules go, as `builtin/<id>/`.
 const BUILTIN_DIR: &str = "builtin";
+
+/// Where the fonts go.
+const FONTS_DIR: &str = "fonts";
+
+/// The fonts `Theme` loads: the text font and the icon font.
+pub const FONT_FILES: [&str; 2] = ["InterVariable.ttf", "MaterialSymbolsRounded.ttf"];
+
+/// Where packages put the fonts when `MOCHI_FONTS` doesn't say.
+const SYSTEM_FONTS: &str = "/usr/share/mochi/fonts";
+
+/// The font files found, by name: in the directories `MOCHI_FONTS` lists
+/// (the Nix package sets it), then in `/usr/share/mochi/fonts`. A missing
+/// one makes the shell fall back to the system's fonts and drawn symbols.
+pub fn find_fonts() -> Vec<PathBuf> {
+    let mut dirs: Vec<PathBuf> = std::env::var_os("MOCHI_FONTS")
+        .map(|value| std::env::split_paths(&value).collect())
+        .unwrap_or_default();
+    dirs.push(PathBuf::from(SYSTEM_FONTS));
+    FONT_FILES
+        .iter()
+        .filter_map(|name| {
+            dirs.iter()
+                .map(|dir| dir.join(name))
+                .find(|path| path.is_file())
+        })
+        .collect()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -54,6 +84,7 @@ pub fn write_shell(
     out: &Path,
     core: &Assets,
     modules: &[ShellModule<'_>],
+    fonts: &[PathBuf],
     mode: Mode,
 ) -> io::Result<usize> {
     fs::create_dir_all(out.join("modules"))?;
@@ -62,6 +93,7 @@ pub fn write_shell(
     let mut keep = vec![
         "modules".to_owned(),
         BUILTIN_DIR.to_owned(),
+        FONTS_DIR.to_owned(),
         MODULES_FILE.to_owned(),
     ];
     let (core_dir, core_source) = match core {
@@ -77,6 +109,16 @@ pub fn write_shell(
         keep.push(name);
     }
     remove_others(out, &keep)?;
+
+    // Fonts are big and never embedded: always links.
+    fs::create_dir_all(out.join(FONTS_DIR))?;
+    let mut names = Vec::new();
+    for font in fonts {
+        let name = file_name(font);
+        written += link(font, &out.join(FONTS_DIR).join(&name))?;
+        names.push(name);
+    }
+    remove_others(&out.join(FONTS_DIR), &names)?;
 
     // A plugin without views, like a launcher provider, has nothing here.
     let modules: Vec<&ShellModule<'_>> = modules
@@ -300,7 +342,7 @@ mod tests {
                 overrides: &[],
             })
             .collect();
-        write_shell(out, &crate::QML, &modules, mode).unwrap()
+        write_shell(out, &crate::QML, &modules, &[], mode).unwrap()
     }
 
     #[test]
@@ -362,11 +404,32 @@ mod tests {
             assets: &plugin,
             overrides: &[],
         }];
-        write_shell(&out, &crate::QML, &modules, Mode::Copy).unwrap();
+        write_shell(&out, &crate::QML, &modules, &[], Mode::Copy).unwrap();
         assert!(!out.join("modules/plugin").exists());
         let generated = fs::read_to_string(out.join(MODULES_FILE)).unwrap();
         assert!(!generated.contains("modules/plugin"), "{generated}");
         fs::remove_dir_all(out).unwrap();
+    }
+
+    #[test]
+    fn fonts_are_linked_and_unlinked() {
+        let out = scratch("fonts");
+        let font = out.with_extension("ttf");
+        fs::write(&font, b"font").unwrap();
+        write_shell(
+            &out,
+            &crate::QML,
+            &[],
+            std::slice::from_ref(&font),
+            Mode::Copy,
+        )
+        .unwrap();
+        let linked = out.join("fonts").join(font.file_name().unwrap());
+        assert_eq!(fs::read_link(&linked).unwrap(), font);
+        write_shell(&out, &crate::QML, &[], &[], Mode::Copy).unwrap();
+        assert!(!linked.exists() && out.join("fonts").is_dir());
+        fs::remove_dir_all(out).unwrap();
+        fs::remove_file(font).unwrap();
     }
 
     #[test]
@@ -378,7 +441,7 @@ mod tests {
             assets: &plugin,
             overrides: &[],
         }];
-        write_shell(&out, &crate::QML, &modules, Mode::Copy).unwrap();
+        write_shell(&out, &crate::QML, &modules, &[], Mode::Copy).unwrap();
         assert!(is_symlink(&out.join("modules/plugin")));
         assert!(out.join("modules/plugin/View.qml").is_file());
         fs::remove_dir_all(out).unwrap();
@@ -396,7 +459,7 @@ mod tests {
                 assets: &FIXTURE_ASSETS,
                 overrides: &overrides,
             }];
-            write_shell(&out, &crate::QML, &modules, mode).unwrap();
+            write_shell(&out, &crate::QML, &modules, &[], mode).unwrap();
             let dir = out.join("modules/clock");
             assert!(!is_symlink(&dir));
             assert_eq!(fs::read_link(dir.join("View.qml")).unwrap(), replacement);

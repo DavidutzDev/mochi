@@ -21,7 +21,12 @@ Item {
     readonly property bool hidden: content.item?.hidden ?? false
     // A view sets `typing` while a text field in it has the focus.
     readonly property bool typing: content.item?.typing ?? false
-    readonly property var placed: widget ? Place.rect(widget, cell, desktop.width, desktop.height) : ({ x: 0, y: 0, width: 0, height: 0 })
+    readonly property var placed: widget ? Place.rect(widget, cell, desktop.width, desktop.height) : ({
+            x: 0,
+            y: 0,
+            width: 0,
+            height: 0
+        })
 
     // While dragging or resizing, and until the saved layout comes back.
     property bool moving: false
@@ -162,10 +167,14 @@ Item {
 
         anchors.fill: parent
         visible: root.framed
-        radius: Theme.radiusLarge
+        radius: Theme.radiusSurface
         color: Theme.background
         border.width: 1
         border.color: Theme.border
+
+        EdgeLight {
+            radius: card.radius
+        }
     }
 
     Loader {
@@ -207,10 +216,10 @@ Item {
     Rectangle {
         anchors.fill: parent
         visible: root.editing
-        radius: Theme.radiusLarge
+        radius: Theme.radiusSurface
         color: "transparent"
         border.width: root.desktop.selected === root.widget?.id ? 2 : 1
-        border.color: root.desktop.selected === root.widget?.id ? Theme.accent : Qt.rgba(1, 1, 1, 0.35)
+        border.color: root.desktop.selected === root.widget?.id ? Theme.accent : Qt.alpha(Theme.foreground, 0.35)
     }
 
     MouseArea {
@@ -253,7 +262,7 @@ Item {
         anchors.margins: -6
         width: 18
         height: 18
-        radius: 9
+        radius: height / 2
         visible: root.editing
         color: Theme.foreground
         border.width: 3
@@ -299,8 +308,8 @@ Item {
     Row {
         anchors.right: parent.right
         anchors.bottom: parent.top
-        anchors.bottomMargin: 6
-        spacing: 4
+        anchors.bottomMargin: Theme.spaceSmall
+        spacing: Theme.spaceTiny
         visible: root.editing && (root.pointed || linger.running || root.desktop.selected === root.widget?.id)
 
         HoverHandler {

@@ -1,0 +1,2 @@
+# Views that set raw sizes or colors, from before Theme's scales: `<count> <path>`.
+# Counts may only go down; see tests/design.rs.

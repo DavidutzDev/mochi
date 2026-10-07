@@ -51,6 +51,8 @@ pub enum ToPlugin {
     Command { id: u64, action: String, args: Args },
     /// A click on one of its activities that has no expanded view.
     Clicked { activity: u64 },
+    /// The pointer came onto one of its activities on the island, or left.
+    Hovered { activity: u64, hovered: bool },
     /// One of its activities is gone for good.
     Ended { activity: u64, reason: EndReason },
     /// A click on one of its bubbles.
@@ -277,6 +279,10 @@ mod tests {
                 .collect(),
         });
         round_trip_to(ToPlugin::Clicked { activity: 2 });
+        round_trip_to(ToPlugin::Hovered {
+            activity: 2,
+            hovered: true,
+        });
         round_trip_to(ToPlugin::Ended {
             activity: 2,
             reason: EndReason::Dismissed,

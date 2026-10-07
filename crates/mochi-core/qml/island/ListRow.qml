@@ -26,7 +26,7 @@ Rectangle {
 
     implicitWidth: 360
     implicitHeight: 56
-    radius: Theme.radiusMedium
+    radius: Theme.radiusField
     color: selected ? Theme.raised : hovered ? (flat ? Theme.surface : Theme.raised) : flat ? "transparent" : Theme.surface
 
     Behavior on color {
@@ -83,9 +83,9 @@ Rectangle {
 
     Column {
         anchors.left: leadingSlot.right
-        anchors.leftMargin: 12
+        anchors.leftMargin: Theme.spaceMedium
         anchors.right: trailingSlot.left
-        anchors.rightMargin: 12
+        anchors.rightMargin: Theme.spaceMedium
         anchors.verticalCenter: parent.verticalCenter
 
         Text {
@@ -94,7 +94,7 @@ Rectangle {
             elide: Text.ElideRight
             textFormat: Text.PlainText
             color: Theme.foreground
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
             font.weight: Font.DemiBold
         }
@@ -108,7 +108,7 @@ Rectangle {
             color: Theme.muted
             linkColor: Theme.accent
             onLinkActivated: link => root.linkActivated(link)
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
         }
     }
@@ -117,8 +117,8 @@ Rectangle {
         id: trailingSlot
 
         anchors.right: parent.right
-        anchors.rightMargin: 12
+        anchors.rightMargin: Theme.spaceMedium
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 6
+        spacing: Theme.spaceSmall
     }
 }

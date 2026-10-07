@@ -21,7 +21,7 @@ Rectangle {
 
     implicitWidth: vertical ? 120 : 220
     implicitHeight: vertical ? 112 : 64
-    radius: Theme.radiusLarge
+    radius: Theme.radiusSurface
     color: checked ? fill : hovered ? Theme.raised : Theme.surface
     scale: area.pressed ? 0.97 : 1
 
@@ -40,7 +40,7 @@ Rectangle {
     Column {
         anchors.centerIn: parent
         visible: root.vertical
-        spacing: 10
+        spacing: Theme.spaceMedium
 
         Symbol {
             anchors.horizontalCenter: parent.horizontalCenter
@@ -61,18 +61,21 @@ Rectangle {
 
     Row {
         anchors.left: parent.left
-        anchors.leftMargin: 12
+        anchors.leftMargin: Theme.spaceMedium
         anchors.right: parent.right
-        anchors.rightMargin: 12
+        anchors.rightMargin: Theme.spaceMedium
         anchors.verticalCenter: parent.verticalCenter
         visible: !root.vertical
-        spacing: 12
+        spacing: Theme.spaceMedium
 
+        // Smaller in a tile shorter than its usual 64 pixels, like a hub
+        // card's one row.
         Rectangle {
-            width: 40
-            height: 40
-            radius: 20
-            color: root.checked ? Qt.rgba(0, 0, 0, 0.15) : Theme.raised
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.min(40, root.height - Theme.spaceSmall)
+            height: width
+            radius: height / 2
+            color: root.checked ? Qt.alpha(Theme.onAccent, 0.15) : Theme.raised
 
             Symbol {
                 anchors.centerIn: parent
@@ -103,7 +106,7 @@ Rectangle {
                 elide: Text.ElideRight
                 color: root.checked ? root.ink : Theme.muted
                 opacity: root.checked ? 0.75 : 1
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
             }
         }

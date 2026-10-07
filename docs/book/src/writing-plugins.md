@@ -54,7 +54,7 @@ A plugin with a backend adds `[backend]` with the program and the command that b
 
 Views are QML files in the views directory, loaded the same way as a builtin module's: see [Writing views](views.md). An activity or bubble names a view by its file name without `.qml`, and a view gets the `payload` property. `import qs.island` gives the theme, `Daemon` and the controls. A view reads its plugin's state with `Daemon.state("<id>")` and runs its actions with `Daemon.command("<id>", "<action>", [args])`.
 
-A hub card or page gets the plugin's published state as its `payload`, and a card can set `hidden: true` to step aside.
+A hub card or page gets the plugin's published state as its `payload`, and a card can set `hidden: true` to step aside. The hub draws the card's frame and title, so the view only draws what goes inside, filling the width it's given.
 
 ### Replacing builtin views
 
@@ -114,7 +114,9 @@ done
 
 ## A flake for Nix users
 
-With a `flake.nix` in the repository, people install the plugin without cargo: `mochi plugins install` builds the flake with `nix build` when Nix is installed, and home-manager can take its package. Copy this next to `mochi-plugin.toml`; `mochi.lib.buildPlugin` builds a Rust plugin from its `Cargo.lock`, with no hash to update, and puts the backend at the manifest's `exec`:
+You don't need one: Mochi builds Rust, Node, Python and Go plugins with Nix from their lock files by itself, see [Building with Nix](plugin-manifest.md#building-with-nix). List the programs your backend runs in `[backend] needs`, so they're there wherever it's built.
+
+A flake is for a build Mochi's builder can't guess, like extra native libraries. `mochi plugins install` uses it when Nix is installed, and home-manager can take its package. Copy this next to `mochi-plugin.toml` and adjust it; `mochi.lib.buildPlugin` is the same builder:
 
 ```nix
 {{#include ../../../examples/plugins/flake.nix}}
@@ -125,6 +127,8 @@ A flake for a plugin in another language works too, as long as its default packa
 The `mochi-sdk` dependency must be a `git` one, like `mochi-sdk = { git = "https://github.com/DavidutzDev/mochi", tag = "v0.0.6" }`, not a `path` to your own checkout, or the plugin only builds on your machine.
 
 ## Publishing a release
+
+Releases work for the most people: nothing to build, so no compiler, no libraries and no Nix needed, and Mochi patches release binaries to run on NixOS too. Building from source depends on each machine having your plugin's build environment, and Mochi's Nix build covers the usual builds of Rust, Node, Python and Go, not every plugin. Publish releases if your plugin compiles to a binary, and always if it's in a language Mochi can't build with Nix, see [Which source to pick](plugins.md#which-source-to-pick).
 
 For a `git-release:` source, attach an archive to a GitHub release, named as `[release] asset` says with `{id}`, `{version}`, `{tag}` and `{arch}` (`x86_64` or `aarch64`) filled in. The archive holds the plugin as it should be installed: the manifest, the views and the built `exec`, at its root or in one directory. `mochi plugins install` reads the manifest from the tagged commit first, to show what it will install, then downloads the asset.
 

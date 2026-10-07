@@ -927,6 +927,13 @@ impl Daemon {
                 Effect::Clicked { module, activity } => {
                     self.notify(&module, ModuleEvent::Clicked(activity));
                 }
+                Effect::Hovered {
+                    module,
+                    activity,
+                    hovered,
+                } => {
+                    self.notify(&module, ModuleEvent::Hovered { activity, hovered });
+                }
                 Effect::Ended {
                     module,
                     activity,

@@ -21,7 +21,7 @@ Item {
     // Active color RGB and Hex
     readonly property var currentRgb: ColorMath.hsvToRgb(hue, saturation, value)
     readonly property string currentHex: ColorMath.rgbToHex(currentRgb.r, currentRgb.g, currentRgb.b, false)
-    readonly property color currentColor: Qt.rgba(currentRgb.r / 255.0, currentRgb.g / 255.0, currentRgb.b / 255.0, 1.0)
+    readonly property color currentColor: Qt.hsva(hue, saturation, value, 1.0)
 
     // Formatted strings matching the reference UI
     readonly property string hexText: currentHex
@@ -50,7 +50,7 @@ Item {
         });
     }
 
-    implicitHeight: toolbar.height + 14 + contentArea.implicitHeight
+    implicitHeight: toolbar.height + Theme.spaceMedium + contentArea.implicitHeight
 
     Timer {
         id: forget
@@ -100,50 +100,130 @@ Item {
         return false;
     }
 
-    // Top navigation toolbar
-    Item {
-        id: toolbar
+    // A box showing the current color in one format: a click copies it, a
+    // double click puts it in the field to edit.
+    component Format: Rectangle {
+        id: format
 
-        width: parent.width
-        height: 34
+        property string label
+        property string value
+        property bool editable: true
+        // For the longer formats.
+        property bool small: false
 
-        Text {
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            text: root.colors.length === 1 ? "1 color saved" : `${root.colors.length} colors saved`
-            color: Theme.muted
-            font.pixelSize: Theme.textBody
-            font.family: Theme.fontFamily
-        }
+        width: Math.floor((parent.width - Theme.spaceSmall * 2) / 3)
+        height: 52
+        radius: Theme.radiusControl
+        color: formatArea.containsMouse ? Theme.highlight : Theme.surface
+        border.color: Theme.border
+        border.width: 1
 
-        // Actions on right
-        Row {
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 8
+        Column {
+            anchors.centerIn: parent
+            spacing: 2
 
-            Button {
-                tone: "accent"
-                icon: "palette"
-                text: "Pick from Screen"
-                onClicked: Daemon.command("colors", "start", [])
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: format.label
+                color: Theme.muted
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+                font.weight: Theme.weightTitle
             }
 
-            Button {
-                visible: root.colors.length > 0
-                icon: "trash"
-                text: "Clear"
-                onClicked: Daemon.command("colors", "clear", [])
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: Theme.spaceTiny
+
+                Text {
+                    text: format.value
+                    color: Theme.foreground
+                    font.pixelSize: format.small ? Theme.textCaption : Theme.textBody
+                    font.family: Theme.fontFamily
+                    font.weight: Theme.weightLabel
+                }
+
+                Symbol {
+                    visible: root.copiedKey === format.label
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "check"
+                    size: 11
+                    color: Theme.success
+                }
+            }
+        }
+
+        MouseArea {
+            id: formatArea
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: root.copyText(format.value, format.label)
+            onDoubleClicked: {
+                if (!format.editable)
+                    return;
+                colorInputField.text = format.value;
+                colorInputField.forceActiveFocus();
             }
         }
     }
 
-    // Main content area: Side-by-side Chooser & History (each taking full half)
+    // A ring around a thumb, light inside dark, so it shows on any color.
+    component Ring: Item {
+        property real outer
+        property real line
+        property color fill: "transparent"
+
+        width: outer
+        height: outer
+
+        Rectangle {
+            anchors.fill: parent
+            radius: width / 2
+            color: "transparent"
+            border.color: "#80000000" // design: a dark edge that shows on any color
+            border.width: 1
+        }
+
+        Rectangle {
+            anchors.centerIn: parent
+            width: parent.width - 4
+            height: width
+            radius: width / 2
+            color: parent.fill
+            border.color: "#ffffff" // design: a light ring that shows on any color
+            border.width: parent.line
+        }
+    }
+
+    PanelHeader {
+        id: toolbar
+
+        width: parent.width
+        title: root.colors.length === 1 ? "1 color saved" : `${root.colors.length} colors saved`
+
+        Button {
+            tone: "accent"
+            icon: "colorize"
+            text: "Pick a color"
+            onClicked: Daemon.command("colors", "start", [])
+        }
+
+        Button {
+            visible: root.colors.length > 0
+            icon: "trash"
+            text: "Clear"
+            onClicked: Daemon.command("colors", "clear", [])
+        }
+    }
+
+    // The chooser on the left, the history on the right.
     Item {
         id: contentArea
 
         anchors.top: toolbar.bottom
-        anchors.topMargin: 14
+        anchors.topMargin: Theme.spaceMedium
         width: parent.width
         implicitHeight: 390
 
@@ -151,28 +231,26 @@ Item {
             id: splitRow
 
             anchors.fill: parent
-            spacing: 14
+            spacing: Theme.spaceMedium
 
-            // Left panel: Color Chooser taking the full half
             Item {
                 width: root.halfWidth
                 height: parent.height
 
                 Column {
                     width: parent.width
-                    spacing: 10
+                    spacing: Theme.spaceSmall
 
-                    // Top preview swatch + 2D SV gradient (fills vertical half)
+                    // The color, and saturation and value to drag through.
                     Rectangle {
                         id: topBox
 
                         width: parent.width
                         height: 180
-                        radius: Theme.radiusLarge
+                        radius: Theme.radiusSurface
                         color: Theme.surface
                         clip: true
 
-                        // Left: Solid preview swatch
                         Rectangle {
                             id: swatch
 
@@ -182,17 +260,19 @@ Item {
                             width: Math.round(parent.width * 0.36)
                             color: root.currentColor
 
-                            // Quick copy icon on hover
+                            // Copies the color on a click.
                             Rectangle {
                                 anchors.centerIn: parent
-                                width: 32
-                                height: 32
-                                radius: 16
+                                width: Theme.controlHeight
+                                height: Theme.controlHeight
+                                radius: height / 2
                                 color: Theme.surface
                                 opacity: swatchHover.containsMouse ? 0.9 : 0.0
 
                                 Behavior on opacity {
-                                    NumberAnimation { duration: Theme.fast }
+                                    NumberAnimation {
+                                        duration: Theme.fast
+                                    }
                                 }
 
                                 Symbol {
@@ -213,7 +293,6 @@ Item {
                             }
                         }
 
-                        // Right: 2D Saturation / Value Picker
                         Rectangle {
                             id: svPicker
 
@@ -224,55 +303,35 @@ Item {
                             color: Qt.hsva(root.hue, 1.0, 1.0, 1.0)
                             clip: true
 
-                            // Horizontal white gradient (Saturation 0 -> 1)
+                            // Saturation, from white on the left.
                             Rectangle {
                                 anchors.fill: parent
                                 gradient: Gradient {
                                     orientation: Gradient.Horizontal
-                                    GradientStop { position: 0.0; color: "#ffffff" }
-                                    GradientStop { position: 1.0; color: "#00ffffff" }
+                                    GradientStop { position: 0.0; color: "#ffffff" } // design: saturation's scale
+                                    GradientStop { position: 1.0; color: "#00ffffff" } // design: saturation's scale
                                 }
                             }
 
-                            // Vertical black gradient (Value 1 -> 0)
+                            // Value, to black at the bottom.
                             Rectangle {
                                 anchors.fill: parent
                                 gradient: Gradient {
                                     orientation: Gradient.Vertical
-                                    GradientStop { position: 0.0; color: "#00000000" }
-                                    GradientStop { position: 1.0; color: "#000000" }
+                                    GradientStop { position: 0.0; color: "#00000000" } // design: value's scale
+                                    GradientStop { position: 1.0; color: "#000000" } // design: value's scale
                                 }
                             }
 
-                            // Thumb selector ring (clamped inside visible area)
-                            Item {
+                            Ring {
                                 id: svThumb
 
                                 readonly property real margin: 2
+
                                 x: Math.round(margin + root.saturation * (parent.width - width - margin * 2))
                                 y: Math.round(margin + (1.0 - root.value) * (parent.height - height - margin * 2))
-                                width: 20
-                                height: 20
-
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: 20
-                                    height: 20
-                                    radius: 10
-                                    color: "transparent"
-                                    border.color: "#80000000"
-                                    border.width: 1
-                                }
-
-                                Rectangle {
-                                    anchors.centerIn: parent
-                                    width: 16
-                                    height: 16
-                                    radius: 8
-                                    color: "transparent"
-                                    border.color: "#ffffff"
-                                    border.width: 2.5
-                                }
+                                outer: 20
+                                line: 2.5
                             }
 
                             MouseArea {
@@ -297,54 +356,33 @@ Item {
                         }
                     }
 
-                    // Rainbow Hue Slider
+                    // The hue.
                     Rectangle {
                         id: hueSlider
 
                         width: parent.width
                         height: 20
                         radius: height / 2
-                        clip: false
 
                         gradient: Gradient {
                             orientation: Gradient.Horizontal
-                            GradientStop { position: 0.0;   color: "#ff0000" }
-                            GradientStop { position: 0.167; color: "#ffff00" }
-                            GradientStop { position: 0.333; color: "#00ff00" }
-                            GradientStop { position: 0.5;   color: "#00ffff" }
-                            GradientStop { position: 0.667; color: "#0000ff" }
-                            GradientStop { position: 0.833; color: "#ff00ff" }
-                            GradientStop { position: 1.0;   color: "#ff0000" }
+                            GradientStop { position: 0.0; color: "#ff0000" } // design: the hues
+                            GradientStop { position: 0.167; color: "#ffff00" } // design: the hues
+                            GradientStop { position: 0.333; color: "#00ff00" } // design: the hues
+                            GradientStop { position: 0.5; color: "#00ffff" } // design: the hues
+                            GradientStop { position: 0.667; color: "#0000ff" } // design: the hues
+                            GradientStop { position: 0.833; color: "#ff00ff" } // design: the hues
+                            GradientStop { position: 1.0; color: "#ff0000" } // design: the hues
                         }
 
-                        // Hue thumb
-                        Item {
+                        Ring {
                             id: hueThumb
 
                             x: Math.round(root.hue * (parent.width - width))
                             anchors.verticalCenter: parent.verticalCenter
-                            width: 24
-                            height: 24
-
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 24
-                                height: 24
-                                radius: 12
-                                color: "transparent"
-                                border.color: "#80000000"
-                                border.width: 1
-                            }
-
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 20
-                                height: 20
-                                radius: 10
-                                color: Qt.hsva(root.hue, 1.0, 1.0, 1.0)
-                                border.color: "#ffffff"
-                                border.width: 3
-                            }
+                            outer: 24
+                            line: 3
+                            fill: Qt.hsva(root.hue, 1.0, 1.0, 1.0)
                         }
 
                         MouseArea {
@@ -365,24 +403,27 @@ Item {
                         }
                     }
 
-                    // "Set Color" Input Bar: lets user enter any hex, rgb, hsl, or named color
+                    // Any hex, rgb, hsl or named color.
                     Rectangle {
                         id: colorInputBar
 
                         width: parent.width
-                        height: 34
+                        height: Theme.controlHeight
                         radius: height / 2
                         color: Theme.surface
                         border.color: root.inputFeedback === "error" ? Theme.danger : (root.inputFeedback === "ok" ? Theme.success : Theme.border)
                         border.width: root.inputFeedback !== "" ? 1.5 : 1
 
                         Behavior on border.color {
-                            ColorAnimation { duration: Theme.fast }
+                            ColorAnimation {
+                                duration: Theme.fast
+                            }
                         }
 
                         Symbol {
                             id: editIcon
-                            x: 10
+
+                            x: Theme.spaceMedium
                             anchors.verticalCenter: parent.verticalCenter
                             name: "edit"
                             size: 13
@@ -393,9 +434,9 @@ Item {
                             id: colorInputField
 
                             anchors.left: editIcon.right
-                            anchors.leftMargin: 8
+                            anchors.leftMargin: Theme.spaceSmall
                             anchors.right: applyBtn.left
-                            anchors.rightMargin: 6
+                            anchors.rightMargin: Theme.spaceSmall
                             anchors.verticalCenter: parent.verticalCenter
                             color: Theme.foreground
                             selectionColor: Theme.accent
@@ -414,28 +455,27 @@ Item {
 
                             Text {
                                 visible: colorInputField.text === "" && !colorInputField.activeFocus
-                                text: "Set color (e.g. #fb542b, 251, 84, 43, coral)..."
+                                text: "Set a color, like #fb542b or coral"
                                 color: Theme.muted
                                 font.pixelSize: Theme.textCaption
                                 font.family: Theme.fontFamily
                             }
                         }
 
-                        // Apply button inside input pill
                         Rectangle {
                             id: applyBtn
 
                             anchors.right: parent.right
-                            anchors.rightMargin: 4
+                            anchors.rightMargin: Theme.spaceTiny
                             anchors.verticalCenter: parent.verticalCenter
                             width: 52
-                            height: 26
-                            radius: 13
+                            height: parent.height - Theme.spaceSmall
+                            radius: height / 2
                             color: applyMouse.containsMouse ? Theme.highlight : Theme.raised
 
                             Row {
                                 anchors.centerIn: parent
-                                spacing: 3
+                                spacing: Theme.spaceTiny
 
                                 Symbol {
                                     anchors.verticalCenter: parent.verticalCenter
@@ -450,12 +490,13 @@ Item {
                                     color: Theme.foreground
                                     font.pixelSize: Theme.textCaption
                                     font.family: Theme.fontFamily
-                                    font.weight: Font.DemiBold
+                                    font.weight: Theme.weightTitle
                                 }
                             }
 
                             MouseArea {
                                 id: applyMouse
+
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
@@ -467,314 +508,61 @@ Item {
                         }
                     }
 
-                    // Formats Grid: Row 1 (HEX, RGB, CMYK)
-                    // Clean uniform appearance without copy button; copies on click!
                     Row {
                         width: parent.width
-                        spacing: 8
+                        spacing: Theme.spaceSmall
 
-                        // HEX Box: copies on press like the others! Double-click loads to input.
-                        Rectangle {
-                            width: Math.floor((parent.width - 16) / 3)
-                            height: 52
-                            radius: Theme.radiusSmall
-                            color: hexArea.containsMouse ? Theme.highlight : Theme.surface
-                            border.color: Theme.border
-                            border.width: 1
-
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 2
-
-                                Text {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "HEX"
-                                    color: Theme.muted
-                                    font.pixelSize: Theme.textCaption
-                                    font.family: Theme.fontFamily
-                                    font.weight: Font.DemiBold
-                                }
-
-                                Row {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    spacing: 4
-
-                                    Text {
-                                        text: root.hexText
-                                        color: Theme.foreground
-                                        font.pixelSize: Theme.textBody
-                                        font.family: Theme.fontFamily
-                                        font.weight: Font.Medium
-                                    }
-
-                                    Symbol {
-                                        visible: root.copiedKey === "HEX"
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        name: "check"
-                                        size: 11
-                                        color: Theme.success
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                id: hexArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.copyText(root.hexText, "HEX")
-                                onDoubleClicked: {
-                                    colorInputField.text = root.hexText;
-                                    colorInputField.forceActiveFocus();
-                                }
-                            }
+                        Format {
+                            label: "HEX"
+                            value: root.hexText
                         }
 
-                        // RGB Box: copies on press! Double-click loads to input.
-                        Rectangle {
-                            width: Math.floor((parent.width - 16) / 3)
-                            height: 52
-                            radius: Theme.radiusSmall
-                            color: rgbArea.containsMouse ? Theme.highlight : Theme.surface
-                            border.color: Theme.border
-                            border.width: 1
-
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 2
-
-                                Text {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "RGB"
-                                    color: Theme.muted
-                                    font.pixelSize: Theme.textCaption
-                                    font.family: Theme.fontFamily
-                                    font.weight: Font.DemiBold
-                                }
-
-                                Row {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    spacing: 4
-
-                                    Text {
-                                        text: root.rgbText
-                                        color: Theme.foreground
-                                        font.pixelSize: Theme.textBody
-                                        font.family: Theme.fontFamily
-                                        font.weight: Font.Medium
-                                    }
-
-                                    Symbol {
-                                        visible: root.copiedKey === "RGB"
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        name: "check"
-                                        size: 11
-                                        color: Theme.success
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                id: rgbArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.copyText(root.rgbText, "RGB")
-                                onDoubleClicked: {
-                                    colorInputField.text = root.rgbText;
-                                    colorInputField.forceActiveFocus();
-                                }
-                            }
+                        Format {
+                            label: "RGB"
+                            value: root.rgbText
                         }
 
-                        // CMYK Box: copies on press!
-                        Rectangle {
-                            width: Math.floor((parent.width - 16) / 3)
-                            height: 52
-                            radius: Theme.radiusSmall
-                            color: cmykArea.containsMouse ? Theme.highlight : Theme.surface
-                            border.color: Theme.border
-                            border.width: 1
-
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 2
-
-                                Text {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "CMYK"
-                                    color: Theme.muted
-                                    font.pixelSize: Theme.textCaption
-                                    font.family: Theme.fontFamily
-                                    font.weight: Font.DemiBold
-                                }
-
-                                Row {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    spacing: 4
-
-                                    Text {
-                                        text: root.cmykText
-                                        color: Theme.foreground
-                                        font.pixelSize: Theme.textCaption
-                                        font.family: Theme.fontFamily
-                                        font.weight: Font.Medium
-                                    }
-
-                                    Symbol {
-                                        visible: root.copiedKey === "CMYK"
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        name: "check"
-                                        size: 11
-                                        color: Theme.success
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                id: cmykArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.copyText(root.cmykText, "CMYK")
-                            }
+                        Format {
+                            label: "CMYK"
+                            value: root.cmykText
+                            small: true
+                            editable: false
                         }
                     }
 
-                    // Formats Grid: Row 2 (HSV, HSL, Add to History)
                     Row {
                         width: parent.width
-                        spacing: 8
+                        spacing: Theme.spaceSmall
 
-                        // HSV Box: copies on press! Double-click loads to input.
-                        Rectangle {
-                            width: Math.floor((parent.width - 16) / 3)
-                            height: 52
-                            radius: Theme.radiusSmall
-                            color: hsvArea.containsMouse ? Theme.highlight : Theme.surface
-                            border.color: Theme.border
-                            border.width: 1
-
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 2
-
-                                Text {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "HSV"
-                                    color: Theme.muted
-                                    font.pixelSize: Theme.textCaption
-                                    font.family: Theme.fontFamily
-                                    font.weight: Font.DemiBold
-                                }
-
-                                Row {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    spacing: 4
-
-                                    Text {
-                                        text: root.hsvText
-                                        color: Theme.foreground
-                                        font.pixelSize: Theme.textCaption
-                                        font.family: Theme.fontFamily
-                                        font.weight: Font.Medium
-                                    }
-
-                                    Symbol {
-                                        visible: root.copiedKey === "HSV"
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        name: "check"
-                                        size: 11
-                                        color: Theme.success
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                id: hsvArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.copyText(root.hsvText, "HSV")
-                                onDoubleClicked: {
-                                    colorInputField.text = root.hsvText;
-                                    colorInputField.forceActiveFocus();
-                                }
-                            }
+                        Format {
+                            label: "HSV"
+                            value: root.hsvText
+                            small: true
                         }
 
-                        // HSL Box: copies on press! Double-click loads to input.
-                        Rectangle {
-                            width: Math.floor((parent.width - 16) / 3)
-                            height: 52
-                            radius: Theme.radiusSmall
-                            color: hslArea.containsMouse ? Theme.highlight : Theme.surface
-                            border.color: Theme.border
-                            border.width: 1
-
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 2
-
-                                Text {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: "HSL"
-                                    color: Theme.muted
-                                    font.pixelSize: Theme.textCaption
-                                    font.family: Theme.fontFamily
-                                    font.weight: Font.DemiBold
-                                }
-
-                                Row {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    spacing: 4
-
-                                    Text {
-                                        text: root.hslText
-                                        color: Theme.foreground
-                                        font.pixelSize: Theme.textCaption
-                                        font.family: Theme.fontFamily
-                                        font.weight: Font.Medium
-                                    }
-
-                                    Symbol {
-                                        visible: root.copiedKey === "HSL"
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        name: "check"
-                                        size: 11
-                                        color: Theme.success
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                id: hslArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.copyText(root.hslText, "HSL")
-                                onDoubleClicked: {
-                                    colorInputField.text = root.hslText;
-                                    colorInputField.forceActiveFocus();
-                                }
-                            }
+                        Format {
+                            label: "HSL"
+                            value: root.hslText
+                            small: true
                         }
 
-                        // Add to History Action Button
+                        // Saves the color to the history.
                         Rectangle {
-                            width: Math.floor((parent.width - 16) / 3)
+                            width: Math.floor((parent.width - Theme.spaceSmall * 2) / 3)
                             height: 52
-                            radius: Theme.radiusSmall
+                            radius: Theme.radiusControl
                             color: addArea.containsMouse ? Qt.lighter(Theme.accent, 1.1) : Theme.accent
                             scale: addArea.pressed ? 0.96 : 1.0
 
                             Behavior on scale {
-                                NumberAnimation { duration: Theme.fast }
+                                NumberAnimation {
+                                    duration: Theme.fast
+                                }
                             }
 
                             Row {
                                 anchors.centerIn: parent
-                                spacing: 6
+                                spacing: Theme.spaceSmall
 
                                 Symbol {
                                     anchors.verticalCenter: parent.verticalCenter
@@ -785,16 +573,17 @@ Item {
 
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    text: root.copiedKey === "ADD" ? "Saved!" : "Save Color"
+                                    text: root.copiedKey === "ADD" ? "Saved" : "Save"
                                     color: Theme.onAccent
                                     font.pixelSize: Theme.textBody
                                     font.family: Theme.fontFamily
-                                    font.weight: Font.DemiBold
+                                    font.weight: Theme.weightTitle
                                 }
                             }
 
                             MouseArea {
                                 id: addArea
+
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
@@ -805,19 +594,20 @@ Item {
                 }
             }
 
-            // Right panel: Color History taking the other full half
+            // The history.
             Item {
                 width: root.halfWidth
                 height: parent.height
 
                 Column {
                     anchors.fill: parent
-                    spacing: 8
+                    spacing: Theme.spaceSmall
 
-                    // History search input
                     Rectangle {
+                        id: searchBox
+
                         width: parent.width
-                        height: 34
+                        height: Theme.controlHeight
                         radius: height / 2
                         color: Theme.surface
                         border.color: Theme.border
@@ -825,7 +615,8 @@ Item {
 
                         Symbol {
                             id: searchIcon
-                            x: 10
+
+                            x: Theme.spaceMedium
                             anchors.verticalCenter: parent.verticalCenter
                             name: "search"
                             size: 13
@@ -834,10 +625,11 @@ Item {
 
                         TextInput {
                             id: searchInput
+
                             anchors.left: searchIcon.right
-                            anchors.leftMargin: 8
+                            anchors.leftMargin: Theme.spaceSmall
                             anchors.right: parent.right
-                            anchors.rightMargin: 10
+                            anchors.rightMargin: Theme.spaceMedium
                             anchors.verticalCenter: parent.verticalCenter
                             color: Theme.foreground
                             selectionColor: Theme.accent
@@ -848,7 +640,7 @@ Item {
 
                             Text {
                                 visible: searchInput.text === ""
-                                text: `Search ${root.colors.length} saved colors...`
+                                text: `Search ${root.colors.length} saved colors`
                                 color: Theme.muted
                                 font.pixelSize: Theme.textBody
                                 font.family: Theme.fontFamily
@@ -856,40 +648,45 @@ Item {
                         }
                     }
 
-                    // Empty state
                     Text {
                         visible: root.filteredColors.length === 0
                         width: parent.width
-                        anchors.topMargin: 20
+                        topPadding: Theme.spaceLarge
                         horizontalAlignment: Text.AlignHCenter
-                        text: root.colors.length === 0 ? "No colors saved yet\nPick or save a color" : "No matches found"
+                        text: root.colors.length === 0 ? "No colors saved yet\nPick or save a color" : "No matches"
                         color: Theme.muted
                         font.pixelSize: Theme.textBody
                         font.family: Theme.fontFamily
                     }
 
-                    // Scrollable History ListView taking available height
                     ListView {
+                        id: history
+
                         width: parent.width
-                        height: parent.height - 42
+                        height: parent.height - searchBox.height - parent.spacing
                         clip: true
-                        spacing: 6
+                        spacing: Theme.spaceSmall
                         model: root.filteredColors
+
+                        ScrollFade {
+                            view: history
+                        }
 
                         delegate: Rectangle {
                             id: historyRow
 
                             required property var modelData
 
-                            width: parent ? parent.width : 0
+                            width: ListView.view.width
                             height: 48
-                            radius: Theme.radiusSmall
+                            radius: Theme.radiusControl
                             color: rowMouse.containsMouse ? Theme.highlight : Theme.surface
                             border.color: Theme.border
                             border.width: 1
 
                             MouseArea {
                                 id: rowMouse
+
                                 anchors.fill: parent
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
@@ -898,18 +695,17 @@ Item {
 
                             Row {
                                 anchors.left: parent.left
-                                anchors.leftMargin: 8
+                                anchors.leftMargin: Theme.spaceSmall
                                 anchors.right: actionsRow.left
-                                anchors.rightMargin: 8
+                                anchors.rightMargin: Theme.spaceSmall
                                 anchors.verticalCenter: parent.verticalCenter
-                                spacing: 10
+                                spacing: Theme.spaceSmall
 
-                                // Preview swatch
                                 Rectangle {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    width: 32
-                                    height: 32
-                                    radius: Theme.radiusSmall - 2
+                                    width: Theme.controlHeight
+                                    height: Theme.controlHeight
+                                    radius: Theme.radiusControl
                                     color: historyRow.modelData.swatch
                                     border.color: Theme.border
                                     border.width: 1
@@ -924,7 +720,7 @@ Item {
                                         color: Theme.foreground
                                         font.pixelSize: Theme.textBody
                                         font.family: Theme.fontFamily
-                                        font.weight: Font.DemiBold
+                                        font.weight: Theme.weightTitle
                                     }
 
                                     Text {
@@ -941,10 +737,11 @@ Item {
 
                             Row {
                                 id: actionsRow
+
                                 anchors.right: parent.right
-                                anchors.rightMargin: 8
+                                anchors.rightMargin: Theme.spaceSmall
                                 anchors.verticalCenter: parent.verticalCenter
-                                spacing: 4
+                                spacing: Theme.spaceTiny
 
                                 IconButton {
                                     icon: root.copiedKey === historyRow.modelData.color ? "check" : "copy"

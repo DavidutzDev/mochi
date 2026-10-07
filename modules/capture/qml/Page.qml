@@ -13,7 +13,7 @@ Item {
     // Up to five rows show; more scroll.
     readonly property int rows: Math.min(captures.length, 5)
 
-    implicitHeight: header.height + 12 + (captures.length === 0 ? 60 : rows * 60 + (rows - 1) * 8)
+    implicitHeight: header.height + Theme.spaceMedium + (captures.length === 0 ? 60 : rows * 60 + (rows - 1) * 8)
 
     // Files other tools saved show up too.
     Component.onCompleted: Daemon.command("capture", "history", [])
@@ -43,42 +43,27 @@ Item {
         return `${(bytes / 1024 / 1024 / 1024).toFixed(1)} GB`;
     }
 
-    Item {
+    PanelHeader {
         id: header
 
         width: parent.width
-        height: 32
-
-        Text {
-            anchors.left: parent.left
-            anchors.verticalCenter: parent.verticalCenter
-            text: {
-                const shots = root.captures.filter(capture => capture.kind === "screenshot").length;
-                const videos = root.captures.length - shots;
-                const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
-                return `${plural(shots, "screenshot")} · ${plural(videos, "recording")}`;
-            }
-            color: Theme.muted
-            font.pixelSize: Theme.textBody
-            font.family: Theme.fontFamily
+        title: {
+            const shots = root.captures.filter(capture => capture.kind === "screenshot").length;
+            const videos = root.captures.length - shots;
+            const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+            return `${plural(shots, "screenshot")} · ${plural(videos, "recording")}`;
         }
 
-        Row {
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            spacing: 8
+        Button {
+            icon: "camera"
+            text: "Screenshot"
+            onClicked: root.capture("screenshot")
+        }
 
-            Button {
-                icon: "camera"
-                text: "Screenshot"
-                onClicked: root.capture("screenshot")
-            }
-
-            Button {
-                icon: "record"
-                text: "Record"
-                onClicked: root.capture("record")
-            }
+        Button {
+            icon: "record"
+            text: "Record"
+            onClicked: root.capture("record")
         }
     }
 
@@ -87,7 +72,7 @@ Item {
         visible: root.captures.length === 0
         text: "No captures yet"
         color: Theme.muted
-        font.pixelSize: Theme.textSubtitle
+        font.pixelSize: Theme.textBody
         font.family: Theme.fontFamily
     }
 
@@ -95,13 +80,17 @@ Item {
         id: list
 
         anchors.top: header.bottom
-        anchors.topMargin: 12
+        anchors.topMargin: Theme.spaceMedium
         width: parent.width
         height: root.rows * 60 + Math.max(root.rows - 1, 0) * 8
         clip: true
-        spacing: 8
+        spacing: Theme.spaceSmall
         boundsBehavior: Flickable.StopAtBounds
         model: root.captures
+
+        ScrollFade {
+            view: list
+        }
 
         delegate: ListRow {
             id: row
@@ -121,7 +110,7 @@ Item {
 
                 Rectangle {
                     anchors.fill: parent
-                    radius: Theme.radiusSmall
+                    radius: Theme.radiusControl
                     color: Theme.raised
                     visible: !row.screenshot || picture.status !== Image.Ready
                 }

@@ -59,6 +59,12 @@ pub enum Effect {
         module: String,
         activity: ActivityId,
     },
+    /// The pointer came onto an activity on the island, or left it.
+    Hovered {
+        module: String,
+        activity: ActivityId,
+        hovered: bool,
+    },
     /// The activity is gone and won't come back.
     Ended {
         module: String,
@@ -225,8 +231,17 @@ impl Arbiter {
     /// no longer shown are ignored: they arrive during transitions.
     pub fn hover(&mut self, id: ActivityId, hovered: bool, now: Instant) {
         if let Some(current) = self.current_mut(id) {
+            let changed = current.hovered != hovered;
             current.hovered = hovered;
             current.update_timer(now);
+            if changed {
+                let effect = Effect::Hovered {
+                    module: current.module.clone(),
+                    activity: id,
+                    hovered,
+                };
+                self.effects.push(effect);
+            }
         }
     }
 

@@ -11,11 +11,11 @@ Item {
     readonly property string phase: payload?.phase ?? "idle"
     readonly property bool running: phase !== "idle"
 
-    implicitHeight: 64
+    implicitHeight: Theme.rowHeight
 
     Row {
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 14
+        spacing: Theme.spaceMedium
 
         Ring {
             anchors.verticalCenter: parent.verticalCenter
@@ -28,15 +28,11 @@ Item {
 
         Column {
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 2
 
-            Text {
+            RollingText {
                 text: root.running ? Clock.format(root.payload.left) : `${root.payload?.focus_minutes ?? 25} min`
-                color: Theme.foreground
-                font.pixelSize: Theme.textTitle
-                font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
-                font.features: { "tnum": 1 }
+                pixelSize: Theme.textTitle
+                weight: Theme.weightTitle
             }
 
             Text {
@@ -49,7 +45,7 @@ Item {
                     return root.payload.paused ? `${what}, paused` : what;
                 }
                 color: Theme.muted
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
             }
         }
@@ -58,7 +54,7 @@ Item {
     Row {
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 6
+        spacing: Theme.spaceSmall
 
         Button {
             visible: !root.running

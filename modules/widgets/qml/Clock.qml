@@ -2,7 +2,8 @@ import QtQuick
 import qs.island
 
 // The clock widget: the time, big, and the date under it, here or in
-// another time zone. The text grows with the widget.
+// another time zone. The text grows with the widget, and its digits roll
+// as they change.
 Item {
     id: root
 
@@ -57,29 +58,42 @@ Item {
         spacing: 2
 
         Row {
-            spacing: 6
+            spacing: Theme.spaceSmall
 
-            Text {
+            RollingText {
                 id: clock
 
                 text: root.time
-                color: Theme.foreground
-                font.family: Theme.displayFamily
-                font.weight: Font.DemiBold
-                font.features: { "tnum": 1 }
+                family: Theme.displayFamily
+                weight: Theme.weightTitle
                 // As big as the widget allows, by height and by width.
                 // "AM" takes about a digit and a half more, at a third of the size.
-                font.pixelSize: Math.max(12, Math.min(root.height * (root.settings.date === false ? 0.8 : 0.55), root.width / (root.time.length * 0.62 + (root.twelve ? 0.75 : 0))))
+                pixelSize: Math.max(12, Math.min(root.height * (root.settings.date === false ? 0.8 : 0.55), root.width / (root.time.length * 0.62 + (root.twelve ? 0.75 : 0))))
             }
 
             Text {
-                anchors.baseline: clock.baseline
+                id: half
+
+                // On the time's baseline.
+                y: clockMetrics.ascent - halfMetrics.ascent
                 visible: root.twelve
                 text: root.parts.hours < 12 ? "AM" : "PM"
                 color: Theme.muted
                 font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
-                font.pixelSize: Math.max(10, clock.font.pixelSize * 0.3)
+                font.weight: Theme.weightTitle
+                font.pixelSize: Math.max(10, clock.pixelSize * 0.3)
+
+                FontMetrics {
+                    id: halfMetrics
+
+                    font: half.font
+                }
+
+                FontMetrics {
+                    id: clockMetrics
+
+                    font: clock.font
+                }
             }
         }
 
@@ -96,7 +110,7 @@ Item {
             }
             color: Theme.muted
             font.family: Theme.fontFamily
-            font.pixelSize: Math.max(Theme.textLabel, clock.font.pixelSize * 0.24)
+            font.pixelSize: Math.max(Theme.textCaption, clock.font.pixelSize * 0.24)
         }
     }
 }

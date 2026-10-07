@@ -1,6 +1,7 @@
 # Workspaces: shows a monitor's workspaces when you switch, when focus moves
 # to it, when one asks for attention, or when they're created or removed.
-# Click a dot to switch.
+# Click a dot to switch, or scroll on them. `mochi ipc workspaces show`
+# brings them up when you want, like from the idle module's `hover`.
 [module.workspaces]
 # How long the indicator stays, in milliseconds.
 # timeout_ms = 1200

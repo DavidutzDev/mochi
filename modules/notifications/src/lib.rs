@@ -124,7 +124,7 @@ impl Module for Notifications {
             ContributionSpec::new("hub", "card", "missed", "Card", "Notifications")
                 .icon("bell")
                 .order(5)
-                .options(json!({ "span": 1 })),
+                .options(json!({ "span": 1, "rows": 1 })),
             ContributionSpec::new("hub", "page", "history", "Page", "Notifications")
                 .icon("bell")
                 .order(20),
@@ -209,6 +209,7 @@ impl Module for Notifications {
                         Some(ModuleEvent::BubbleClicked(_)) => daemon.show_history(&ctx),
                         Some(
                             ModuleEvent::Clicked(_)
+                            | ModuleEvent::Hovered { .. }
                             | ModuleEvent::State { .. }
                             | ModuleEvent::Offers(_),
                         ) => {}

@@ -32,6 +32,7 @@ kind = "card"
 id = "now"
 view = "Card"
 title = "Weather"
+options = { span = 1, rows = 1 }
 order = 70
 
 # The same card as a desktop widget.

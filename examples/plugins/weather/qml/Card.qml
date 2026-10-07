@@ -1,15 +1,19 @@
 import QtQuick
 import qs.island
 
-// The hub's card: the temperature and sky now, and the day's low and high.
+// The hub's card, and a desktop widget: the temperature and sky now, and
+// the day's low and high, in one row.
 Item {
     id: root
 
     property var payload: null
+    // What the desktop gives a widget; this one has no settings.
+    property var settings: ({})
+    property string instance: ""
     readonly property bool ready: payload?.temperature !== undefined && payload?.temperature !== null
     readonly property var today: payload?.days?.[0] ?? null
 
-    implicitHeight: 64
+    implicitHeight: Theme.rowHeight
 
     Text {
         anchors.verticalCenter: parent.verticalCenter
@@ -18,16 +22,19 @@ Item {
         wrapMode: Text.Wrap
         text: root.payload?.error ?? "Fetching the weather…"
         color: Theme.muted
-        font.pixelSize: Theme.textLabel
+        font.pixelSize: Theme.textCaption
         font.family: Theme.fontFamily
     }
 
     Row {
         anchors.verticalCenter: parent.verticalCenter
+        width: parent.width
         visible: root.ready
-        spacing: 14
+        spacing: Theme.spaceMedium
 
         WeatherIcon {
+            id: icon
+
             anchors.verticalCenter: parent.verticalCenter
             kind: root.payload?.kind ?? "cloudy"
             day: root.payload?.day ?? true
@@ -37,24 +44,23 @@ Item {
 
         Column {
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 2
+            width: parent.width - icon.width - parent.spacing
 
-            Text {
+            RollingText {
                 text: `${root.payload?.temperature}${root.payload?.unit ?? ""}`
-                color: Theme.foreground
-                font.pixelSize: Theme.textTitle
-                font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
-                font.features: { "tnum": 1 }
+                pixelSize: Theme.textTitle
+                weight: Theme.weightTitle
             }
 
             Text {
+                width: parent.width
+                elide: Text.ElideRight
                 text: {
                     const range = root.today ? ` · ${root.today.min}° to ${root.today.max}°` : "";
                     return `${root.payload?.description ?? ""} in ${root.payload?.place ?? ""}${range}`;
                 }
                 color: Theme.muted
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
             }
         }

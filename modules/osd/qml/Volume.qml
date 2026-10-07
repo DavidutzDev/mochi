@@ -35,7 +35,7 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 12
+        spacing: Theme.spaceMedium
 
         Symbol {
             anchors.verticalCenter: parent.verticalCenter
@@ -68,6 +68,25 @@ Item {
                 height: bar.height + 6
                 radius: 1
                 color: Theme.muted
+            }
+        }
+
+        // The level, as wide as "100%" so the bar doesn't shift.
+        RollingText {
+            id: level
+
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.max(implicitWidth, widest.advanceWidth)
+            text: `${percent}%`
+            color: muted ? Theme.muted : Theme.foreground
+            pixelSize: Theme.textBody
+            weight: Theme.weightLabel
+
+            TextMetrics {
+                id: widest
+
+                font: level.font
+                text: "100%"
             }
         }
     }

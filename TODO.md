@@ -192,8 +192,8 @@ Mochi must work on any compositor that speaks the standard protocols (Hyprland, 
 - [x] Type scale in `[text]`: caption 11, label 12, body 13, subtitle 14, title 16, headline 20, display 42, and `family` (empty keeps the system font); every view uses it
 - [x] Motion: `fast_ms` for colors and hovers, `move_ms` with Material 3's expressive curve (`0.38, 1.21, 0.22, 1`) for things that move, on the navbar, the power profiles and the workspace pill
 - [x] Every view moved to roles: no raw colors or sizes outside the demo module
-- [ ] Colors generated from the wallpaper, as an option of the same roles
-- [ ] Light variant of the palette
+- [ ] Colors generated from the wallpaper, as an option of the same roles (see Polish and features)
+- [ ] Light variant of the palette (see Polish and features)
 - [x] Built-in controls in the core: `Button`, `IconButton`, `Slider`, `ProgressBar`, `Switch`, `Segmented`, `Tile`, `ListRow`, `Badge`, `SectionLabel`, all drawn from theme roles. Media, notifications, the OSD, power and the launcher use them; their private buttons and icon sets are gone, and every icon lives in `Symbol`. `mochi ipc demo controls` shows them all; `docs/views.md` describes them
 
 ## Layout
@@ -304,7 +304,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] Theme-colored line icons drawn in QML
 - [ ] Confirm Caps Lock and Num Lock with a physical key press (a virtual keyboard doesn't change the hardware LEDs)
 - [ ] Check whether headset dials (Arctis Nova 7) report volume through the audio server
-- [ ] Laptop screen brightness: sysfs backlight with udev events
+- [ ] Laptop screen brightness: sysfs backlight with udev events (see Polish and features, with DDC)
 - [ ] Keyboard backlight
 
 ### Media
@@ -523,7 +523,8 @@ A new module: the apps' tray icons.
 - [ ] Archive sources (`https://…/plugin.tar.gz` with a hash)
 - [ ] A plugin replacing a builtin module entirely
 - [x] Building plugins with Nix, for declarative setups: home-manager's `plugins.<id>.src` and `package`, `lib.buildPlugin`, and flakes in `mochi plugins install`
-- [ ] `lib.buildPlugin` for plugins in other languages than Rust
+- [x] `lib.buildPlugin` for plugins in other languages than Rust: Node, Python, Go with vendor/, scripts and release archives
+- [ ] Go plugins without vendor/, and Java, in `lib.buildPlugin`: both need a hash Nix can't get from their lock files
 - [ ] Static musl binaries in `examples/plugins/release.yml`, so `git-release:` plugins run on NixOS without nix-ld
 - [x] Release workflow template for plugin repositories: `examples/plugins/release.yml`
 - [x] Settings checks for plugins, from their `settings.toml`
@@ -551,6 +552,38 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [x] Colors module: screen picker with a magnifier, exact pixels from wlr-screencopy at any scale and rotation; island card with HEX, RGB, HSL and OKLCH; history in a hub card and page; `#` provider
 - [x] Skin tones in the emoji grid
 - [ ] Colors: a palette widget for the desktop
+
+## Polish and features
+
+### Frontend
+
+- [x] A design system in `Theme`: a type scale (four sizes and display), a spacing scale, radii for surfaces, fields and controls, heights, Inter and Material Symbols; the core controls and the hub use it
+- [x] Every module's views moved onto the scale, emptying `crates/mochi-core/tests/design-baseline.txt`
+- [x] A check in `nix flake check` that rejects raw pixel sizes and colors in module QML, so views can't drift from the scale again (`crates/mochi-core/tests/design.rs`)
+- [ ] The hub's Home as a control center: tiles of one height with their label inside, slider tiles (volume, brightness) with a `›` to their page, and an icon-only footer instead of the labelled tab
+- [x] The hub sized to its content, its outline animating between pages instead of one fixed size for all of them
+- [ ] An editable control center: choose the tiles and drag them into place, reusing the widgets editor's drag and snap
+- [x] Shared components (now to be used by every module): a panel header (back, title, actions), fading edges where a list scrolls, rolling digits for the clock and percentages, a light along a panel's top edge that follows the pointer and pulses while something works, switch rows and slider rows
+- [ ] Theme presets: named palettes in a picker with preview cards, applied live
+- [ ] A light mode for every preset (replaces "Light variant of the palette" under Design system)
+- [ ] Colors from the wallpaper, with contrast corrected without moving the hue (replaces "Colors generated from the wallpaper" under Design system)
+- [ ] Motion settings: reduced motion, which turns animations off, and a speed multiplier for the rest
+- [ ] A one-line launcher layout: icon and name, the description only on the selected row
+
+### Features
+
+- [ ] Drop files on the island: it says what was dropped and offers actions that fit, like compress, merge PDFs, convert images, extract an archive or open with
+- [ ] Coding agents' status on the island: working, waiting for you, or done, for T3 Code and Claude Code through their hooks
+- [ ] A privacy indicator: a dot on the island while the microphone or camera is in use, with a mic mute; the audio module already sees recording apps
+- [ ] Keep awake: a toggle that blocks idle and sleep
+- [ ] Night light, through hyprsunset or wlsunset
+- [ ] A focus timer, built in (the pomodoro example plugin shows the idea)
+- [ ] Brightness: the laptop's backlight and external monitors over DDC/CI with ddcutil, with the OSD and a slider tile (replaces "Laptop screen brightness" under OSD)
+
+### Checks and tools
+
+- [ ] A test that loads every QML view in a temporary shell, part of `nix flake check`, so a broken view fails the build
+- [ ] `mochi doctor`: checks the compositor's protocols, the portals, the fonts and the tools modules and plugins need, and says what to install
 
 ## Integration and docs
 

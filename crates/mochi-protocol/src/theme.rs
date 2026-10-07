@@ -181,27 +181,47 @@ impl Default for Motion {
     }
 }
 
-/// The type scale, in pixels. An empty `family` keeps the system font, and
-/// an empty `display_family` keeps `family`.
+/// The type scale, in pixels: four sizes and one for big numbers. An empty
+/// `family` uses Inter, which Mochi's packages bring, or the system font
+/// without it; an empty `display_family` keeps `family`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Text {
     pub family: String,
     /// For the clocks, on the idle island and in the hub.
     pub display_family: String,
-    /// Badges and fine print.
+    /// Labels, metadata and fine print.
     pub caption: u32,
-    /// Section labels and metadata.
-    pub label: u32,
+    /// Everything else: rows, buttons, messages.
     pub body: u32,
-    /// Names and summaries in lists.
-    pub subtitle: u32,
-    /// Titles of cards and tracks.
+    /// Card, track and section titles.
     pub title: u32,
     /// Page titles.
     pub headline: u32,
     /// Big numbers, like a clock.
     pub display: u32,
+    /// Before 0.0.7's scale: read as `caption`. Not sent to the UI.
+    #[serde(skip_serializing)]
+    pub label: Option<u32>,
+    /// Before 0.0.7's scale: read as `body`. Not sent to the UI.
+    #[serde(skip_serializing)]
+    pub subtitle: Option<u32>,
+}
+
+impl Text {
+    /// Applies the keys the scale replaced, and says which ones were used.
+    pub fn migrate(&mut self) -> Vec<String> {
+        let mut notes = Vec::new();
+        if let Some(label) = self.label {
+            self.caption = label;
+            notes.push("`text.label` is now `text.caption`".to_owned());
+        }
+        if let Some(subtitle) = self.subtitle {
+            self.body = subtitle;
+            notes.push("`text.subtitle` is now `text.body`".to_owned());
+        }
+        notes
+    }
 }
 
 impl Default for Text {
@@ -210,12 +230,12 @@ impl Default for Text {
             family: String::new(),
             display_family: String::new(),
             caption: 11,
-            label: 12,
             body: 13,
-            subtitle: 14,
-            title: 16,
+            title: 15,
             headline: 20,
             display: 42,
+            label: None,
+            subtitle: None,
         }
     }
 }

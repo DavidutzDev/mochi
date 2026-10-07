@@ -29,7 +29,7 @@ Item {
     readonly property real thumbWidth: 220
     readonly property real thumbHeight: 124
 
-    implicitWidth: columns * thumbWidth + (columns - 1) * 10 + Theme.padding * 2
+    implicitWidth: columns * thumbWidth + (columns - 1) * Theme.spaceSmall + Theme.padding * 2
     implicitHeight: column.implicitHeight + Theme.padding * 2
 
     onTabChanged: current = 0
@@ -82,102 +82,80 @@ Item {
         }
     }
 
+    EdgeLight {
+        radius: Theme.radiusSurface
+    }
+
     Column {
         id: column
 
         x: Theme.padding
         y: Theme.padding
         width: root.width - Theme.padding * 2
-        spacing: 12
+        spacing: Theme.spaceMedium
 
-        Item {
+        PanelHeader {
             width: parent.width
-            height: 30
-
-            Row {
-                anchors.verticalCenter: parent.verticalCenter
-                spacing: 8
-
-                Symbol {
-                    anchors.verticalCenter: parent.verticalCenter
-                    name: "display"
-                    size: 16
-                }
-
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root.switching ? "Switch what you share" : "Share your screen"
-                    color: Theme.foreground
-                    font.pixelSize: Theme.textSubtitle
-                    font.family: Theme.fontFamily
-                    font.weight: Font.DemiBold
-                }
-            }
+            title: root.switching ? "Switch what you share" : "Share your screen"
 
             // A switchable share is a monitor that only exists while it's
             // shared, so the app can't remember it. Switching a running
             // share, only the quality shows.
-            Row {
-                anchors.right: parent.right
+            Text {
                 anchors.verticalCenter: parent.verticalCenter
-                spacing: 8
+                visible: !root.switching && !(root.payload.switchable ?? false)
+                text: "Remember"
+                color: Theme.muted
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+            }
 
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: !root.switching && !(root.payload.switchable ?? false)
-                    text: "Remember"
-                    color: Theme.muted
-                    font.pixelSize: Theme.textLabel
-                    font.family: Theme.fontFamily
-                }
+            Switch {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !root.switching && !(root.payload.switchable ?? false)
+                checked: root.payload.remember ?? false
+                onToggled: Daemon.command("share", "remember", [])
+            }
 
-                Switch {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: !root.switching && !(root.payload.switchable ?? false)
-                    checked: root.payload.remember ?? false
-                    onToggled: Daemon.command("share", "remember", [])
-                }
+            // The switchable copy's quality, which Mochi sets for its
+            // monitor; each click steps to the next preset. While
+            // switching a running share, it changes at once.
+            Button {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.payload.switchable ?? false
+                tone: "ghost"
+                text: `${root.payload.framerate ?? 60} fps`
+                onClicked: Daemon.command("share", "framerate", [])
+            }
 
-                // The switchable copy's quality, which Mochi sets for its
-                // monitor; each click steps to the next preset. While
-                // switching a running share, it changes at once.
-                Button {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: root.payload.switchable ?? false
-                    tone: "ghost"
-                    text: `${root.payload.framerate ?? 60} fps`
-                    onClicked: Daemon.command("share", "framerate", [])
-                }
+            Button {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.payload.switchable ?? false
+                tone: "ghost"
+                text: (root.payload.resolution ?? "native") === "native" ? "Native" : root.payload.resolution
+                onClicked: Daemon.command("share", "resolution", [])
+            }
 
-                Button {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: root.payload.switchable ?? false
-                    tone: "ghost"
-                    text: (root.payload.resolution ?? "native") === "native" ? "Native" : root.payload.resolution
-                    onClicked: Daemon.command("share", "resolution", [])
-                }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !root.switching
+                text: "Switchable"
+                color: Theme.muted
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+            }
 
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: !root.switching
-                    text: "Switchable"
-                    color: Theme.muted
-                    font.pixelSize: Theme.textLabel
-                    font.family: Theme.fontFamily
-                }
-
-                Switch {
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: !root.switching
-                    checked: root.payload.switchable ?? false
-                    onToggled: Daemon.command("share", "switchable", [])
-                }
+            Switch {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: !root.switching
+                checked: root.payload.switchable ?? false
+                onToggled: Daemon.command("share", "switchable", [])
             }
         }
 
         Row {
             width: parent.width
-            spacing: 10
+            spacing: Theme.spaceSmall
 
             Segmented {
                 width: parent.width - region.width - parent.spacing
@@ -223,17 +201,23 @@ Item {
 
         // At most three rows; more scroll.
         Flickable {
+            id: thumbs
+
             width: parent.width
-            height: Math.min(grid.implicitHeight, 3 * (root.thumbHeight + 44) + 2 * 10)
+            height: Math.min(grid.implicitHeight, 3 * (root.thumbHeight + 44) + 2 * Theme.spaceSmall)
             contentHeight: grid.implicitHeight
             clip: true
             boundsBehavior: Flickable.StopAtBounds
+
+            ScrollFade {
+                view: thumbs
+            }
 
             Grid {
                 id: grid
 
                 columns: root.columns
-                spacing: 10
+                spacing: Theme.spaceSmall
 
                 Repeater {
                     model: root.tab === "screens" ? Daemon.screens : root.windows
@@ -269,7 +253,7 @@ Item {
 
         width: root.thumbWidth
         height: root.thumbHeight + 44
-        radius: Theme.radiusLarge
+        radius: Theme.radiusSurface
         color: selected ? Theme.raised : Theme.surface
         border.width: selected ? 2 : 0
         border.color: Theme.accent
@@ -281,7 +265,7 @@ Item {
             y: 8
             width: parent.width - 16
             height: root.thumbHeight - 8
-            radius: Theme.radiusMedium
+            radius: Theme.radiusField
             color: Theme.background
 
             Symbol {
@@ -304,7 +288,7 @@ Item {
 
         Column {
             anchors.top: picture.bottom
-            anchors.topMargin: 6
+            anchors.topMargin: Theme.spaceSmall
             x: 10
             width: parent.width - 20
 
@@ -313,9 +297,9 @@ Item {
                 text: thumb.title
                 elide: Text.ElideRight
                 color: Theme.foreground
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
+                font.weight: Theme.weightTitle
             }
 
             Text {

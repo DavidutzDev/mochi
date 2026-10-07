@@ -23,7 +23,7 @@ Item {
         anchors.bottom: parent.bottom
         width: 12
         height: 12
-        radius: 6
+        radius: height / 2
         color: Theme.accent
 
         Symbol {

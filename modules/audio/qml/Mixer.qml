@@ -49,7 +49,7 @@ Column {
         }
     }
 
-    spacing: 6
+    spacing: Theme.spaceSmall
 
     function toggleOpen(app: string): void {
         const next = Object.assign({}, opened);
@@ -85,8 +85,8 @@ Column {
     Text {
         width: parent.width
         visible: !root.connected
-        topPadding: 12
-        bottomPadding: 12
+        topPadding: Theme.spaceMedium
+        bottomPadding: Theme.spaceMedium
         horizontalAlignment: Text.AlignHCenter
         text: "Can't reach the audio server"
         color: Theme.muted
@@ -104,9 +104,17 @@ Column {
 
             required property int index
             readonly property bool output: index === 0
-            readonly property var modelData: output
-                ? { kind: "output", label: "Output", device: root.payload?.output ?? null, devices: root.payload?.outputs ?? [] }
-                : { kind: "input", label: "Input", device: root.payload?.input ?? null, devices: root.payload?.inputs ?? [] }
+            readonly property var modelData: output ? {
+                kind: "output",
+                label: "Output",
+                device: root.payload?.output ?? null,
+                devices: root.payload?.outputs ?? []
+            } : {
+                kind: "input",
+                label: "Input",
+                device: root.payload?.input ?? null,
+                devices: root.payload?.inputs ?? []
+            }
             readonly property var device: modelData.device
 
             width: root.width
@@ -217,12 +225,18 @@ Column {
     }
 
     ListView {
+        id: appList
+
         width: parent.width
         height: Math.min(contentHeight, root.appRows * 52)
         visible: root.connected && root.apps.length > 0
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         model: root.apps.length
+
+        ScrollFade {
+            view: appList
+        }
 
         delegate: Column {
             id: group

@@ -39,7 +39,7 @@ Canvas {
         context.lineTo(width, height);
         context.lineTo(left, height);
         context.closePath();
-        context.fillStyle = Qt.rgba(color.r, color.g, color.b, 0.15);
+        context.fillStyle = Qt.alpha(color, 0.15);
         context.fill();
     }
 

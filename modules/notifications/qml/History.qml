@@ -14,37 +14,28 @@ Item {
     implicitWidth: 400
     implicitHeight: column.implicitHeight + Theme.padding * 2
 
+    EdgeLight {
+        radius: Theme.radiusSurface
+    }
+
     Column {
         id: column
 
         anchors.fill: parent
         anchors.margins: Theme.padding
-        spacing: 10
+        spacing: Theme.spaceSmall
 
-        Row {
+        PanelHeader {
             width: parent.width
-            spacing: 8
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                width: parent.width - dnd.width - clear.width - parent.spacing * 2
-                text: "Notifications"
-                color: Theme.foreground
-                font.pixelSize: Theme.textTitle
-                font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
-            }
+            title: "Notifications"
 
             Button {
-                id: dnd
-
                 text: root.payload.dnd ? "Do not disturb: on" : "Do not disturb: off"
+                tone: root.payload.dnd ? "accent" : "neutral"
                 onClicked: Daemon.command("notifications", "dnd", ["toggle"])
             }
 
             Button {
-                id: clear
-
                 text: "Clear"
                 visible: root.notes.length > 0
                 onClicked: Daemon.command("notifications", "clear", [])
@@ -68,7 +59,7 @@ Item {
                 required property var modelData
 
                 width: column.width
-                height: 40
+                height: Theme.rowHeight
 
                 MouseArea {
                     anchors.fill: parent
@@ -79,17 +70,17 @@ Item {
 
                 Row {
                     anchors.fill: parent
-                    spacing: 10
+                    spacing: Theme.spaceSmall
 
                     AppIcon {
                         anchors.verticalCenter: parent.verticalCenter
                         note: entry.modelData
-                        size: 26
+                        size: Theme.controlHeight
                     }
 
                     Column {
                         anchors.verticalCenter: parent.verticalCenter
-                        width: parent.width - 26 - close.width - parent.spacing * 2
+                        width: parent.width - Theme.controlHeight - close.width - parent.spacing * 2
 
                         Text {
                             width: parent.width
@@ -99,7 +90,7 @@ Item {
                             color: Theme.foreground
                             font.pixelSize: Theme.textBody
                             font.family: Theme.fontFamily
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.weightTitle
                         }
 
                         Text {
@@ -111,7 +102,7 @@ Item {
                             color: Theme.muted
                             linkColor: Theme.accent
                             onLinkActivated: link => Daemon.command("notifications", "open", [String(entry.modelData.id), link])
-                            font.pixelSize: Theme.textLabel
+                            font.pixelSize: Theme.textCaption
                             font.family: Theme.fontFamily
                         }
                     }
@@ -131,7 +122,7 @@ Item {
             visible: root.notes.length > root.shown
             text: `${root.notes.length - root.shown} more`
             color: Theme.muted
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
         }
     }

@@ -26,7 +26,7 @@ Item {
     }
 
     implicitWidth: 560
-    implicitHeight: column.implicitHeight + 16
+    implicitHeight: column.implicitHeight + Theme.spaceSmall * 2
 
     onPayloadChanged: {
         if ((payload.query ?? "") !== input.text)
@@ -58,12 +58,16 @@ Item {
             list.currentIndex = (list.currentIndex + by + results.length) % results.length;
     }
 
+    EdgeLight {
+        radius: Theme.radiusSurface
+    }
+
     Column {
         id: column
 
         anchors.fill: parent
-        anchors.topMargin: 8
-        anchors.bottomMargin: 8
+        anchors.topMargin: Theme.spaceSmall
+        anchors.bottomMargin: Theme.spaceSmall
 
         Item {
             width: parent.width
@@ -83,7 +87,7 @@ Item {
                 id: input
 
                 anchors.left: magnifier.right
-                anchors.leftMargin: 12
+                anchors.leftMargin: Theme.spaceMedium
                 anchors.right: parent.right
                 anchors.rightMargin: Theme.padding
                 anchors.verticalCenter: parent.verticalCenter
@@ -137,10 +141,15 @@ Item {
             visible: root.results.length > 0
             width: parent.width
             height: Math.min(root.results.length, root.rows) * root.rowHeight + root.headings * 26 + 8
-            topMargin: 8
+            topMargin: Theme.spaceSmall
             clip: true
             model: root.results
             boundsBehavior: Flickable.StopAtBounds
+
+            ScrollFade {
+                view: list
+            }
+
             // Headings only when results come from more than one provider.
             section.property: root.payload.sections ? "section" : ""
             section.delegate: Item {
@@ -152,7 +161,7 @@ Item {
                 SectionLabel {
                     x: Theme.padding + 4
                     anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 4
+                    anchors.bottomMargin: Theme.spaceTiny
                     text: parent.section
                 }
             }
@@ -162,8 +171,8 @@ Item {
                 required property var modelData
                 required property int index
 
-                x: 8
-                width: list.width - 16
+                x: Theme.spaceSmall
+                width: list.width - Theme.spaceSmall * 2
                 height: root.rowHeight
                 flat: true
                 marker: true
@@ -186,7 +195,7 @@ Item {
                         visible: row.modelData.color != null
                         width: 26
                         height: 26
-                        radius: 13
+                        radius: height / 2
                         color: row.modelData.color ?? "transparent"
                         border.width: 1
                         border.color: Theme.border
@@ -198,7 +207,7 @@ Item {
                         visible: row.modelData.glyph != null && row.modelData.color == null
                         text: row.modelData.glyph ?? ""
                         color: Theme.foreground
-                        font.pixelSize: 22
+                        font.pixelSize: Theme.textHeadline
                         font.family: Theme.fontFamily
                     }
 
@@ -208,7 +217,7 @@ Item {
                         anchors.fill: parent
                         visible: row.modelData.glyph == null && row.modelData.color == null
                         // Actions get a smaller icon, a step in.
-                        anchors.margins: row.modelData.small ? 6 : 0
+                        anchors.margins: row.modelData.small ? Theme.spaceSmall : 0
                         source: {
                             const name = row.modelData.icon ?? "";
                             if (name.startsWith("/"))
@@ -223,9 +232,9 @@ Item {
 
                     Rectangle {
                         anchors.fill: parent
-                        anchors.margins: 4
+                        anchors.margins: Theme.spaceTiny
                         visible: row.modelData.glyph == null && row.modelData.color == null && icon.status !== Image.Ready
-                        radius: Theme.radiusSmall
+                        radius: Theme.radiusControl
                         color: Theme.raised
                     }
                 }

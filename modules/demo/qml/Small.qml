@@ -12,21 +12,19 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 10
+        spacing: Theme.spaceSmall
 
-        Rectangle {
+        Symbol {
             anchors.verticalCenter: parent.verticalCenter
-            width: 22
-            height: 22
-            radius: 11
-            color: "#30d158"
+            name: "headphones"
+            color: Theme.success
         }
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: payload.text || "Headphones connected"
             color: Theme.foreground
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
         }
     }
