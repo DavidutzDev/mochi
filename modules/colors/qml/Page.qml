@@ -11,7 +11,6 @@ Item {
 
     property var payload: null
     readonly property var colors: payload?.history ?? []
-    property string viewMode: "split" // "split" | "chooser" | "history"
 
     // Active color in HSV (normalized 0.0 .. 1.0)
     // Matches the reference coral/orange (#fb542b)
@@ -106,23 +105,15 @@ Item {
         id: toolbar
 
         width: parent.width
-        height: 38
+        height: 34
 
-        // Prettier, well-spaced view switcher
-        Segmented {
-            id: viewSwitcher
-
+        Text {
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            height: 38
-            width: 360
-            options: [
-                { "value": "split", "label": "Split", "icon": "grid" },
-                { "value": "chooser", "label": "Chooser", "icon": "palette" },
-                { "value": "history", "label": `History (${root.colors.length})`, "icon": "clock" }
-            ]
-            current: root.viewMode
-            onPicked: value => root.viewMode = value
+            text: root.colors.length === 1 ? "1 color saved" : `${root.colors.length} colors saved`
+            color: Theme.muted
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
         }
 
         // Actions on right
@@ -139,7 +130,7 @@ Item {
             }
 
             Button {
-                visible: root.colors.length > 0 && root.viewMode !== "chooser"
+                visible: root.colors.length > 0
                 icon: "trash"
                 text: "Clear"
                 onClicked: Daemon.command("colors", "clear", [])
@@ -147,26 +138,18 @@ Item {
         }
     }
 
-    // Main content area
+    // Main content area: Side-by-side Chooser & History (each taking full half)
     Item {
         id: contentArea
 
         anchors.top: toolbar.bottom
         anchors.topMargin: 14
         width: parent.width
-        implicitHeight: {
-            if (root.viewMode === "split")
-                return 400;
-            if (root.viewMode === "chooser")
-                return chooserComponent.implicitHeight;
-            return Math.max(200, historyFullComponent.implicitHeight);
-        }
+        implicitHeight: 390
 
-        // 1. SPLIT VIEW: Side-by-side Chooser & History (each taking full half)
         Row {
             id: splitRow
 
-            visible: root.viewMode === "split"
             anchors.fill: parent
             spacing: 14
 
@@ -179,7 +162,7 @@ Item {
                     width: parent.width
                     spacing: 10
 
-                    // Top preview swatch + 2D SV gradient (taller to fill vertical half)
+                    // Top preview swatch + 2D SV gradient (fills vertical half)
                     Rectangle {
                         id: topBox
 
@@ -424,6 +407,10 @@ Item {
                                 if (text.trim() !== "")
                                     root.applyCustomColor(text);
                             }
+                            onEditingFinished: {
+                                if (text.trim() !== "")
+                                    root.applyCustomColor(text);
+                            }
 
                             Text {
                                 visible: colorInputField.text === "" && !colorInputField.activeFocus
@@ -452,7 +439,7 @@ Item {
 
                                 Symbol {
                                     anchors.verticalCenter: parent.verticalCenter
-                                    name: root.inputFeedback === "ok" ? "check" : "check"
+                                    name: "check"
                                     size: 11
                                     color: root.inputFeedback === "ok" ? Theme.success : Theme.foreground
                                 }
@@ -973,568 +960,6 @@ Item {
                                     onClicked: Daemon.command("colors", "remove", [historyRow.modelData.color])
                                 }
                             }
-                        }
-                    }
-                }
-            }
-        }
-
-        // 2. CHOOSER ONLY FULL VIEW
-        Item {
-            id: chooserComponent
-
-            visible: root.viewMode === "chooser"
-            width: parent.width
-            implicitHeight: chooserCol.implicitHeight
-
-            Column {
-                id: chooserCol
-
-                width: parent.width
-                spacing: 14
-
-                // Expansive Preview + 2D Gradient Box
-                Rectangle {
-                    width: parent.width
-                    height: 210
-                    radius: Theme.radiusLarge
-                    color: Theme.surface
-                    clip: true
-
-                    // Swatch
-                    Rectangle {
-                        id: fullSwatch
-                        anchors.left: parent.left
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        width: Math.round(parent.width * 0.38)
-                        color: root.currentColor
-
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: 40
-                            height: 40
-                            radius: 20
-                            color: Theme.surface
-                            opacity: fullSwatchHover.containsMouse ? 0.9 : 0.0
-
-                            Behavior on opacity {
-                                NumberAnimation { duration: Theme.fast }
-                            }
-
-                            Symbol {
-                                anchors.centerIn: parent
-                                name: root.copiedKey === "FULL_SWATCH" ? "check" : "copy"
-                                size: 16
-                                color: root.copiedKey === "FULL_SWATCH" ? Theme.success : Theme.foreground
-                            }
-                        }
-
-                        MouseArea {
-                            id: fullSwatchHover
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.copyText(root.currentHex, "FULL_SWATCH")
-                        }
-                    }
-
-                    // 2D Gradient
-                    Rectangle {
-                        anchors.left: fullSwatch.right
-                        anchors.right: parent.right
-                        anchors.top: parent.top
-                        anchors.bottom: parent.bottom
-                        color: Qt.hsva(root.hue, 1.0, 1.0, 1.0)
-                        clip: true
-
-                        Rectangle {
-                            anchors.fill: parent
-                            gradient: Gradient {
-                                orientation: Gradient.Horizontal
-                                GradientStop { position: 0.0; color: "#ffffff" }
-                                GradientStop { position: 1.0; color: "#00ffffff" }
-                            }
-                        }
-
-                        Rectangle {
-                            anchors.fill: parent
-                            gradient: Gradient {
-                                orientation: Gradient.Vertical
-                                GradientStop { position: 0.0; color: "#00000000" }
-                                GradientStop { position: 1.0; color: "#000000" }
-                            }
-                        }
-
-                        Item {
-                            id: fullSvThumb
-                            readonly property real margin: 2
-                            x: Math.round(margin + root.saturation * (parent.width - width - margin * 2))
-                            y: Math.round(margin + (1.0 - root.value) * (parent.height - height - margin * 2))
-                            width: 22
-                            height: 22
-
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 22
-                                height: 22
-                                radius: 11
-                                color: "transparent"
-                                border.color: "#80000000"
-                                border.width: 1
-                            }
-
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 18
-                                height: 18
-                                radius: 9
-                                color: "transparent"
-                                border.color: "#ffffff"
-                                border.width: 3
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.CrossCursor
-
-                            function updateFull(mouse) {
-                                const rangeX = width - fullSvThumb.width - fullSvThumb.margin * 2;
-                                const rangeY = height - fullSvThumb.height - fullSvThumb.margin * 2;
-                                if (rangeX > 0 && rangeY > 0) {
-                                    root.saturation = Math.max(0.0, Math.min(1.0, (mouse.x - fullSvThumb.margin - fullSvThumb.width / 2) / rangeX));
-                                    root.value = Math.max(0.0, Math.min(1.0, 1.0 - (mouse.y - fullSvThumb.margin - fullSvThumb.height / 2) / rangeY));
-                                }
-                            }
-
-                            onPressed: mouse => updateFull(mouse)
-                            onPositionChanged: mouse => {
-                                if (pressed)
-                                    updateFull(mouse);
-                            }
-                        }
-                    }
-                }
-
-                // Full Hue Slider
-                Rectangle {
-                    width: parent.width
-                    height: 24
-                    radius: height / 2
-                    clip: false
-
-                    gradient: Gradient {
-                        orientation: Gradient.Horizontal
-                        GradientStop { position: 0.0;   color: "#ff0000" }
-                        GradientStop { position: 0.167; color: "#ffff00" }
-                        GradientStop { position: 0.333; color: "#00ff00" }
-                        GradientStop { position: 0.5;   color: "#00ffff" }
-                        GradientStop { position: 0.667; color: "#0000ff" }
-                        GradientStop { position: 0.833; color: "#ff00ff" }
-                        GradientStop { position: 1.0;   color: "#ff0000" }
-                    }
-
-                    Item {
-                        id: fullHueThumb
-                        x: Math.round(root.hue * (parent.width - width))
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 26
-                        height: 26
-
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: 26
-                            height: 26
-                            radius: 13
-                            color: "transparent"
-                            border.color: "#80000000"
-                            border.width: 1
-                        }
-
-                        Rectangle {
-                            anchors.centerIn: parent
-                            width: 22
-                            height: 22
-                            radius: 11
-                            color: Qt.hsva(root.hue, 1.0, 1.0, 1.0)
-                            border.color: "#ffffff"
-                            border.width: 3
-                        }
-                    }
-
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-
-                        function updateHueFull(mouse) {
-                            const range = parent.width - fullHueThumb.width;
-                            if (range > 0)
-                                root.hue = Math.max(0.0, Math.min(1.0, (mouse.x - fullHueThumb.width / 2) / range));
-                        }
-
-                        onPressed: mouse => updateHueFull(mouse)
-                        onPositionChanged: mouse => {
-                            if (pressed)
-                                updateHueFull(mouse);
-                        }
-                    }
-                }
-
-                // "Set Color" Input Bar in full view
-                Rectangle {
-                    width: parent.width
-                    height: 38
-                    radius: height / 2
-                    color: Theme.surface
-                    border.color: root.inputFeedback === "error" ? Theme.danger : (root.inputFeedback === "ok" ? Theme.success : Theme.border)
-                    border.width: root.inputFeedback !== "" ? 1.5 : 1
-
-                    Symbol {
-                        id: fullEditIcon
-                        x: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        name: "edit"
-                        size: 14
-                        color: root.inputFeedback === "error" ? Theme.danger : (root.inputFeedback === "ok" ? Theme.success : Theme.muted)
-                    }
-
-                    TextInput {
-                        id: fullColorInputField
-
-                        anchors.left: fullEditIcon.right
-                        anchors.leftMargin: 10
-                        anchors.right: fullApplyBtn.left
-                        anchors.rightMargin: 8
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: Theme.foreground
-                        selectionColor: Theme.accent
-                        font.pixelSize: Theme.textBody
-                        font.family: Theme.fontFamily
-                        clip: true
-                        selectByMouse: true
-                        onAccepted: {
-                            if (text.trim() !== "")
-                                root.applyCustomColor(text);
-                        }
-
-                        Text {
-                            visible: fullColorInputField.text === "" && !fullColorInputField.activeFocus
-                            text: "Set color (e.g. #fb542b, 251, 84, 43, coral, hsl(12, 96%, 58%))..."
-                            color: Theme.muted
-                            font.pixelSize: Theme.textBody
-                            font.family: Theme.fontFamily
-                        }
-                    }
-
-                    Rectangle {
-                        id: fullApplyBtn
-
-                        anchors.right: parent.right
-                        anchors.rightMargin: 6
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 60
-                        height: 28
-                        radius: 14
-                        color: fullApplyMouse.containsMouse ? Theme.highlight : Theme.raised
-
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: 4
-
-                            Symbol {
-                                anchors.verticalCenter: parent.verticalCenter
-                                name: "check"
-                                size: 12
-                                color: root.inputFeedback === "ok" ? Theme.success : Theme.foreground
-                            }
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: "Set"
-                                color: Theme.foreground
-                                font.pixelSize: Theme.textBody
-                                font.family: Theme.fontFamily
-                                font.weight: Font.DemiBold
-                            }
-                        }
-
-                        MouseArea {
-                            id: fullApplyMouse
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
-                                if (fullColorInputField.text.trim() !== "")
-                                    root.applyCustomColor(fullColorInputField.text);
-                            }
-                        }
-                    }
-                }
-
-                // Format row with 5 formats + Action button (copies on click!)
-                Row {
-                    width: parent.width
-                    spacing: 10
-
-                    Repeater {
-                        model: [
-                            { "label": "HEX", "value": root.hexText },
-                            { "label": "RGB", "value": root.rgbText },
-                            { "label": "CMYK", "value": root.cmykText },
-                            { "label": "HSV", "value": root.hsvText },
-                            { "label": "HSL", "value": root.hslText }
-                        ]
-
-                        Rectangle {
-                            required property var modelData
-
-                            width: Math.floor((chooserCol.width - 50) / 6)
-                            height: 56
-                            radius: Theme.radiusSmall
-                            color: fArea.containsMouse ? Theme.highlight : Theme.surface
-                            border.color: Theme.border
-                            border.width: 1
-
-                            Column {
-                                anchors.centerIn: parent
-                                spacing: 3
-
-                                Text {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    text: modelData.label
-                                    color: Theme.muted
-                                    font.pixelSize: Theme.textCaption
-                                    font.family: Theme.fontFamily
-                                    font.weight: Font.DemiBold
-                                }
-
-                                Row {
-                                    anchors.horizontalCenter: parent.horizontalCenter
-                                    spacing: 4
-
-                                    Text {
-                                        text: modelData.value
-                                        color: Theme.foreground
-                                        font.pixelSize: Theme.textBody
-                                        font.family: Theme.fontFamily
-                                        font.weight: Font.Medium
-                                    }
-
-                                    Symbol {
-                                        visible: root.copiedKey === modelData.label
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        name: "check"
-                                        size: 11
-                                        color: Theme.success
-                                    }
-                                }
-                            }
-
-                            MouseArea {
-                                id: fArea
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.copyText(modelData.value, modelData.label)
-                                onDoubleClicked: {
-                                    fullColorInputField.text = modelData.value;
-                                    fullColorInputField.forceActiveFocus();
-                                }
-                            }
-                        }
-                    }
-
-                    // Save Color Button
-                    Rectangle {
-                        width: Math.floor((chooserCol.width - 50) / 6)
-                        height: 56
-                        radius: Theme.radiusSmall
-                        color: fullAddArea.containsMouse ? Qt.lighter(Theme.accent, 1.1) : Theme.accent
-                        scale: fullAddArea.pressed ? 0.96 : 1.0
-
-                        Behavior on scale {
-                            NumberAnimation { duration: Theme.fast }
-                        }
-
-                        Row {
-                            anchors.centerIn: parent
-                            spacing: 6
-
-                            Symbol {
-                                anchors.verticalCenter: parent.verticalCenter
-                                name: root.copiedKey === "ADD" ? "check" : "plus"
-                                size: 14
-                                color: Theme.onAccent
-                            }
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: root.copiedKey === "ADD" ? "Saved!" : "Save Color"
-                                color: Theme.onAccent
-                                font.pixelSize: Theme.textBody
-                                font.family: Theme.fontFamily
-                                font.weight: Font.DemiBold
-                            }
-                        }
-
-                        MouseArea {
-                            id: fullAddArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.addToHistory()
-                        }
-                    }
-                }
-            }
-        }
-
-        // 3. HISTORY FULL VIEW
-        Item {
-            id: historyFullComponent
-
-            visible: root.viewMode === "history"
-            width: parent.width
-            implicitHeight: historyCol.implicitHeight
-
-            Column {
-                id: historyCol
-
-                width: parent.width
-                spacing: 12
-
-                // Search bar
-                Rectangle {
-                    width: parent.width
-                    height: 36
-                    radius: height / 2
-                    color: Theme.surface
-                    border.color: Theme.border
-                    border.width: 1
-
-                    Symbol {
-                        id: fullSearchIcon
-                        x: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        name: "search"
-                        size: 14
-                        color: Theme.muted
-                    }
-
-                    TextInput {
-                        anchors.left: fullSearchIcon.right
-                        anchors.leftMargin: 10
-                        anchors.right: parent.right
-                        anchors.rightMargin: 12
-                        anchors.verticalCenter: parent.verticalCenter
-                        color: Theme.foreground
-                        selectionColor: Theme.accent
-                        font.pixelSize: Theme.textBody
-                        font.family: Theme.fontFamily
-                        clip: true
-                        text: root.historySearch
-                        onTextChanged: root.historySearch = text
-
-                        Text {
-                            visible: parent.text === ""
-                            text: `Search ${root.colors.length} saved colors...`
-                            color: Theme.muted
-                            font.pixelSize: Theme.textBody
-                            font.family: Theme.fontFamily
-                        }
-                    }
-                }
-
-                // Empty message
-                Text {
-                    visible: root.filteredColors.length === 0
-                    width: parent.width
-                    anchors.topMargin: 30
-                    horizontalAlignment: Text.AlignHCenter
-                    text: root.colors.length === 0 ? "No colors saved yet" : "No matches found"
-                    color: Theme.muted
-                    font.pixelSize: Theme.textSubtitle
-                    font.family: Theme.fontFamily
-                }
-
-                // Cards with all formats
-                Repeater {
-                    model: root.filteredColors
-
-                    Rectangle {
-                        id: fullHistoryRow
-
-                        required property var modelData
-
-                        width: historyCol.width
-                        height: 56
-                        radius: Theme.radiusMedium
-                        color: Theme.surface
-                        border.color: Theme.border
-                        border.width: 1
-
-                        // Swatch: clicking loads it into chooser
-                        Rectangle {
-                            id: fullSwatchItem
-
-                            x: 12
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 36
-                            height: 36
-                            radius: Theme.radiusSmall
-                            color: fullHistoryRow.modelData.swatch
-                            border.color: Theme.border
-                            border.width: 1
-
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    root.selectColor(fullHistoryRow.modelData.color);
-                                    root.viewMode = "split";
-                                }
-                            }
-                        }
-
-                        // Formats pills
-                        Flow {
-                            anchors.left: fullSwatchItem.right
-                            anchors.leftMargin: 12
-                            anchors.right: fullTrash.left
-                            anchors.rightMargin: 10
-                            anchors.verticalCenter: parent.verticalCenter
-                            spacing: 8
-
-                            Repeater {
-                                model: fullHistoryRow.modelData.formats ?? []
-
-                                Button {
-                                    required property var modelData
-                                    readonly property string key: `${fullHistoryRow.modelData.color}/${modelData.format}`
-
-                                    text: modelData.text
-                                    icon: root.copiedKey === key ? "check" : ""
-                                    iconSize: 12
-                                    onClicked: {
-                                        Daemon.command("colors", "copy", [fullHistoryRow.modelData.color, modelData.format]);
-                                        root.copiedKey = key;
-                                        forget.restart();
-                                    }
-                                }
-                            }
-                        }
-
-                        IconButton {
-                            id: fullTrash
-
-                            anchors.right: parent.right
-                            anchors.rightMargin: 10
-                            anchors.verticalCenter: parent.verticalCenter
-                            icon: "trash"
-                            size: 14
-                            tone: "neutral"
-                            onClicked: Daemon.command("colors", "remove", [fullHistoryRow.modelData.color])
                         }
                     }
                 }
