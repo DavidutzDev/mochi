@@ -20,20 +20,29 @@ Item {
         onTriggered: root.copied = ""
     }
 
+    // The color went to the clipboard as it was picked.
+    EdgeLight {
+        id: light
+
+        radius: Theme.radiusSurface
+        color: root.payload.swatch ?? Theme.accent
+        Component.onCompleted: flash()
+    }
+
     Row {
         id: row
 
         x: Theme.padding
         y: Theme.padding
         width: parent.width - Theme.padding * 2
-        spacing: 14
+        spacing: Theme.spaceMedium
 
         Rectangle {
             id: swatch
 
             width: 104
             height: formats.implicitHeight
-            radius: Theme.radiusMedium
+            radius: Theme.radiusField
             color: root.payload.swatch ?? "transparent"
             border.color: Theme.border
             border.width: 1
@@ -51,7 +60,7 @@ Item {
                 text: `Copied ${root.payload.text ?? ""}`
                 elide: Text.ElideRight
                 color: Theme.muted
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
             }
 
@@ -65,7 +74,7 @@ Item {
 
                     width: formats.width
                     height: 26
-                    radius: Theme.radiusSmall
+                    radius: Theme.radiusControl
                     color: area.containsMouse ? Theme.raised : "transparent"
 
                     Behavior on color {
@@ -84,13 +93,13 @@ Item {
                         color: Theme.muted
                         font.pixelSize: Theme.textCaption
                         font.family: Theme.fontFamily
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.weightTitle
                     }
 
                     Text {
                         anchors.left: label.right
                         anchors.right: mark.left
-                        anchors.rightMargin: 8
+                        anchors.rightMargin: Theme.spaceSmall
                         anchors.verticalCenter: parent.verticalCenter
                         text: line.modelData.text
                         elide: Text.ElideRight
@@ -103,7 +112,7 @@ Item {
                         id: mark
 
                         anchors.right: parent.right
-                        anchors.rightMargin: 8
+                        anchors.rightMargin: Theme.spaceSmall
                         anchors.verticalCenter: parent.verticalCenter
                         visible: area.containsMouse || root.copied === line.modelData.format
                         name: root.copied === line.modelData.format ? "check" : "copy"
@@ -121,6 +130,7 @@ Item {
                             Daemon.command("colors", "copy", [root.payload.color, line.modelData.format]);
                             root.copied = line.modelData.format;
                             forget.restart();
+                            light.flash();
                         }
                     }
                 }

@@ -15,12 +15,12 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 8
+        spacing: Theme.spaceSmall
 
         Button {
             anchors.verticalCenter: parent.verticalCenter
             tone: "ghost"
-            icon: "window"
+            icon: "arrow_back"
             text: "Back"
             onClicked: Daemon.command("share", "back", [])
         }
@@ -37,7 +37,7 @@ Item {
             rightPadding: 8
             text: "Drag the area to share"
             color: Theme.muted
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
         }
     }

@@ -125,7 +125,7 @@ Item {
 
             width: parent.width
             height: width
-            radius: Theme.radiusSmall
+            radius: Theme.radiusControl
             color: Theme.background
             border.color: Theme.foreground
             border.width: 2
@@ -144,7 +144,7 @@ Item {
                         width: root.cell
                         height: root.cell
                         color: pixel === "" ? "transparent" : pixel
-                        border.color: "#1affffff"
+                        border.color: Qt.alpha(Theme.foreground, 0.1)
                         border.width: 1
                     }
                 }
@@ -174,7 +174,7 @@ Item {
             id: label
 
             anchors.top: lens.bottom
-            anchors.topMargin: 8
+            anchors.topMargin: Theme.spaceSmall
             anchors.horizontalCenter: lens.horizontalCenter
             width: row.implicitWidth + 20
             height: 28
@@ -185,13 +185,13 @@ Item {
                 id: row
 
                 anchors.centerIn: parent
-                spacing: 8
+                spacing: Theme.spaceSmall
 
                 Rectangle {
                     anchors.verticalCenter: parent.verticalCenter
                     width: 14
                     height: 14
-                    radius: 7
+                    radius: height / 2
                     color: root.lens?.swatch ?? "transparent"
                     border.color: Theme.border
                     border.width: 1
@@ -201,7 +201,7 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     text: root.lens?.hex ?? ""
                     color: Theme.foreground
-                    font.pixelSize: Theme.textLabel
+                    font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily
                     font.features: {
                         "tnum": 1

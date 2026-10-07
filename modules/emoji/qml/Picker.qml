@@ -26,7 +26,7 @@ Item {
     // As the module's action takes them, in the same order.
     readonly property var toneNames: ["none", "light", "medium-light", "medium", "medium-dark", "dark"]
     // The swatches: the yellow of emoji without a tone, then the five.
-    readonly property var toneColors: ["#ffcc4d", "#f7dece", "#f3d2a2", "#d5ab88", "#af7e57", "#7c533e"]
+    readonly property var toneColors: ["#ffcc4d", "#f7dece", "#f3d2a2", "#d5ab88", "#af7e57", "#7c533e"] // design: the colors of Unicode skin tones, not the theme
     // Each emoji as {glyph, name, group, words, subgroup, tones, index},
     // from the published [glyph, name, group, name words, subgroup words,
     // tones]. Tones is the five toned emoji, or null.
@@ -154,7 +154,10 @@ Item {
                 continue;
             if (recent.includes(entry.glyph))
                 points += 2;
-            found.push({ "entry": entry, "points": points });
+            found.push({
+                "entry": entry,
+                "points": points
+            });
         }
         found.sort((a, b) => b.points - a.points || a.entry.words.length - b.entry.words.length || a.entry.index - b.entry.index);
         return found.map(hit => hit.entry);
@@ -187,8 +190,12 @@ Item {
 
     // Pastes the emoji into the window you were in, or only copies it.
     function send(entry: var, copy: bool): void {
-        if (entry)
-            Daemon.command("emoji", copy ? "copy" : "paste", [toned(entry)]);
+        if (!entry)
+            return;
+        Daemon.command("emoji", copy ? "copy" : "paste", [toned(entry)]);
+        // Copying leaves the picker open: its edge says it's done.
+        if (copy)
+            light.flash();
     }
 
     // Opens the tones of an emoji over its tile.
@@ -207,14 +214,22 @@ Item {
         Daemon.command("emoji", "tone", [toneNames[tone], entry.glyph]);
         const glyph = tone > 0 ? entry.tones[tone - 1] : entry.glyph;
         Daemon.command("emoji", copy ? "copy" : "paste", [glyph]);
+        if (copy)
+            light.flash();
+    }
+
+    EdgeLight {
+        id: light
+
+        radius: Theme.radiusSurface
     }
 
     Column {
         id: column
 
         anchors.fill: parent
-        anchors.topMargin: 8
-        anchors.bottomMargin: 8
+        anchors.topMargin: Theme.spaceSmall
+        anchors.bottomMargin: Theme.spaceSmall
 
         Item {
             width: parent.width
@@ -234,9 +249,9 @@ Item {
                 id: input
 
                 anchors.left: magnifier.right
-                anchors.leftMargin: 12
+                anchors.leftMargin: Theme.spaceMedium
                 anchors.right: swatches.left
-                anchors.rightMargin: 12
+                anchors.rightMargin: Theme.spaceMedium
                 anchors.verticalCenter: parent.verticalCenter
                 focus: true
                 color: Theme.foreground
@@ -303,7 +318,7 @@ Item {
                             anchors.centerIn: parent
                             width: 14
                             height: 14
-                            radius: 7
+                            radius: height / 2
                             color: swatch.modelData
                         }
 
@@ -335,7 +350,12 @@ Item {
             height: 44
 
             Repeater {
-                model: [{ "title": "Recent", "glyph": "" }].concat(root.groups)
+                model: [
+                    {
+                        "title": "Recent",
+                        "glyph": ""
+                    }
+                ].concat(root.groups)
 
                 Rectangle {
                     id: tabItem
@@ -347,7 +367,7 @@ Item {
 
                     width: (root.width - 24) / (root.groups.length + 1)
                     height: 36
-                    radius: Theme.radiusSmall
+                    radius: Theme.radiusControl
                     color: current ? Theme.raised : tabArea.containsMouse ? Theme.surface : "transparent"
 
                     Symbol {
@@ -363,7 +383,7 @@ Item {
                         visible: tabItem.index > 0
                         text: tabItem.modelData.glyph
                         opacity: tabItem.current ? 1 : 0.7
-                        font.pixelSize: 20
+                        font.pixelSize: Theme.textHeadline
                         font.family: Theme.fontFamily
                     }
 
@@ -419,6 +439,10 @@ Item {
                 boundsBehavior: Flickable.StopAtBounds
                 highlightFollowsCurrentItem: false
 
+                ScrollFade {
+                    view: grid
+                }
+
                 delegate: Item {
                     id: tile
 
@@ -431,8 +455,8 @@ Item {
 
                     Rectangle {
                         anchors.fill: parent
-                        anchors.margins: 2
-                        radius: Theme.radiusSmall
+                        anchors.margins: 2 // design: a hairline gap between tiles
+                        radius: Theme.radiusControl
                         color: tile.current ? Theme.raised : area.containsMouse ? Theme.surface : "transparent"
                         border.width: tile.current ? 1 : 0
                         border.color: Theme.accent
@@ -441,7 +465,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: root.toned(tile.modelData)
-                        font.pixelSize: 26
+                        font.pixelSize: 26 // design: an emoji sized to fill its 44 pixel tile
                         font.family: Theme.fontFamily
                     }
 
@@ -449,7 +473,7 @@ Item {
                     Rectangle {
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
-                        anchors.margins: 6
+                        anchors.margins: Theme.spaceSmall
                         visible: tile.modelData.tones !== null && (area.containsMouse || tile.current)
                         width: 4
                         height: 4
@@ -494,7 +518,7 @@ Item {
                 anchors.left: parent.left
                 anchors.leftMargin: Theme.padding + 2
                 anchors.right: hint.left
-                anchors.rightMargin: 12
+                anchors.rightMargin: Theme.spaceMedium
                 anchors.verticalCenter: parent.verticalCenter
                 text: {
                     if (root.hoveredTab !== "")
@@ -505,7 +529,7 @@ Item {
                 elide: Text.ElideRight
                 textFormat: Text.PlainText
                 color: Theme.foreground
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
             }
 
@@ -549,7 +573,7 @@ Item {
         height: root.cell + 8
         x: Math.max(4, Math.min(root.width - width - 4, root.choosingAt.x - width / 2))
         y: below ? root.choosingAt.y + root.cell + 4 : root.choosingAt.y - height - 4
-        radius: Theme.radiusMedium
+        radius: Theme.radiusField
         color: Theme.raised
         border.width: 1
         border.color: Theme.border
@@ -573,8 +597,8 @@ Item {
 
                     Rectangle {
                         anchors.fill: parent
-                        anchors.margins: 2
-                        radius: Theme.radiusSmall
+                        anchors.margins: 2 // design: a hairline gap between tiles
+                        radius: Theme.radiusControl
                         color: choiceArea.containsMouse ? Theme.highlight : "transparent"
                         border.width: choice.current ? 1 : 0
                         border.color: Theme.accent
@@ -583,7 +607,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: root.choosing ? (choice.index > 0 ? root.choosing.tones[choice.index - 1] : root.choosing.glyph) : ""
-                        font.pixelSize: 26
+                        font.pixelSize: 26 // design: an emoji sized to fill its 44 pixel tile
                         font.family: Theme.fontFamily
                     }
 

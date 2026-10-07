@@ -31,7 +31,7 @@ Item {
     }
 
     implicitWidth: 880
-    implicitHeight: column.implicitHeight + 16
+    implicitHeight: column.implicitHeight + Theme.spaceSmall * 2
 
     onPayloadChanged: {
         if ((payload.query ?? "") === input.text) {
@@ -61,8 +61,12 @@ Item {
 
     function send(action: string, index: int): void {
         const entry = results[index];
-        if (entry)
-            Daemon.command("clipboard", action, [`${entry.id}`]);
+        if (!entry)
+            return;
+        Daemon.command("clipboard", action, [`${entry.id}`]);
+        // Copied or pinned without closing: the panel's edge says it's done.
+        if (action === "copy" || action === "pin")
+            light.flash();
     }
 
     function togglePin(index: int): void {
@@ -112,12 +116,18 @@ Item {
         return "";
     }
 
+    EdgeLight {
+        id: light
+
+        radius: Theme.radiusSurface
+    }
+
     Column {
         id: column
 
         anchors.fill: parent
-        anchors.topMargin: 8
-        anchors.bottomMargin: 8
+        anchors.topMargin: Theme.spaceSmall
+        anchors.bottomMargin: Theme.spaceSmall
 
         Item {
             width: parent.width
@@ -137,7 +147,7 @@ Item {
                 id: input
 
                 anchors.left: magnifier.right
-                anchors.leftMargin: 12
+                anchors.leftMargin: Theme.spaceMedium
                 anchors.right: pausedLabel.left
                 anchors.rightMargin: Theme.padding
                 anchors.verticalCenter: parent.verticalCenter
@@ -194,7 +204,7 @@ Item {
                 width: visible ? implicitWidth : 0
                 text: "Paused"
                 color: Theme.muted
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
             }
         }
@@ -227,11 +237,16 @@ Item {
 
                 width: 440
                 height: parent.height
-                topMargin: 8
+                topMargin: Theme.spaceSmall
                 clip: true
                 model: root.results
                 boundsBehavior: Flickable.StopAtBounds
                 highlightMoveDuration: 0
+
+                ScrollFade {
+                    view: list
+                }
+
                 delegate: Column {
                     id: item
 
@@ -239,8 +254,8 @@ Item {
                     required property int index
                     readonly property string heading: root.heading(index)
 
-                    x: 8
-                    width: list.width - 16
+                    x: Theme.spaceSmall
+                    width: list.width - Theme.spaceSmall * 2
 
                     Text {
                         visible: item.heading !== ""
@@ -252,7 +267,7 @@ Item {
                         color: Theme.muted
                         font.pixelSize: Theme.textCaption
                         font.family: Theme.fontFamily
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.weightTitle
                     }
 
                     ListRow {
@@ -290,7 +305,7 @@ Item {
 
                             Rectangle {
                                 anchors.fill: parent
-                                radius: Theme.radiusSmall
+                                radius: Theme.radiusControl
                                 color: Theme.raised
                                 visible: !row.image || picture.status !== Image.Ready
                             }
@@ -341,11 +356,11 @@ Item {
             Rectangle {
                 anchors.left: list.right
                 anchors.right: parent.right
-                anchors.rightMargin: 8
+                anchors.rightMargin: Theme.spaceSmall
                 anchors.top: parent.top
-                anchors.topMargin: 8
+                anchors.topMargin: Theme.spaceSmall
                 anchors.bottom: parent.bottom
-                radius: Theme.radiusMedium
+                radius: Theme.radiusField
                 color: Theme.surface
                 clip: true
 
@@ -353,12 +368,18 @@ Item {
                     id: pane
 
                     anchors.fill: parent
-                    anchors.margins: 14
+                    anchors.margins: Theme.spaceMedium
                     visible: root.current?.kind === "text"
                     contentWidth: width
                     contentHeight: full.implicitHeight
                     boundsBehavior: Flickable.StopAtBounds
                     clip: true
+
+                    ScrollFade {
+                        view: pane
+                        color: Theme.surface
+                        size: Theme.spaceMedium
+                    }
 
                     Text {
                         id: full
@@ -375,7 +396,7 @@ Item {
 
                 Image {
                     anchors.fill: parent
-                    anchors.margins: 14
+                    anchors.margins: Theme.spaceMedium
                     visible: root.current?.kind === "image"
                     source: root.current?.kind === "image" ? (root.current.image ?? "") : ""
                     fillMode: Image.PreserveAspectFit
