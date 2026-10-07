@@ -1,11 +1,13 @@
 import QtQuick
 import qs.island
 
-// The history: a search box and the entries, newest first. Each keystroke
-// goes to the module, which answers with the matches. Arrows or Tab move
-// the selection, Enter pastes it, Shift+Enter only copies it, Shift+Delete
-// removes it, Escape closes. A click on an image opens it in the preview
-// card a screenshot gets.
+// The history: a search box, the entries with the pins on top, and the
+// selected one in full on the right. Each keystroke goes to the module,
+// which answers with the matches. Arrows or Tab move the selection, Enter
+// pastes it, Shift+Enter only copies it, Ctrl+P pins or unpins it,
+// Shift+Delete removes it, Page Up and Page Down scroll the side pane,
+// Escape closes. A click on an image opens it in the preview card a
+// screenshot gets.
 Item {
     id: root
 
@@ -15,8 +17,20 @@ Item {
     property var results: []
     readonly property int rows: 7
     readonly property int rowHeight: 56
+    readonly property int headingHeight: 26
+    readonly property var current: results[list.currentIndex] ?? null
+    // Each answer is a new list, so changes of `current` aren't all moves.
+    readonly property real currentId: current?.id ?? -1
+    readonly property bool hasPins: results.length > 0 && results[0].pinned
+    // The whole text of the selected entry, once the module sent it.
+    readonly property string detail: {
+        const detail = payload.detail;
+        if (current && detail && detail.id === current.id)
+            return detail.text;
+        return current?.text ?? "";
+    }
 
-    implicitWidth: 600
+    implicitWidth: 880
     implicitHeight: column.implicitHeight + 16
 
     onPayloadChanged: {
@@ -24,12 +38,20 @@ Item {
             const selected = results[list.currentIndex]?.id;
             results = payload.results ?? [];
             // Keep the selection on the same entry when the list changes
-            // under it, as after a removal.
+            // under it, as after a removal or a pin.
             const index = results.findIndex(entry => entry.id === selected);
             list.currentIndex = index >= 0 ? index : Math.min(list.currentIndex, results.length - 1);
             if (list.currentIndex < 0)
                 list.currentIndex = 0;
         }
+    }
+
+    // The side pane shows a text in full: ask for it whenever the
+    // selection lands on one.
+    onCurrentIdChanged: {
+        pane.contentY = 0;
+        if (current && current.kind === "text" && payload.detail?.id !== current.id)
+            Daemon.command("clipboard", "preview", [`${current.id}`]);
     }
 
     Component.onCompleted: {
@@ -43,9 +65,20 @@ Item {
             Daemon.command("clipboard", action, [`${entry.id}`]);
     }
 
+    function togglePin(index: int): void {
+        const entry = results[index];
+        if (entry)
+            send(entry.pinned ? "unpin" : "pin", index);
+    }
+
     function move(by: int): void {
         if (results.length > 0)
             list.currentIndex = (list.currentIndex + by + results.length) % results.length;
+    }
+
+    function scrollPane(by: real): void {
+        const most = Math.max(0, pane.contentHeight - pane.height);
+        pane.contentY = Math.max(0, Math.min(most, pane.contentY + by));
     }
 
     // "now", "5 min", "3 h", "2 d", from seconds since the epoch.
@@ -64,6 +97,19 @@ Item {
     function headline(text: string): string {
         const line = text.split("\n").find(line => line.trim() !== "") ?? "";
         return line.trim().replace(/\s+/g, " ");
+    }
+
+    // The heading above a row: "Pinned" over the first pin, "History"
+    // over the first entry after them, or nothing.
+    function heading(index: int): string {
+        const entry = results[index];
+        if (!entry || !hasPins)
+            return "";
+        if (index === 0)
+            return "Pinned";
+        if (!entry.pinned && results[index - 1].pinned)
+            return "History";
+        return "";
     }
 
     Column {
@@ -117,6 +163,18 @@ Item {
                     else
                         event.accepted = false;
                 }
+                Keys.onPressed: event => {
+                    if (event.key === Qt.Key_P && event.modifiers & Qt.ControlModifier) {
+                        root.togglePin(list.currentIndex);
+                        event.accepted = true;
+                    } else if (event.key === Qt.Key_PageDown) {
+                        root.scrollPane(pane.height - 40);
+                        event.accepted = true;
+                    } else if (event.key === Qt.Key_PageUp) {
+                        root.scrollPane(-(pane.height - 40));
+                        event.accepted = true;
+                    }
+                }
 
                 Text {
                     visible: input.text === ""
@@ -159,84 +217,170 @@ Item {
             font.family: Theme.fontFamily
         }
 
-        ListView {
-            id: list
-
+        Item {
             visible: root.results.length > 0
             width: parent.width
-            height: Math.min(root.results.length, root.rows) * root.rowHeight + 8
-            topMargin: 8
-            clip: true
-            model: root.results
-            boundsBehavior: Flickable.StopAtBounds
-            delegate: ListRow {
-                id: row
+            height: Math.min(root.results.length, root.rows) * root.rowHeight + (root.hasPins ? 2 * root.headingHeight : 0) + 8
 
-                required property var modelData
-                required property int index
-                readonly property bool image: modelData.kind === "image"
+            ListView {
+                id: list
 
-                x: 8
-                width: list.width - 16
-                height: root.rowHeight
-                flat: true
-                marker: true
-                selected: ListView.isCurrentItem
-                leadingSize: 40
-                title: image ? "Image" : root.headline(modelData.text)
-                subtitle: {
-                    const parts = [];
-                    if (image && modelData.width > 0)
-                        parts.push(`${modelData.width} × ${modelData.height}`);
-                    if (!image && modelData.lines > 1)
-                        parts.push(`${modelData.lines} lines`);
-                    parts.push(root.ago(modelData.time));
-                    return parts.join(" · ");
-                }
-                onHoveredChanged: {
-                    if (hovered)
-                        list.currentIndex = index;
-                }
-                // An image opens in the preview card; Enter still pastes it.
-                onClicked: root.send(image ? "show" : "pick", index)
+                width: 440
+                height: parent.height
+                topMargin: 8
+                clip: true
+                model: root.results
+                boundsBehavior: Flickable.StopAtBounds
+                highlightMoveDuration: 0
+                delegate: Column {
+                    id: item
 
-                leading: Item {
-                    anchors.fill: parent
+                    required property var modelData
+                    required property int index
+                    readonly property string heading: root.heading(index)
 
-                    Rectangle {
-                        anchors.fill: parent
-                        radius: Theme.radiusSmall
-                        color: Theme.raised
-                        visible: !row.image || picture.status !== Image.Ready
-                    }
+                    x: 8
+                    width: list.width - 16
 
-                    Symbol {
-                        anchors.centerIn: parent
-                        visible: !row.image
-                        name: "clipboard"
-                        size: 20
+                    Text {
+                        visible: item.heading !== ""
+                        width: parent.width
+                        height: root.headingHeight
+                        leftPadding: 14
+                        verticalAlignment: Text.AlignVCenter
+                        text: item.heading
                         color: Theme.muted
+                        font.pixelSize: Theme.textCaption
+                        font.family: Theme.fontFamily
+                        font.weight: Font.DemiBold
                     }
 
-                    Image {
-                        id: picture
+                    ListRow {
+                        id: row
 
-                        anchors.fill: parent
-                        visible: row.image
-                        source: row.modelData.image ?? ""
-                        sourceSize.width: 80
-                        sourceSize.height: 80
-                        fillMode: Image.PreserveAspectCrop
-                        asynchronous: true
-                        cache: false
+                        readonly property var modelData: item.modelData
+                        readonly property int index: item.index
+                        readonly property bool image: modelData.kind === "image"
+
+                        width: parent.width
+                        height: root.rowHeight
+                        flat: true
+                        marker: true
+                        selected: item.ListView.isCurrentItem
+                        leadingSize: 40
+                        title: image ? "Image" : root.headline(modelData.text)
+                        subtitle: {
+                            const parts = [];
+                            if (image && modelData.width > 0)
+                                parts.push(`${modelData.width} × ${modelData.height}`);
+                            if (!image && modelData.lines > 1)
+                                parts.push(`${modelData.lines} lines`);
+                            parts.push(root.ago(modelData.time));
+                            return parts.join(" · ");
+                        }
+                        onHoveredChanged: {
+                            if (hovered)
+                                list.currentIndex = index;
+                        }
+                        // An image opens in the preview card; Enter still pastes it.
+                        onClicked: root.send(image ? "show" : "pick", index)
+
+                        leading: Item {
+                            anchors.fill: parent
+
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: Theme.radiusSmall
+                                color: Theme.raised
+                                visible: !row.image || picture.status !== Image.Ready
+                            }
+
+                            Symbol {
+                                anchors.centerIn: parent
+                                visible: !row.image
+                                name: "clipboard"
+                                size: 20
+                                color: Theme.muted
+                            }
+
+                            Image {
+                                id: picture
+
+                                anchors.fill: parent
+                                visible: row.image
+                                source: row.modelData.image ?? ""
+                                sourceSize.width: 80
+                                sourceSize.height: 80
+                                fillMode: Image.PreserveAspectCrop
+                                asynchronous: true
+                                cache: false
+                            }
+                        }
+
+                        trailing: [
+                            IconButton {
+                                visible: row.selected || row.modelData.pinned
+                                icon: "pin"
+                                size: 14
+                                tone: row.modelData.pinned ? "accent" : "ghost"
+                                onClicked: root.togglePin(row.index)
+                            },
+                            IconButton {
+                                visible: row.selected
+                                icon: "trash"
+                                size: 14
+                                onClicked: root.send("delete", row.index)
+                            }
+                        ]
+                    }
+                }
+            }
+
+            // The selected entry in full: the whole text, scrolling, or
+            // the image at a size that fits.
+            Rectangle {
+                anchors.left: list.right
+                anchors.right: parent.right
+                anchors.rightMargin: 8
+                anchors.top: parent.top
+                anchors.topMargin: 8
+                anchors.bottom: parent.bottom
+                radius: Theme.radiusMedium
+                color: Theme.surface
+                clip: true
+
+                Flickable {
+                    id: pane
+
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    visible: root.current?.kind === "text"
+                    contentWidth: width
+                    contentHeight: full.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+                    clip: true
+
+                    Text {
+                        id: full
+
+                        width: pane.width
+                        text: root.detail
+                        wrapMode: Text.WrapAnywhere
+                        textFormat: Text.PlainText
+                        color: Theme.foreground
+                        font.pixelSize: Theme.textBody
+                        font.family: Theme.fontFamily
                     }
                 }
 
-                trailing: IconButton {
-                    visible: row.selected
-                    icon: "trash"
-                    size: 16
-                    onClicked: root.send("delete", row.index)
+                Image {
+                    anchors.fill: parent
+                    anchors.margins: 14
+                    visible: root.current?.kind === "image"
+                    source: root.current?.kind === "image" ? (root.current.image ?? "") : ""
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    cache: false
                 }
             }
         }
@@ -246,7 +390,7 @@ Item {
             topPadding: 6
             leftPadding: Theme.padding + 4
             visible: root.results.length > 0
-            text: "Enter pastes · Shift+Enter copies · Shift+Delete removes"
+            text: "Enter pastes · Shift+Enter copies · Ctrl+P pins · Shift+Delete removes"
             color: Theme.muted
             font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily

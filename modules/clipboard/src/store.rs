@@ -407,15 +407,50 @@ impl Store {
     /// Adds a copy at `time` and returns its id. Copying the same thing
     /// again moves the entry to the top instead of storing it twice.
     pub fn add(&mut self, clip: &Clip, time: u64) -> io::Result<u64> {
-        let hash = hash(clip);
-        if let Some(index) = self.entries.iter().position(|entry| entry.hash == hash) {
-            let id = self.entries[index].id;
+        if let Some(id) = self.find(clip) {
             self.touch(id, time)?;
             return Ok(id);
         }
-
         let id = self.next_id;
-        self.next_id += 1;
+        self.write(clip, time, id)?;
+        Ok(id)
+    }
+
+    /// Adds a copy under an id from another store, as when pinning moves an
+    /// entry between the history and the pins. Ids after it stay unused.
+    pub fn keep(&mut self, clip: &Clip, time: u64, id: u64) -> io::Result<()> {
+        if self.get(id).is_some() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "the entry is already there",
+            ));
+        }
+        self.write(clip, time, id)
+    }
+
+    /// The entry holding the same thing as `clip`, if any.
+    pub fn find(&self, clip: &Clip) -> Option<u64> {
+        let hash = hash(clip);
+        self.entries
+            .iter()
+            .find(|entry| entry.hash == hash)
+            .map(|entry| entry.id)
+    }
+
+    /// The id the next new entry gets.
+    pub fn next_id(&self) -> u64 {
+        self.next_id
+    }
+
+    /// Makes new entries start at `next` or later, so two stores never give
+    /// out the same id.
+    pub fn reserve(&mut self, next: u64) {
+        self.next_id = self.next_id.max(next);
+    }
+
+    fn write(&mut self, clip: &Clip, time: u64, id: u64) -> io::Result<()> {
+        let hash = hash(clip);
+        self.next_id = self.next_id.max(id + 1);
         let (width, height) = match clip.kind {
             Kind::Image => clip
                 .formats
@@ -495,7 +530,7 @@ impl Store {
             content: (content_offset, sealed_content.len() as u64),
         });
         self.sort();
-        Ok(id)
+        Ok(())
     }
 
     /// Moves an entry to the top, as copied at `time`.

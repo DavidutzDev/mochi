@@ -1,14 +1,16 @@
 import QtQuick
 import qs.island
 
-// The hub page: the history, newest first, with a search box, pause and
-// clear above it. Clicking a row pastes it into the window you were in, the
-// copy button only copies it, the trash removes it.
+// The hub page: the pins, then the history, newest first, with a search
+// box, pause and clear above them. Clicking a row pastes it into the window
+// you were in, the pin button pins or unpins it, the copy button only
+// copies it, the trash removes it. Clearing leaves the pins.
 Item {
     id: root
 
     property var payload: null
     readonly property var entries: payload?.entries ?? []
+    readonly property int count: payload?.count ?? 0
     readonly property bool paused: payload?.paused ?? false
     // Filtered here: the page lists the newest entries the module publishes.
     readonly property var shown: {
@@ -17,10 +19,12 @@ Item {
             return entries;
         return entries.filter(entry => (entry.kind === "image" ? "image" : entry.text).toLowerCase().includes(query));
     }
+    readonly property bool hasPins: shown.length > 0 && shown[0].pinned
+    readonly property int headingHeight: 24
     // Up to five rows show; more scroll.
     readonly property int rows: Math.min(shown.length, 5)
 
-    implicitHeight: toolbar.height + 12 + (shown.length === 0 ? 60 : rows * 60 + (rows - 1) * 8)
+    implicitHeight: toolbar.height + 12 + (shown.length === 0 ? 60 : rows * 60 + (rows - 1) * 8 + (hasPins ? 2 * headingHeight : 0))
 
     // "now", "5 min ago", "3 h ago", "2 d ago".
     function ago(time: real): string {
@@ -38,6 +42,19 @@ Item {
     function headline(text: string): string {
         const line = text.split("\n").find(line => line.trim() !== "") ?? "";
         return line.trim().replace(/\s+/g, " ");
+    }
+
+    // "Pinned" over the first pin, "History" over the first entry after
+    // them, or nothing.
+    function heading(index: int): string {
+        const entry = shown[index];
+        if (!entry || !hasPins)
+            return "";
+        if (index === 0)
+            return "Pinned";
+        if (!entry.pinned && shown[index - 1].pinned)
+            return "History";
+        return "";
     }
 
     Item {
@@ -80,7 +97,7 @@ Item {
 
                 Text {
                     visible: search.text === ""
-                    text: root.paused ? "Paused" : root.entries.length === 1 ? "1 entry" : `${root.entries.length} entries`
+                    text: root.paused ? "Paused" : root.count === 1 ? "1 entry" : `${root.count} entries`
                     color: Theme.muted
                     font: search.font
                 }
@@ -100,7 +117,7 @@ Item {
             }
 
             Button {
-                visible: root.entries.length > 0
+                visible: root.count > 0
                 text: "Clear all"
                 onClicked: Daemon.command("clipboard", "clear", [])
             }
@@ -122,80 +139,119 @@ Item {
         anchors.top: toolbar.bottom
         anchors.topMargin: 12
         width: parent.width
-        height: root.rows * 60 + Math.max(root.rows - 1, 0) * 8
+        height: root.rows * 60 + Math.max(root.rows - 1, 0) * 8 + (root.hasPins ? 2 * root.headingHeight : 0)
         clip: true
         spacing: 8
         boundsBehavior: Flickable.StopAtBounds
         model: root.shown
 
-        delegate: ListRow {
-            id: row
+        delegate: Column {
+            id: item
 
             required property var modelData
-            readonly property bool image: modelData.kind === "image"
+            required property int index
+            readonly property string heading: root.heading(index)
 
             width: list.width
-            height: 60
-            leadingSize: 40
-            title: image ? "Image" : root.headline(modelData.text)
-            subtitle: {
-                const parts = [];
-                if (image && modelData.width > 0)
-                    parts.push(`${modelData.width} × ${modelData.height}`);
-                if (!image && modelData.lines > 1)
-                    parts.push(`${modelData.lines} lines`);
-                parts.push(root.ago(modelData.time));
-                return parts.join(" · ");
-            }
-            // An image opens in the preview card, with copy, edit and delete.
-            onClicked: Daemon.command("clipboard", row.image ? "show" : "pick", [`${row.modelData.id}`])
 
-            leading: Item {
-                anchors.fill: parent
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: Theme.radiusSmall
-                    color: Theme.raised
-                    visible: !row.image || picture.status !== Image.Ready
-                }
-
-                Symbol {
-                    anchors.centerIn: parent
-                    visible: !row.image
-                    name: "clipboard"
-                    size: 20
-                    color: Theme.muted
-                }
-
-                Image {
-                    id: picture
-
-                    anchors.fill: parent
-                    visible: row.image
-                    source: row.modelData.image ?? ""
-                    sourceSize.width: 80
-                    sourceSize.height: 80
-                    fillMode: Image.PreserveAspectCrop
-                    asynchronous: true
-                    cache: false
-                }
+            Text {
+                visible: item.heading !== ""
+                width: parent.width
+                height: root.headingHeight
+                leftPadding: 4
+                verticalAlignment: Text.AlignVCenter
+                text: item.heading
+                color: Theme.muted
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+                font.weight: Font.DemiBold
             }
 
-            trailing: [
-                IconButton {
-                    icon: "copy"
-                    size: 14
-                    tone: "neutral"
-                    onClicked: Daemon.command("clipboard", "copy", [`${row.modelData.id}`])
-                },
-                IconButton {
-                    icon: "trash"
-                    size: 14
-                    tone: "neutral"
-                    onClicked: Daemon.command("clipboard", "delete", [`${row.modelData.id}`])
+            ListRow {
+                id: row
+
+                readonly property var modelData: item.modelData
+                readonly property bool image: modelData.kind === "image"
+                readonly property bool pinned: modelData.pinned ?? false
+                readonly property string entry: `${modelData.id}`
+
+                width: parent.width
+                height: 60
+                leadingSize: 40
+                title: image ? "Image" : root.headline(modelData.text)
+                subtitle: {
+                    const parts = [];
+                    if (image && modelData.width > 0)
+                        parts.push(`${modelData.width} × ${modelData.height}`);
+                    if (!image && modelData.lines > 1)
+                        parts.push(`${modelData.lines} lines`);
+                    parts.push(root.ago(modelData.time));
+                    return parts.join(" · ");
                 }
-            ]
+                // An image opens in the preview card, with copy, edit and delete.
+                onClicked: Daemon.command("clipboard", row.image ? "show" : "pick", [row.entry])
+
+                // Over the buttons too, which the row's own hover misses.
+                HoverHandler {
+                    id: hover
+                }
+
+                leading: Item {
+                    anchors.fill: parent
+
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: Theme.radiusSmall
+                        color: Theme.raised
+                        visible: !row.image || picture.status !== Image.Ready
+                    }
+
+                    Symbol {
+                        anchors.centerIn: parent
+                        visible: !row.image
+                        name: "clipboard"
+                        size: 20
+                        color: Theme.muted
+                    }
+
+                    Image {
+                        id: picture
+
+                        anchors.fill: parent
+                        visible: row.image
+                        source: row.modelData.image ?? ""
+                        sourceSize.width: 80
+                        sourceSize.height: 80
+                        fillMode: Image.PreserveAspectCrop
+                        asynchronous: true
+                        cache: false
+                    }
+                }
+
+                trailing: [
+                    IconButton {
+                        // Always on a pin; on hover elsewhere.
+                        opacity: row.pinned || hover.hovered ? 1 : 0
+                        enabled: opacity > 0
+                        icon: "pin"
+                        size: 14
+                        tone: row.pinned ? "accent" : "neutral"
+                        onClicked: Daemon.command("clipboard", row.pinned ? "unpin" : "pin", [row.entry])
+                    },
+                    IconButton {
+                        icon: "copy"
+                        size: 14
+                        tone: "neutral"
+                        onClicked: Daemon.command("clipboard", "copy", [row.entry])
+                    },
+                    IconButton {
+                        icon: "trash"
+                        size: 14
+                        tone: "neutral"
+                        onClicked: Daemon.command("clipboard", "delete", [row.entry])
+                    }
+                ]
+            }
         }
     }
 }

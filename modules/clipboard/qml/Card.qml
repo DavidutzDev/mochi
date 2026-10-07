@@ -20,7 +20,11 @@ Item {
 
         Text {
             width: parent.width
-            text: root.paused ? "Paused" : root.count === 1 ? "1 entry" : `${root.count} entries`
+            text: {
+                const pins = root.payload?.pins ?? 0;
+                const count = root.paused ? "Paused" : root.count === 1 ? "1 entry" : `${root.count} entries`;
+                return pins > 0 ? `${count} · ${pins} pinned` : count;
+            }
             elide: Text.ElideRight
             color: Theme.foreground
             font.pixelSize: Theme.textBody
