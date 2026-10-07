@@ -76,7 +76,10 @@ Item {
             width: list.width
             height: 60
             title: modelData.summary || modelData.app
-            subtitle: [modelData.app, (modelData.body ?? "").split("\n")[0]].filter(part => part).join(" · ")
+            // StyledText, so the app's name is escaped like the body was.
+            subtitle: [(modelData.app ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;"), modelData.line ?? ""].filter(part => part).join(" · ")
+            subtitleFormat: Text.StyledText
+            onLinkActivated: link => Daemon.command("notifications", "open", [String(row.modelData.id), link])
             onClicked: {
                 if (row.modelData.default)
                     Daemon.command("notifications", "invoke", [String(row.modelData.id), "default"]);

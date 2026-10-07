@@ -15,7 +15,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::note::{Note, Urgency};
+use crate::note::{Note, REPLY, Urgency};
 
 /// Why a notification closed, as the spec numbers it for
 /// `NotificationClosed`.
@@ -37,6 +37,8 @@ pub enum Effect {
     Closed(u32, Reason),
     /// Tell the app the user picked this action.
     Invoked(u32, String),
+    /// Tell the app the user replied with this text.
+    Replied(u32, String),
     /// This notification's popup was taken over by the next `Popup` from the
     /// same app, which replaces it in place.
     Superseded(u32),
@@ -182,6 +184,24 @@ impl Center {
         }
         let resident = note.resident;
         let mut effects = vec![Effect::Invoked(id, key.to_owned())];
+        if !resident {
+            effects.extend(self.close(id, Reason::Dismissed));
+        }
+        Ok(effects)
+    }
+
+    /// The user replied to a notification that takes a reply: one with an
+    /// `inline-reply` action. It closes like after any action.
+    pub fn reply(&mut self, id: u32, text: &str) -> Result<Vec<Effect>, String> {
+        let note = self
+            .notes
+            .get(&id)
+            .ok_or_else(|| format!("no notification {id}"))?;
+        if note.action(REPLY).is_none() {
+            return Err(format!("notification {id} takes no reply"));
+        }
+        let resident = note.resident;
+        let mut effects = vec![Effect::Replied(id, text.to_owned())];
         if !resident {
             effects.extend(self.close(id, Reason::Dismissed));
         }
@@ -441,5 +461,41 @@ mod tests {
         );
         assert!(center.invoke(2, "reply").is_err());
         assert!(center.invoke(9, "default").is_err());
+    }
+
+    #[test]
+    fn replies_go_only_to_notifications_that_take_them() {
+        let mut center = Center::new(10, false);
+        let mut chat = note(1, Urgency::Normal);
+        chat.actions.push(Action {
+            key: REPLY.into(),
+            label: "Reply".into(),
+        });
+        center.notify(chat.clone());
+        assert_eq!(
+            center.reply(1, "on my way").unwrap(),
+            [
+                Effect::Replied(1, "on my way".into()),
+                Effect::Withdraw(1),
+                Effect::Closed(1, Reason::Dismissed)
+            ]
+        );
+
+        // From the history too, and a resident one stays.
+        center.set_dnd(true);
+        center.notify(Note {
+            id: 2,
+            resident: true,
+            ..chat
+        });
+        assert_eq!(
+            center.reply(2, "ok").unwrap(),
+            [Effect::Replied(2, "ok".into())]
+        );
+        assert_eq!(history(&center), [2]);
+
+        center.notify(note(3, Urgency::Normal));
+        assert!(center.reply(3, "hi").is_err());
+        assert!(center.reply(9, "hi").is_err());
     }
 }

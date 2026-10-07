@@ -11,6 +11,9 @@ Rectangle {
     property string image: ""
     property string title: ""
     property string subtitle: ""
+    // Text.StyledText for a subtitle with markup; its links emit
+    // `linkActivated` instead of `clicked`.
+    property int subtitleFormat: Text.PlainText
     property bool selected: false
     property bool flat: false
     property bool marker: false
@@ -19,6 +22,7 @@ Rectangle {
     property alias trailing: trailingSlot.data
     readonly property bool hovered: area.containsMouse
     signal clicked
+    signal linkActivated(string link)
 
     implicitWidth: 360
     implicitHeight: 56
@@ -100,8 +104,10 @@ Rectangle {
             visible: text !== ""
             text: root.subtitle
             elide: Text.ElideRight
-            textFormat: Text.PlainText
+            textFormat: root.subtitleFormat
             color: Theme.muted
+            linkColor: Theme.accent
+            onLinkActivated: link => root.linkActivated(link)
             font.pixelSize: Theme.textLabel
             font.family: Theme.fontFamily
         }

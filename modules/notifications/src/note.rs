@@ -25,6 +25,10 @@ impl Urgency {
     }
 }
 
+/// The action that asks for a reply instead of a button: its label goes on
+/// the Reply button, and the text typed goes back in `NotificationReplied`.
+pub const REPLY: &str = "inline-reply";
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Action {
     pub key: String,

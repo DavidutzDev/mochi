@@ -44,7 +44,7 @@ Text sizes: `textCaption`, `textLabel`, `textBody`, `textSubtitle`, `textTitle`,
 | `Switch` | on or off | `checked`, `toggled(checked)` |
 | `Segmented` | one choice out of a few | `options` (`[{value, label, icon}]`), `current`, `picked(value)` |
 | `Tile` | a control-center tile, vertical for actions, horizontal for toggles | `icon`, `title`, `subtitle`, `checked`, `tone`, `vertical`, `clicked()` |
-| `ListRow` | a row with something at the start and controls at the end | `icon` or `image` or `leading`, `title`, `subtitle`, `trailing`, `selected`, `flat`, `marker`, `clicked()` |
+| `ListRow` | a row with something at the start and controls at the end | `icon` or `image` or `leading`, `title`, `subtitle` (`subtitleFormat: Text.StyledText` for markup, with `linkActivated(link)`), `trailing`, `selected`, `flat`, `marker`, `clicked()` |
 | `Badge` | a count in an accent circle | `count` |
 | `SectionLabel` | the label above a group of controls | `text` |
 

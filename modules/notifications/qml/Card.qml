@@ -60,10 +60,12 @@ Item {
                     Text {
                         width: parent.width
                         visible: text !== ""
-                        text: (entry.modelData.body ?? "").split("\n")[0]
+                        text: entry.modelData.line ?? ""
                         elide: Text.ElideRight
-                        textFormat: Text.PlainText
+                        textFormat: Text.StyledText
                         color: Theme.muted
+                        linkColor: Theme.accent
+                        onLinkActivated: link => Daemon.command("notifications", "open", [String(entry.modelData.id), link])
                         font.pixelSize: Theme.textLabel
                         font.family: Theme.fontFamily
                     }

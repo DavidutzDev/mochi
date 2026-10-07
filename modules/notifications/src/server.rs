@@ -39,7 +39,15 @@ struct Server {
 #[interface(name = "org.freedesktop.Notifications")]
 impl Server {
     fn get_capabilities(&self) -> Vec<&str> {
-        vec!["actions", "body", "icon-static", "persistence"]
+        vec![
+            "actions",
+            "body",
+            "body-hyperlinks",
+            "body-markup",
+            "icon-static",
+            "inline-reply",
+            "persistence",
+        ]
     }
 
     // The spec fixes these arguments.
@@ -97,6 +105,15 @@ impl Server {
         id: u32,
         action_key: &str,
     ) -> zbus::Result<()>;
+
+    /// Not in the spec: KDE added it with the `inline-reply` capability,
+    /// and apps that send an `inline-reply` action listen for it.
+    #[zbus(signal)]
+    async fn notification_replied(
+        emitter: &SignalEmitter<'_>,
+        id: u32,
+        text: &str,
+    ) -> zbus::Result<()>;
 }
 
 /// Serves the interface and asks for the name, queueing behind another
@@ -153,4 +170,9 @@ pub async fn closed(connection: &Connection, id: u32, reason: Reason) -> zbus::R
 pub async fn invoked(connection: &Connection, id: u32, action: &str) -> zbus::Result<()> {
     let emitter = SignalEmitter::new(connection, PATH)?;
     Server::action_invoked(&emitter, id, action).await
+}
+
+pub async fn replied(connection: &Connection, id: u32, text: &str) -> zbus::Result<()> {
+    let emitter = SignalEmitter::new(connection, PATH)?;
+    Server::notification_replied(&emitter, id, text).await
 }
