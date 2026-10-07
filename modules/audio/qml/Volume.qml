@@ -88,7 +88,6 @@ Item {
         Symbol {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
-            anchors.margins: 2
             visible: root.appIcon !== "" && root.muted
             name: "volume-muted"
             size: 14
@@ -100,11 +99,11 @@ Item {
         id: heading
 
         anchors.left: mute.right
-        anchors.leftMargin: 10
+        anchors.leftMargin: Theme.spaceSmall
         anchors.right: routeButton.visible ? routeButton.left : parent.right
         anchors.rightMargin: routeButton.visible ? 4 : 0
         anchors.top: parent.top
-        anchors.topMargin: 4
+        anchors.topMargin: Theme.spaceTiny
         height: 20
 
         Text {
@@ -118,14 +117,14 @@ Item {
             color: Theme.foreground
             font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
+            font.weight: Theme.weightTitle
         }
 
         Symbol {
             id: chevron
 
             anchors.left: name.right
-            anchors.leftMargin: 4
+            anchors.leftMargin: Theme.spaceTiny
             anchors.verticalCenter: parent.verticalCenter
             visible: root.choosable
             name: "chevron"
@@ -136,7 +135,7 @@ Item {
 
         Text {
             anchors.left: root.choosable ? chevron.right : name.right
-            anchors.leftMargin: 8
+            anchors.leftMargin: Theme.spaceSmall
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             visible: root.subtitle !== ""
@@ -144,7 +143,7 @@ Item {
             elide: Text.ElideRight
             textFormat: Text.PlainText
             color: Theme.muted
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
         }
 
@@ -173,9 +172,9 @@ Item {
 
         anchors.left: heading.left
         anchors.right: percent.left
-        anchors.rightMargin: 10
+        anchors.rightMargin: Theme.spaceSmall
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 4
+        anchors.bottomMargin: Theme.spaceTiny
         thickness: 6
         // Above 100%, louder than the device's normal level, in the accent
         // color, as in the OSD.
@@ -209,17 +208,29 @@ Item {
         }
     }
 
-    Text {
+    // As wide as "100%", so the slider keeps its length.
+    Item {
         id: percent
 
         anchors.right: parent.right
         anchors.verticalCenter: slider.verticalCenter
-        width: 38
-        horizontalAlignment: Text.AlignRight
-        text: `${slider.shownPercent}%`
-        color: Theme.muted
-        font.pixelSize: Theme.textLabel
-        font.family: Theme.fontFamily
-        font.features: { "tnum": 1 }
+        width: widest.advanceWidth
+        height: number.height
+
+        RollingText {
+            id: number
+
+            anchors.right: parent.right
+            text: `${slider.shownPercent}%`
+            color: Theme.muted
+            pixelSize: Theme.textCaption
+        }
+
+        TextMetrics {
+            id: widest
+
+            font: number.font
+            text: "100%"
+        }
     }
 }

@@ -82,8 +82,8 @@ impl Module for Network {
         vec![
             ContributionSpec::new("hub", "card", "status", "Card", "Network")
                 .icon("wifi")
-                .order(15)
-                .options(json!({ "span": 2 })),
+                .order(1)
+                .options(json!({ "span": 2, "rows": 1 })),
             ContributionSpec::new("hub", "page", "page", "Page", "Network")
                 .icon("wifi")
                 .order(15),

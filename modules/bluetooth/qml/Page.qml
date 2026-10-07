@@ -19,7 +19,7 @@ Item {
         visible: !root.available
         text: "No Bluetooth adapter, or BlueZ isn't running"
         color: Theme.muted
-        font.pixelSize: Theme.textSubtitle
+        font.pixelSize: Theme.textBody
         font.family: Theme.fontFamily
     }
 
@@ -28,35 +28,13 @@ Item {
 
         visible: root.available
         width: parent.width
-        spacing: 8
+        spacing: Theme.spaceSmall
 
-        Item {
+        PanelHeader {
             width: parent.width
-            height: 34
-
-            Symbol {
-                id: symbol
-
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                name: "bluetooth"
-                size: 18
-                color: root.powered ? Theme.accent : Theme.muted
-            }
-
-            Text {
-                anchors.left: symbol.right
-                anchors.leftMargin: 10
-                anchors.verticalCenter: parent.verticalCenter
-                text: root.powered ? "Bluetooth is on" : "Bluetooth is off"
-                color: Theme.foreground
-                font.pixelSize: Theme.textSubtitle
-                font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
-            }
+            title: root.powered ? "Bluetooth is on" : "Bluetooth is off"
 
             Switch {
-                anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 checked: root.powered
                 onToggled: Daemon.command("bluetooth", "power", ["toggle"])

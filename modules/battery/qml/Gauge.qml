@@ -45,8 +45,8 @@ Item {
     Rectangle {
         id: nub
 
-        anchors.left: body.right
-        anchors.leftMargin: 1
+        // A pixel apart from the body.
+        x: body.width + 1
         anchors.verticalCenter: parent.verticalCenter
         width: 2
         height: parent.height * 0.4

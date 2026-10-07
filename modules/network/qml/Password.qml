@@ -7,6 +7,8 @@ Item {
 
     property var payload: ({})
     readonly property string ssid: payload.ssid ?? ""
+    // Sent, until the island moves on.
+    property bool joining: false
 
     implicitWidth: 400
     implicitHeight: column.implicitHeight + Theme.padding * 2
@@ -14,8 +16,15 @@ Item {
     Component.onCompleted: Qt.callLater(() => input.forceActiveFocus())
 
     function join(): void {
-        if (input.text.length > 0)
-            Daemon.command("network", "password", [root.ssid, input.text]);
+        if (input.text.length === 0)
+            return;
+        Daemon.command("network", "password", [root.ssid, input.text]);
+        root.joining = true;
+    }
+
+    EdgeLight {
+        radius: Theme.radiusSurface
+        working: root.joining
     }
 
     Column {
@@ -24,25 +33,11 @@ Item {
         x: Theme.padding
         y: Theme.padding
         width: root.width - Theme.padding * 2
-        spacing: 14
+        spacing: Theme.spaceMedium
 
-        Row {
-            spacing: 10
-
-            Symbol {
-                anchors.verticalCenter: parent.verticalCenter
-                name: "lock"
-                size: 16
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: `Join ${root.ssid}`
-                color: Theme.foreground
-                font.pixelSize: Theme.textSubtitle
-                font.family: Theme.fontFamily
-                font.weight: Font.DemiBold
-            }
+        PanelHeader {
+            width: parent.width
+            title: `Join ${root.ssid}`
         }
 
         Rectangle {
@@ -55,9 +50,9 @@ Item {
                 id: input
 
                 anchors.left: parent.left
-                anchors.leftMargin: 16
+                anchors.leftMargin: Theme.spaceLarge
                 anchors.right: reveal.left
-                anchors.rightMargin: 8
+                anchors.rightMargin: Theme.spaceSmall
                 anchors.verticalCenter: parent.verticalCenter
                 echoMode: reveal.shown ? TextInput.Normal : TextInput.Password
                 color: Theme.foreground
@@ -85,7 +80,7 @@ Item {
                 property bool shown: false
 
                 anchors.right: parent.right
-                anchors.rightMargin: 5
+                anchors.rightMargin: Theme.spaceTiny
                 anchors.verticalCenter: parent.verticalCenter
                 tone: "ghost"
                 text: shown ? "Hide" : "Show"
@@ -95,7 +90,7 @@ Item {
 
         Row {
             anchors.right: parent.right
-            spacing: 8
+            spacing: Theme.spaceSmall
 
             Button {
                 text: "Cancel"

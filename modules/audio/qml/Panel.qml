@@ -14,6 +14,10 @@ Item {
     focus: true
     Keys.onEscapePressed: Daemon.event("dismiss")
 
+    EdgeLight {
+        radius: Theme.radiusSurface
+    }
+
     Mixer {
         id: mixer
 

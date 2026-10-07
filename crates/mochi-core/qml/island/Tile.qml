@@ -68,9 +68,12 @@ Rectangle {
         visible: !root.vertical
         spacing: Theme.spaceMedium
 
+        // Smaller in a tile shorter than its usual 64 pixels, like a hub
+        // card's one row.
         Rectangle {
-            width: 40
-            height: 40
+            anchors.verticalCenter: parent.verticalCenter
+            width: Math.min(40, root.height - Theme.spaceSmall)
+            height: width
             radius: height / 2
             color: root.checked ? Qt.alpha(Theme.onAccent, 0.15) : Theme.raised
 

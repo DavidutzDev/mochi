@@ -16,23 +16,21 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 3
+        spacing: Theme.spaceTiny
 
         Symbol {
             anchors.verticalCenter: parent.verticalCenter
-            name: "bluetooth"
+            name: "bluetooth_connected"
             size: 15
             color: Theme.accent
         }
 
-        Text {
+        RollingText {
             anchors.verticalCenter: parent.verticalCenter
             visible: root.battery !== null
             text: `${root.battery}%`
             color: root.battery !== null && root.battery <= 15 ? Theme.danger : Theme.foreground
-            font.pixelSize: Theme.textCaption
-            font.family: Theme.fontFamily
-            font.features: { "tnum": 1 }
+            pixelSize: Theme.textCaption
         }
     }
 }

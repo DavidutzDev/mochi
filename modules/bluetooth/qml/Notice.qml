@@ -14,7 +14,7 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 10
+        spacing: Theme.spaceSmall
 
         Symbol {
             anchors.verticalCenter: parent.verticalCenter
@@ -29,7 +29,7 @@ Item {
             color: Theme.foreground
             font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
+            font.weight: Theme.weightTitle
         }
     }
 }
