@@ -28,9 +28,25 @@ Leave it out for a plugin of views only, like one that only replaces a builtin v
 |---|---|---|
 | `exec` | required | The program mochid starts, relative to the plugin's directory. |
 | `args` | | Its arguments. |
-| `build` | | A shell command that builds `exec` from source. `mochi plugins install` runs it with `sh` in the plugin's directory for `git:` and `path:` sources, with `MOCHI_PLUGIN_DIR` set; never for `git-release:`, nor when the plugin has a `flake.nix` and Nix is installed, which builds it with `nix build` instead. |
+| `build` | | A shell command that builds `exec` from source. `mochi plugins install` runs it with `sh` in the plugin's directory for `git:` and `path:` sources, with `MOCHI_PLUGIN_DIR` set; never for `git-release:`, nor when Nix builds the plugin instead, see [Building with Nix](#building-with-nix). |
+| `needs` | | Programs the backend runs, by command name, like `["python3", "ffmpeg"]`. When Nix builds the plugin, they go on the backend's PATH; otherwise `install` lists the missing ones and mochid warns about them when the plugin starts. |
+| `kind` | | How Nix builds the backend, when the plugin's files don't tell: `rust`, `node`, `python`, `go` or `files`. See below. |
 
 The backend starts in the plugin's directory, with the socket to mochid as file descriptor 3. See [the plugin protocol](protocol.md#plugin-backends).
+
+### Building with Nix
+
+Mochi can build a plugin with Nix, so people on NixOS, or without the plugin's build tools, can use it: home-manager's `programs.mochi.plugins.<id>.src`, and `mochi plugins install` when Nix is installed but the build's tools or the `needs` aren't. You write no Nix and no hashes: the build follows the lock file the plugin already has, found from its files, or from `kind`:
+
+| `kind` | Found from | What Nix does |
+|---|---|---|
+| `rust` | `Cargo.lock` | Builds it with cargo, git dependencies included. |
+| `node` | `package-lock.json` | Installs the dependencies, and runs `npm run build` when `package.json` has one. |
+| `go` | `go.mod` | Builds it with the dependencies in `vendor/`. Without `vendor/` Nix would need a hash, so commit it (`go mod vendor`) or publish releases. |
+| `python` | `pyproject.toml` or `requirements.txt` | Runs the backend with a Python that has its dependencies, from nixpkgs' Python packages. |
+| `files` | `exec` already there | Uses the plugin as it is: a script, or a release archive with a built binary, which gets patched to find NixOS's libraries. |
+
+In every case the backend ends up at `exec`, with the `needs` on its PATH and `#!/usr/bin/env` lines pointing at them. For compiled languages without a lock file Nix can read, like Java, publish releases: a release archive works as `src` too.
 
 ## `[release]`
 

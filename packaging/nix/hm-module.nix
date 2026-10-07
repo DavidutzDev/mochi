@@ -38,7 +38,7 @@ let
       toml.generate "widgets.toml" { widget = cfg.widgets; };
 
   # Plugins Nix builds go in the store, and plugins.toml points at them.
-  buildPlugin = import ./build-plugin.nix { inherit (pkgs) lib rustPlatform pkg-config; };
+  buildPlugin = import ./build-plugin.nix { inherit pkgs; };
   pluginSource =
     plugin:
     if builtins.isString plugin then
@@ -48,7 +48,7 @@ let
     else if plugin.package != null then
       "path:${plugin.package}"
     else
-      "path:${buildPlugin { inherit (plugin) src buildInputs; }}";
+      "path:${buildPlugin { inherit (plugin) src buildInputs runtimeInputs; }}";
   pluginList.plugins = lib.mapAttrs (_: plugin: { source = pluginSource plugin; }) cfg.plugins;
 
   pluginType = lib.types.either lib.types.str (
@@ -66,9 +66,11 @@ let
           example = lib.literalExpression "inputs.mochi-pomodoro";
           description = ''
             The plugin's source tree, usually a flake input with
-            `flake = false`. Nix builds it during the switch, without cargo on
-            the machine and without `mochi plugins install`. Rust plugins
-            with a Cargo.lock only.
+            `flake = false`, or its release archive. Nix builds it during the
+            switch, with no build tools on the machine and no
+            `mochi plugins install`: Rust, Node, Python and Go (with
+            vendor/) from their lock files, and scripts or release binaries
+            as they are.
           '';
         };
         package = lib.mkOption {
@@ -86,6 +88,15 @@ let
           default = [ ];
           example = lib.literalExpression "[ pkgs.alsa-lib ]";
           description = "Native libraries the backend links, for `src`.";
+        };
+        runtimeInputs = lib.mkOption {
+          type = lib.types.listOf lib.types.package;
+          default = [ ];
+          example = lib.literalExpression "[ pkgs.ffmpeg ]";
+          description = ''
+            Programs the backend runs, put on its PATH, for `src`. Most come
+            from the `needs` in the plugin's manifest already.
+          '';
         };
       };
     }

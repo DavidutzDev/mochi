@@ -523,7 +523,8 @@ A new module: the apps' tray icons.
 - [ ] Archive sources (`https://…/plugin.tar.gz` with a hash)
 - [ ] A plugin replacing a builtin module entirely
 - [x] Building plugins with Nix, for declarative setups: home-manager's `plugins.<id>.src` and `package`, `lib.buildPlugin`, and flakes in `mochi plugins install`
-- [ ] `lib.buildPlugin` for plugins in other languages than Rust
+- [x] `lib.buildPlugin` for plugins in other languages than Rust: Node, Python, Go with vendor/, scripts and release archives
+- [ ] Go plugins without vendor/, and Java, in `lib.buildPlugin`: both need a hash Nix can't get from their lock files
 - [ ] Static musl binaries in `examples/plugins/release.yml`, so `git-release:` plugins run on NixOS without nix-ld
 - [x] Release workflow template for plugin repositories: `examples/plugins/release.yml`
 - [x] Settings checks for plugins, from their `settings.toml`

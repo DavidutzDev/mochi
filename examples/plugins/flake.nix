@@ -1,12 +1,14 @@
-# A flake for a Rust plugin's repository: copy it next to
-# mochi-plugin.toml. With it, people install the plugin without cargo:
+# A flake for a plugin's repository, for a build Mochi can't guess by
+# itself, like extra native libraries: copy it next to mochi-plugin.toml.
+# Without one, Mochi builds Rust, Node, Python and Go plugins with Nix from
+# their lock files anyway. With it:
 #
 # - `mochi plugins install` builds it with `nix build` when Nix is
 #   installed, instead of the manifest's `build` command.
 # - home-manager can take the package as
 #   `programs.mochi.plugins.<id>.package = inputs.<plugin>.packages.${pkgs.system}.default;`
 #
-# `mochi.lib.buildPlugin` reads the crates from Cargo.lock, so there's no
+# `mochi.lib.buildPlugin` follows the plugin's lock file, so there's no
 # hash to update, and puts the backend at the manifest's `exec`.
 {
   description = "A Mochi plugin";

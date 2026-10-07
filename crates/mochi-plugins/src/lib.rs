@@ -108,6 +108,15 @@ pub enum ListError {
     },
 }
 
+/// Whether `program` is on the PATH, or is a path that exists.
+pub fn on_path(program: &str) -> bool {
+    if program.contains('/') {
+        return Path::new(program).is_file();
+    }
+    std::env::var_os("PATH")
+        .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(program).is_file()))
+}
+
 /// plugins.toml.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PluginList {
