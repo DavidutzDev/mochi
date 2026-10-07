@@ -13,3 +13,7 @@
 # only by you. Their buttons don't come back, since the apps that sent
 # them can't answer anymore.
 # save_history = true
+# Read the Markdown some apps, like Discord, put in bodies: **bold**,
+# *italic*, __underline__, ~~strike~~, `code`, [links](https://…) and
+# ||spoilers||. Plain https:// links become links too.
+# markdown = true

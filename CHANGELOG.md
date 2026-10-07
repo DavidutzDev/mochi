@@ -28,6 +28,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- Discord's notifications showed their Markdown as typed, like `**TEST**`. The notifications module reads it now: `**bold**`, `*italic*`, `__underline__`, `~~strike~~`, `` `code` ``, `[text](url)` links, and `||spoilers||`, shown as "spoiler". Plain `https://` links in any app's notifications become links, and `<s>`, `<strong>`, `<em>`, `<del>` and `<strike>` are kept. `markdown = false` in `[module.notifications]` turns it off.
 - A plugin's override that fails to load gives way to the builtin view, on the island and in bubbles, and `mochid`'s log has the error.
 - A widget in the middle or far third of a screen that isn't a whole number of cells no longer jumps a few pixels when you let go of it.
 
