@@ -4,8 +4,8 @@ import "ColorMath.js" as ColorMath
 
 // The hub page: an interactive color chooser matching the reference design,
 // side-by-side with color history. Supports picking from screen, choosing via
-// 2D Sat/Val gradient and hue slider, direct hex entry, copying in multiple
-// formats (HEX, RGB, CMYK, HSV, HSL), and managing saved colors.
+// 2D Sat/Val gradient and hue slider, setting custom hex/rgb/hsl/named colors,
+// copying in multiple formats (HEX, RGB, CMYK, HSV, HSL), and managing saved colors.
 Item {
     id: root
 
@@ -14,7 +14,7 @@ Item {
     property string viewMode: "split" // "split" | "chooser" | "history"
 
     // Active color in HSV (normalized 0.0 .. 1.0)
-    // Matches the reference screenshot (#fb542b) exactly
+    // Matches the reference coral/orange (#fb542b)
     property real hue: 0.03285
     property real saturation: 0.8287
     property real value: 0.9843
@@ -31,9 +31,13 @@ Item {
     readonly property string hsvText: ColorMath.formatHsv(hue, saturation, value)
     readonly property string hslText: ColorMath.formatHsl(currentRgb.r, currentRgb.g, currentRgb.b)
 
+    // Half width for split view panels
+    readonly property real halfWidth: Math.floor((contentArea.width - splitRow.spacing) / 2)
+
     // Feedback key for copied checkmark
     property string copiedKey: ""
     property string historySearch: ""
+    property string inputFeedback: ""
 
     // Filtered history
     readonly property var filteredColors: {
@@ -53,7 +57,10 @@ Item {
         id: forget
 
         interval: 1600
-        onTriggered: root.copiedKey = ""
+        onTriggered: {
+            root.copiedKey = "";
+            root.inputFeedback = "";
+        }
     }
 
     function copyText(text: string, key: string): void {
@@ -78,23 +85,39 @@ Item {
         }
     }
 
+    function applyCustomColor(input: string): bool {
+        const rgb = ColorMath.parseColorString(input);
+        if (rgb) {
+            const hsv = ColorMath.rgbToHsv(rgb.r, rgb.g, rgb.b);
+            root.hue = hsv.h;
+            root.saturation = hsv.s;
+            root.value = hsv.v;
+            root.inputFeedback = "ok";
+            forget.restart();
+            return true;
+        }
+        root.inputFeedback = "error";
+        forget.restart();
+        return false;
+    }
+
     // Top navigation toolbar
     Item {
         id: toolbar
 
         width: parent.width
-        height: 34
+        height: 38
 
-        // View mode switch
+        // Prettier, well-spaced view switcher
         Segmented {
             id: viewSwitcher
 
             anchors.left: parent.left
             anchors.verticalCenter: parent.verticalCenter
-            height: 34
-            implicitWidth: 320
+            height: 38
+            width: 360
             options: [
-                { "value": "split", "label": "Split View", "icon": "grid" },
+                { "value": "split", "label": "Split", "icon": "grid" },
                 { "value": "chooser", "label": "Chooser", "icon": "palette" },
                 { "value": "history", "label": `History (${root.colors.length})`, "icon": "clock" }
             ]
@@ -133,13 +156,13 @@ Item {
         width: parent.width
         implicitHeight: {
             if (root.viewMode === "split")
-                return 390;
+                return 400;
             if (root.viewMode === "chooser")
                 return chooserComponent.implicitHeight;
             return Math.max(200, historyFullComponent.implicitHeight);
         }
 
-        // 1. SPLIT VIEW: Side-by-side Chooser & History
+        // 1. SPLIT VIEW: Side-by-side Chooser & History (each taking full half)
         Row {
             id: splitRow
 
@@ -147,21 +170,21 @@ Item {
             anchors.fill: parent
             spacing: 14
 
-            // Left panel: Color Chooser
+            // Left panel: Color Chooser taking the full half
             Item {
-                width: 440
+                width: root.halfWidth
                 height: parent.height
 
                 Column {
                     width: parent.width
-                    spacing: 12
+                    spacing: 10
 
-                    // Top preview swatch + 2D SV gradient
+                    // Top preview swatch + 2D SV gradient (taller to fill vertical half)
                     Rectangle {
                         id: topBox
 
                         width: parent.width
-                        height: 160
+                        height: 180
                         radius: Theme.radiusLarge
                         color: Theme.surface
                         clip: true
@@ -238,7 +261,7 @@ Item {
                                 }
                             }
 
-                            // Thumb selector ring (clamped within visible area)
+                            // Thumb selector ring (clamped inside visible area)
                             Item {
                                 id: svThumb
 
@@ -359,12 +382,111 @@ Item {
                         }
                     }
 
+                    // "Set Color" Input Bar: lets user enter any hex, rgb, hsl, or named color
+                    Rectangle {
+                        id: colorInputBar
+
+                        width: parent.width
+                        height: 34
+                        radius: height / 2
+                        color: Theme.surface
+                        border.color: root.inputFeedback === "error" ? Theme.danger : (root.inputFeedback === "ok" ? Theme.success : Theme.border)
+                        border.width: root.inputFeedback !== "" ? 1.5 : 1
+
+                        Behavior on border.color {
+                            ColorAnimation { duration: Theme.fast }
+                        }
+
+                        Symbol {
+                            id: editIcon
+                            x: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            name: "edit"
+                            size: 13
+                            color: root.inputFeedback === "error" ? Theme.danger : (root.inputFeedback === "ok" ? Theme.success : Theme.muted)
+                        }
+
+                        TextInput {
+                            id: colorInputField
+
+                            anchors.left: editIcon.right
+                            anchors.leftMargin: 8
+                            anchors.right: applyBtn.left
+                            anchors.rightMargin: 6
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: Theme.foreground
+                            selectionColor: Theme.accent
+                            font.pixelSize: Theme.textBody
+                            font.family: Theme.fontFamily
+                            clip: true
+                            selectByMouse: true
+                            onAccepted: {
+                                if (text.trim() !== "")
+                                    root.applyCustomColor(text);
+                            }
+
+                            Text {
+                                visible: colorInputField.text === "" && !colorInputField.activeFocus
+                                text: "Set color (e.g. #fb542b, 251, 84, 43, coral)..."
+                                color: Theme.muted
+                                font.pixelSize: Theme.textCaption
+                                font.family: Theme.fontFamily
+                            }
+                        }
+
+                        // Apply button inside input pill
+                        Rectangle {
+                            id: applyBtn
+
+                            anchors.right: parent.right
+                            anchors.rightMargin: 4
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 52
+                            height: 26
+                            radius: 13
+                            color: applyMouse.containsMouse ? Theme.highlight : Theme.raised
+
+                            Row {
+                                anchors.centerIn: parent
+                                spacing: 3
+
+                                Symbol {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    name: root.inputFeedback === "ok" ? "check" : "check"
+                                    size: 11
+                                    color: root.inputFeedback === "ok" ? Theme.success : Theme.foreground
+                                }
+
+                                Text {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "Set"
+                                    color: Theme.foreground
+                                    font.pixelSize: Theme.textCaption
+                                    font.family: Theme.fontFamily
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+
+                            MouseArea {
+                                id: applyMouse
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (colorInputField.text.trim() !== "")
+                                        root.applyCustomColor(colorInputField.text);
+                                }
+                            }
+                        }
+                    }
+
                     // Formats Grid: Row 1 (HEX, RGB, CMYK)
+                    // Clean uniform appearance without copy button; copies on click!
                     Row {
                         width: parent.width
                         spacing: 8
 
-                        // HEX Box (editable or click to copy)
+                        // HEX Box: copies on press like the others! Double-click loads to input.
                         Rectangle {
                             width: Math.floor((parent.width - 16) / 3)
                             height: 52
@@ -390,15 +512,12 @@ Item {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     spacing: 4
 
-                                    TextInput {
-                                        id: hexInput
+                                    Text {
                                         text: root.hexText
                                         color: Theme.foreground
                                         font.pixelSize: Theme.textBody
                                         font.family: Theme.fontFamily
                                         font.weight: Font.Medium
-                                        selectByMouse: true
-                                        onEditingFinished: root.selectColor(text)
                                     }
 
                                     Symbol {
@@ -411,25 +530,20 @@ Item {
                                 }
                             }
 
-                            IconButton {
-                                anchors.right: parent.right
-                                anchors.rightMargin: 4
-                                anchors.verticalCenter: parent.verticalCenter
-                                icon: root.copiedKey === "HEX" ? "check" : "copy"
-                                size: 11
-                                tone: "ghost"
-                                onClicked: root.copyText(root.hexText, "HEX")
-                            }
-
                             MouseArea {
                                 id: hexArea
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                acceptedButtons: Qt.NoButton
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.copyText(root.hexText, "HEX")
+                                onDoubleClicked: {
+                                    colorInputField.text = root.hexText;
+                                    colorInputField.forceActiveFocus();
+                                }
                             }
                         }
 
-                        // RGB Box
+                        // RGB Box: copies on press! Double-click loads to input.
                         Rectangle {
                             width: Math.floor((parent.width - 16) / 3)
                             height: 52
@@ -479,10 +593,14 @@ Item {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: root.copyText(root.rgbText, "RGB")
+                                onDoubleClicked: {
+                                    colorInputField.text = root.rgbText;
+                                    colorInputField.forceActiveFocus();
+                                }
                             }
                         }
 
-                        // CMYK Box
+                        // CMYK Box: copies on press!
                         Rectangle {
                             width: Math.floor((parent.width - 16) / 3)
                             height: 52
@@ -541,7 +659,7 @@ Item {
                         width: parent.width
                         spacing: 8
 
-                        // HSV Box
+                        // HSV Box: copies on press! Double-click loads to input.
                         Rectangle {
                             width: Math.floor((parent.width - 16) / 3)
                             height: 52
@@ -591,10 +709,14 @@ Item {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: root.copyText(root.hsvText, "HSV")
+                                onDoubleClicked: {
+                                    colorInputField.text = root.hsvText;
+                                    colorInputField.forceActiveFocus();
+                                }
                             }
                         }
 
-                        // HSL Box
+                        // HSL Box: copies on press! Double-click loads to input.
                         Rectangle {
                             width: Math.floor((parent.width - 16) / 3)
                             height: 52
@@ -644,6 +766,10 @@ Item {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: root.copyText(root.hslText, "HSL")
+                                onDoubleClicked: {
+                                    colorInputField.text = root.hslText;
+                                    colorInputField.forceActiveFocus();
+                                }
                             }
                         }
 
@@ -692,9 +818,9 @@ Item {
                 }
             }
 
-            // Right panel: Color History
+            // Right panel: Color History taking the other full half
             Item {
-                width: parent.width - 440 - splitRow.spacing
+                width: root.halfWidth
                 height: parent.height
 
                 Column {
@@ -704,7 +830,7 @@ Item {
                     // History search input
                     Rectangle {
                         width: parent.width
-                        height: 32
+                        height: 34
                         radius: height / 2
                         color: Theme.surface
                         border.color: Theme.border
@@ -755,10 +881,10 @@ Item {
                         font.family: Theme.fontFamily
                     }
 
-                    // Scrollable History ListView
+                    // Scrollable History ListView taking available height
                     ListView {
                         width: parent.width
-                        height: parent.height - 40
+                        height: parent.height - 42
                         clip: true
                         spacing: 6
                         model: root.filteredColors
@@ -865,12 +991,12 @@ Item {
                 id: chooserCol
 
                 width: parent.width
-                spacing: 16
+                spacing: 14
 
                 // Expansive Preview + 2D Gradient Box
                 Rectangle {
                     width: parent.width
-                    height: 220
+                    height: 210
                     radius: Theme.radiusLarge
                     color: Theme.surface
                     clip: true
@@ -1055,7 +1181,98 @@ Item {
                     }
                 }
 
-                // Format row with 5 formats + Action button
+                // "Set Color" Input Bar in full view
+                Rectangle {
+                    width: parent.width
+                    height: 38
+                    radius: height / 2
+                    color: Theme.surface
+                    border.color: root.inputFeedback === "error" ? Theme.danger : (root.inputFeedback === "ok" ? Theme.success : Theme.border)
+                    border.width: root.inputFeedback !== "" ? 1.5 : 1
+
+                    Symbol {
+                        id: fullEditIcon
+                        x: 12
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "edit"
+                        size: 14
+                        color: root.inputFeedback === "error" ? Theme.danger : (root.inputFeedback === "ok" ? Theme.success : Theme.muted)
+                    }
+
+                    TextInput {
+                        id: fullColorInputField
+
+                        anchors.left: fullEditIcon.right
+                        anchors.leftMargin: 10
+                        anchors.right: fullApplyBtn.left
+                        anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        color: Theme.foreground
+                        selectionColor: Theme.accent
+                        font.pixelSize: Theme.textBody
+                        font.family: Theme.fontFamily
+                        clip: true
+                        selectByMouse: true
+                        onAccepted: {
+                            if (text.trim() !== "")
+                                root.applyCustomColor(text);
+                        }
+
+                        Text {
+                            visible: fullColorInputField.text === "" && !fullColorInputField.activeFocus
+                            text: "Set color (e.g. #fb542b, 251, 84, 43, coral, hsl(12, 96%, 58%))..."
+                            color: Theme.muted
+                            font.pixelSize: Theme.textBody
+                            font.family: Theme.fontFamily
+                        }
+                    }
+
+                    Rectangle {
+                        id: fullApplyBtn
+
+                        anchors.right: parent.right
+                        anchors.rightMargin: 6
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 60
+                        height: 28
+                        radius: 14
+                        color: fullApplyMouse.containsMouse ? Theme.highlight : Theme.raised
+
+                        Row {
+                            anchors.centerIn: parent
+                            spacing: 4
+
+                            Symbol {
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: "check"
+                                size: 12
+                                color: root.inputFeedback === "ok" ? Theme.success : Theme.foreground
+                            }
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: "Set"
+                                color: Theme.foreground
+                                font.pixelSize: Theme.textBody
+                                font.family: Theme.fontFamily
+                                font.weight: Font.DemiBold
+                            }
+                        }
+
+                        MouseArea {
+                            id: fullApplyMouse
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                if (fullColorInputField.text.trim() !== "")
+                                    root.applyCustomColor(fullColorInputField.text);
+                            }
+                        }
+                    }
+                }
+
+                // Format row with 5 formats + Action button (copies on click!)
                 Row {
                     width: parent.width
                     spacing: 10
@@ -1120,6 +1337,10 @@ Item {
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: root.copyText(modelData.value, modelData.label)
+                                onDoubleClicked: {
+                                    fullColorInputField.text = modelData.value;
+                                    fullColorInputField.forceActiveFocus();
+                                }
                             }
                         }
                     }
