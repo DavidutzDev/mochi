@@ -18,7 +18,7 @@ Canvas {
         const radius = Math.min(width, height) / 2 - line;
         context.lineWidth = line;
         context.lineCap = "round";
-        context.strokeStyle = Qt.rgba(Theme.muted.r, Theme.muted.g, Theme.muted.b, 0.35);
+        context.strokeStyle = Qt.alpha(Theme.muted, 0.35);
         context.beginPath();
         context.arc(width / 2, height / 2, radius, 0, Math.PI * 2);
         context.stroke();

@@ -9,6 +9,9 @@ Item {
     id: root
 
     property var payload: null
+    // What the desktop gives a widget; this one has no settings.
+    property var settings: ({})
+    property string instance: ""
     readonly property bool playing: payload?.status === "playing"
     // Nothing playing: the card makes room for the others.
     readonly property bool hidden: payload === null

@@ -18,6 +18,6 @@ Item {
         color: Theme.foreground
         font.pixelSize: Theme.textBody
         font.family: Theme.fontFamily
-        font.weight: Font.DemiBold
+        font.weight: Theme.weightTitle
     }
 }

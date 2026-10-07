@@ -11,7 +11,7 @@ Item {
     Grid {
         anchors.centerIn: parent
         columns: 3
-        spacing: 12
+        spacing: Theme.spaceMedium
 
         Repeater {
             model: 9
@@ -21,7 +21,7 @@ Item {
 
                 width: 152
                 height: 152
-                radius: 18
+                radius: Theme.radiusSurface
                 color: Qt.hsla(index / 9, 0.6, 0.5, 1)
             }
         }

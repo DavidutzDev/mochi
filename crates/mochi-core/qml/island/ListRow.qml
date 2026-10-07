@@ -26,7 +26,7 @@ Rectangle {
 
     implicitWidth: 360
     implicitHeight: 56
-    radius: Theme.radiusMedium
+    radius: Theme.radiusField
     color: selected ? Theme.raised : hovered ? (flat ? Theme.surface : Theme.raised) : flat ? "transparent" : Theme.surface
 
     Behavior on color {
@@ -94,7 +94,7 @@ Rectangle {
             elide: Text.ElideRight
             textFormat: Text.PlainText
             color: Theme.foreground
-            font.pixelSize: Theme.textSubtitle
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
             font.weight: Font.DemiBold
         }
@@ -108,7 +108,7 @@ Rectangle {
             color: Theme.muted
             linkColor: Theme.accent
             onLinkActivated: link => root.linkActivated(link)
-            font.pixelSize: Theme.textLabel
+            font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
         }
     }

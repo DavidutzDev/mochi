@@ -54,7 +54,7 @@ A plugin with a backend adds `[backend]` with the program and the command that b
 
 Views are QML files in the views directory, loaded the same way as a builtin module's: see [Writing views](views.md). An activity or bubble names a view by its file name without `.qml`, and a view gets the `payload` property. `import qs.island` gives the theme, `Daemon` and the controls. A view reads its plugin's state with `Daemon.state("<id>")` and runs its actions with `Daemon.command("<id>", "<action>", [args])`.
 
-A hub card or page gets the plugin's published state as its `payload`, and a card can set `hidden: true` to step aside.
+A hub card or page gets the plugin's published state as its `payload`, and a card can set `hidden: true` to step aside. The hub draws the card's frame and title, so the view only draws what goes inside, filling the width it's given.
 
 ### Replacing builtin views
 

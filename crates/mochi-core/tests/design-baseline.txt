@@ -1,18 +1,2 @@
 # Views that set raw sizes or colors, from before Theme's scales: `<count> <path>`.
 # Counts may only go down; see tests/design.rs.
-2 modules/demo/qml/Big.qml
-1 modules/demo/qml/Bubble.qml
-2 modules/demo/qml/BubbleWide.qml
-4 modules/demo/qml/Card.qml
-6 modules/demo/qml/CardExpanded.qml
-4 modules/demo/qml/Controls.qml
-3 modules/demo/qml/Small.qml
-3 modules/demo/qml/Volume.qml
-5 modules/demo/qml/Wide.qml
-7 modules/notes/qml/Todo.qml
-1 modules/widgets/qml/Calendar.qml
-1 modules/widgets/qml/Clock.qml
-11 modules/widgets/qml/Drawer.qml
-1 modules/widgets/qml/Editing.qml
-4 modules/widgets/qml/Frame.qml
-4 modules/widgets/qml/Settings.qml

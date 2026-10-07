@@ -6,13 +6,13 @@ import qs.island
 Row {
     property var payload: ({})
 
-    spacing: 6
+    spacing: Theme.spaceSmall
 
     Rectangle {
         anchors.verticalCenter: parent.verticalCenter
         width: 8
         height: 8
-        radius: 4
+        radius: height / 2
         color: Theme.accent
     }
 

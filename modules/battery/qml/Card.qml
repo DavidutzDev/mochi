@@ -8,6 +8,9 @@ Item {
     id: root
 
     property var payload: null
+    // What the desktop gives a widget; this one has no settings.
+    property var settings: ({})
+    property string instance: ""
     readonly property bool present: payload?.present ?? false
     // A desktop: nothing worth a card.
     readonly property bool hidden: !present

@@ -14,23 +14,30 @@ Item {
 
         anchors.fill: parent
         anchors.margins: Theme.padding
-        spacing: 8
+        spacing: Theme.spaceSmall
 
         Row {
-            spacing: 8
+            spacing: Theme.spaceSmall
 
             Rectangle {
                 width: 20
                 height: 20
-                radius: 5
-                color: "#0a84ff"
+                radius: Theme.radiusControl
+                color: Theme.accent
+
+                Symbol {
+                    anchors.centerIn: parent
+                    name: "chat"
+                    size: 14
+                    color: Theme.onAccent
+                }
             }
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: "Messages · click to expand"
                 color: Theme.muted
-                font.pixelSize: Theme.textLabel
+                font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
             }
         }

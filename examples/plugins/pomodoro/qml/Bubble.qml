@@ -18,7 +18,7 @@ Item {
         id: row
 
         anchors.centerIn: parent
-        spacing: 5
+        spacing: Theme.spaceTiny
 
         Ring {
             anchors.verticalCenter: parent.verticalCenter
@@ -29,14 +29,12 @@ Item {
             progress: (root.payload.left ?? 0) / Math.max(1, root.payload.total ?? 1)
         }
 
-        Text {
+        RollingText {
             anchors.verticalCenter: parent.verticalCenter
             text: Clock.format(root.payload.left)
             color: root.tint
-            font.pixelSize: Theme.textCaption
-            font.family: Theme.fontFamily
-            font.weight: Font.DemiBold
-            font.features: { "tnum": 1 }
+            pixelSize: Theme.textCaption
+            weight: Theme.weightTitle
         }
     }
 }

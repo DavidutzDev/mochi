@@ -116,7 +116,7 @@ impl Module for BatteryModule {
             // The same card on the desktop; it steps aside without a battery.
             ContributionSpec::new("widgets", "widget", "level", "Card", "Battery")
                 .icon("bolt")
-                .options(json!({ "size": [16, 6], "min": [12, 5], "max": [30, 10] })),
+                .options(json!({ "size": [18, 6], "min": [12, 5], "max": [30, 10] })),
         ]
     }
 
