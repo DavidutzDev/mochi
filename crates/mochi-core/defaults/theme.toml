@@ -72,16 +72,16 @@
 # move_ms = 350
 
 [text]
-# A font family name; empty keeps the system font.
+# A font family name; empty uses Inter, which Mochi's packages bring, or
+# the system font without it.
 # family = ""
 # The font of the clocks, on the idle island and in the hub; empty keeps
 # `family`.
 # display_family = ""
-# Sizes in pixels, from fine print to a big clock.
+# The type scale, in pixels: labels and fine print, everything else, titles,
+# page titles, and big numbers like a clock.
 # caption = 11
-# label = 12
 # body = 13
-# subtitle = 14
-# title = 16
+# title = 15
 # headline = 20
 # display = 42

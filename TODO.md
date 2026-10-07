@@ -557,12 +557,13 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 
 ### Frontend
 
-- [ ] A design system in `Theme`: a type scale (three or four sizes), a spacing scale, and radii for surfaces and fields, one border opacity, and every view moved onto them
-- [ ] A check in `nix flake check` that rejects raw pixel sizes and colors in module QML, so views can't drift from the scale again
+- [x] A design system in `Theme`: a type scale (four sizes and display), a spacing scale, radii for surfaces, fields and controls, heights, Inter and Material Symbols; the core controls and the hub use it
+- [ ] Every module's views moved onto the scale, emptying `crates/mochi-core/tests/design-baseline.txt`
+- [x] A check in `nix flake check` that rejects raw pixel sizes and colors in module QML, so views can't drift from the scale again (`crates/mochi-core/tests/design.rs`)
 - [ ] The hub's Home as a control center: tiles of one height with their label inside, slider tiles (volume, brightness) with a `›` to their page, and an icon-only footer instead of the labelled tab
-- [ ] The hub sized to its content, its outline animating between pages instead of one fixed size for all of them
+- [x] The hub sized to its content, its outline animating between pages instead of one fixed size for all of them
 - [ ] An editable control center: choose the tiles and drag them into place, reusing the widgets editor's drag and snap
-- [ ] Shared components every module uses: a panel header (back, title, actions), fading edges where a list scrolls, rolling digits for the clock and percentages, a light along a panel's top edge that follows the pointer and pulses while something works, switch rows and slider rows
+- [x] Shared components (now to be used by every module): a panel header (back, title, actions), fading edges where a list scrolls, rolling digits for the clock and percentages, a light along a panel's top edge that follows the pointer and pulses while something works, switch rows and slider rows
 - [ ] Theme presets: named palettes in a picker with preview cards, applied live
 - [ ] A light mode for every preset (replaces "Light variant of the palette" under Design system)
 - [ ] Colors from the wallpaper, with contrast corrected without moving the hue (replaces "Colors generated from the wallpaper" under Design system)

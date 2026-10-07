@@ -83,9 +83,9 @@ Rectangle {
 
     Column {
         anchors.left: leadingSlot.right
-        anchors.leftMargin: 12
+        anchors.leftMargin: Theme.spaceMedium
         anchors.right: trailingSlot.left
-        anchors.rightMargin: 12
+        anchors.rightMargin: Theme.spaceMedium
         anchors.verticalCenter: parent.verticalCenter
 
         Text {
@@ -117,8 +117,8 @@ Rectangle {
         id: trailingSlot
 
         anchors.right: parent.right
-        anchors.rightMargin: 12
+        anchors.rightMargin: Theme.spaceMedium
         anchors.verticalCenter: parent.verticalCenter
-        spacing: 6
+        spacing: Theme.spaceSmall
     }
 }

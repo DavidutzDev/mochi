@@ -9,7 +9,7 @@ url='https://github.com/DavidutzDev/mochi'
 license=('MIT')
 # mochid refuses to start with another Quickshell than the one it's tested
 # against; see QUICKSHELL_VERSION in crates/mochi-core/src/supervisor.rs.
-depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder' 'sh')
+depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder' 'sh' 'inter-font')
 makedepends=('cargo')
 # makepkg builds C with GCC's LTO by default, which leaves zstd's objects
 # as GCC bitcode the Rust linker can't read.
@@ -20,8 +20,10 @@ optdepends=(
   'uwsm: start apps from the launcher as units of their own'
   'xdg-desktop-portal-hyprland: pick what to share with the share module'
 )
-source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('d0eaf9d4bfa52b08fbbf42977ab842bdece4f6068e384c7b37c88588f24faa52')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
+        "MaterialSymbolsRounded.ttf::https://raw.githubusercontent.com/google/material-design-icons/bd8cb85bd4bad964fe6918f79665bb40c3a8efef/variablefont/MaterialSymbolsRounded%5BFILL%2CGRAD%2Copsz%2Cwght%5D.ttf")
+sha256sums=('d0eaf9d4bfa52b08fbbf42977ab842bdece4f6068e384c7b37c88588f24faa52'
+            'c2182b6337495e64cc9e2311c52522567ac277d25a842bd027f9c9e3a5cc6d86')
 
 prepare() {
   cd "$pkgname-$pkgver"
@@ -47,6 +49,9 @@ package() {
   cd "$pkgname-$pkgver"
   install -Dm755 target/release/mochid target/release/mochi -t "$pkgdir/usr/bin/"
   install -Dm644 systemd/mochid.service -t "$pkgdir/usr/lib/systemd/user/"
+  # The fonts the shell loads: Inter from inter-font, and the icons.
+  install -Dm644 "$srcdir/MaterialSymbolsRounded.ttf" -t "$pkgdir/usr/share/mochi/fonts/"
+  ln -s /usr/share/fonts/inter/InterVariable.ttf "$pkgdir/usr/share/mochi/fonts/InterVariable.ttf"
   install -Dm644 LICENSE -t "$pkgdir/usr/share/licenses/$pkgname/"
   target/release/mochi completions bash | install -Dm644 /dev/stdin "$pkgdir/usr/share/bash-completion/completions/mochi"
   target/release/mochi completions fish | install -Dm644 /dev/stdin "$pkgdir/usr/share/fish/vendor_completions.d/mochi.fish"

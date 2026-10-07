@@ -165,6 +165,9 @@ fn config_command(action: &ConfigAction, config: Option<PathBuf>) -> anyhow::Res
             let widgets = mochi_module_widgets::check(&widgets_file).map_err(anyhow::Error::msg)?;
             println!("{} is fine", config_file.display());
             println!("{} is fine", theme_file.display());
+            for note in mochi_core::config::theme_notes(&theme_file)? {
+                println!("  {note}; the old name still works for now");
+            }
             if widgets {
                 println!("{} is fine", widgets_file.display());
             }

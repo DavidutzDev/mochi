@@ -33,6 +33,15 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 - The idle module's `hover` runs an action when the pointer rests on the clock for `hover_delay_ms` (350 by default), like `hover = ["workspaces", "show"]`; a quick click still runs `click`. Modules hear the pointer come onto their activities and leave as `ModuleEvent::Hovered`, in `mochi-core` and `mochi-sdk` (the plugin protocol's `hovered` message), and an activity the island stops showing under the pointer hears it leave.
 - `mochi ipc workspaces show` shows a monitor's workspace dots on the island, the one under the pointer by default: clicks switch, and they stay while the pointer is on them. Scrolling on the dots switches to the previous or next workspace.
 
+- A design scale in `Theme`: four text sizes and one for big numbers (`textCaption`, `textBody`, `textTitle`, `textHeadline`, `textDisplay`), weights, five spacings (`spaceTiny` to `spaceHuge`), corners by what they round (`radiusSurface`, `radiusField`, `radiusControl`) and heights (`controlHeight`, `rowHeight`, `tileHeight`). A test reads every view and rejects new raw sizes, spacing, corners, margins and colors; a line that needs one says why in a `// design:` comment. The core controls and the hub are on the scale; the modules follow.
+- Inter for text and Material Symbols Rounded for icons, brought by the Nix package and the Arch packages, which mochid links into the shell when it finds them (`MOCHI_FONTS`, then `/usr/share/mochi/fonts`). `Symbol` draws Mochi's icon names from the font, and any Material Symbols name too, like `timer`, with `filled` for active states; without the font it draws its own, as before.
+- Shared components: `PanelHeader`, `SwitchRow`, `SliderRow`, `RollingText` (digits that roll when they change), `ScrollFade` (fading edges where a list scrolls) and `EdgeLight` (a light along a panel's top edge that leans toward the pointer, sweeps while something works and flashes when it's done). `mochi ipc demo controls` shows them.
+- The hub's cards sit in frames the hub draws, with the icon, the title and a chevron inside, on a grid of equal rows: a card spans `options.span` columns and `options.rows` rows, or the one or two rows its view needs, and fills the first free place. The hub takes the height its content needs, up to `height`, and the island's outline follows it between pages, instead of one size for every page.
+
+### Changed
+
+- The type scale has four sizes and one for big numbers: `label` and `subtitle` are gone from `[text]` in `theme.toml`, and `title` is 15 instead of 16. Old files still work: `label` is read as `caption` and `subtitle` as `body`, with a note from `mochi config check`. `Theme.textLabel` and `Theme.textSubtitle` give `textCaption` and `textBody` for views and plugins that still use them.
+
 ### Fixed
 
 - When `mochi reload` restarted the idle module, it left a second clock waiting behind the shown one, and its `hover` then watched the hidden one.
