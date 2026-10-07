@@ -178,6 +178,11 @@ pub enum ModuleEvent {
     Command(ModuleCommand),
     /// A click on one of its activities that has no expanded view.
     Clicked(ActivityId),
+    /// The pointer came onto one of its activities on the island, or left.
+    Hovered {
+        activity: ActivityId,
+        hovered: bool,
+    },
     /// One of its activities is gone for good.
     Ended {
         activity: ActivityId,

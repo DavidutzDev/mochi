@@ -89,6 +89,7 @@ Item {
 
         if (!next) {
             activity = null;
+            leave(previous, null);
             return;
         }
 
@@ -105,8 +106,17 @@ Item {
         // The daemon ignores events for activities that are gone, so a new
         // one (a keyed replacement too) has to hear that the pointer is
         // already over the island.
+        leave(previous, next);
         if (hover.hovered && (!previous || previous.id !== next.id))
             Daemon.eventFor(next, "hover_enter");
+    }
+
+    // An activity the island stops showing while the pointer is over it,
+    // like the idle clock when a notice comes, is no longer hovered: its
+    // module shouldn't act on a hover that ended out of sight.
+    function leave(previous: var, next: var): void {
+        if (hover.hovered && previous && (!next || previous.id !== next.id))
+            Daemon.eventFor(previous, "hover_leave");
     }
 
     // Loads the next view into the hidden slot and swaps the slots.

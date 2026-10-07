@@ -554,6 +554,13 @@ fn on_event(event: ModuleEvent, link: &mut Link, outgoing: &mpsc::UnboundedSende
             Some(ours) => ToPlugin::Clicked { activity: ours },
             None => return,
         },
+        ModuleEvent::Hovered { activity, hovered } => match link.activity(activity) {
+            Some(ours) => ToPlugin::Hovered {
+                activity: ours,
+                hovered,
+            },
+            None => return,
+        },
         ModuleEvent::Ended { activity, reason } => match link.activity(activity) {
             Some(ours) => {
                 link.activities.remove(&ours);

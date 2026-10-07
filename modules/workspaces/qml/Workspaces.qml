@@ -2,8 +2,9 @@ import QtQuick
 import qs.island
 
 // A monitor's workspaces as dots, the active one stretched into a pill, with
-// its name. Clicking a dot switches to that workspace. A new switch updates
-// the payload in place, so the pill slides between dots.
+// its name. Clicking a dot switches to that workspace, and the scroll wheel
+// to the previous or next one. A new switch updates the payload in place, so
+// the pill slides between dots.
 Item {
     id: root
 
@@ -12,6 +13,29 @@ Item {
 
     implicitWidth: row.implicitWidth + Theme.padding * 2
     implicitHeight: 40
+
+    // Scrolled distance not yet a whole notch, so a touchpad's small steps
+    // add up to one switch instead of many.
+    property real scrolled: 0
+
+    function step(by: int): void {
+        const active = workspaces.findIndex(workspace => workspace.active);
+        const next = workspaces[Math.max(0, Math.min(workspaces.length - 1, active + by))];
+        if (next && !next.active)
+            Daemon.command("workspaces", "switch", [payload.output, next.name]);
+    }
+
+    WheelHandler {
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        onWheel: event => {
+            root.scrolled += event.angleDelta.y;
+            while (Math.abs(root.scrolled) >= 120) {
+                const up = root.scrolled > 0;
+                root.scrolled -= up ? 120 : -120;
+                root.step(up ? -1 : 1);
+            }
+        }
+    }
 
     Row {
         id: row

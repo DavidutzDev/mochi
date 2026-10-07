@@ -104,6 +104,13 @@ pub enum ModuleEvent {
     Command(ModuleCommand),
     /// A click on one of its activities that has no expanded view.
     Clicked(ActivityId),
+    /// The pointer came onto one of its activities on the island, or left.
+    Hovered {
+        /// The id [`ModuleCtx::present`] returned.
+        activity: ActivityId,
+        /// Whether the pointer is on it now.
+        hovered: bool,
+    },
     /// One of its activities is gone for good.
     Ended {
         /// The id [`ModuleCtx::present`] returned.
@@ -546,6 +553,10 @@ async fn read(
                 outgoing: Some(outgoing.clone()),
             }),
             ToPlugin::Clicked { activity } => ModuleEvent::Clicked(ActivityId(activity)),
+            ToPlugin::Hovered { activity, hovered } => ModuleEvent::Hovered {
+                activity: ActivityId(activity),
+                hovered,
+            },
             ToPlugin::Ended { activity, reason } => ModuleEvent::Ended {
                 activity: ActivityId(activity),
                 reason,

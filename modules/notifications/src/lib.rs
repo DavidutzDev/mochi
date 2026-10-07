@@ -209,6 +209,7 @@ impl Module for Notifications {
                         Some(ModuleEvent::BubbleClicked(_)) => daemon.show_history(&ctx),
                         Some(
                             ModuleEvent::Clicked(_)
+                            | ModuleEvent::Hovered { .. }
                             | ModuleEvent::State { .. }
                             | ModuleEvent::Offers(_),
                         ) => {}
