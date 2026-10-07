@@ -145,6 +145,7 @@ impl Module for Colors {
                     )
                     .optional(),
                 ),
+            ActionSpec::new("add", "Add a color to the history").arg(color()),
             ActionSpec::new("remove", "Remove a color from the history").arg(color()),
             ActionSpec::new("clear", "Remove every color from the history"),
             ActionSpec::new(
@@ -261,6 +262,10 @@ impl State {
                     .and_then(Format::parse)
                     .unwrap_or(self.settings.format);
                 copy(ctx, color.format(format, self.settings.uppercase));
+            }),
+            "add" => color().map(|color| {
+                self.history.add(color);
+                self.changed(ctx);
             }),
             "remove" => color().and_then(|color| {
                 if self.history.remove(color) {
@@ -741,6 +746,13 @@ mod tests {
             color["formats"][3],
             json!({ "format": "oklch", "label": "OKLCH", "text": "oklch(24% 0.03 284 / 0.5)" })
         );
+    }
+
+    #[test]
+    fn actions_include_add() {
+        let colors = Colors;
+        let actions = colors.actions();
+        assert!(actions.iter().any(|a| a.name == "add"));
     }
 }
 
