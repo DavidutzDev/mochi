@@ -58,7 +58,7 @@ A hub card or page gets the plugin's published state as its `payload`, and a car
 
 ### Replacing builtin views
 
-`overrides = ["idle/Pill"]` puts the plugin's `qml/overrides/idle/Pill.qml` in place of the idle module's `Pill.qml`, while both modules are enabled. The file sits in the idle module's directory, so it can use that module's other files and gets the same payload as the view it replaces. Without the plugin, the builtin view is back. When two plugins replace the same view, the one whose id sorts first wins.
+`overrides = ["idle/Pill"]` puts the plugin's `qml/overrides/idle/Pill.qml` in place of the idle module's `Pill.qml`, while both modules are enabled. The file sits in the idle module's directory, so it can use that module's other files and gets the same payload as the view it replaces. Without the plugin, the builtin view is back. An override that fails to load, with a QML error for example, gives way to the builtin view, and `mochid`'s log has the error. When two plugins replace the same view, the one whose id sorts first wins.
 
 ## The backend in Rust
 

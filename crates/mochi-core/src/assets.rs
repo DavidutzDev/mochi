@@ -5,6 +5,10 @@
 //! content didn't change are left alone, because Quickshell reloads whenever
 //! a watched file changes.
 //!
+//! A module with overridden views also gets its own files, untouched, in
+//! `builtin/<id>/`. The island loads a view from there when the override
+//! fails to load.
+//!
 //! In [`Mode::Link`] the entries are symlinks into the source tree instead,
 //! so editing QML in the repository hot-reloads the running shell.
 
@@ -21,6 +25,9 @@ use crate::module::Assets;
 /// directories that some QML file imports, and views are loaded by URL at
 /// runtime. Importing every module here makes their files hot-reload.
 const MODULES_FILE: &str = "Modules.qml";
+
+/// Where the builtin views of overridden modules go, as `builtin/<id>/`.
+const BUILTIN_DIR: &str = "builtin";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -52,7 +59,11 @@ pub fn write_shell(
     fs::create_dir_all(out.join("modules"))?;
     let mut written = 0;
 
-    let mut keep = vec!["modules".to_owned(), MODULES_FILE.to_owned()];
+    let mut keep = vec![
+        "modules".to_owned(),
+        BUILTIN_DIR.to_owned(),
+        MODULES_FILE.to_owned(),
+    ];
     let (core_dir, core_source) = match core {
         Assets::Embedded { dir, source } => (*dir, *source),
         Assets::Disk(_) => panic!("the core QML is embedded"),
@@ -75,24 +86,35 @@ pub fn write_shell(
             Assets::Embedded { .. } => true,
         })
         .collect();
+    fs::create_dir_all(out.join(BUILTIN_DIR))?;
+    let mut builtin = Vec::new();
     for module in &modules {
         let target = out.join("modules").join(module.id);
-        written += match (module.assets, mode, module.overrides.is_empty()) {
-            (Assets::Embedded { dir, .. }, Mode::Copy, true) => copy_dir(dir, &target)?,
-            (Assets::Embedded { source, .. }, Mode::Link, true) => {
-                link(Path::new(source), &target)?
-            }
-            (Assets::Disk(dir), _, true) => link(dir, &target)?,
-            (assets, mode, false) => overridden(assets, mode, module.overrides, &target)?,
-        };
+        if module.overrides.is_empty() {
+            written += whole(module.assets, mode, &target)?;
+        } else {
+            written += overridden(module.assets, mode, module.overrides, &target)?;
+            written += whole(module.assets, mode, &out.join(BUILTIN_DIR).join(module.id))?;
+            builtin.push(module.id.to_owned());
+        }
     }
     let ids: Vec<String> = modules.iter().map(|module| module.id.to_owned()).collect();
     remove_others(&out.join("modules"), &ids)?;
+    remove_others(&out.join(BUILTIN_DIR), &builtin)?;
 
     if write_if_changed(&out.join(MODULES_FILE), modules_file(&ids).as_bytes())? {
         written += 1;
     }
     Ok(written)
+}
+
+/// A module's own directory, copied or linked.
+fn whole(assets: &Assets, mode: Mode, target: &Path) -> io::Result<usize> {
+    match (assets, mode) {
+        (Assets::Embedded { dir, .. }, Mode::Copy) => copy_dir(dir, target),
+        (Assets::Embedded { source, .. }, Mode::Link) => link(Path::new(source), target),
+        (Assets::Disk(dir), _) => link(dir, target),
+    }
 }
 
 /// A module directory with some files replaced: a real directory where the
@@ -382,9 +404,16 @@ mod tests {
                 fs::read_to_string(dir.join("View.qml")).unwrap(),
                 "// mine\n"
             );
+            // The module's own view stays reachable as a fallback.
+            assert_ne!(
+                fs::read_to_string(out.join("builtin/clock/View.qml")).unwrap(),
+                "// mine\n"
+            );
         }
-        // Without the override, the module's own file comes back.
+        // Without the override, the module's own file comes back, and the
+        // fallback copy goes.
         write(&out, &["clock"], Mode::Copy);
+        assert!(!out.join("builtin/clock").exists());
         assert_ne!(
             fs::read_to_string(out.join("modules/clock/View.qml")).unwrap(),
             "// mine\n"

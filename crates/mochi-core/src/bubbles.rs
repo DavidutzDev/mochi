@@ -184,6 +184,39 @@ impl Bubbles {
     /// Every shown bubble in drawing order, and what each full area left
     /// out.
     pub fn snapshot(&self) -> (Vec<Bubble>, Vec<Overflow>) {
+        let placed = self.placed();
+        let mut bubbles = Vec::new();
+        let mut overflow = Vec::new();
+        for area in Area::ALL {
+            let (kept, left_out) = self.split(&placed, area);
+            if !left_out.is_empty() {
+                let hidden = u32::try_from(left_out.len()).unwrap_or(u32::MAX);
+                overflow.push(Overflow { area, hidden });
+            }
+            bubbles.extend(
+                gathered(&kept)
+                    .into_iter()
+                    .map(|placed| bubble(placed, placed.wide)),
+            );
+        }
+        (bubbles, overflow)
+    }
+
+    /// The bubbles a full area leaves out, in the order they would sort in.
+    /// Each has its wide view when its module has one, since a list of them
+    /// has room for text.
+    pub fn hidden(&self, area: Area) -> Vec<Bubble> {
+        let placed = self.placed();
+        let (_, left_out) = self.split(&placed, area);
+        left_out
+            .into_iter()
+            .map(|placed| bubble(placed, placed.entry.spec.wide.as_deref()))
+            .collect()
+    }
+
+    /// The bubbles the user lets show, where they go, in drawing order
+    /// before groups gather.
+    fn placed(&self) -> Vec<Placed<'_>> {
         let mut placed: Vec<Placed<'_>> = self
             .entries
             .iter()
@@ -203,40 +236,32 @@ impl Bubbles {
                 placed.entry.arrival,
             )
         });
+        placed
+    }
 
-        let mut bubbles = Vec::new();
-        let mut overflow = Vec::new();
-        for area in Area::ALL {
-            let mut in_area: Vec<&Placed<'_>> =
-                placed.iter().filter(|placed| placed.area == area).collect();
-            // A stack holds them all.
-            if let Some(max) = self.max_per_area.filter(|_| self.stack.is_none())
-                && in_area.len() > max
-            {
-                let hidden = u32::try_from(in_area.len() - max).unwrap_or(u32::MAX);
-                overflow.push(Overflow { area, hidden });
-                // The lowest priorities make room, wherever they sort.
-                let mut kept = in_area.clone();
-                kept.sort_by_key(|placed| {
-                    (Reverse(placed.entry.spec.priority), placed.entry.arrival)
-                });
-                kept.truncate(max);
-                in_area.retain(|placed| kept.iter().any(|kept| std::ptr::eq(*kept, *placed)));
-            }
-            bubbles.extend(gathered(&in_area).into_iter().map(|placed| Bubble {
-                id: placed.entry.id,
-                module: placed.entry.module.clone(),
-                key: placed.entry.spec.key.clone(),
-                view: placed.wide.unwrap_or(&placed.entry.spec.view).to_owned(),
-                wide: placed.wide.is_some(),
-                payload: placed.entry.spec.payload.clone(),
-                area,
-                group: placed.group.map(str::to_owned),
-                priority: placed.entry.spec.priority.0,
-                news: placed.entry.news,
-            }));
+    /// One area's bubbles: the ones that fit, and the ones left out past
+    /// `max_per_area`, both in sorted order.
+    fn split<'a, 'b>(
+        &self,
+        placed: &'b [Placed<'a>],
+        area: Area,
+    ) -> (Vec<&'b Placed<'a>>, Vec<&'b Placed<'a>>) {
+        let in_area: Vec<&Placed<'_>> =
+            placed.iter().filter(|placed| placed.area == area).collect();
+        // A stack holds them all.
+        let Some(max) = self.max_per_area.filter(|_| self.stack.is_none()) else {
+            return (in_area, Vec::new());
+        };
+        if in_area.len() <= max {
+            return (in_area, Vec::new());
         }
-        (bubbles, overflow)
+        // The lowest priorities make room, wherever they sort.
+        let mut kept = in_area.clone();
+        kept.sort_by_key(|placed| (Reverse(placed.entry.spec.priority), placed.entry.arrival));
+        kept.truncate(max);
+        in_area
+            .into_iter()
+            .partition(|placed| kept.iter().any(|kept| std::ptr::eq(*kept, *placed)))
     }
 
     fn place<'a>(&'a self, entry: &'a Entry) -> Placed<'a> {
@@ -273,6 +298,21 @@ impl Bubbles {
             return Err(BubbleError::NotOwner(id));
         }
         Ok(index)
+    }
+}
+
+fn bubble(placed: &Placed<'_>, wide: Option<&str>) -> Bubble {
+    Bubble {
+        id: placed.entry.id,
+        module: placed.entry.module.clone(),
+        key: placed.entry.spec.key.clone(),
+        view: wide.unwrap_or(&placed.entry.spec.view).to_owned(),
+        wide: wide.is_some(),
+        payload: placed.entry.spec.payload.clone(),
+        area: placed.area,
+        group: placed.group.map(str::to_owned),
+        priority: placed.entry.spec.priority.0,
+        news: placed.entry.news,
     }
 }
 
@@ -516,6 +556,33 @@ mod tests {
                 hidden: 1
             }]
         );
+        let hidden: Vec<u64> = bubbles
+            .hidden(Area::Right)
+            .iter()
+            .map(|bubble| bubble.id.0)
+            .collect();
+        assert_eq!(hidden, [1]);
+        assert!(bubbles.hidden(Area::Left).is_empty());
+    }
+
+    #[test]
+    fn hidden_bubbles_list_with_their_wide_views() {
+        let mut bubbles = Bubbles::new(BTreeMap::new(), Some(1));
+        bubbles.show(BubbleId(1), "a", spec(Area::Left).priority(Priority::HIGH));
+        bubbles.show(BubbleId(2), "b", spec(Area::Left).wide("Wide"));
+        bubbles.show(BubbleId(3), "c", spec(Area::Left).order(-1));
+        let views: Vec<_> = bubbles
+            .hidden(Area::Left)
+            .iter()
+            .map(|bubble| (bubble.id.0, bubble.view.clone(), bubble.wide))
+            .collect();
+        assert_eq!(
+            views,
+            [(3, "Bubble".into(), false), (2, "Wide".into(), true)]
+        );
+        // A stack hides nothing.
+        bubbles.set_stack(Some(mochi_protocol::Stacking { news_ms: 4000 }));
+        assert!(bubbles.hidden(Area::Left).is_empty());
     }
 
     #[test]

@@ -205,6 +205,15 @@ Item {
                             setSource(url, {
                                 payload: slot.bubble.payload
                             });
+                            // A failed override gives way to the module's
+                            // own view, as in the island.
+                            if (status !== Loader.Ready) {
+                                const builtin = `root:/builtin/${slot.bubble.module}/${slot.bubble.view}.qml`;
+                                console.warn(`mochi: could not load ${url}, trying ${builtin}`);
+                                setSource(builtin, {
+                                    payload: slot.bubble.payload
+                                });
+                            }
                             if (status !== Loader.Ready)
                                 console.warn(`mochi: could not load ${url}`);
                         }

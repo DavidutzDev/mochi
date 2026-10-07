@@ -3,7 +3,7 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::{Bubble, BubbleId, Contribution, ModuleActions, Overflow, Stacking, Theme};
+use crate::{Area, Bubble, BubbleId, Contribution, ModuleActions, Overflow, Stacking, Theme};
 
 /// Identifies one activity for its whole life, across the daemon and the UI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -47,6 +47,9 @@ pub enum ClientMessage {
     },
     /// A click on a bubble. UI only, never answered.
     BubbleClick { bubble: BubbleId },
+    /// A click on an area's "+N", for the bubbles it leaves out. The daemon
+    /// lists them in the island. UI only, never answered.
+    OverflowClick { area: Area },
     /// Answered with `status`.
     Status,
     /// Reloads config and theme. Answered with `ok` or `error`.
@@ -235,7 +238,7 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use crate::{ActionSpec, Area, ArgSpec, decode, encode};
+    use crate::{ActionSpec, ArgSpec, decode, encode};
 
     fn round_trip_client(message: ClientMessage) {
         let line = encode(&message).unwrap();
@@ -283,6 +286,7 @@ mod tests {
         round_trip_client(ClientMessage::BubbleClick {
             bubble: BubbleId(3),
         });
+        round_trip_client(ClientMessage::OverflowClick { area: Area::Right });
         round_trip_client(ClientMessage::Status);
         round_trip_client(ClientMessage::Reload);
         round_trip_client(ClientMessage::Dismiss);
@@ -438,6 +442,15 @@ mod tests {
             ClientMessage::Event {
                 activity: ActivityId(7),
                 kind: EventKind::HoverEnter
+            }
+        );
+
+        let overflow: ClientMessage =
+            decode(r#"{"type":"overflow_click","area":"center-right"}"#).unwrap();
+        assert_eq!(
+            overflow,
+            ClientMessage::OverflowClick {
+                area: Area::CenterRight
             }
         );
     }

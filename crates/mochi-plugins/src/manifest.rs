@@ -268,8 +268,15 @@ impl Manifest {
     }
 }
 
+/// The module id of what the daemon itself shows in the island, like the
+/// list of hidden bubbles.
+pub const CORE_ID: &str = "mochi";
+
 /// Ids are what config.toml and `mochi ipc` use, and a directory name.
 pub fn check_id(id: &str) -> Result<(), String> {
+    if id == CORE_ID {
+        return Err(format!("plugin id {id:?} is taken by mochi itself"));
+    }
     let fine = !id.is_empty()
         && id
             .chars()
@@ -398,6 +405,7 @@ options = { span = 2 }
         let base = "[plugin]\nname = \"X\"\nversion = \"1\"\n";
 
         assert!(error(&format!("{base}id = \"Bad Id\"\napi = 1\n")).contains("lowercase"));
+        assert!(error(&format!("{base}id = \"mochi\"\napi = 1\n")).contains("taken"));
         assert!(error(&format!("{base}id = \"x\"\napi = 9\n")).contains("api 9"));
         assert!(error(&format!("{base}id = \"x\"\napi = 1\nnope = 1\n")).contains("nope"));
         assert!(

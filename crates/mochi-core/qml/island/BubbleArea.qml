@@ -298,7 +298,7 @@ Row {
         }
     }
 
-    // What didn't fit, as a count.
+    // What didn't fit, as a count. A click lists them in the island.
     Pill {
         id: more
 
@@ -320,6 +320,12 @@ Row {
             font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
             font.weight: Font.DemiBold
+        }
+
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: Daemon.overflowClick(root.area)
         }
 
         Component.onCompleted: root.window.addPill(more)

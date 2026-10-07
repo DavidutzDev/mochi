@@ -66,6 +66,77 @@ Item {
         moving = true;
     }
 
+    // Within this many pixels, an edge or the middle goes to a guide, before
+    // the grid.
+    readonly property real reach: 6
+
+    // Puts the widget's top-left corner near x, y while dragging: on a
+    // guide where one is in reach and the spot can be saved as it is, else
+    // on the grid.
+    function moveTo(x: real, y: real): void {
+        const others = desktop.others(root);
+        const size = [desktop.width, desktop.height];
+        const length = [liveWidth, liveHeight];
+        const spot = [x, y];
+        // On the grid, where it will be saved, so it doesn't jump when let go.
+        const saved = Place.saved(x, y, liveWidth, liveHeight, cell, desktop.width, desktop.height);
+        const grid = [saved.x, saved.y];
+        const live = [0, 0];
+        for (const axis of [0, 1]) {
+            const shift = Place.guideShift({
+                x: x,
+                y: y,
+                width: liveWidth,
+                height: liveHeight
+            }, axis, others, size[axis], reach, shift => {
+                const moved = spot[axis] + shift;
+                if (moved < 0 || moved > size[axis] - length[axis])
+                    return false;
+                const at = axis === 0 ? [moved, y] : [x, moved];
+                return Place.fits(at[0], at[1], liveWidth, liveHeight, cell, desktop.width, desktop.height)[axis];
+            });
+            live[axis] = shift !== null ? spot[axis] + shift : Math.max(0, Math.min(size[axis] - length[axis], grid[axis]));
+        }
+        liveX = live[0];
+        liveY = live[1];
+        showGuides(others);
+    }
+
+    // Sizes the widget near w by h pixels while resizing, in whole cells
+    // within its limits: its far edge or middle on a guide in reach, else
+    // the nearest cell.
+    function sizeTo(w: real, h: real): void {
+        const others = desktop.others(root);
+        const min = widget.min ?? [2, 2];
+        const max = widget.max ?? [200, 120];
+        const start = [liveX, liveY];
+        const size = [desktop.width, desktop.height];
+        const wanted = [w, h];
+        const live = [0, 0];
+        for (const axis of [0, 1]) {
+            const length = Place.guideLength(start[axis], wanted[axis], others, axis, size[axis], cell, reach, length => {
+                if (length < min[axis] * cell || length > max[axis] * cell)
+                    return false;
+                const at = axis === 0 ? [length, liveHeight] : [liveWidth, length];
+                return Place.fits(liveX, liveY, at[0], at[1], cell, desktop.width, desktop.height)[axis];
+            });
+            const cells = Math.max(min[axis], Math.min(max[axis], Math.round(wanted[axis] / cell)));
+            live[axis] = length ?? cells * cell;
+        }
+        liveWidth = live[0];
+        liveHeight = live[1];
+        showGuides(others);
+    }
+
+    function showGuides(others: var): void {
+        desktop.guides = Place.guides({
+            x: liveX,
+            y: liveY,
+            width: liveWidth,
+            height: liveHeight
+        }, others, desktop.width, desktop.height);
+    }
+
     // Saves where it is and how big: the module answers with the new
     // layout, which ends `moving`.
     function commit(): void {
@@ -159,12 +230,10 @@ Item {
             if (!pressed)
                 return;
             const now = mapToItem(root.desktop, event.x, event.y);
-            const x = root.placed.x + now.x - start.x;
-            const y = root.placed.y + now.y - start.y;
-            root.liveX = Math.max(0, Math.min(root.desktop.width - root.liveWidth, Place.snap(x, root.cell)));
-            root.liveY = Math.max(0, Math.min(root.desktop.height - root.liveHeight, Place.snap(y, root.cell)));
+            root.moveTo(root.placed.x + now.x - start.x, root.placed.y + now.y - start.y);
         }
         onReleased: {
+            root.desktop.guides = [];
             if (root.liveX === root.placed.x && root.liveY === root.placed.y) {
                 // A click: open its settings.
                 root.moving = false;
@@ -204,14 +273,12 @@ Item {
                 if (!pressed)
                     return;
                 const now = mapToItem(root.desktop, event.x, event.y);
-                const min = root.widget.min ?? [2, 2];
-                const max = root.widget.max ?? [200, 120];
-                const columns = Math.round((root.placed.width + now.x - start.x) / root.cell);
-                const rows = Math.round((root.placed.height + now.y - start.y) / root.cell);
-                root.liveWidth = Math.max(min[0], Math.min(max[0], columns)) * root.cell;
-                root.liveHeight = Math.max(min[1], Math.min(max[1], rows)) * root.cell;
+                root.sizeTo(root.placed.width + now.x - start.x, root.placed.height + now.y - start.y);
             }
-            onReleased: root.commit()
+            onReleased: {
+                root.desktop.guides = [];
+                root.commit();
+            }
         }
     }
 

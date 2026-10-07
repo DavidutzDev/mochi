@@ -9,12 +9,15 @@ use mochi_core::actions;
 use mochi_core::compositor::Compositor;
 use mochi_core::supervisor::{Supervisor, UiEvent};
 use mochi_core::{
-    Arbiter, Assets, Bubbles, CallError, ClickOutside, Config, Effect, Module, ModuleCommand,
-    ModuleError, ModuleEvent, ModuleRequest, Notices, Panels, Priority, Reply, Request,
+    ActivitySpec, Arbiter, Assets, Bubbles, CallError, ClickOutside, Config, Effect, Module,
+    ModuleCommand, ModuleError, ModuleEvent, ModuleRequest, Notices, Panels, Priority, Reply,
+    Request,
 };
+use mochi_plugins::manifest::CORE_ID;
 use mochi_protocol::{
-    API, ActionSpec, ClientMessage, CompositorStatus, Contribution, DaemonMessage, ErrorCode,
-    EventKind, ModuleActions, PluginState, PluginStatus, Role, Status, Theme,
+    API, ActionSpec, ActivityId, Area, ClientMessage, CompositorStatus, Contribution,
+    DaemonMessage, ErrorCode, EventKind, ModuleActions, PluginState, PluginStatus, Role, Status,
+    Theme,
 };
 use serde_json::Value;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -113,6 +116,8 @@ pub struct Daemon {
     /// `[island] notices`: which monitor everything else shows on.
     notices: Notices,
     handshake_deadline: Option<Instant>,
+    /// The list of an area's hidden bubbles, while the island has it.
+    hidden_list: Option<(ActivityId, Area)>,
 }
 
 /// Where the daemon reads its configuration from.
@@ -150,6 +155,7 @@ impl Daemon {
             panels: Panels::default(),
             notices: Notices::default(),
             handshake_deadline: None,
+            hidden_list: None,
         }
     }
 
@@ -419,13 +425,24 @@ impl Daemon {
                 }
             }
             (Some(Role::Ui), ClientMessage::BubbleClick { bubble }) => {
+                // A click in the list of hidden bubbles closes it, so a
+                // panel the bubble opens doesn't wait behind it.
+                if let Some((list, _)) = self.hidden_list {
+                    self.arbiter.dismiss(list, Instant::now());
+                }
                 // Clicks on a bubble that just went away are dropped.
                 if let Some(module) = self.bubbles.owner(bubble) {
                     let module = module.to_owned();
                     self.notify(&module, ModuleEvent::BubbleClicked(bubble));
                 }
             }
-            (Some(_), ClientMessage::Event { .. } | ClientMessage::BubbleClick { .. }) => {
+            (Some(Role::Ui), ClientMessage::OverflowClick { area }) => self.list_hidden(area),
+            (
+                Some(_),
+                ClientMessage::Event { .. }
+                | ClientMessage::BubbleClick { .. }
+                | ClientMessage::OverflowClick { .. },
+            ) => {
                 self.reply_error(id, ErrorCode::NotAllowed, "only the ui sends events");
             }
             (
@@ -457,6 +474,52 @@ impl Daemon {
                 }
                 self.reply(id, DaemonMessage::Ok);
             }
+        }
+    }
+
+    /// Opens the list of an area's hidden bubbles in the island, or closes
+    /// it when it already lists them.
+    fn list_hidden(&mut self, area: Area) {
+        let now = Instant::now();
+        if let Some((list, listed)) = self.hidden_list
+            && listed == area
+        {
+            self.arbiter.dismiss(list, now);
+            return;
+        }
+        let bubbles = self.bubbles.hidden(area);
+        if bubbles.is_empty() {
+            return;
+        }
+        let mut spec = ActivitySpec::new(HIDDEN_VIEW)
+            .key("hidden-bubbles")
+            .priority(Priority::URGENT)
+            .uninterruptible()
+            .modal()
+            .payload(hidden_payload(area, &bubbles));
+        spec.output = self.panel_output();
+        let id = self.runner.ids.next();
+        self.arbiter.submit(id, CORE_ID, spec, now);
+        self.hidden_list = Some((id, area));
+    }
+
+    /// Keeps the open list of hidden bubbles up to date, and closes it when
+    /// its area has none left.
+    fn update_hidden_list(&mut self) {
+        let Some((list, area)) = self.hidden_list else {
+            return;
+        };
+        let bubbles = self.bubbles.hidden(area);
+        let result = if bubbles.is_empty() {
+            self.hidden_list = None;
+            self.arbiter.withdraw(CORE_ID, list, Instant::now())
+        } else {
+            self.arbiter
+                .update(CORE_ID, list, hidden_payload(area, &bubbles))
+        };
+        if let Err(error) = result {
+            tracing::debug!(%error, "the list of hidden bubbles is gone");
+            self.hidden_list = None;
         }
     }
 
@@ -843,6 +906,7 @@ impl Daemon {
     fn apply_effects(&mut self) {
         if self.bubbles.take_changed() {
             self.broadcast(&self.bubbles_message());
+            self.update_hidden_list();
         }
         for effect in self.arbiter.take_effects() {
             match effect {
@@ -860,7 +924,12 @@ impl Daemon {
                     module,
                     activity,
                     reason,
-                } => self.notify(&module, ModuleEvent::Ended { activity, reason }),
+                } => {
+                    if self.hidden_list.is_some_and(|(list, _)| list == activity) {
+                        self.hidden_list = None;
+                    }
+                    self.notify(&module, ModuleEvent::Ended { activity, reason });
+                }
             }
         }
     }
@@ -966,6 +1035,13 @@ impl Daemon {
 /// The files plugins put in place of builtin views, for the enabled
 /// modules. When two plugins replace the same view, the one whose id
 /// sorts first wins.
+/// The core view that lists an area's hidden bubbles, `island/<view>.qml`.
+const HIDDEN_VIEW: &str = "HiddenBubbles";
+
+fn hidden_payload(area: Area, bubbles: &[mochi_protocol::Bubble]) -> Value {
+    serde_json::json!({ "area": area, "bubbles": bubbles })
+}
+
 fn overrides(
     plugins: &BTreeMap<&'static str, crate::plugins::PluginModule>,
     enabled: &[&'static str],
