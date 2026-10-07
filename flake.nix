@@ -124,6 +124,12 @@
         };
       };
 
+      # `lib.buildPlugin pkgs { src = ./.; }`: a Rust plugin built with Nix,
+      # as the directory mochid reads. For plugins' own flakes, and what the
+      # home-manager module uses for `plugins.<id>.src`.
+      lib.buildPlugin =
+        pkgs: import ./packaging/nix/build-plugin.nix { inherit (pkgs) lib rustPlatform pkg-config; };
+
       # `programs.mochi` for home-manager and NixOS, using this flake's
       # package unless `programs.mochi.package` says otherwise.
       homeModules.default =

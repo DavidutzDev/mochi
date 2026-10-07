@@ -112,6 +112,18 @@ while read -r line <&3; do
 done
 ```
 
+## A flake for Nix users
+
+With a `flake.nix` in the repository, people install the plugin without cargo: `mochi plugins install` builds the flake with `nix build` when Nix is installed, and home-manager can take its package. Copy this next to `mochi-plugin.toml`; `mochi.lib.buildPlugin` builds a Rust plugin from its `Cargo.lock`, with no hash to update, and puts the backend at the manifest's `exec`:
+
+```nix
+{{#include ../../../examples/plugins/flake.nix}}
+```
+
+A flake for a plugin in another language works too, as long as its default package has the backend at the manifest's `exec`, or in `bin/` by the same name.
+
+The `mochi-sdk` dependency must be a `git` one, like `mochi-sdk = { git = "https://github.com/DavidutzDev/mochi", tag = "v0.0.6" }`, not a `path` to your own checkout, or the plugin only builds on your machine.
+
 ## Publishing a release
 
 For a `git-release:` source, attach an archive to a GitHub release, named as `[release] asset` says with `{id}`, `{version}`, `{tag}` and `{arch}` (`x86_64` or `aarch64`) filled in. The archive holds the plugin as it should be installed: the manifest, the views and the built `exec`, at its root or in one directory. `mochi plugins install` reads the manifest from the tagged commit first, to show what it will install, then downloads the asset.

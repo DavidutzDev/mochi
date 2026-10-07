@@ -37,7 +37,59 @@ let
     else
       toml.generate "widgets.toml" { widget = cfg.widgets; };
 
-  pluginList.plugins = lib.mapAttrs (_: source: { inherit source; }) cfg.plugins;
+  # Plugins Nix builds go in the store, and plugins.toml points at them.
+  buildPlugin = import ./build-plugin.nix { inherit (pkgs) lib rustPlatform pkg-config; };
+  pluginSource =
+    plugin:
+    if builtins.isString plugin then
+      plugin
+    else if plugin.source != null then
+      plugin.source
+    else if plugin.package != null then
+      "path:${plugin.package}"
+    else
+      "path:${buildPlugin { inherit (plugin) src buildInputs; }}";
+  pluginList.plugins = lib.mapAttrs (_: plugin: { source = pluginSource plugin; }) cfg.plugins;
+
+  pluginType = lib.types.either lib.types.str (
+    lib.types.submodule {
+      options = {
+        source = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          example = "git:github.com/User/mochi-pomodoro:main";
+          description = "A source for `mochi plugins install`, like the plain string form.";
+        };
+        src = lib.mkOption {
+          type = lib.types.nullOr lib.types.path;
+          default = null;
+          example = lib.literalExpression "inputs.mochi-pomodoro";
+          description = ''
+            The plugin's source tree, usually a flake input with
+            `flake = false`. Nix builds it during the switch, without cargo on
+            the machine and without `mochi plugins install`. Rust plugins
+            with a Cargo.lock only.
+          '';
+        };
+        package = lib.mkOption {
+          type = lib.types.nullOr lib.types.package;
+          default = null;
+          example = lib.literalExpression "inputs.mochi-pomodoro.packages.\${pkgs.system}.default";
+          description = ''
+            The plugin already built, like its own flake's package: a
+            directory with {file}`mochi-plugin.toml`, its views and its
+            backend.
+          '';
+        };
+        buildInputs = lib.mkOption {
+          type = lib.types.listOf lib.types.package;
+          default = [ ];
+          example = lib.literalExpression "[ pkgs.alsa-lib ]";
+          description = "Native libraries the backend links, for `src`.";
+        };
+      };
+    }
+  );
 
   written =
     lib.optional (cfg.settings != { }) "config.toml"
@@ -105,20 +157,24 @@ in
     };
 
     plugins = lib.mkOption {
-      type = lib.types.attrsOf lib.types.str;
+      type = lib.types.attrsOf pluginType;
       default = { };
       example = lib.literalExpression ''
         {
-          pomodoro = "git:github.com/User/mochi-pomodoro:main";
           weather = "git-release:github.com/User/mochi-weather:v0.2.0";
+          pomodoro.src = inputs.mochi-pomodoro;
+          clock.package = inputs.mochi-clock.packages.''${pkgs.system}.default;
         }
       '';
       description = ''
-        Plugins by id and source, written to
-        {file}`$XDG_CONFIG_HOME/mochi/plugins.toml`. Enable them in
-        `settings.modules` like builtin modules. Nix doesn't fetch or build
-        them: run `mochi plugins install` after switching, which also
-        writes {file}`plugins.lock` next to it.
+        Plugins by id, written to {file}`$XDG_CONFIG_HOME/mochi/plugins.toml`.
+        Enable them in `settings.modules` like builtin modules.
+
+        A string is a source for `mochi plugins install`, which you run
+        after switching; it fetches and builds the plugin and writes
+        {file}`plugins.lock`. `src` has Nix build the plugin during the
+        switch instead, with no build tools on the machine, and `package`
+        takes one already built, like the plugin's own flake's package.
       '';
     };
 
@@ -188,7 +244,18 @@ in
   config = lib.mkIf cfg.enable {
     assertions = [
       (lib.hm.assertions.assertPlatform "programs.mochi" pkgs lib.platforms.linux)
-    ];
+    ]
+    ++ lib.mapAttrsToList (id: plugin: {
+      assertion =
+        builtins.isString plugin
+        ||
+          lib.count (option: option != null) [
+            plugin.source
+            plugin.src
+            plugin.package
+          ] == 1;
+      message = "programs.mochi.plugins.${id}: set exactly one of source, src and package";
+    }) cfg.plugins;
 
     home.packages = [ package ];
 

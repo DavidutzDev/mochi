@@ -77,6 +77,11 @@ impl Locations {
         }
     }
 
+    /// The garbage collector root keeping a plugin's `nix build` alive.
+    pub fn nix_root(&self, id: &str) -> PathBuf {
+        self.installs.join(".nix").join(id)
+    }
+
     /// Where a plugin's files are: in place for `path:`, installed
     /// otherwise.
     pub fn dir(&self, id: &str, source: &Source) -> PathBuf {

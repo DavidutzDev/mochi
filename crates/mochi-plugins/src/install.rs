@@ -1,7 +1,8 @@
 //! Installing, updating and removing plugins, for `mochi plugins`.
 //!
 //! This shells out to `git`, `curl` and `tar`, and runs a plugin's build
-//! command with `sh`. Nothing runs or lands in place before the caller
+//! command with `sh`, or `nix build` when the plugin has a `flake.nix` and
+//! Nix is installed. Nothing runs or lands in place before the caller
 //! confirms the [`Plan`]: a `git:` plugin is cloned to a scratch directory
 //! first, which runs none of its code, and a release's manifest is read
 //! before its asset is downloaded.
@@ -55,8 +56,27 @@ pub struct Plan {
     pub revision: Option<String>,
     /// The asset it downloads.
     pub download: Option<String>,
-    /// The build command it runs, and where.
-    pub build: Option<(String, PathBuf)>,
+    /// How it builds, and where.
+    pub build: Option<(Build, PathBuf)>,
+}
+
+/// How a plugin's backend is built.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Build {
+    /// The manifest's `build` command, run with `sh`.
+    Command(String),
+    /// `nix build` on the plugin's `flake.nix`, whose default package has
+    /// the backend at the manifest's `exec`, or in `bin/` by its name.
+    Flake,
+}
+
+impl fmt::Display for Build {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Command(command) => f.write_str(command),
+            Self::Flake => f.write_str("nix build .#default, from its flake.nix"),
+        }
+    }
 }
 
 impl fmt::Display for Plan {
@@ -77,8 +97,8 @@ impl fmt::Display for Plan {
         if let Some(url) = &self.download {
             writeln!(f, "  fetches {url}")?;
         }
-        if let Some((command, dir)) = &self.build {
-            writeln!(f, "  runs    {command}")?;
+        if let Some((build, dir)) = &self.build {
+            writeln!(f, "  runs    {build}")?;
             writeln!(f, "          in {}", dir.display())?;
         }
         match &self.manifest.backend {
@@ -180,6 +200,7 @@ impl Installer<'_> {
             std::fs::remove_dir_all(&dir)?;
             removed = true;
         }
+        remove_path(&self.locations.nix_root(id))?;
         let mut lock = Lock::load(&self.locations.lock)?;
         if lock.plugins.remove(id).is_some() {
             lock.save(&self.locations.lock)?;
@@ -239,14 +260,14 @@ impl Installer<'_> {
             source: source.clone(),
             revision: Some(commit.chars().take(10).collect()),
             download: None,
-            build: build_command(&manifest).map(|command| (command, target.clone())),
+            build: how_to_build(&manifest, &work).map(|build| (build, target.clone())),
             manifest,
         };
         if !(self.confirm)(&plan) {
             std::fs::remove_dir_all(&work)?;
             return Ok(None);
         }
-        build(&plan.manifest, &work).inspect_err(|_| {
+        self.build(&plan, &work).inspect_err(|_| {
             let _ = std::fs::remove_dir_all(&work);
         })?;
         swap(&work, &target)?;
@@ -390,18 +411,23 @@ impl Installer<'_> {
             return Ok(Some((locked, false)));
         }
         let manifest = self.manifest_for(id, &dir)?;
+        // Nix built it already, like home-manager's `plugins.<id>.src`, and
+        // the store can't be written to.
+        let built = dir.starts_with("/nix/store");
         let plan = Plan {
             id: id.to_owned(),
             source: source.clone(),
             revision: None,
             download: None,
-            build: build_command(&manifest).map(|command| (command, dir.clone())),
+            build: how_to_build(&manifest, &dir)
+                .filter(|_| !built)
+                .map(|build| (build, dir.clone())),
             manifest,
         };
         if !(self.confirm)(&plan) {
             return Ok(None);
         }
-        build(&plan.manifest, &dir)?;
+        self.build(&plan, &dir)?;
         Ok(Some((
             Locked {
                 source: source.to_string(),
@@ -441,31 +467,174 @@ fn check_manifest_id(id: &str, manifest: &Manifest) -> Result<(), InstallError> 
     Ok(())
 }
 
-fn build_command(manifest: &Manifest) -> Option<String> {
-    manifest
-        .backend
-        .as_ref()
-        .and_then(|backend| backend.build.clone())
+/// How the plugin in `dir` builds: with its flake when it has one and Nix
+/// is installed, else with its build command, if it has a backend at all.
+fn how_to_build(manifest: &Manifest, dir: &Path) -> Option<Build> {
+    let backend = manifest.backend.as_ref()?;
+    if dir.join("flake.nix").is_file() && installed("nix") {
+        return Some(Build::Flake);
+    }
+    backend.build.clone().map(Build::Command)
 }
 
-/// Runs the build command, if any, on the terminal, then checks the
-/// backend is there.
-fn build(manifest: &Manifest, dir: &Path) -> Result<(), InstallError> {
-    if let Some(command) = build_command(manifest) {
-        let status = Command::new("sh")
-            .args(["-c", &command])
-            .current_dir(dir)
-            .env(mochi_protocol::plugin::DIR_ENV, dir)
+impl Installer<'_> {
+    /// Builds the plugin in `dir` as the plan says, on the terminal, then
+    /// checks the backend is there.
+    fn build(&self, plan: &Plan, dir: &Path) -> Result<(), InstallError> {
+        match plan.build.as_ref().map(|(build, _)| build) {
+            Some(Build::Command(command)) => {
+                let status = Command::new("sh")
+                    .args(["-c", command])
+                    .current_dir(dir)
+                    .env(mochi_protocol::plugin::DIR_ENV, dir)
+                    .stdin(Stdio::null())
+                    .status()
+                    .map_err(|error| InstallError(format!("cannot run sh: {error}")))?;
+                if !status.success() {
+                    return Err(InstallError(format!(
+                        "the build failed ({status}): {command}{}",
+                        advice(plan, dir, command)
+                    )));
+                }
+            }
+            Some(Build::Flake) => self.build_flake(plan, dir)?,
+            None => {}
+        }
+        check_exec(&plan.manifest, dir)
+    }
+
+    /// `nix build` on the plugin's flake. The result stays alive through a
+    /// garbage collector root in the installs' `.nix` directory, and the
+    /// backend in the plugin's directory links into it.
+    fn build_flake(&self, plan: &Plan, dir: &Path) -> Result<(), InstallError> {
+        let exec = plan
+            .manifest
+            .backend
+            .as_ref()
+            .map(|backend| backend.exec.clone())
+            .unwrap_or_default();
+        let root = self.locations.nix_root(&plan.id);
+        if let Some(parent) = root.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let flake = format!("{}#default", dir.display());
+        let status = Command::new("nix")
+            .args([
+                "--extra-experimental-features",
+                "nix-command flakes",
+                "build",
+                "--out-link",
+            ])
+            .arg(&root)
+            .arg(&flake)
             .stdin(Stdio::null())
             .status()
-            .map_err(|error| InstallError(format!("cannot run sh: {error}")))?;
+            .map_err(|error| InstallError(format!("cannot run nix: {error}")))?;
         if !status.success() {
             return Err(InstallError(format!(
-                "the build failed ({status}): {command}"
+                "nix build {flake} failed ({status}); its output is above"
             )));
         }
+        let output = std::fs::canonicalize(&root)?;
+        let name = Path::new(&exec).file_name().unwrap_or_default();
+        let built = [output.join(&exec), output.join("bin").join(name)]
+            .into_iter()
+            .find(|path| path.is_file())
+            .ok_or_else(|| {
+                InstallError(format!(
+                    "the flake's package {} has neither {exec} nor bin/{}",
+                    output.display(),
+                    name.to_string_lossy()
+                ))
+            })?;
+        let link = dir.join(&exec);
+        if let Some(parent) = link.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        remove_path(&link)?;
+        std::os::unix::fs::symlink(&built, &link)?;
+        Ok(())
     }
-    check_exec(manifest, dir)
+}
+
+/// What to try when a build command failed: the tools it lacks, and the
+/// ways around building it here.
+fn advice(plan: &Plan, dir: &Path, command: &str) -> String {
+    let missing = missing_tools(command);
+    let mut text = String::new();
+    if missing.is_empty() {
+        text.push_str("\n  Its output is above.");
+    } else {
+        let names: Vec<String> = missing.iter().map(|tool| format!("`{tool}`")).collect();
+        text.push_str(&format!(
+            "\n  {} isn't installed. Ways around it:",
+            names.join(", ")
+        ));
+        text.push_str(&format!(
+            "\n  - install it, then run `mochi plugins install {}` again",
+            plan.id
+        ));
+    }
+    let id = &plan.id;
+    text.push_str(&format!(
+        "\n  - with home-manager, let Nix build it during the switch, with no tools here:\n      programs.mochi.plugins.{id}.src = <a flake input of its repository>;"
+    ));
+    if plan.manifest.release.is_some()
+        && let Source::Git { url, .. } = &plan.source
+        && let Some(repo) = github_repo(url)
+    {
+        text.push_str(&format!(
+            "\n  - use its prebuilt releases, if it publishes them:\n      {id} = {{ source = \"git-release:github.com/{repo}\" }}"
+        ));
+    }
+    if !dir.join("flake.nix").is_file() {
+        text.push_str(
+            "\n  - ask its author for a flake.nix: with Nix installed, Mochi builds a plugin's flake instead",
+        );
+    } else if !installed("nix") {
+        text.push_str("\n  - install Nix: the plugin has a flake.nix, which Mochi builds with it");
+    }
+    text
+}
+
+/// The commands `command` starts that aren't on the PATH: the first word
+/// of each part between `&&`, `||`, `;` and `|`, past variable settings.
+fn missing_tools(command: &str) -> Vec<String> {
+    let mut missing: Vec<String> = Vec::new();
+    for part in command.split(['&', '|', ';', '\n']) {
+        let Some(program) = part
+            .split_whitespace()
+            .find(|word| !word.contains('=') || word.starts_with(['/', '.']))
+        else {
+            continue;
+        };
+        let builtin = matches!(
+            program,
+            "cd" | "export" | "set" | "test" | "[" | "true" | "false" | "echo"
+        );
+        if !builtin && !installed(program) && !missing.iter().any(|tool| tool == program) {
+            missing.push(program.to_owned());
+        }
+    }
+    missing
+}
+
+/// Whether `program` is on the PATH, or is a path that exists.
+fn installed(program: &str) -> bool {
+    if program.contains('/') {
+        return Path::new(program).is_file();
+    }
+    std::env::var_os("PATH")
+        .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(program).is_file()))
+}
+
+/// `owner/repo` from a GitHub clone URL.
+fn github_repo(url: &str) -> Option<String> {
+    let rest = url
+        .strip_prefix("https://github.com/")
+        .or_else(|| url.strip_prefix("git@github.com:"))?;
+    let repo = rest.trim_end_matches('/').trim_end_matches(".git");
+    (repo.split('/').count() == 2).then(|| repo.to_owned())
 }
 
 fn check_exec(manifest: &Manifest, dir: &Path) -> Result<(), InstallError> {
@@ -742,6 +911,108 @@ mod tests {
         );
         assert_eq!(std::fs::read_dir(&locations.installs).unwrap().count(), 0);
         assert!(!locations.lock.exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn finds_the_tools_a_build_lacks() {
+        assert_eq!(
+            missing_tools("cargo build --release && install -Dm755 target/release/x bin/x")
+                .into_iter()
+                .filter(|tool| tool == "cargo")
+                .count(),
+            usize::from(!installed("cargo"))
+        );
+        assert_eq!(
+            missing_tools(
+                "CC=clang mochi-no-such-tool-1 x | mochi-no-such-tool-2; cd x && mochi-no-such-tool-1"
+            ),
+            ["mochi-no-such-tool-1", "mochi-no-such-tool-2"]
+        );
+        assert!(missing_tools("sh -c true && echo done").is_empty());
+        assert!(
+            missing_tools("/nonexistent/bin/tool").contains(&"/nonexistent/bin/tool".to_owned())
+        );
+    }
+
+    #[test]
+    fn reads_github_repositories() {
+        assert_eq!(
+            github_repo("https://github.com/Xonex5/mochi-clock").unwrap(),
+            "Xonex5/mochi-clock"
+        );
+        assert_eq!(github_repo("https://github.com/a/b.git/").unwrap(), "a/b");
+        assert_eq!(github_repo("git@github.com:a/b.git").unwrap(), "a/b");
+        assert!(github_repo("https://gitlab.com/a/b").is_none());
+        assert!(github_repo("https://github.com/a").is_none());
+    }
+
+    #[test]
+    fn a_failed_build_says_what_to_try() {
+        let root = scratch("advice");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(
+            root.join(manifest::FILE),
+            "[plugin]\nid = \"clock\"\nname = \"Clock\"\nversion = \"1\"\napi = 1\n[backend]\nexec = \"bin/clock\"\nbuild = \"mochi-no-such-cargo build\"\n[release]\nasset = \"clock-{version}.tar.gz\"\n",
+        )
+        .unwrap();
+        let manifest = Manifest::load(&root).unwrap();
+        let plan = Plan {
+            id: "clock".into(),
+            source: "git:github.com/Someone/mochi-clock:main".parse().unwrap(),
+            manifest,
+            revision: None,
+            download: None,
+            build: Some((
+                Build::Command("mochi-no-such-cargo build".into()),
+                root.clone(),
+            )),
+        };
+        let locations = Locations {
+            list: root.join("plugins.toml"),
+            lock: root.join("plugins.lock"),
+            installs: root.join("installs"),
+        };
+        let installer = Installer {
+            locations: &locations,
+            confirm: &mut |_| true,
+        };
+        let error = installer.build(&plan, &root).unwrap_err().0;
+        assert!(
+            error.contains("`mochi-no-such-cargo` isn't installed"),
+            "{error}"
+        );
+        assert!(
+            error.contains("programs.mochi.plugins.clock.src"),
+            "{error}"
+        );
+        assert!(
+            error.contains("git-release:github.com/Someone/mochi-clock"),
+            "{error}"
+        );
+        assert!(error.contains("flake.nix"), "{error}");
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn builds_with_the_flake_only_when_there_is_one() {
+        let manifest = Manifest::parse(
+            "[plugin]\nid = \"x\"\nname = \"X\"\nversion = \"1\"\napi = 1\n[backend]\nexec = \"bin/x\"\nbuild = \"cargo build\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            how_to_build(&manifest, Path::new("/nonexistent")),
+            Some(Build::Command("cargo build".into()))
+        );
+        let root = scratch("flake");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::write(root.join("flake.nix"), "{}").unwrap();
+        let expected = if installed("nix") {
+            Build::Flake
+        } else {
+            Build::Command("cargo build".into())
+        };
+        assert_eq!(how_to_build(&manifest, &root), Some(expected));
         std::fs::remove_dir_all(root).unwrap();
     }
 
