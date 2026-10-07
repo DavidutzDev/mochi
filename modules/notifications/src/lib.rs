@@ -35,6 +35,7 @@
 //! ```
 
 mod center;
+mod markdown;
 mod markup;
 mod note;
 mod saved;
@@ -75,6 +76,7 @@ struct Settings {
     history: usize,
     same_app: SameApp,
     save_history: bool,
+    markdown: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -93,6 +95,7 @@ impl Default for Settings {
             history: 50,
             same_app: SameApp::Replace,
             save_history: true,
+            markdown: true,
         }
     }
 }
@@ -223,6 +226,8 @@ impl Module for Notifications {
 struct Daemon {
     center: Center,
     timeout: Duration,
+    /// Whether bodies' Markdown is read, see [`markdown`].
+    markdown: bool,
     connection: Connection,
     /// Where images from pixels go.
     image_dir: PathBuf,
@@ -262,6 +267,7 @@ impl Daemon {
         Self {
             center,
             timeout: Duration::from_millis(settings.timeout_ms),
+            markdown: settings.markdown,
             connection,
             image_dir,
             saved,
@@ -345,7 +351,7 @@ impl Daemon {
             } else {
                 format!("notification-{}", note.id)
             })
-            .payload(payload(note));
+            .payload(payload(note, self.markdown));
         match note.urgency {
             Urgency::Critical => spec.priority(Priority::URGENT).uninterruptible(),
             Urgency::Normal | Urgency::Low => spec
@@ -434,7 +440,10 @@ impl Daemon {
             .center
             .get(id)
             .ok_or_else(|| format!("no notification {id}"))?;
-        if !markup::links(&note.body).iter().any(|link| link == url) {
+        if !markup::links(&note.body, self.markdown)
+            .iter()
+            .any(|link| link == url)
+        {
             return Err(format!("notification {id} has no link {url:?}"));
         }
         mochi_core::process::spawn_detached(
@@ -456,7 +465,11 @@ impl Daemon {
     fn history_payload(&self) -> Value {
         json!({
             "dnd": self.center.dnd(),
-            "notes": self.center.history().map(payload).collect::<Vec<_>>(),
+            "notes": self
+                .center
+                .history()
+                .map(|note| payload(note, self.markdown))
+                .collect::<Vec<_>>(),
         })
     }
 
@@ -521,7 +534,7 @@ fn bubble(view: &str, key: &str) -> BubbleSpec {
 }
 
 /// What the views get for one notification.
-fn payload(note: &Note) -> Value {
+fn payload(note: &Note, markdown: bool) -> Value {
     let image = match &note.image {
         Some(Image::Path(path)) if path.starts_with('/') => Some(format!("file://{path}")),
         Some(Image::Path(path)) => Some(path.clone()),
@@ -538,8 +551,8 @@ fn payload(note: &Note) -> Value {
         "image": image,
         "summary": note.summary,
         // StyledText: the whole body, and its first line for one-line rows.
-        "body": markup::markup(&note.body),
-        "line": markup::first_line(&note.body),
+        "body": markup::markup(&note.body, markdown),
+        "line": markup::first_line(&note.body, markdown),
         // `default` is what a click on the text does, and `inline-reply`
         // opens a text field: neither is a plain button.
         "actions": note
