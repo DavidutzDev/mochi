@@ -54,7 +54,7 @@ Rectangle {
 
                 Row {
                     anchors.centerIn: parent
-                    spacing: 8
+                    spacing: Theme.spaceSmall
 
                     Symbol {
                         anchors.verticalCenter: parent.verticalCenter

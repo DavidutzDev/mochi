@@ -17,7 +17,7 @@ Rectangle {
         anchors.centerIn: parent
         text: root.count > 99 ? "99+" : String(root.count)
         color: Theme.onAccent
-        font.pixelSize: 9
+        font.pixelSize: 9 // design: fits inside the 14 pixel dot
         font.family: Theme.fontFamily
         font.weight: Font.Bold
     }

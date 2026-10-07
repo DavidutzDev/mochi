@@ -113,6 +113,8 @@
             ];
 
             RUST_SRC_PATH = "${pkgs.rustPlatform.rustLibSrc}";
+            # Inter and the icon font, as the package has them.
+            MOCHI_FONTS = "${pkgs.callPackage ./packaging/nix/fonts.nix { }}";
           };
         }
       );

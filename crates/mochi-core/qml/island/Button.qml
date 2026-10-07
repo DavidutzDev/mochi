@@ -49,7 +49,7 @@ Rectangle {
         id: content
 
         anchors.centerIn: parent
-        spacing: 6
+        spacing: Theme.spaceSmall
 
         Symbol {
             anchors.verticalCenter: parent.verticalCenter

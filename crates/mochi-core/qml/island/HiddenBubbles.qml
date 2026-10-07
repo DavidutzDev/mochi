@@ -20,7 +20,7 @@ Item {
         x: Theme.padding
         y: Theme.padding
         width: root.width - Theme.padding * 2
-        spacing: 4
+        spacing: Theme.spaceTiny
 
         SectionLabel {
             text: root.bubbles.length === 1 ? "1 more bubble" : `${root.bubbles.length} more bubbles`
@@ -86,7 +86,7 @@ Item {
                     id: label
 
                     anchors.right: parent.right
-                    anchors.rightMargin: 12
+                    anchors.rightMargin: Theme.spaceMedium
                     anchors.verticalCenter: parent.verticalCenter
                     text: row.modelData.module
                     color: Theme.muted
