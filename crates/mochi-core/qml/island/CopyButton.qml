@@ -24,8 +24,8 @@ Item {
     property bool open: false
     signal copied(string format)
 
-    implicitWidth: buttons.implicitWidth
-    implicitHeight: buttons.implicitHeight
+    implicitWidth: label.implicitWidth + Theme.spaceHuge + arrow.width + 1
+    implicitHeight: 30
 
     function copy(format: string): void {
         Daemon.command(module, action, [format]);
@@ -40,25 +40,113 @@ Item {
         interval: 1500
     }
 
-    Row {
-        id: buttons
+    // One pill, Copy and the arrow its two halves, each lit on hover.
+    component Half: Item {
+        id: half
 
-        spacing: 2
+        property bool first: true
+        property alias hovered: area.containsMouse
+        default property alias content: inner.data
+        signal clicked
 
-        Button {
-            width: Math.max(implicitWidth, root.width - more.width - buttons.spacing)
-            text: done.running ? "Copied" : "Copy"
-            icon: done.running ? "check" : "copy"
-            onClicked: root.copy(root.formats[0].format)
+        height: parent ? parent.height : 0
+
+        // Rounded on the outer side only: a pill, and a square over its
+        // inner corners.
+        Item {
+            anchors.fill: parent
+            visible: area.containsMouse
+
+            Rectangle {
+                anchors.fill: parent
+                radius: height / 2
+                color: Theme.highlight
+            }
+
+            Rectangle {
+                x: half.first ? parent.width / 2 : 0
+                width: parent.width / 2
+                height: parent.height
+                color: Theme.highlight
+            }
         }
 
-        Button {
-            id: more
+        Item {
+            id: inner
 
-            icon: "chevron"
-            iconSize: 12
-            rotation: root.open ? 270 : 90
+            anchors.fill: parent
+        }
+
+        MouseArea {
+            id: area
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: half.clicked()
+        }
+    }
+
+    Rectangle {
+        id: pill
+
+        anchors.fill: parent
+        radius: height / 2
+        color: Theme.raised
+
+        Half {
+            id: main
+
+            width: parent.width - arrow.width - 1
+            onClicked: root.copy(root.formats[0].format)
+
+            Row {
+                id: label
+
+                anchors.centerIn: parent
+                spacing: Theme.spaceSmall
+
+                Symbol {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: done.running ? "check" : "copy"
+                    size: 15
+                    color: Theme.foreground
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: done.running ? "Copied" : "Copy"
+                    color: Theme.foreground
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
+                    font.weight: Font.DemiBold
+                }
+            }
+        }
+
+        Rectangle {
+            x: main.width
+            anchors.verticalCenter: parent.verticalCenter
+            width: 1
+            height: parent.height - Theme.spaceSmall * 2
+            color: Theme.highlight
+        }
+
+        Half {
+            id: arrow
+
+            x: main.width + 1
+            width: root.height + Theme.spaceTiny
+            first: false
             onClicked: root.open = !root.open
+
+            Symbol {
+                anchors.centerIn: parent
+                name: "chevron"
+                size: 12
+                rotation: root.open ? 270 : 90
+                color: Theme.foreground
+            }
         }
     }
 
