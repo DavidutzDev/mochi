@@ -6,7 +6,7 @@ The flake has the `mochi` package, with both binaries, the systemd unit and the 
 
 ```nix
 mochi = {
-  url = "github:DavidutzDev/mochi/v0.0.6";
+  url = "github:DavidutzDev/mochi/v0.0.7";
   inputs.nixpkgs.follows = "nixpkgs";
 };
 ```

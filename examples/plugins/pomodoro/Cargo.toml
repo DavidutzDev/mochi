@@ -12,7 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 # In a plugin of your own:
-# mochi-sdk = { git = "https://github.com/DavidutzDev/mochi", tag = "v0.0.6" }
+# mochi-sdk = { git = "https://github.com/DavidutzDev/mochi", tag = "v0.0.7" }
 mochi-sdk = { path = "../../../crates/mochi-sdk" }
 serde = { version = "1", features = ["derive"] }
 tokio = { version = "1", features = ["macros", "time"] }

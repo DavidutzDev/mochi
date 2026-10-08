@@ -2,7 +2,7 @@
 
 Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor release may change the config format, the protocol or the module interface; the changelog says when.
 
-## Unreleased
+## 0.0.7 - 2026-10-08
 
 ### Added
 

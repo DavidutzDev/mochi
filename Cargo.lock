@@ -723,7 +723,7 @@ dependencies = [
 
 [[package]]
 name = "mochi"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "clap",
  "clap_complete",
@@ -735,7 +735,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-compositor"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "serde_json",
  "thiserror",
@@ -748,7 +748,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-core"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "libc",
@@ -765,7 +765,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-audio"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "libpulse-binding",
@@ -779,7 +779,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-battery"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -794,7 +794,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-bluetooth"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -809,7 +809,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-capture"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "libc",
@@ -824,7 +824,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-clipboard"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "blake3",
  "chacha20poly1305",
@@ -849,7 +849,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-colors"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -864,7 +864,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-demo"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -875,7 +875,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-emoji"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -888,7 +888,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-hub"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -901,7 +901,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-idle"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -914,7 +914,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-launcher"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "inotify",
@@ -930,7 +930,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-media"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -945,7 +945,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-network"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -960,7 +960,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-notes"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -972,7 +972,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-notifications"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "enumflags2",
  "futures-util",
@@ -989,7 +989,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-osd"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "libpulse-binding",
@@ -1003,7 +1003,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-performance"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "libc",
@@ -1017,7 +1017,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-power"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "futures-util",
  "include_dir",
@@ -1032,7 +1032,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-settings"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -1043,7 +1043,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-share"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -1056,7 +1056,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-tray"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "enumflags2",
  "futures-util",
@@ -1073,7 +1073,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-widgets"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -1087,7 +1087,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-workspaces"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "include_dir",
  "mochi-core",
@@ -1129,7 +1129,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-plugins"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "blake3",
  "mochi-protocol",
@@ -1141,7 +1141,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-protocol"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "schemars",
  "serde",
@@ -1151,7 +1151,7 @@ dependencies = [
 
 [[package]]
 name = "mochi-sdk"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "mochi-protocol",
  "serde",
@@ -1161,7 +1161,7 @@ dependencies = [
 
 [[package]]
 name = "mochid"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "clap",
