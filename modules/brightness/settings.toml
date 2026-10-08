@@ -1,0 +1,10 @@
+# Brightness: the laptop's backlight and external monitors over DDC/CI.
+[module.brightness]
+# The percent that `mochi ipc brightness up` and `down` move.
+# step = 5
+# Monitors over DDC/CI, through ddcutil. It needs the i2c-dev kernel module
+# and access to /dev/i2c-*, from the i2c group or ddcutil's udev rule.
+# external = true
+# The level on the island when it changes, also from a key the firmware
+# handles.
+# osd = true

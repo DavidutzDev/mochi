@@ -305,7 +305,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] Theme-colored line icons drawn in QML
 - [ ] Confirm Caps Lock and Num Lock with a physical key press (a virtual keyboard doesn't change the hardware LEDs)
 - [ ] Check whether headset dials (Arctis Nova 7) report volume through the audio server
-- [ ] Laptop screen brightness: sysfs backlight with udev events (see Polish and features, with DDC)
+- [x] Laptop screen brightness: in the brightness module, with DDC (polled every 500 ms, as sysfs sends no events for it)
 - [ ] Keyboard backlight
 
 ### Media
@@ -566,10 +566,10 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [x] The hub sized to its content, its outline animating between pages instead of one fixed size for all of them
 - [ ] An editable control center: choose the tiles and drag them into place, reusing the widgets editor's drag and snap
 - [x] Shared components (now to be used by every module): a panel header (back, title, actions), fading edges where a list scrolls, rolling digits for the clock and percentages, a light along a panel's top edge that follows the pointer and pulses while something works, switch rows and slider rows
-- [ ] Theme presets: named palettes in a picker with preview cards, applied live
-- [ ] A light mode for every preset (replaces "Light variant of the palette" under Design system)
-- [ ] Colors from the wallpaper, with contrast corrected without moving the hue (replaces "Colors generated from the wallpaper" under Design system)
-- [ ] Motion settings: reduced motion, which turns animations off, and a speed multiplier for the rest
+- [x] Theme presets: named palettes in a picker with preview cards, applied live
+- [x] A light mode for every preset (replaces "Light variant of the palette" under Design system)
+- [x] Colors from the wallpaper, with contrast corrected without moving the hue (replaces "Colors generated from the wallpaper" under Design system)
+- [x] Motion settings: reduced motion, which turns animations off, and a speed multiplier for the rest
 - [ ] A one-line launcher layout: icon and name, the description only on the selected row
 
 ### Features
@@ -580,7 +580,7 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [ ] Keep awake: a toggle that blocks idle and sleep
 - [ ] Night light, through hyprsunset or wlsunset
 - [ ] A focus timer, built in (the pomodoro example plugin shows the idea)
-- [ ] Brightness: the laptop's backlight and external monitors over DDC/CI with ddcutil, with the OSD and a slider tile (replaces "Laptop screen brightness" under OSD)
+- [x] Brightness: the laptop's backlight and external monitors over DDC/CI with ddcutil, with the OSD and a slider tile (replaces "Laptop screen brightness" under OSD)
 
 ### Checks and tools
 

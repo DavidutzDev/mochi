@@ -847,6 +847,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-brightness"
+version = "0.0.7"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
 name = "mochi-module-capture"
 version = "0.0.7"
 dependencies = [
@@ -1224,6 +1238,7 @@ dependencies = [
  "mochi-module-audio",
  "mochi-module-battery",
  "mochi-module-bluetooth",
+ "mochi-module-brightness",
  "mochi-module-capture",
  "mochi-module-clipboard",
  "mochi-module-colors",

@@ -21,6 +21,7 @@
 - [Network](modules/network.md)
 - [Bluetooth](modules/bluetooth.md)
 - [Battery](modules/battery.md)
+- [Brightness](modules/brightness.md)
 - [Performance](modules/performance.md)
 - [Notifications](modules/notifications.md)
 - [Launcher](modules/launcher.md)

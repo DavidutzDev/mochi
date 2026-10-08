@@ -759,6 +759,7 @@ fn icon(module: &str) -> &'static str {
     match module {
         "audio" => "volume_up",
         "battery" => "battery_full",
+        "brightness" => "light_mode",
         "bluetooth" => "bluetooth",
         "capture" => "screenshot_region",
         "clipboard" => "content_paste",
