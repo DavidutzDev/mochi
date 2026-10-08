@@ -179,6 +179,9 @@ impl Module for Share {
                                 tracing::info!("leaving the switchable monitor to the next start");
                                 state.save(&ctx);
                             } else {
+                                if state.session.is_some() {
+                                    tracing::info!("nothing captures the switchable monitor: removing it");
+                                }
                                 state.stop(&ctx).await;
                             }
                             return Ok(());
@@ -306,14 +309,22 @@ impl State {
                 ctx.publish_state(session.payload());
                 self.session = Some(session);
             }
-            _ => self.stop(ctx).await,
+            Some(_) => {
+                tracing::info!("the saved share's monitor is gone: the share ended");
+                self.stop(ctx).await;
+            }
+            None => self.stop(ctx).await,
         }
     }
 
     /// Writes down what a restart needs to carry on.
     fn save(&mut self, ctx: &ModuleCtx) {
         let captured = ctx.compositor().state().captured;
-        Saved::new(captured.clone(), self.session.as_ref()).save(ctx.session_dir());
+        Saved::new(
+            restarting(&captured, self.session.as_ref()),
+            self.session.as_ref(),
+        )
+        .save(ctx.session_dir());
         self.saved_captures = captured;
     }
 
@@ -695,6 +706,21 @@ impl State {
     }
 }
 
+/// The captures that carry on through a restart: not the copy's own of
+/// the screen it shows, which ends with the old shell and starts again
+/// with the new one, so counting it would keep the bubble after the share.
+fn restarting(captured: &[String], session: Option<&Session>) -> Vec<String> {
+    let own = session.and_then(|session| match &session.source {
+        Source::Screen(output) | Source::Area { output, .. } => Some(output.as_str()),
+        Source::Window { .. } => None,
+    });
+    captured
+        .iter()
+        .filter(|target| Some(target.as_str()) != own)
+        .cloned()
+        .collect()
+}
+
 /// How long the switchable monitor has to appear.
 const APPEAR: Duration = Duration::from_secs(3);
 /// How long the copy gets to draw before the app sees the monitor.
@@ -755,6 +781,14 @@ mod tests {
             .arg(ArgSpec::int("height", ""));
         let words: Vec<String> = words.split(' ').map(str::to_owned).collect();
         mochi_core::actions::parse(&spec, &words).unwrap()
+    }
+
+    #[test]
+    fn the_copys_own_capture_isnt_carried_over() {
+        let session = Session::new(Source::Screen("DP-3".into()), Instant::now());
+        let captured = vec!["DP-3".to_owned(), OUTPUT.to_owned()];
+        assert_eq!(restarting(&captured, Some(&session)), [OUTPUT]);
+        assert_eq!(restarting(&captured, None), captured);
     }
 
     #[test]
