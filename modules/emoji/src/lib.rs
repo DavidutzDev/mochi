@@ -219,17 +219,7 @@ impl Picker {
     }
 
     fn open(&mut self, ctx: &ModuleCtx) {
-        // The other panels take the keyboard too; only one can be
-        // open. Not awaited, as they close this the same way.
-        for module in ["hub", "launcher", "clipboard", "audio", "tray"] {
-            let close = ctx.call(module, "close", &[]);
-            tokio::spawn(async move {
-                match close.await {
-                    Ok(()) | Err(CallError::NotEnabled(_)) => {}
-                    Err(error) => tracing::warn!(%error, module, "could not close it"),
-                }
-            });
-        }
+        ctx.close_other_panels();
         let spec = ActivitySpec::new("Picker")
             .key("picker")
             .priority(Priority::URGENT)

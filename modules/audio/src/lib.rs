@@ -28,8 +28,8 @@ use std::time::{Duration, Instant};
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, CallError, ContributionSpec,
-    Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, ContributionSpec, Module,
+    ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -358,15 +358,7 @@ impl State {
     fn open(&mut self, ctx: &ModuleCtx) {
         // The other panels take the keyboard too; only one can be open. Not
         // awaited, as they close this the same way.
-        for module in ["hub", "launcher", "clipboard", "tray", "emoji"] {
-            let close = ctx.call(module, "close", &[]);
-            tokio::spawn(async move {
-                match close.await {
-                    Ok(()) | Err(CallError::NotEnabled(_)) => {}
-                    Err(error) => tracing::warn!(%error, module, "could not close it"),
-                }
-            });
-        }
+        ctx.close_other_panels();
         let spec = ActivitySpec::new("Panel")
             .key("audio")
             .priority(Priority::URGENT)

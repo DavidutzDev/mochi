@@ -80,6 +80,18 @@ pub trait Module: Send + 'static {
     fn run(self: Box<Self>, ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>>;
 }
 
+/// The modules whose panels take the keyboard, each with a `close` action:
+/// see [`ModuleCtx::close_other_panels`].
+pub const PANELS: [&str; 7] = [
+    "hub",
+    "launcher",
+    "clipboard",
+    "audio",
+    "tray",
+    "emoji",
+    "settings",
+];
+
 /// Reads a `[module.<id>]` table into a module's settings type.
 pub fn settings<T: DeserializeOwned>(table: &toml::Table) -> Result<T, toml::de::Error> {
     toml::Value::Table(table.clone()).try_into()
@@ -471,6 +483,21 @@ impl ModuleCtx {
             answer
                 .await
                 .unwrap_or_else(|_| Err("the daemon stopped".to_owned()))
+        }
+    }
+
+    /// Closes every other panel: views that take the keyboard, of which
+    /// only one can be open. Not awaited, as they close this one the same
+    /// way.
+    pub fn close_other_panels(&self) {
+        for module in PANELS.iter().filter(|module| **module != self.module) {
+            let close = self.call(module, "close", &[]);
+            tokio::spawn(async move {
+                match close.await {
+                    Ok(()) | Err(CallError::NotEnabled(_)) => {}
+                    Err(error) => tracing::warn!(%error, module, "could not close it"),
+                }
+            });
         }
     }
 

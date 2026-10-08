@@ -19,7 +19,7 @@ Item {
     property string query: ""
     // The module the list is narrowed to, or "" for all.
     property string module: ""
-    property bool menu: false
+    readonly property bool menu: copy.open
 
     readonly property bool atBottom: Theme.anchor === "bottom"
     readonly property bool open: (desktop.layout?.drawer ?? false) && dragging === null
@@ -33,7 +33,7 @@ Item {
     })
 
     function close(): void {
-        menu = false;
+        copy.open = false;
         Daemon.command("widgets", "drawer", ["off"]);
     }
 
@@ -311,30 +311,12 @@ Item {
                     spacing: Theme.spaceSmall
 
                     // Copy the layout as widgets.toml; the arrow has the other formats.
-                    Row {
+                    CopyButton {
                         id: copy
 
                         width: (parent.width - 8) / 2
-                        spacing: 2
-
-                        Button {
-                            width: parent.width - more.width - 2
-                            text: "Copy"
-                            icon: "copy"
-                            onClicked: {
-                                Daemon.command("widgets", "copy", ["toml"]);
-                                light.flash();
-                            }
-                        }
-
-                        Button {
-                            id: more
-
-                            icon: "chevron"
-                            iconSize: 12
-                            rotation: root.menu ? 270 : 90
-                            onClicked: root.menu = !root.menu
-                        }
+                        module: "widgets"
+                        onCopied: light.flash()
                     }
 
                     Button {
@@ -343,71 +325,6 @@ Item {
                         icon: "check"
                         tone: "accent"
                         onClicked: Daemon.command("widgets", "edit", ["off"])
-                    }
-                }
-            }
-
-            // The other formats, over the copy button.
-            Rectangle {
-                visible: root.menu
-                anchors.bottom: buttons.top
-                anchors.bottomMargin: Theme.spaceSmall
-                width: copy.width
-                height: formats.implicitHeight + 8
-                radius: Theme.radiusField
-                color: Theme.raised
-
-                Column {
-                    id: formats
-
-                    x: 4
-                    y: 4
-                    width: parent.width - 8
-
-                    Repeater {
-                        model: [
-                            {
-                                "label": "Copy as TOML",
-                                "format": "toml"
-                            },
-                            {
-                                "label": "Copy as Nix",
-                                "format": "nix"
-                            }
-                        ]
-
-                        Rectangle {
-                            id: format
-
-                            required property var modelData
-
-                            width: formats.width
-                            height: 32
-                            radius: Theme.radiusControl
-                            color: formatArea.containsMouse ? Theme.highlight : "transparent"
-
-                            Text {
-                                x: 10
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: format.modelData.label
-                                color: Theme.foreground
-                                font.pixelSize: Theme.textBody
-                                font.family: Theme.fontFamily
-                            }
-
-                            MouseArea {
-                                id: formatArea
-
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    Daemon.command("widgets", "copy", [format.modelData.format]);
-                                    light.flash();
-                                    root.menu = false;
-                                }
-                            }
-                        }
                     }
                 }
             }

@@ -29,7 +29,7 @@ use std::path::PathBuf;
 use include_dir::{Dir, include_dir};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Assets, BoxFuture, BubbleId, BubbleSpec,
-    CallError, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -489,15 +489,7 @@ impl State {
     fn open(&mut self, ctx: &ModuleCtx) {
         // The other panels take the keyboard too; only one can be open.
         if self.panel.is_none() {
-            for module in ["hub", "launcher", "clipboard", "audio", "emoji"] {
-                let close = ctx.call(module, "close", &[]);
-                tokio::spawn(async move {
-                    match close.await {
-                        Ok(()) | Err(CallError::NotEnabled(_)) => {}
-                        Err(error) => tracing::warn!(%error, module, "could not close it"),
-                    }
-                });
-            }
+            ctx.close_other_panels();
         }
         let spec = ActivitySpec::new("Panel")
             .key("tray")

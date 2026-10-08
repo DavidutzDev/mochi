@@ -17,8 +17,8 @@
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, CallError, ContributionSpec,
-    Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, ContributionSpec, Module,
+    ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -156,17 +156,7 @@ fn command(
 }
 
 fn open(ctx: &ModuleCtx, settings: Settings, shown: &mut Option<ActivityId>, page: &str) {
-    // The other panels take the keyboard too; only one can be
-    // open. Not awaited: they close the hub the same way.
-    for module in ["launcher", "clipboard", "audio", "tray", "emoji"] {
-        let close = ctx.call(module, "close", &[]);
-        tokio::spawn(async move {
-            match close.await {
-                Ok(()) | Err(CallError::NotEnabled(_)) => {}
-                Err(error) => tracing::warn!(%error, module, "could not close it"),
-            }
-        });
-    }
+    ctx.close_other_panels();
 
     let spec = ActivitySpec::new("Hub")
         .key("hub")
