@@ -1,8 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/*", "modules/*", "examples/plugins/*"]
+members = ["crates/*", "modules/*", "examples/demo", "examples/plugins/*"]
 # The example plugins build with `cargo build --workspace`, but aren't part
-# of the Mochi package.
+# of the Mochi package. examples/demo is mochid's `demo` feature: views and
+# actions for trying the island, which the daemon's tests drive.
 default-members = ["crates/*", "modules/*"]
 
 [workspace.package]
@@ -23,7 +24,7 @@ mochi-module-battery = { path = "modules/battery" }
 mochi-module-bluetooth = { path = "modules/bluetooth" }
 mochi-module-capture = { path = "modules/capture" }
 mochi-module-clipboard = { path = "modules/clipboard" }
-mochi-module-demo = { path = "modules/demo" }
+mochi-module-demo = { path = "examples/demo" }
 mochi-module-hub = { path = "modules/hub" }
 mochi-module-idle = { path = "modules/idle" }
 mochi-module-launcher = { path = "modules/launcher" }

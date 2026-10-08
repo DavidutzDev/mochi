@@ -9,7 +9,9 @@ publish.workspace = true
 
 [features]
 default = ["demo"]
-# Demo views and actions for trying the island. Enabled per user in config.toml.
+# The demo module, from examples/demo: views and actions for trying the
+# island, which the daemon's tests drive. On while working on Mochi; the
+# packages build without it, and test with it.
 demo = ["dep:mochi-module-demo"]
 
 [dependencies]

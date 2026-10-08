@@ -14,6 +14,8 @@ cargo run -p mochid -- --dev --modules idle,osd,demo
 
 `--dev` links the QML to the source tree, so editing any `qml/` file updates the running island. `--modules` overrides the module list in `~/.config/mochi/config.toml`. Stop it with Ctrl+C.
 
+`demo` is a module for working on Mochi, in `examples/demo`: test views, `mochi ipc demo` actions that walk the island through its rules, and `mochi ipc demo controls`, every built-in control to try. Builds from the repository have it; the packages leave it out.
+
 From another terminal:
 
 ```sh
@@ -116,7 +118,6 @@ cargo test -p mochid --test record -- --ignored --nocapture
 | `bluetooth` | Bluetooth from BlueZ: a bubble with the connected device's battery, a page to connect, pair and forget devices, a home tile, and pairing questions on the island. |
 | `battery` | A laptop's battery from UPower: a short notice as it drops past 80, 50, 20 and 10%, a warning bubble at or under 50%, red at 10%, notices on plugging in or out, and a hub card. Every level is a setting. |
 | `performance` | CPU, memory and GPU use and temperatures: a hub page with graphs and the busiest processes, a notice when a reading stays high naming the busiest process, and a red bubble while one stays critical. Every level is a setting. |
-| `demo` | Test views and `mochi ipc demo` actions for trying the island. |
 
 ## Configuration
 

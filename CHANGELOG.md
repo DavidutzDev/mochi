@@ -14,6 +14,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Changed
 
+- The demo module moved to `examples/demo`, and the Nix and Arch packages leave it out: it's for working on Mochi, with test views, the `mochi ipc demo` actions the daemon's tests drive, and `mochi ipc demo controls`. Builds from the repository still have it, as mochid's default `demo` feature.
 - The daemon sends only the contributions whose target module runs: an offer to a module that's off goes nowhere.
 
 ## 0.0.7 - 2026-10-08

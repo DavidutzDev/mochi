@@ -1,5 +1,6 @@
 //! Views use `Theme`'s scales, not raw sizes and colors, so they don't drift
-//! apart. This reads every view in `modules/` and the core QML and counts
+//! apart. This reads every view in `modules/`, `examples/` and the core QML,
+//! and counts
 //! the lines that set, by hand:
 //!
 //! - a text size (`pixelSize: 13`);
@@ -101,6 +102,7 @@ fn counts() -> BTreeMap<String, usize> {
     let root = root();
     let mut found = Vec::new();
     views(&root.join("modules"), &mut found);
+    views(&root.join("examples"), &mut found);
     views(&root.join("crates/mochi-core/qml"), &mut found);
     let mut counts = BTreeMap::new();
     for path in found {

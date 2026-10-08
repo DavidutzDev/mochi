@@ -42,6 +42,10 @@ rustPlatform.buildRustPackage {
 
   cargoLock.lockFile = ../../Cargo.lock;
 
+  # The demo module is for working on Mochi; the tests drive it.
+  buildNoDefaultFeatures = true;
+  checkNoDefaultFeatures = false;
+
   nativeBuildInputs = [
     makeWrapper
     installShellFiles
