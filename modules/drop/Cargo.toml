@@ -8,6 +8,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+image = { workspace = true, features = ["bmp", "gif", "ico", "tiff"] }
 include_dir.workspace = true
 mochi-core.workspace = true
 schemars.workspace = true

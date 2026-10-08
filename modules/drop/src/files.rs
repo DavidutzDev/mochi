@@ -6,11 +6,30 @@ use std::path::{Path, PathBuf};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Kind {
     Image,
+    Video,
+    Audio,
     Pdf,
+    /// Office documents: Word, Writer, Excel, PowerPoint and the like.
+    Document,
+    /// Markup: Markdown, HTML, reStructuredText.
+    Text,
     Archive,
     Folder,
     Other,
 }
+
+/// Every kind, in the order a summary names them.
+pub const KINDS: [Kind; 9] = [
+    Kind::Image,
+    Kind::Video,
+    Kind::Audio,
+    Kind::Pdf,
+    Kind::Document,
+    Kind::Text,
+    Kind::Archive,
+    Kind::Folder,
+    Kind::Other,
+];
 
 impl Kind {
     pub fn of(path: &Path) -> Self {
@@ -23,54 +42,43 @@ impl Kind {
             .unwrap_or_default();
         let extension = name.rsplit_once('.').map_or("", |(_, extension)| extension);
         match extension {
-            "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "avif" | "heic" => {
-                Self::Image
-            }
+            "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" | "tif" | "tiff" | "avif" | "heic"
+            | "ico" | "svg" => Self::Image,
+            "mp4" | "mkv" | "webm" | "mov" | "avi" | "m4v" => Self::Video,
+            "mp3" | "ogg" | "opus" | "flac" | "wav" | "m4a" | "aac" => Self::Audio,
             "pdf" => Self::Pdf,
+            "doc" | "docx" | "odt" | "rtf" | "xls" | "xlsx" | "ods" | "ppt" | "pptx" | "odp" => {
+                Self::Document
+            }
+            "md" | "markdown" | "html" | "htm" | "rst" => Self::Text,
             "zip" | "tar" | "tgz" | "txz" | "tbz2" | "7z" | "rar" => Self::Archive,
             "gz" | "xz" | "zst" | "bz2" if name.contains(".tar.") => Self::Archive,
             _ => Self::Other,
         }
     }
 
-    fn noun(self, count: usize) -> &'static str {
-        let one = count == 1;
-        match self {
-            Self::Image => {
-                if one {
-                    "image"
-                } else {
-                    "images"
-                }
-            }
-            Self::Pdf => {
-                if one {
-                    "PDF"
-                } else {
-                    "PDFs"
-                }
-            }
-            Self::Archive => {
-                if one {
-                    "archive"
-                } else {
-                    "archives"
-                }
-            }
-            Self::Folder => {
-                if one {
-                    "folder"
-                } else {
-                    "folders"
-                }
-            }
-            Self::Other => {
-                if one {
-                    "file"
-                } else {
-                    "files"
-                }
-            }
+    /// What one of it, or several, is called.
+    fn noun(self, count: usize) -> String {
+        let (one, many) = match self {
+            Self::Image => ("image", "images"),
+            Self::Video => ("video", "videos"),
+            Self::Audio => ("audio file", "audio files"),
+            Self::Pdf => ("PDF", "PDFs"),
+            Self::Document => ("document", "documents"),
+            Self::Text => ("text file", "text files"),
+            Self::Archive => ("archive", "archives"),
+            Self::Folder => ("folder", "folders"),
+            Self::Other => ("file", "files"),
+        };
+        if count == 1 {
+            let article = if matches!(self, Self::Image | Self::Archive | Self::Audio) {
+                "an"
+            } else {
+                "a"
+            };
+            format!("{article} {one}")
+        } else {
+            format!("{count} {many}")
         }
     }
 }
@@ -134,29 +142,13 @@ pub fn summary(files: &[Dropped]) -> String {
             .map(|name| name.to_string_lossy().into_owned())
             .unwrap_or_default();
     }
-    let mut parts: Vec<String> = Vec::new();
-    for kind in [
-        Kind::Image,
-        Kind::Pdf,
-        Kind::Archive,
-        Kind::Folder,
-        Kind::Other,
-    ] {
-        let count = files.iter().filter(|file| file.kind == kind).count();
-        match count {
-            0 => {}
-            1 => parts.push(format!(
-                "{} {}",
-                if kind == Kind::Image || kind == Kind::Archive {
-                    "an"
-                } else {
-                    "a"
-                },
-                kind.noun(1)
-            )),
-            _ => parts.push(format!("{count} {}", kind.noun(count))),
-        }
-    }
+    let parts: Vec<String> = KINDS
+        .into_iter()
+        .filter_map(|kind| {
+            let count = files.iter().filter(|file| file.kind == kind).count();
+            (count > 0).then(|| kind.noun(count))
+        })
+        .collect();
     match parts.as_slice() {
         [] => String::new(),
         [one] => one.clone(),

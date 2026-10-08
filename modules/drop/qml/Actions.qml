@@ -8,7 +8,9 @@ Item {
     id: root
 
     property var payload: ({})
-    readonly property var actions: payload.actions ?? []
+    readonly property var actions: (payload.actions ?? []).filter(action => !action.convert)
+    // The formats it converts to, under "Convert to".
+    readonly property var formats: (payload.actions ?? []).filter(action => action.convert)
     readonly property bool busy: payload.running != null
 
     implicitWidth: Math.max(360, buttons.implicitWidth + Theme.padding * 2)
@@ -47,7 +49,7 @@ Item {
         }
 
         Text {
-            visible: root.actions.length === 0
+            visible: root.actions.length === 0 && root.formats.length === 0
             text: "Nothing to do with these: install zip, ImageMagick or poppler for more"
             color: Theme.muted
             font.pixelSize: Theme.textCaption
@@ -69,6 +71,32 @@ Item {
 
                     icon: running ? "hourglass_top" : modelData.icon
                     text: running ? "Working…" : modelData.label
+                    enabled: !root.busy
+                    onClicked: Daemon.command("drop", "run", [modelData.id])
+                }
+            }
+        }
+
+        SectionLabel {
+            visible: root.formats.length > 0
+            text: "Convert to"
+        }
+
+        Flow {
+            width: column.width
+            visible: root.formats.length > 0
+            spacing: Theme.spaceSmall
+
+            Repeater {
+                model: root.formats
+
+                Button {
+                    required property var modelData
+                    readonly property bool running: root.payload.running === modelData.id
+
+                    icon: running ? "hourglass_top" : ""
+                    text: modelData.label
+                    tone: running ? "accent" : "neutral"
                     enabled: !root.busy
                     onClicked: Daemon.command("drop", "run", [modelData.id])
                 }

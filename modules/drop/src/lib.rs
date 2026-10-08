@@ -30,7 +30,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
-use crate::actions::Plan;
+use crate::actions::{Plan, Step};
 use crate::files::Dropped;
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
@@ -46,35 +46,45 @@ pub struct DropModule;
 #[derive(Debug, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
-    /// The actions to offer, when they fit: zip, extract, merge, png, jpg,
-    /// webp, copy and open.
+    /// The actions to offer, when they fit: zip, extract, merge, convert,
+    /// copy and open.
     actions: Vec<String>,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            actions: actions::ALL
-                .iter()
-                .map(|action| action.id.to_owned())
-                .collect(),
+            actions: actions::IDS.iter().map(|id| (*id).to_owned()).collect(),
         }
     }
 }
 
+/// Earlier names for the conversions, which `convert` replaced.
+const OLD_CONVERSIONS: [&str; 3] = ["png", "jpg", "webp"];
+
 impl Settings {
     fn load(table: &mochi_core::toml::Table) -> Result<Self, String> {
-        let settings: Self = mochi_core::settings(table).map_err(|error| error.to_string())?;
-        if let Some(unknown) = settings
-            .actions
-            .iter()
-            .find(|id| !actions::ALL.iter().any(|action| action.id == id.as_str()))
-        {
-            let known: Vec<&str> = actions::ALL.iter().map(|action| action.id).collect();
+        let mut settings: Self = mochi_core::settings(table).map_err(|error| error.to_string())?;
+        if let Some(unknown) = settings.actions.iter().find(|id| {
+            !actions::IDS.contains(&id.as_str()) && !OLD_CONVERSIONS.contains(&id.as_str())
+        }) {
             return Err(format!(
                 "actions has {unknown}; the actions are {}",
-                known.join(", ")
+                actions::IDS.join(", ")
             ));
+        }
+        // The old names still turn the conversions on.
+        if settings
+            .actions
+            .iter()
+            .any(|id| OLD_CONVERSIONS.contains(&id.as_str()))
+        {
+            settings
+                .actions
+                .retain(|id| !OLD_CONVERSIONS.contains(&id.as_str()));
+            if !settings.actions.iter().any(|id| id == "convert") {
+                settings.actions.push("convert".to_owned());
+            }
         }
         Ok(settings)
     }
@@ -109,7 +119,19 @@ impl Module for DropModule {
             ("zip", "zip", "Compressing dropped files"),
             ("extract", "bsdtar", "Extracting dropped archives"),
             ("merge", "pdfunite", "Merging dropped PDFs"),
-            ("png", "magick", "Converting dropped images"),
+            ("convert", "ffmpeg", "Converting dropped videos and sound"),
+            (
+                "convert",
+                "soffice",
+                "Converting dropped documents, with LibreOffice",
+            ),
+            ("convert", "pandoc", "Converting dropped Markdown and HTML"),
+            ("convert", "vtracer", "Converting dropped images to SVG"),
+            (
+                "convert",
+                "magick",
+                "Converting dropped HEIC and AVIF images, and images to PDF",
+            ),
             ("copy", "wl-copy", "Copying dropped files' paths"),
             ("open", "xdg-open", "Opening dropped files"),
         ] {
@@ -148,8 +170,9 @@ impl Module for DropModule {
 
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {
         Box::pin(async move {
-            // check_settings refused unknown actions.
-            let settings: Settings = ctx.settings()?;
+            // check_settings refused unknown actions; load renames the old.
+            let table: mochi_core::toml::Table = ctx.settings()?;
+            let settings = Settings::load(&table).unwrap_or_default();
             let (finished, mut results) = mpsc::unbounded_channel();
             let mut state = State {
                 enabled: settings.actions,
@@ -279,8 +302,13 @@ impl State {
         if self.running.is_some() {
             return Err("an action is still running".into());
         }
-        if !self.enabled.iter().any(|id| id == action) {
-            return Err(format!("{action} is off in the settings"));
+        let setting = if action.starts_with("to-") {
+            "convert"
+        } else {
+            action
+        };
+        if !self.enabled.iter().any(|id| id == setting) {
+            return Err(format!("{setting} is off in the settings"));
         }
         let plan = actions::plan(action, &self.files, &mochi_core::process::installed)?;
         self.running = Some(action.to_owned());
@@ -322,7 +350,12 @@ impl State {
             "count": self.files.len(),
             "actions": offered
                 .iter()
-                .map(|action| json!({ "id": action.id, "label": action.label, "icon": action.icon }))
+                .map(|action| json!({
+                    "id": action.id,
+                    "label": action.label,
+                    "icon": action.icon,
+                    "convert": action.convert,
+                }))
                 .collect::<Vec<_>>(),
             "running": self.running,
             "message": self.message,
@@ -359,43 +392,58 @@ impl State {
     }
 }
 
-/// Runs a plan's programs in turn; the first to fail stops it, with what it
+/// Runs a plan's steps in turn; the first to fail stops it, with what it
 /// printed.
 async fn execute(plan: &Plan) -> Result<(), String> {
     for step in &plan.steps {
-        if let Some(folder) = &step.make {
-            tokio::fs::create_dir_all(folder)
+        match step {
+            Step::MakeDir(folder) => tokio::fs::create_dir_all(folder)
                 .await
-                .map_err(|error| format!("can't make {}: {error}", folder.display()))?;
-        }
-        // Apps outlive Mochi, in their own scope.
-        if step.program == "xdg-open" {
-            let argv: Vec<String> = std::iter::once(step.program.clone())
-                .chain(
-                    step.args
-                        .iter()
-                        .map(|arg| arg.to_string_lossy().into_owned()),
-                )
-                .collect();
-            mochi_core::process::spawn_detached(&mochi_core::process::in_app_scope(&argv), None)?;
-            continue;
-        }
-        let output = tokio::process::Command::new(&step.program)
-            .args(&step.args)
-            .current_dir(&step.cwd)
-            .stdin(Stdio::null())
-            .kill_on_drop(true)
-            .output()
-            .await
-            .map_err(|error| format!("can't run {}: {error}", step.program))?;
-        if !output.status.success() {
-            let said = String::from_utf8_lossy(&output.stderr);
-            let last = said
-                .lines()
-                .rev()
-                .find(|line| !line.trim().is_empty())
-                .unwrap_or("");
-            return Err(format!("{} failed: {}", step.program, last.trim()));
+                .map_err(|error| format!("can't make {}: {error}", folder.display()))?,
+            Step::Move { from, to } => {
+                tokio::fs::rename(from, to)
+                    .await
+                    .map_err(|error| format!("can't move {}: {error}", from.display()))?;
+                // The folder the program wrote in, now empty.
+                if let Some(folder) = from.parent() {
+                    let _ = tokio::fs::remove_dir(folder).await;
+                }
+            }
+            Step::Image { input, output } => {
+                let (input, output) = (input.clone(), output.clone());
+                tokio::task::spawn_blocking(move || actions::convert_image(&input, &output))
+                    .await
+                    .map_err(|error| error.to_string())??;
+            }
+            // Apps outlive Mochi, in their own scope.
+            Step::Run { program, args, .. } if program == "xdg-open" => {
+                let argv: Vec<String> = std::iter::once(program.clone())
+                    .chain(args.iter().map(|arg| arg.to_string_lossy().into_owned()))
+                    .collect();
+                mochi_core::process::spawn_detached(
+                    &mochi_core::process::in_app_scope(&argv),
+                    None,
+                )?;
+            }
+            Step::Run { program, args, cwd } => {
+                let output = tokio::process::Command::new(program)
+                    .args(args)
+                    .current_dir(cwd)
+                    .stdin(Stdio::null())
+                    .kill_on_drop(true)
+                    .output()
+                    .await
+                    .map_err(|error| format!("can't run {program}: {error}"))?;
+                if !output.status.success() {
+                    let said = String::from_utf8_lossy(&output.stderr);
+                    let last = said
+                        .lines()
+                        .rev()
+                        .find(|line| !line.trim().is_empty())
+                        .unwrap_or("");
+                    return Err(format!("{program} failed: {}", last.trim()));
+                }
+            }
         }
     }
     Ok(())
@@ -415,6 +463,9 @@ mod tests {
         let table = |text: &str| mochi_core::toml::from_str(text).unwrap();
         assert!(Settings::load(&table("actions = [\"zip\", \"merge\"]")).is_ok());
         assert!(Settings::load(&table("actions = [\"shred\"]")).is_err());
+        // The old names of the conversions still turn them on.
+        let old = Settings::load(&table("actions = [\"zip\", \"png\", \"webp\"]")).unwrap();
+        assert_eq!(old.actions, ["zip", "convert"]);
     }
 
     #[tokio::test]
@@ -423,12 +474,14 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         let plan = Plan {
-            steps: vec![actions::Step {
-                program: "sh".into(),
-                args: vec!["-c".into(), "echo hi > made/out.txt".into()],
-                cwd: dir.clone(),
-                make: Some(dir.join("made")),
-            }],
+            steps: vec![
+                Step::MakeDir(dir.join("made")),
+                Step::Run {
+                    program: "sh".into(),
+                    args: vec!["-c".into(), "echo hi > made/out.txt".into()],
+                    cwd: dir.clone(),
+                },
+            ],
             done: "Done".into(),
             result: None,
         };
@@ -438,11 +491,10 @@ mod tests {
             "hi\n"
         );
         let failing = Plan {
-            steps: vec![actions::Step {
+            steps: vec![Step::Run {
                 program: "sh".into(),
                 args: vec!["-c".into(), "echo broken >&2; exit 1".into()],
                 cwd: dir.clone(),
-                make: None,
             }],
             ..plan
         };
