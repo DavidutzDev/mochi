@@ -12,6 +12,7 @@ pub mod changes;
 pub mod config;
 pub mod contributions;
 pub mod examples;
+pub mod islands;
 pub mod module;
 pub mod nix;
 pub mod options;
@@ -36,6 +37,7 @@ pub use config::{
     BubblesConfig, ClickOutside, Config, ConfigError, IslandConfig, Notices, Panels, Paths,
 };
 pub use contributions::ContributionSpec;
+pub use islands::{Change, Islands};
 pub use module::{
     ActivityIds, Assets, BoxFuture, CallError, Module, ModuleCommand, ModuleCtx, ModuleError,
     ModuleEvent, ModuleRequest, Need, Reply, Request, SettingsOp, settings,

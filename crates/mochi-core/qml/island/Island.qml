@@ -16,13 +16,10 @@ Item {
     // The activity on screen, or null when the daemon has nothing to show.
     property var activity: null
     readonly property bool shown: activity !== null
-    // This island's monitor. An activity meant for another one doesn't show
-    // here; this island shows the idle island meanwhile.
+    // This island's monitor: it shows what the daemon shows there.
     property string output: ""
-
-    function elsewhere(next: var): bool {
-        return next?.output != null && output !== "" && next.output !== output;
-    }
+    // What the daemon shows on this island now.
+    readonly property var assigned: Daemon.activityFor(output)
 
     // Radius of the corners away from any edge.
     readonly property real radius: Math.min(height / 2, width / 2, Theme.maxRadius)
@@ -49,8 +46,8 @@ Item {
     }
 
     onOverlayReadyChanged: {
-        if (overlayReady && Daemon.activity?.overlay != null && !elsewhere(Daemon.activity))
-            present(Daemon.activity);
+        if (overlayReady && assigned?.overlay != null)
+            present(assigned);
     }
 
     property int front: 0
@@ -108,7 +105,7 @@ Item {
         // already over the island.
         leave(previous, next);
         if (hover.hovered && (!previous || previous.id !== next.id))
-            Daemon.eventFor(next, "hover_enter");
+            Daemon.eventFor(next, "hover_enter", output);
     }
 
     // An activity the island stops showing while the pointer is over it,
@@ -116,7 +113,7 @@ Item {
     // module shouldn't act on a hover that ended out of sight.
     function leave(previous: var, next: var): void {
         if (hover.hovered && previous && (!next || previous.id !== next.id))
-            Daemon.eventFor(previous, "hover_leave");
+            Daemon.eventFor(previous, "hover_leave", output);
     }
 
     // Loads the next view into the hidden slot and swaps the slots.
@@ -157,26 +154,14 @@ Item {
         return previous.id === next.id || (next.key != null && next.key === previous.key);
     }
 
-    Connections {
-        target: Daemon
-
-        function onActivityChanged(): void {
-            root.follow();
-        }
-    }
-
+    onAssignedChanged: follow()
     Component.onCompleted: follow()
 
-    // Shows the daemon's activity, or the idle island when the activity is
-    // meant for another monitor.
+    // Shows what the daemon shows on this monitor, once its overlay, if it
+    // has one, is ready.
     function follow(): void {
-        const next = Daemon.activity;
-        if (waiting(next))
-            return;
-        if (!elsewhere(next))
-            present(next);
-        else if (Daemon.resting !== null && !elsewhere(Daemon.resting))
-            present(Daemon.resting);
+        if (!waiting(assigned))
+            present(assigned);
     }
 
     // A soft shadow under the shape. Theme.shadow sets its strength, and
@@ -213,7 +198,7 @@ Item {
 
         anchors.fill: parent
         clip: true
-        Keys.onEscapePressed: Daemon.eventFor(root.activity, "dismiss")
+        Keys.onEscapePressed: Daemon.eventFor(root.activity, "dismiss", root.output)
 
         IslandLoader {
             id: first
@@ -237,7 +222,14 @@ Item {
 
     HoverHandler {
         id: hover
-        onHoveredChanged: Daemon.eventFor(root.activity, hovered ? "hover_enter" : "hover_leave")
+        onHoveredChanged: {
+            Daemon.eventFor(root.activity, hovered ? "hover_enter" : "hover_leave", root.output);
+            // Where a view's own buttons send their events.
+            if (hovered)
+                Daemon.pointedOutput = root.output;
+            else if (Daemon.pointedOutput === root.output)
+                Daemon.pointedOutput = null;
+        }
     }
 
     // Files dragged over the island go to the drop module, when it runs:
@@ -270,12 +262,12 @@ Item {
     // Left click expands or collapses, or goes to the module.
     TapHandler {
         acceptedButtons: Qt.LeftButton
-        onTapped: Daemon.eventFor(root.activity, "click")
+        onTapped: Daemon.eventFor(root.activity, "click", root.output)
     }
 
     // Right click closes the activity.
     TapHandler {
         acceptedButtons: Qt.RightButton
-        onTapped: Daemon.eventFor(root.activity, "dismiss")
+        onTapped: Daemon.eventFor(root.activity, "dismiss", root.output)
     }
 }

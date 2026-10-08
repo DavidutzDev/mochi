@@ -32,13 +32,12 @@ PanelWindow {
         right: true
     }
 
-    // A modal activity, like the launcher, takes the keyboard and catches
-    // every click so one outside the island can close it. Only the window
-    // on the activity's monitor does, when it names one: two surfaces asking
-    // for the keyboard would fight over it.
-    readonly property var activity: Daemon.activity
-    readonly property var panelOutput: activity?.output ?? activity?.payload?.output ?? null
-    readonly property bool modal: (activity?.modal ?? false) && (panelOutput == null || panelOutput === screen?.name)
+    // What this monitor's island shows. A modal activity, like the
+    // launcher, takes the keyboard and catches every click so one outside
+    // the island can close it; the daemon gives a panel to one monitor's
+    // island, so two surfaces don't fight over the keyboard.
+    readonly property var activity: Daemon.activityFor(screen?.name ?? "")
+    readonly property bool modal: activity?.modal ?? false
     // An activity with an overlay covers every monitor and asks for the
     // keyboard on each: Hyprland only sends the pointer to surfaces holding
     // the keyboard, so an overlay without it couldn't be clicked.
@@ -47,7 +46,7 @@ PanelWindow {
     // too, without the keyboard: the click closes it instead of reaching
     // the window underneath. Not on a monitor that isn't showing it, and not
     // after a scroll outside released it.
-    readonly property bool catching: (activity?.outside ?? false) && !island.elsewhere(activity) && !releases(activity)
+    readonly property bool catching: (activity?.outside ?? false) && !releases(activity)
     // The activity whose catch a scroll released, as {id, module, key}.
     property var released: null
 
@@ -106,7 +105,7 @@ PanelWindow {
         anchors.fill: parent
         enabled: root.covering
         acceptedButtons: Qt.AllButtons
-        onClicked: Daemon.event(root.overlaid ? "dismiss" : "outside")
+        onClicked: Daemon.eventFor(root.activity, root.overlaid ? "dismiss" : "outside", root.screen?.name ?? "")
         // The catch takes the scroll wheel too, and a surface can't pass an
         // event on to the window underneath. A scroll outside a notice the
         // user didn't open releases the catch instead, so the next scroll
@@ -131,6 +130,12 @@ PanelWindow {
     onModalChanged: {
         if (modal && !overlaid)
             Qt.callLater(island.takeKeys);
+        // A panel's own buttons send their events to this island.
+        const name = screen?.name ?? "";
+        if (modal)
+            Daemon.focusedOutput = name;
+        else if (Daemon.focusedOutput === name)
+            Daemon.focusedOutput = null;
     }
 
     // The activity's overlay, under the bubbles and the island. It stays

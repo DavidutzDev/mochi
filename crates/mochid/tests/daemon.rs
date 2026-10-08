@@ -67,6 +67,7 @@ fn commands_and_events_drive_the_island() {
     ui.send(&ClientMessage::Event {
         activity: alert.id,
         kind: EventKind::Dismiss,
+        output: None,
     });
     let back = ui.next_present().unwrap();
     assert_eq!(back.id, card.id);
@@ -75,6 +76,7 @@ fn commands_and_events_drive_the_island() {
     ui.send(&ClientMessage::Event {
         activity: card.id,
         kind: EventKind::Click,
+        output: None,
     });
     let expanded = ui.next_present().unwrap();
     assert_eq!(
@@ -225,6 +227,7 @@ fn clicking_the_idle_pill_toggles_the_hub() {
     ui.send(&ClientMessage::Event {
         activity: pill.id,
         kind: EventKind::Click,
+        output: None,
     });
     let hub = ui.next_present().unwrap();
     assert_eq!((hub.module.as_str(), hub.view.as_str()), ("hub", "Hub"));
@@ -233,6 +236,7 @@ fn clicking_the_idle_pill_toggles_the_hub() {
     ui.send(&ClientMessage::Event {
         activity: hub.id,
         kind: EventKind::Dismiss,
+        output: None,
     });
     assert_eq!(shown(&ui.next_present()), Some(("idle", "Pill")));
 }
@@ -309,6 +313,7 @@ fn bad_requests_get_specific_errors() {
     ctl.send(&ClientMessage::Event {
         activity: mochi_protocol::ActivityId(1),
         kind: EventKind::Click,
+        output: None,
     });
     assert_eq!(error_code(ctl.recv()), ErrorCode::NotAllowed);
 

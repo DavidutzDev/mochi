@@ -135,7 +135,7 @@ A command can wait for its answer, held in a variable or moved into a task, whil
 | `.overlay("Pick")` | A full-screen view on every monitor under the island, for picking something on screen |
 | `.passive()` | A click outside doesn't close it |
 | `.fleeting()` | Shows at once or not at all, never waiting in the queue |
-| `.output("DP-3")` | A modal activity on this monitor only |
+| `.output("DP-3")` | On this monitor's island only, whatever `[island] panels` and `notices` say; it waits only behind what that island shows |
 
 `update(id, payload)` changes what it shows, and `withdraw(id)` removes it. Each activity ends exactly once, with an `Ended` event.
 

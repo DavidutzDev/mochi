@@ -1,4 +1,4 @@
-//! The daemon loop. It owns the arbiter, the bubbles, the module slots and
+//! The daemon loop. It owns the islands, the bubbles, the module slots and
 //! the connections, and is the only place any of them change.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -9,9 +9,9 @@ use mochi_core::actions;
 use mochi_core::compositor::Compositor;
 use mochi_core::supervisor::{Supervisor, UiEvent};
 use mochi_core::{
-    ActivitySpec, Arbiter, Assets, Bubbles, CallError, ClickOutside, Config, Effect, Module,
-    ModuleCommand, ModuleError, ModuleEvent, ModuleRequest, Notices, Panels, Priority, Reply,
-    Request, SettingsOp,
+    ActivitySpec, Assets, Bubbles, CallError, Change, ClickOutside, Config, Effect, Islands,
+    Module, ModuleCommand, ModuleError, ModuleEvent, ModuleRequest, Notices, Panels, Priority,
+    Reply, Request, SettingsOp,
 };
 use mochi_plugins::manifest::CORE_ID;
 use mochi_protocol::{
@@ -95,7 +95,8 @@ pub struct Daemon {
     /// which ones changed.
     settings: BTreeMap<&'static str, mochi_core::toml::Table>,
     states: BTreeMap<String, Value>,
-    arbiter: Arbiter,
+    /// An arbiter for each monitor's island.
+    islands: Islands,
     bubbles: Bubbles,
     clients: HashMap<ConnectionId, Client>,
     theme: Theme,
@@ -146,7 +147,7 @@ impl Daemon {
             modules: BTreeMap::new(),
             settings: BTreeMap::new(),
             states: BTreeMap::new(),
-            arbiter: Arbiter::new(),
+            islands: Islands::new(),
             bubbles: Bubbles::default(),
             clients: HashMap::new(),
             theme: loaded.theme,
@@ -271,7 +272,7 @@ impl Daemon {
         self.listed = catalog.listed;
         self.panels = config.island.panels;
         self.notices = config.island.notices;
-        self.arbiter
+        self.islands
             .set_outside_expanded_only(config.island.click_outside == ClickOutside::Expanded);
         self.bubbles.configure(
             config.bubbles.modules.clone(),
@@ -313,11 +314,11 @@ impl Daemon {
             watchers.remove(module);
         }
         let now = Instant::now();
-        self.arbiter.withdraw_all(module, now);
+        self.islands.withdraw_all(module, now);
         self.bubbles.hide_all(module);
         // A module that paused the island can't resume it any more.
-        if self.arbiter.exclusive() == Some(module) {
-            self.arbiter.set_exclusive(None, now);
+        if self.islands.exclusive() == Some(module) {
+            self.islands.set_exclusive(None, now);
             self.bubbles.set_only(None);
         }
         if self.states.remove(module).is_some() {
@@ -330,13 +331,30 @@ impl Daemon {
         tracing::info!(module, "stopped");
     }
 
+    /// Gives each monitor the compositor reports an island; Mochi's own
+    /// monitors get none.
+    fn follow_outputs(&mut self) {
+        let outputs: Vec<String> = self
+            .compositor
+            .state()
+            .outputs
+            .into_iter()
+            .map(|output| output.name)
+            .filter(|name| !mochi_core::compositor::is_virtual(name))
+            .collect();
+        self.islands.set_outputs(&outputs, Instant::now());
+    }
+
     /// Runs until SIGINT or SIGTERM.
     pub async fn run(mut self, mut inputs: Inputs) -> anyhow::Result<()> {
         let mut terminate =
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+        let mut monitors = self.compositor.subscribe();
+        let mut watching = true;
+        self.follow_outputs();
 
         loop {
-            let deadline = [self.arbiter.next_deadline(), self.handshake_deadline]
+            let deadline = [self.islands.next_deadline(), self.handshake_deadline]
                 .into_iter()
                 .flatten()
                 .min();
@@ -364,6 +382,11 @@ impl Daemon {
                     self.on_exit(module, generation, result);
                 }
                 Some(event) = inputs.ui.recv() => self.on_ui_process(event),
+                changed = monitors.changed(), if watching => match changed {
+                    Ok(()) => self.follow_outputs(),
+                    // The compositor connection is gone; the islands stay.
+                    Err(_) => watching = false,
+                },
                 Some(light) = inputs.appearance.recv() => {
                     if let Some(loaded) = self.store.set_system_light(light)
                         && let Err(error) = self.run_with(loaded)
@@ -377,7 +400,7 @@ impl Daemon {
             }
 
             let now = Instant::now();
-            self.arbiter.tick(now);
+            self.islands.tick(now);
             if self
                 .handshake_deadline
                 .is_some_and(|deadline| deadline <= now)
@@ -450,21 +473,32 @@ impl Daemon {
             (Some(_), ClientMessage::Hello { .. }) => {
                 self.reply_error(id, ErrorCode::BadMessage, "hello was already sent");
             }
-            (Some(Role::Ui), ClientMessage::Event { activity, kind }) => {
+            (
+                Some(Role::Ui),
+                ClientMessage::Event {
+                    activity,
+                    kind,
+                    output,
+                },
+            ) => {
                 let now = Instant::now();
                 match kind {
-                    EventKind::Click => self.arbiter.click(activity, now),
-                    EventKind::HoverEnter => self.arbiter.hover(activity, true, now),
-                    EventKind::HoverLeave => self.arbiter.hover(activity, false, now),
-                    EventKind::Dismiss => self.arbiter.dismiss(activity, now),
-                    EventKind::Outside => self.arbiter.outside(activity, now),
+                    EventKind::Click => self.islands.click(output.as_deref(), activity, now),
+                    EventKind::HoverEnter => {
+                        self.islands.hover(output.as_deref(), activity, true, now);
+                    }
+                    EventKind::HoverLeave => {
+                        self.islands.hover(output.as_deref(), activity, false, now);
+                    }
+                    EventKind::Dismiss => self.islands.dismiss(activity, now),
+                    EventKind::Outside => self.islands.outside(output.as_deref(), activity, now),
                 }
             }
             (Some(Role::Ui), ClientMessage::BubbleClick { bubble }) => {
                 // A click in the list of hidden bubbles closes it, so a
                 // panel the bubble opens doesn't wait behind it.
                 if let Some((list, _)) = self.hidden_list {
-                    self.arbiter.dismiss(list, Instant::now());
+                    self.islands.dismiss(list, Instant::now());
                 }
                 // Clicks on a bubble that just went away are dropped.
                 if let Some(module) = self.bubbles.owner(bubble) {
@@ -505,8 +539,10 @@ impl Daemon {
             (Some(_), ClientMessage::ListActions { module }) => self.on_list_actions(id, module),
             (Some(_), ClientMessage::Reload) => self.on_reload(id),
             (Some(_), ClientMessage::Dismiss) => {
-                if let Some(shown) = self.arbiter.shown() {
-                    self.arbiter.dismiss(shown.id, Instant::now());
+                // The island on the focused monitor.
+                let focused = self.compositor.state().focused_output;
+                if let Some(shown) = self.islands.shown_on(focused.as_deref()) {
+                    self.islands.dismiss(shown.id, Instant::now());
                 }
                 self.reply(id, DaemonMessage::Ok);
             }
@@ -520,7 +556,7 @@ impl Daemon {
         if let Some((list, listed)) = self.hidden_list
             && listed == area
         {
-            self.arbiter.dismiss(list, now);
+            self.islands.dismiss(list, now);
             return;
         }
         let bubbles = self.bubbles.hidden(area);
@@ -535,7 +571,7 @@ impl Daemon {
             .payload(hidden_payload(area, &bubbles));
         spec.output = self.panel_output();
         let id = self.runner.ids.next();
-        self.arbiter.submit(id, CORE_ID, spec, now);
+        self.islands.submit(id, CORE_ID, spec, now);
         self.hidden_list = Some((id, area));
     }
 
@@ -548,9 +584,9 @@ impl Daemon {
         let bubbles = self.bubbles.hidden(area);
         let result = if bubbles.is_empty() {
             self.hidden_list = None;
-            self.arbiter.withdraw(CORE_ID, list, Instant::now())
+            self.islands.withdraw(CORE_ID, list, Instant::now())
         } else {
-            self.arbiter
+            self.islands
                 .update(CORE_ID, list, hidden_payload(area, &bubbles))
         };
         if let Err(error) = result {
@@ -594,9 +630,17 @@ impl Daemon {
             for (module, state) in self.states.clone() {
                 self.reply(id, DaemonMessage::State { module, state });
             }
-            let activity = self.arbiter.shown();
-            let resting = self.arbiter.resting();
-            self.reply(id, DaemonMessage::Present { activity, resting });
+            for (output, activity) in self.islands.shown() {
+                let output = Some(output).filter(|output| !output.is_empty());
+                self.reply(
+                    id,
+                    DaemonMessage::Present {
+                        activity,
+                        resting: None,
+                        output,
+                    },
+                );
+            }
             self.reply(id, self.bubbles_message());
         }
     }
@@ -858,15 +902,15 @@ impl Daemon {
                         spec.output = self.notice_output();
                     }
                 }
-                self.arbiter.submit(id, module, spec, now);
+                self.islands.submit(id, module, spec, now);
                 Ok(())
             }
             Request::Update { id, payload } => self
-                .arbiter
+                .islands
                 .update(module, id, payload)
                 .map_err(|error| error.to_string()),
             Request::Withdraw { id } => self
-                .arbiter
+                .islands
                 .withdraw(module, id, now)
                 .map_err(|error| error.to_string()),
             Request::ShowBubble { id, spec } => {
@@ -905,7 +949,7 @@ impl Daemon {
             }
             Request::PauseIsland(paused) => {
                 let only = paused.then(|| module.to_owned());
-                self.arbiter.set_exclusive(only.clone(), now);
+                self.islands.set_exclusive(only.clone(), now);
                 self.bubbles.set_only(only);
                 return;
             }
@@ -963,7 +1007,7 @@ impl Daemon {
         if let Some(slot) = self.modules.get_mut(module) {
             slot.events = None;
         }
-        self.arbiter.withdraw_all(module, Instant::now());
+        self.islands.withdraw_all(module, Instant::now());
         self.bubbles.hide_all(module);
     }
 
@@ -1006,15 +1050,24 @@ impl Daemon {
             self.broadcast(&self.bubbles_message());
             self.update_hidden_list();
         }
-        for effect in self.arbiter.take_effects() {
-            match effect {
-                Effect::Present(activity) => {
+        for change in self.islands.take_effects(Instant::now()) {
+            let effect = match change {
+                Change::Present { output, activity } => {
                     if let Some(activity) = &activity {
-                        tracing::debug!(id = %activity.id, module = %activity.module, view = %activity.view, "present");
+                        tracing::debug!(id = %activity.id, module = %activity.module, view = %activity.view, output, "present");
                     }
-                    let resting = self.arbiter.resting();
-                    self.broadcast(&DaemonMessage::Present { activity, resting });
+                    let output = Some(output).filter(|output| !output.is_empty());
+                    self.broadcast(&DaemonMessage::Present {
+                        activity,
+                        resting: None,
+                        output,
+                    });
+                    continue;
                 }
+                Change::Effect(effect) => effect,
+            };
+            match effect {
+                Effect::Present(_) => {}
                 Effect::Clicked { module, activity } => {
                     self.notify(&module, ModuleEvent::Clicked(activity));
                 }

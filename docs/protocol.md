@@ -82,7 +82,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 |---|---|---|
 | `hello` | `api`, `role` | everyone, first |
 | `command` | `module`, `action`, `args` (optional, defaults to `[]`) | UI and control |
-| `event` | `activity`, `kind` | UI |
+| `event` | `activity`, `kind`, `output` (optional) | UI |
 | `bubble_click` | `bubble` | UI |
 | `overflow_click` | `area` | UI |
 | `status` | | control |
@@ -99,7 +99,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `contributions` | `contributions` | UI |
 | `state` | `module`, `state` (any JSON) | UI |
 | `live` | `module`, `value` (any JSON): a value that changes many times a second, like an audio meter's level. The daemon doesn't keep it, so a reconnecting UI doesn't get it again | UI |
-| `present` | `activity` (object or `null`), `resting` (optional) | UI |
+| `present` | `activity` (object or `null`), `output` (optional), `resting` (optional) | UI |
 | `bubbles` | `bubbles`, `overflow` (optional) | UI |
 | `theme` | `theme` | UI |
 | `ok` | | whoever sent `command` or `reload` |
@@ -109,6 +109,8 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `error` | `code`, `message` | everyone |
 
 ### Activity
+
+Each monitor has an island of its own. `present` carries what one island shows, and `output` names its monitor; after `hello` the daemon sends one for every monitor. Without `output`, the activity is for every island, as before the compositor names its monitors. `resting` is only for UIs of earlier releases, which had one island mirrored on every monitor; the daemon no longer sends it. An `event` names in `output` the island it happened on, so a click expands the activity on that monitor only.
 
 `present` carries the activity on screen:
 
@@ -133,7 +135,7 @@ The UI loads `root:/modules/<module>/<view>.qml` and passes `payload` to it. `ac
 
 `overlay` is only present when the module set one, and implies `modal`. It names a second view, `root:/modules/<module>/<overlay>.qml`, which the UI draws full-screen on every monitor, under the island, while the activity shows. The overlay gets the same `payload` and a `screen` property with its monitor. If it has a `ready` property, the island waits for it to turn `true` before showing the activity, so an overlay can freeze the screen before the island changes. Overlays are for picking something on screen, like the capture module's region.
 
-`output` is only present for a modal activity shown on one monitor, by name, from `[island] panels`. The islands on other monitors keep what they showed.
+`output` in an activity is only present when it's meant for one monitor, from `[island] panels`, `notices` or the module itself. It's the same as the `present`'s.
 
 `outside` is only present when `true`: a click outside the island closes the activity, so the UI catches every click while it shows and sends an `outside` event. `modal` implies it.
 

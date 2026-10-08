@@ -196,6 +196,9 @@ impl Module for Workspaces {
                                     // clicks go on to your windows.
                                     .passive()
                                     .fleeting()
+                                    // On the monitor that switched, where
+                                    // its island has its own.
+                                    .output(notice.output.clone())
                                     .timeout(timeout)
                                     .payload(payload),
                             );

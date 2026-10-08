@@ -200,8 +200,9 @@ impl ActivitySpec {
         self
     }
 
-    /// Shows a modal activity on this monitor only, whatever `[island]
-    /// panels` says.
+    /// Shows the activity on this monitor's island only, whatever
+    /// `[island] panels` or `notices` say. Each monitor has an island of
+    /// its own, so it waits only behind what that one shows.
     pub fn output(mut self, output: impl Into<String>) -> Self {
         self.output = Some(output.into());
         self

@@ -147,6 +147,21 @@ impl Arbiter {
         }
     }
 
+    /// Whether it holds the activity, shown, suspended or waiting.
+    pub fn contains(&self, id: ActivityId) -> bool {
+        self.locate(|entry| entry.id == id).is_some()
+    }
+
+    /// Every activity it holds, with its module.
+    pub fn activities(&self) -> Vec<(ActivityId, String)> {
+        self.current
+            .iter()
+            .chain(&self.suspended)
+            .chain(&self.queue)
+            .map(|entry| (entry.id, entry.module.clone()))
+            .collect()
+    }
+
     /// The module the island is paused for, if any.
     pub fn exclusive(&self) -> Option<&str> {
         self.exclusive.as_deref()

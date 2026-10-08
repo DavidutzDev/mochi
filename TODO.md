@@ -288,7 +288,7 @@ wide = true         # the module's wide views with text, in pills
 - [x] Clicking a dot switches to that workspace; the same action is `mochi ipc workspaces switch <output> <workspace>`
 - [x] Settings: `timeout_ms`, `focus`, `urgent`, `changes`, `labels`
 - [x] Tested against Hyprland 0.56: switches through the action and by clicking a dot
-- [ ] Per-output islands, so the indicator only shows on the monitor that switched (the island is mirrored on every monitor for now)
+- [x] Per-output islands, so the indicator only shows on the monitor that switched
 
 ### OSD
 

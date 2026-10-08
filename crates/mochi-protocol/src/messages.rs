@@ -44,6 +44,9 @@ pub enum ClientMessage {
     Event {
         activity: ActivityId,
         kind: EventKind,
+        /// The monitor whose island it happened on, when the UI knows.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output: Option<String>,
     },
     /// A click on a bubble. UI only, never answered.
     BubbleClick { bubble: BubbleId },
@@ -87,9 +90,14 @@ pub enum DaemonMessage {
     Present {
         activity: Option<Activity>,
         /// What islands on other monitors show while `activity` is meant
-        /// for one monitor: the idle island, when it runs.
+        /// for one monitor: the idle island, when it runs. Only without
+        /// `output`.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         resting: Option<Activity>,
+        /// The monitor whose island shows `activity`; every monitor's
+        /// without it. Each monitor has an island of its own.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output: Option<String>,
     },
     /// Every bubble, in drawing order. Sent to the UI after `hello` and on
     /// every change.
@@ -285,6 +293,12 @@ mod tests {
         round_trip_client(ClientMessage::Event {
             activity: ActivityId(3),
             kind: EventKind::HoverLeave,
+            output: None,
+        });
+        round_trip_client(ClientMessage::Event {
+            activity: ActivityId(3),
+            kind: EventKind::Click,
+            output: Some("DP-3".into()),
         });
         round_trip_client(ClientMessage::BubbleClick {
             bubble: BubbleId(3),
@@ -319,6 +333,7 @@ mod tests {
         round_trip_daemon(DaemonMessage::Present {
             activity: Some(activity()),
             resting: None,
+            output: None,
         });
         round_trip_daemon(DaemonMessage::Present {
             activity: Some(Activity {
@@ -326,6 +341,7 @@ mod tests {
                 ..activity()
             }),
             resting: Some(activity()),
+            output: None,
         });
         round_trip_daemon(DaemonMessage::Present {
             activity: Some(Activity {
@@ -334,6 +350,7 @@ mod tests {
                 ..activity()
             }),
             resting: None,
+            output: None,
         });
         round_trip_daemon(DaemonMessage::Present {
             activity: Some(Activity {
@@ -342,10 +359,17 @@ mod tests {
                 ..activity()
             }),
             resting: None,
+            output: None,
         });
         round_trip_daemon(DaemonMessage::Present {
             activity: None,
             resting: None,
+            output: None,
+        });
+        round_trip_daemon(DaemonMessage::Present {
+            activity: Some(activity()),
+            resting: None,
+            output: Some("HDMI-A-1".into()),
         });
         round_trip_daemon(DaemonMessage::Output {
             output: "[SELECTION]/screen:DP-3".into(),
@@ -426,6 +450,7 @@ mod tests {
         let present = DaemonMessage::Present {
             activity: Some(activity()),
             resting: None,
+            output: None,
         };
         assert_eq!(
             serde_json::to_value(&present).unwrap(),
@@ -448,7 +473,8 @@ mod tests {
             event,
             ClientMessage::Event {
                 activity: ActivityId(7),
-                kind: EventKind::HoverEnter
+                kind: EventKind::HoverEnter,
+                output: None,
             }
         );
 

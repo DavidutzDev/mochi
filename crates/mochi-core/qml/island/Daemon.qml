@@ -40,11 +40,20 @@ Singleton {
     // bindings on it update.
     property var states: ({})
 
-    // {id, module, view, payload, expanded, expandable}, or null.
-    property var activity: null
-    // What islands on other monitors show while `activity` is meant for one
-    // monitor: the idle island, or null.
-    property var resting: null
+    // Each monitor's island shows an activity of its own: {id, module,
+    // view, payload, expanded, expandable} or null, by monitor name. The
+    // empty name stands for every monitor, before the compositor names
+    // them. Replaced, never mutated, so bindings on it update.
+    property var activities: ({})
+
+    // Where a view's own events go: the island holding the keyboard, for a
+    // panel, or else the one under the pointer, by monitor; null for none.
+    property var focusedOutput: null
+    property var pointedOutput: null
+
+    function activityFor(output: string): var {
+        return activities[output] ?? activities[""] ?? null;
+    }
 
     // Every bubble in drawing order: [{id, module, key, view, payload, area,
     // group}]. Consecutive bubbles with the same area and group share a pill.
@@ -65,31 +74,60 @@ Singleton {
         return states[module] ?? null;
     }
 
-    // Reports something that happened to the shown activity.
+    // Reports something that happened to the activity a view belongs to:
+    // the panel with the keyboard, or the one under the pointer.
     function event(kind: string): void {
-        if (activity)
-            send({ type: "event", activity: activity.id, kind: kind });
+        const output = focusedOutput ?? pointedOutput;
+        if (output !== null) {
+            eventFor(activityFor(output), kind, output);
+            return;
+        }
+        const any = Object.keys(activities).map(output => ({
+                    "activity": activities[output],
+                    "output": output
+                })).find(entry => entry.activity !== null);
+        if (any)
+            eventFor(any.activity, kind, any.output);
     }
 
-    // Reports something that happened to one activity, which the daemon
-    // ignores unless it's still the shown one.
-    function eventFor(activity: var, kind: string): void {
-        if (activity)
-            send({ type: "event", activity: activity.id, kind: kind });
+    // Reports something that happened to one activity on the island of
+    // `output`, which the daemon ignores unless it's still shown there.
+    function eventFor(activity: var, kind: string, output: string): void {
+        if (!activity)
+            return;
+        const message = {
+            "type": "event",
+            "activity": activity.id,
+            "kind": kind
+        };
+        if (output)
+            message.output = output;
+        send(message);
     }
 
     function bubbleClick(id: int): void {
-        send({ type: "bubble_click", bubble: id });
+        send({
+            type: "bubble_click",
+            bubble: id
+        });
     }
 
     // A click on an area's "+N": the daemon lists its hidden bubbles.
     function overflowClick(area: string): void {
-        send({ type: "overflow_click", area: area });
+        send({
+            type: "overflow_click",
+            area: area
+        });
     }
 
     // Runs a module action, for example from a button in a view.
     function command(module: string, action: string, args: var): void {
-        send({ type: "command", module: module, action: action, args: args ?? [] });
+        send({
+            type: "command",
+            module: module,
+            action: action,
+            args: args ?? []
+        });
     }
 
     function send(message: var): void {
@@ -120,20 +158,24 @@ Singleton {
         case "contributions":
             contributions = message.contributions;
             break;
-        case "state": {
-            const next = Object.assign({}, states);
-            next[message.module] = message.state;
-            states = next;
-            break;
-        }
+        case "state":
+            {
+                const next = Object.assign({}, states);
+                next[message.module] = message.state;
+                states = next;
+                break;
+            }
         case "live":
             live(message.module, message.value);
             break;
         case "present":
-            // Before the activity, which islands react to.
-            resting = message.resting ?? null;
-            activity = message.activity;
-            break;
+            {
+                // The monitor's island, or every one's before they have names.
+                const next = Object.assign({}, activities);
+                next[message.output ?? ""] = message.activity;
+                activities = next;
+                break;
+            }
         case "bubbles":
             bubbles = message.bubbles;
             overflow = message.overflow ?? [];
@@ -162,7 +204,11 @@ Singleton {
 
         onConnectionStateChanged: {
             if (connected) {
-                root.send({ type: "hello", api: root.api, role: "ui" });
+                root.send({
+                    type: "hello",
+                    api: root.api,
+                    role: "ui"
+                });
             } else {
                 root.ready = false;
             }

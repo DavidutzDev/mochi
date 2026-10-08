@@ -156,6 +156,7 @@ fn event(ui: &mut Client, activity: &Activity, kind: EventKind) {
     ui.send(&ClientMessage::Event {
         activity: activity.id,
         kind,
+        output: None,
     });
 }
 
