@@ -190,30 +190,16 @@ impl Store {
         Ok(loaded)
     }
 
-    /// Puts a field, or each field of a section, back to its default: no
-    /// change where the files say nothing, the default over them where they
-    /// do.
+    /// Drops the panel's change to an option, or to every option of a
+    /// section, so it's back to what the files say: their value, or the
+    /// default where they say nothing.
     fn reset(&self, changes: &mut Changes, path: &str) -> Result<(), String> {
-        let fields: Vec<&Field> = match self.sections.iter().find(|section| section.path == path) {
-            Some(section) => section
-                .fields
-                .iter()
-                .filter(|field| field.kind != Kind::Group)
-                .collect(),
-            None => vec![self.field(path)?],
-        };
-        for field in fields {
-            let (file, parts) = File::split(&field.path).ok_or("no such option")?;
-            let table = changes.table_mut(file);
-            changes::remove(table, &parts);
-            let default = changes::get(self.defaults.get(file), &parts);
-            let base = changes::get(self.base.get(file), &parts);
-            if let (Some(default), Some(base)) = (default, base)
-                && default != base
-            {
-                changes::set(table, &parts, default.clone());
-            }
+        let known = self.sections.iter().any(|section| section.path == path);
+        if !known {
+            self.field(path)?;
         }
+        let (file, parts) = File::split(path).ok_or_else(|| format!("no option {path}"))?;
+        changes::remove(changes.table_mut(file), &parts);
         Ok(())
     }
 
@@ -245,6 +231,13 @@ impl Store {
     pub fn snapshot(&self) -> Json {
         let config = self.effective(File::Config);
         let theme = self.effective(File::Theme);
+        // What the files say, without the changes.
+        let saved = |file: File| {
+            let mut table = self.defaults.get(file).clone();
+            changes::merge(&mut table, self.base.get(file));
+            table
+        };
+        let (saved_config, saved_theme) = (saved(File::Config), saved(File::Theme));
         let enabled: Vec<String> = match changes::get(&config, &["modules"]) {
             Some(Value::Array(ids)) => ids
                 .iter()
@@ -269,8 +262,20 @@ impl Store {
                         let value = changes::get(table, &parts)
                             .map(options::to_json)
                             .unwrap_or(Json::Null);
+                        // Changed here, not only different from the default.
+                        let changed = changes::get(self.changes.table(file), &parts).is_some();
+                        let saved = if file == File::Config {
+                            &saved_config
+                        } else {
+                            &saved_theme
+                        };
+                        let saved = changes::get(saved, &parts)
+                            .map(options::to_json)
+                            .unwrap_or(Json::Null);
                         let mut field = serde_json::to_value(field).expect("serializes");
                         field["value"] = value;
+                        field["saved"] = saved;
+                        field["changed"] = Json::Bool(changed);
                         field
                     })
                     .collect();
@@ -801,24 +806,54 @@ mod tests {
     }
 
     #[test]
-    fn resetting_puts_the_default_over_the_file() {
+    fn resetting_goes_back_to_the_file() {
         let config = temp("reset");
         std::fs::write(&config, "[module.osd]\ntimeout_ms = 900\n").unwrap();
         let (mut store, _) = Store::load(&config, None).unwrap();
+        let timeout = |store: &Store| {
+            store.snapshot()["sections"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|section| section["fields"].as_array().unwrap())
+                .find(|field| field["path"] == "config.module.osd.timeout_ms")
+                .cloned()
+                .unwrap()
+        };
+        assert_eq!(timeout(&store)["changed"], json!(false));
+        store
+            .change(&set("config.module.osd.timeout_ms", json!(2000)))
+            .unwrap();
+        store
+            .change(&set("config.module.osd.volume", json!(false)))
+            .unwrap();
+        assert_eq!(timeout(&store)["changed"], json!(true));
+        assert_eq!(timeout(&store)["saved"], json!(900));
+
+        // The file's 900, not the default 1500.
         store
             .change(&Op::Reset {
                 path: "config.module.osd.timeout_ms".to_owned(),
             })
             .unwrap();
-        assert_eq!(
-            changes::get(&store.changes.config, &["module", "osd", "timeout_ms"]),
-            Some(&Value::Integer(1500))
-        );
-        // Back to the file's 900: the change goes.
+        assert_eq!(timeout(&store)["value"], json!(900));
+        assert_eq!(timeout(&store)["changed"], json!(false));
+        assert!(!store.changes.is_empty(), "volume is still changed");
+
+        // A whole section.
         store
-            .change(&set("config.module.osd.timeout_ms", json!(900)))
+            .change(&Op::Reset {
+                path: "config.module.osd".to_owned(),
+            })
             .unwrap();
         assert!(store.changes.is_empty());
+        assert!(
+            store
+                .change(&Op::Reset {
+                    path: "config.module.nope".to_owned()
+                })
+                .is_err()
+        );
         std::fs::remove_dir_all(config.parent().unwrap()).unwrap();
     }
 

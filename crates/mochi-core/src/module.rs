@@ -207,7 +207,8 @@ pub enum SettingsOp {
     Snapshot,
     /// Sets an option, as the panel sends it; `null` unsets it.
     Set { path: String, value: Value },
-    /// Puts an option, or every option of a section, back to its default.
+    /// Drops the change to an option, or to every option of a section,
+    /// back to what the files say.
     Reset { path: String },
     /// Drops every change the panel made, back to what the files say.
     Discard,

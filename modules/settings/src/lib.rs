@@ -50,7 +50,7 @@ impl Module for Settings {
             ),
             ActionSpec::new(
                 "reset",
-                "Put an option, or each option of a section, back to its default",
+                "Undo the change to an option, or to each option of a section, back to what the files say",
             )
             .arg(path()),
             ActionSpec::new(

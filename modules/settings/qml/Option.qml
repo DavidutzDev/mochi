@@ -2,8 +2,8 @@ import QtQuick
 import qs.island
 
 // One option: its title and description, and the control its kind calls
-// for. A changed option has a dot and, on hover, a button back to its
-// default. A theme option goes out as it moves, at most every 50 ms; any
+// for. An option changed here has a dot and, on hover, a button back to
+// what the files say. A theme option goes out as it moves, at most every 50 ms; any
 // other waits until it stops changing for 400 ms, since it restarts its
 // module. `popup` asks the panel for a menu or the color picker, which it
 // draws over everything.
@@ -20,7 +20,8 @@ Item {
 
     readonly property bool group: field.kind === "group"
     readonly property bool theme: field.path.startsWith("theme.")
-    readonly property bool modified: !group && JSON.stringify(field.value) !== JSON.stringify(field["default"])
+    // Changed in the panel: the reset button takes it back to the files.
+    readonly property bool modified: !group && field.changed === true
     // The value the control shows: what's on the way, or the daemon's.
     property var pending: undefined
     readonly property var value: pending !== undefined ? pending : field.value
@@ -360,7 +361,8 @@ Item {
                 thickness: 4
                 fill: Theme.accent
                 value: ((root.value ?? root.field.min) - root.field.min) / parent.span
-                reset: ((root.field["default"] ?? root.field.min) - root.field.min) / parent.span
+                // A double click goes back to what the files say.
+                reset: ((root.field.saved ?? root.field["default"] ?? root.field.min) - root.field.min) / parent.span
                 onMoved: value => root.sendSoon(parent.snap(value))
                 onReleased: value => root.sendNow(parent.snap(value))
             }

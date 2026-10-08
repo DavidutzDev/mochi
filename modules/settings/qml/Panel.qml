@@ -5,7 +5,7 @@ import qs.island
 // The settings panel: the sections in a sidebar, grouped as Appearance,
 // Shell, Modules and Plugins, and the options of the open one beside it.
 // Every change applies at once. Typing searches every option, and
-// "@modified" lists the ones that aren't at their default. Copy gives
+// "@modified" lists the ones changed here. Copy gives
 // everything that isn't a default as the `settings` and `theme` of
 // home-manager's programs.mochi, or as TOML.
 //
@@ -79,8 +79,9 @@ Item {
         return map;
     }
 
+    // Changed in the panel, over what the files say.
     function modified(field: var): bool {
-        return field.kind !== "group" && JSON.stringify(field.value) !== JSON.stringify(field["default"]);
+        return field.kind !== "group" && field.changed === true;
     }
 
     function sectionModified(entry: var): bool {
@@ -362,7 +363,7 @@ Item {
                         font.weight: row.selected ? Theme.weightLabel : Theme.weightBody
                     }
 
-                    // Something in it isn't at its default.
+                    // Something in it was changed here.
                     Rectangle {
                         id: dot
 
@@ -465,7 +466,7 @@ Item {
 
                 Text {
                     anchors.verticalCenter: parent.verticalCenter
-                    text: content.searching ? (root.modifiedOnly ? "Changed from the defaults" : `Results for “${root.query.trim()}”`) : root.current?.title ?? ""
+                    text: content.searching ? (root.modifiedOnly ? "Changed here" : `Results for “${root.query.trim()}”`) : root.current?.title ?? ""
                     color: Theme.foreground
                     font.pixelSize: Theme.textHeadline
                     font.family: Theme.fontFamily
