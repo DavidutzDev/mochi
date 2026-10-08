@@ -331,6 +331,30 @@ impl Daemon {
         tracing::info!(module, "stopped");
     }
 
+    /// Clicks again where the user clicked to close something, after the
+    /// UI has had time to stop catching clicks there.
+    fn pass_on(&self, click: mochi_protocol::Click) {
+        let button = match click.button {
+            2 => mochi_core::compositor::BTN_RIGHT,
+            4 => mochi_core::compositor::BTN_MIDDLE,
+            _ => mochi_core::compositor::BTN_LEFT,
+        };
+        let compositor = self.compositor.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(PASS_ON_DELAY).await;
+            let again = mochi_core::compositor::Click {
+                x: click.x,
+                y: click.y,
+                width: click.width,
+                height: click.height,
+                button,
+            };
+            if let Err(error) = compositor.click(&click.output, again) {
+                tracing::debug!(%error, "can't pass the click on");
+            }
+        });
+    }
+
     /// Gives each monitor the compositor reports an island; Mochi's own
     /// monitors get none.
     fn follow_outputs(&mut self) {
@@ -479,6 +503,7 @@ impl Daemon {
                     activity,
                     kind,
                     output,
+                    click,
                 },
             ) => {
                 let now = Instant::now();
@@ -491,7 +516,18 @@ impl Daemon {
                         self.islands.hover(output.as_deref(), activity, false, now);
                     }
                     EventKind::Dismiss => self.islands.dismiss(activity, now),
-                    EventKind::Outside => self.islands.outside(output.as_deref(), activity, now),
+                    EventKind::Outside => {
+                        self.islands.outside(output.as_deref(), activity, now);
+                        // The click that closed it was meant for the window
+                        // under it: pass it on once the island lets go.
+                        let closed = self
+                            .islands
+                            .shown_on(output.as_deref())
+                            .is_none_or(|shown| shown.id != activity);
+                        if closed && let Some(click) = click {
+                            self.pass_on(click);
+                        }
+                    }
                 }
             }
             (Some(Role::Ui), ClientMessage::BubbleClick { bubble }) => {
@@ -1193,6 +1229,10 @@ impl Daemon {
 /// The files plugins put in place of builtin views, for the enabled
 /// modules. When two plugins replace the same view, the one whose id
 /// sorts first wins.
+/// How long the UI gets to stop catching clicks before a click outside is
+/// passed on: a frame or two to update the input region.
+const PASS_ON_DELAY: Duration = Duration::from_millis(80);
+
 /// The core view that lists an area's hidden bubbles, `island/<view>.qml`.
 const HIDDEN_VIEW: &str = "HiddenBubbles";
 

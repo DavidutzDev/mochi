@@ -20,8 +20,8 @@ pub use actions::{ActionSpec, ArgKind, ArgSpec, ModuleActions};
 pub use bubbles::{Area, Bubble, BubbleId, Overflow, Stacking};
 pub use contributions::Contribution;
 pub use messages::{
-    Activity, ActivityId, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode, EventKind,
-    PluginState, PluginStatus, Role, Status,
+    Activity, ActivityId, Click, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode,
+    EventKind, PluginState, PluginStatus, Role, Status,
 };
 pub use theme::{
     Anchor, Appearance, Color, ColorError, Colors, Layout, Mode, Motion, Notch, Text, Theme,

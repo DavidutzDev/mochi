@@ -6,6 +6,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- A click outside the island that closes a panel or a notice reaches the window under it too: the daemon clicks again at the same spot through a virtual pointer once the island lets go, so one click does both. While a panel is open, a click on another monitor closes it as well. `event` gains an optional `click`.
 - An island per monitor. Each monitor's island decides what it shows by itself, so a panel open on one doesn't hold back a notice on another, and a click expands what it shows on that monitor only. What's meant for every monitor, like the idle clock, shows on each island and ends on all of them at once. The workspace indicator now shows on the monitor that switched. The daemon keeps an arbiter per monitor (`mochi_core::Islands`), the protocol's `present` names the monitor in a new `output` field, and the UI's `event` names the island it happened on.
 - The tray drawer takes the keyboard: arrows, Enter to activate, Shift+Enter or the Menu key for an app's menu, and arrows, Enter and Left in menus. Tooltips show under the drawer's apps and beside pinned bubbles when the pointer rests on them.
 - XEmbed tray icons, from old X11 apps: the tray starts KDE's `xembedsniproxy` when it's installed and not running, which turns them into StatusNotifierItems. `xembed = false` turns it off.

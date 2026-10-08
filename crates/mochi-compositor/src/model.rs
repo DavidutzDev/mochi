@@ -81,6 +81,14 @@ impl Model {
         self.outputs.entry(output).or_default().size = (width, height);
     }
 
+    /// The protocol id of the output called `name`.
+    pub fn output_id(&self, name: &str) -> Option<u32> {
+        self.outputs
+            .iter()
+            .find(|(_, output)| output.name == name)
+            .map(|(id, _)| *id)
+    }
+
     pub fn output_removed(&mut self, output: u32) {
         self.outputs.remove(&output);
         for group in self.groups.values_mut() {

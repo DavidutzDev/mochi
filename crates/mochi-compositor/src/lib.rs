@@ -184,7 +184,25 @@ pub(crate) enum Action {
     ActivateWorkspace(WorkspaceId),
     AssumeCaptures(Vec<String>),
     ActivateToplevel(u32),
+    Click { output: String, click: Click },
 }
+
+/// A click to make as if the user made it: see [`Compositor::click`].
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Click {
+    /// Where, in the output's logical pixels, out of `width` by `height`.
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    /// A Linux button code, like `BTN_LEFT`.
+    pub button: u32,
+}
+
+/// Linux's codes for the mouse buttons.
+pub const BTN_LEFT: u32 = 0x110;
+pub const BTN_RIGHT: u32 = 0x111;
+pub const BTN_MIDDLE: u32 = 0x112;
 
 /// A cheap, cloneable handle to the compositor.
 #[derive(Debug, Clone)]
@@ -237,6 +255,21 @@ impl Compositor {
         }
         self.actions
             .send(Action::ActivateToplevel(id))
+            .map_err(|_| CompositorError::Unsupported)
+    }
+
+    /// Clicks on `output` as the user would, through a virtual pointer
+    /// (`wlr-virtual-pointer-unstable-v1`), for a click a layer surface
+    /// caught that belongs to the window under it.
+    pub fn click(&self, output: &str, click: Click) -> Result<(), CompositorError> {
+        let mut click = click;
+        click.x = click.x.clamp(0.0, click.width.max(1.0) - 1.0);
+        click.y = click.y.clamp(0.0, click.height.max(1.0) - 1.0);
+        self.actions
+            .send(Action::Click {
+                output: output.to_owned(),
+                click,
+            })
             .map_err(|_| CompositorError::Unsupported)
     }
 

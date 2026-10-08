@@ -105,6 +105,21 @@ Singleton {
         send(message);
     }
 
+    // A click outside the island closed `activity` on the island of
+    // `output`; the daemon passes the click on to the window under it.
+    // `click` is {output, x, y, width, height, button}.
+    function outsideClick(activity: var, output: string, click: var): void {
+        if (!activity)
+            return;
+        send({
+            "type": "event",
+            "activity": activity.id,
+            "kind": "outside",
+            "output": output,
+            "click": click
+        });
+    }
+
     function bubbleClick(id: int): void {
         send({
             type: "bubble_click",

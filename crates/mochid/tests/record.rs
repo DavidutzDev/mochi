@@ -157,6 +157,7 @@ fn event(ui: &mut Client, activity: &Activity, kind: EventKind) {
         activity: activity.id,
         kind,
         output: None,
+        click: None,
     });
 }
 

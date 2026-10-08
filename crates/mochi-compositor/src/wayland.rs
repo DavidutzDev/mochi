@@ -15,7 +15,7 @@ use tokio::io::unix::AsyncFd;
 use tokio::sync::{mpsc, watch};
 use wayland_client::backend::WaylandError;
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
-use wayland_client::protocol::{wl_output, wl_registry, wl_seat};
+use wayland_client::protocol::{wl_output, wl_pointer, wl_registry, wl_seat};
 use wayland_client::{
     Connection, Dispatch, EventQueue, Proxy, QueueHandle, WEnum, event_created_child,
 };
@@ -27,6 +27,10 @@ use wayland_protocols::ext::workspace::v1::client::{
 use wayland_protocols_wlr::foreign_toplevel::v1::client::{
     zwlr_foreign_toplevel_handle_v1::{self, ZwlrForeignToplevelHandleV1},
     zwlr_foreign_toplevel_manager_v1::{self, ZwlrForeignToplevelManagerV1},
+};
+use wayland_protocols_wlr::virtual_pointer::v1::client::{
+    zwlr_virtual_pointer_manager_v1::ZwlrVirtualPointerManagerV1,
+    zwlr_virtual_pointer_v1::ZwlrVirtualPointerV1,
 };
 
 use crate::ipc::{Event, Ipc};
@@ -104,6 +108,8 @@ pub(crate) fn start() -> Result<Compositor, String> {
 
     // Activating a window names the seat whose focus it takes.
     let seat: Option<wl_seat::WlSeat> = globals.bind(&handle, 1..=1, ()).ok();
+    // For clicks a layer surface caught that belong to the window under it.
+    let pointers: Option<ZwlrVirtualPointerManagerV1> = globals.bind(&handle, 1..=2, ()).ok();
 
     let mut client = Client {
         model: Model::default(),
@@ -112,6 +118,9 @@ pub(crate) fn start() -> Result<Compositor, String> {
         outputs,
         handles: HashMap::new(),
         seat,
+        pointers,
+        pointer: None,
+        started: std::time::Instant::now(),
         done: false,
         windows_changed: false,
         finished: false,
@@ -236,7 +245,7 @@ async fn run(
             action = actions.recv() => {
                 drop(guard);
                 match action {
-                    Some(action) => client.perform(action),
+                    Some(action) => client.perform(action, &queue.handle()),
                     // Every handle is gone: nobody is listening any more.
                     None => return,
                 }
@@ -303,6 +312,12 @@ struct Client {
     /// Window handles by protocol id, to activate them.
     handles: HashMap<u32, ZwlrForeignToplevelHandleV1>,
     seat: Option<wl_seat::WlSeat>,
+    pointers: Option<ZwlrVirtualPointerManagerV1>,
+    /// The virtual pointer, made once and kept: one made per click and
+    /// dropped at once can lose its events.
+    pointer: Option<(u32, ZwlrVirtualPointerV1)>,
+    /// Events carry milliseconds from here.
+    started: std::time::Instant,
     /// The compositor finished a batch of changes.
     done: bool,
     /// A window opened, closed or changed its title, app or focus.
@@ -329,7 +344,7 @@ fn bind_output(
 }
 
 impl Client {
-    fn perform(&mut self, action: Action) {
+    fn perform(&mut self, action: Action, handle: &QueueHandle<Self>) {
         match action {
             Action::ActivateWorkspace(id) => match self.workspaces.get(&id.0) {
                 Some(workspace) => {
@@ -342,12 +357,70 @@ impl Client {
                 self.model.assume_captures(&captured);
                 self.done = true;
             }
+            Action::Click { output, click } => self.click(&output, click, handle),
             Action::ActivateToplevel(id) => match (self.handles.get(&id), &self.seat) {
                 (Some(handle), Some(seat)) => handle.activate(seat),
                 (None, _) => tracing::warn!(id, "the window is gone"),
                 (_, None) => tracing::warn!("no seat to activate a window with"),
             },
         }
+    }
+}
+
+impl Client {
+    /// Clicks through a virtual pointer tied to `output`, so its
+    /// coordinates are that output's.
+    fn click(&mut self, output: &str, click: crate::Click, handle: &QueueHandle<Self>) {
+        let (Some(pointers), Some(seat)) = (&self.pointers, &self.seat) else {
+            tracing::debug!("no virtual pointer to pass a click on with");
+            return;
+        };
+        if pointers.version() < 2 {
+            tracing::debug!("the virtual pointer can't be tied to an output");
+            return;
+        }
+        let Some(id) = self.model.output_id(output) else {
+            tracing::debug!(output, "no such output to click on");
+            return;
+        };
+        let Some(wl_output) = self
+            .outputs
+            .values()
+            .find(|candidate| candidate.id().protocol_id() == id)
+        else {
+            return;
+        };
+        // A pointer is tied to one output; another output gets a new one.
+        if self.pointer.as_ref().is_none_or(|(on, _)| *on != id) {
+            if let Some((_, old)) = self.pointer.take() {
+                old.destroy();
+            }
+            let pointer = pointers.create_virtual_pointer_with_output(
+                Some(seat),
+                Some(wl_output),
+                handle,
+                (),
+            );
+            self.pointer = Some((id, pointer));
+        }
+        let Some((_, pointer)) = &self.pointer else {
+            return;
+        };
+        let time = u32::try_from(self.started.elapsed().as_millis()).unwrap_or(u32::MAX);
+        let extent = |size: f64| size.round().max(1.0) as u32;
+        pointer.motion_absolute(
+            time,
+            click.x.round() as u32,
+            click.y.round() as u32,
+            extent(click.width),
+            extent(click.height),
+        );
+        pointer.frame();
+        pointer.button(time, click.button, wl_pointer::ButtonState::Pressed);
+        pointer.frame();
+        pointer.button(time + 1, click.button, wl_pointer::ButtonState::Released);
+        pointer.frame();
+        tracing::debug!(output, x = click.x, y = click.y, "passed a click on");
     }
 }
 
@@ -606,6 +679,30 @@ impl Dispatch<wl_seat::WlSeat, ()> for Client {
         _: &mut Self,
         _: &wl_seat::WlSeat,
         _: wl_seat::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
+impl Dispatch<ZwlrVirtualPointerManagerV1, ()> for Client {
+    fn event(
+        _: &mut Self,
+        _: &ZwlrVirtualPointerManagerV1,
+        _: <ZwlrVirtualPointerManagerV1 as Proxy>::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
+impl Dispatch<ZwlrVirtualPointerV1, ()> for Client {
+    fn event(
+        _: &mut Self,
+        _: &ZwlrVirtualPointerV1,
+        _: <ZwlrVirtualPointerV1 as Proxy>::Event,
         _: &(),
         _: &Connection,
         _: &QueueHandle<Self>,

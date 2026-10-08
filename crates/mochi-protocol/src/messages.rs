@@ -47,6 +47,10 @@ pub enum ClientMessage {
         /// The monitor whose island it happened on, when the UI knows.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         output: Option<String>,
+        /// For `outside`: the click that closed it, which the daemon passes
+        /// on to the window under it once the island lets go.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        click: Option<Click>,
     },
     /// A click on a bubble. UI only, never answered.
     BubbleClick { bubble: BubbleId },
@@ -244,6 +248,20 @@ pub enum ErrorCode {
     Internal,
 }
 
+/// A click outside the island, where it happened, to pass on.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Click {
+    /// The monitor it happened on.
+    pub output: String,
+    /// Where, in that monitor's logical pixels, out of `width` by `height`.
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+    /// Qt's button: 1 left, 2 right, 4 middle.
+    pub button: u32,
+}
+
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -294,11 +312,26 @@ mod tests {
             activity: ActivityId(3),
             kind: EventKind::HoverLeave,
             output: None,
+            click: None,
         });
         round_trip_client(ClientMessage::Event {
             activity: ActivityId(3),
             kind: EventKind::Click,
             output: Some("DP-3".into()),
+            click: None,
+        });
+        round_trip_client(ClientMessage::Event {
+            activity: ActivityId(3),
+            kind: EventKind::Outside,
+            output: Some("DP-3".into()),
+            click: Some(Click {
+                output: "HDMI-A-1".into(),
+                x: 640.5,
+                y: 300.0,
+                width: 1920.0,
+                height: 1080.0,
+                button: 1,
+            }),
         });
         round_trip_client(ClientMessage::BubbleClick {
             bubble: BubbleId(3),
@@ -475,6 +508,7 @@ mod tests {
                 activity: ActivityId(7),
                 kind: EventKind::HoverEnter,
                 output: None,
+                click: None,
             }
         );
 

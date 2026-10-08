@@ -59,7 +59,10 @@ PanelWindow {
             return true;
         return activity.key != null && activity.module === released.module && activity.key === released.key;
     }
-    readonly property bool covering: modal || overlaid || catching
+    // A panel open on another monitor's island: a click here closes it
+    // too, as a click outside it would.
+    readonly property string panelElsewhere: Daemon.focusedOutput !== null && Daemon.focusedOutput !== (screen?.name ?? "") ? Daemon.focusedOutput : ""
+    readonly property bool covering: modal || overlaid || catching || panelElsewhere !== ""
 
     // Always the whole screen: a layer surface that changes size is animated by
     // the compositor (Hyprland's `layers` animation), which would stretch a
@@ -105,7 +108,27 @@ PanelWindow {
         anchors.fill: parent
         enabled: root.covering
         acceptedButtons: Qt.AllButtons
-        onClicked: Daemon.eventFor(root.activity, root.overlaid ? "dismiss" : "outside", root.screen?.name ?? "")
+        onClicked: mouse => {
+            const here = root.screen?.name ?? "";
+            if (root.overlaid) {
+                Daemon.eventFor(root.activity, "dismiss", here);
+                return;
+            }
+            // Where it was, so the daemon passes it on to the window under
+            // it once the island lets go: one click, not two.
+            const click = {
+                "output": here,
+                "x": mouse.x,
+                "y": mouse.y,
+                "width": root.width,
+                "height": root.height,
+                "button": mouse.button
+            };
+            if (root.modal || root.catching)
+                Daemon.outsideClick(root.activity, here, click);
+            else
+                Daemon.outsideClick(Daemon.activityFor(root.panelElsewhere), root.panelElsewhere, click);
+        }
         // The catch takes the scroll wheel too, and a surface can't pass an
         // event on to the window underneath. A scroll outside a notice the
         // user didn't open releases the catch instead, so the next scroll

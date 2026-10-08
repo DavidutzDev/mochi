@@ -82,7 +82,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 |---|---|---|
 | `hello` | `api`, `role` | everyone, first |
 | `command` | `module`, `action`, `args` (optional, defaults to `[]`) | UI and control |
-| `event` | `activity`, `kind`, `output` (optional) | UI |
+| `event` | `activity`, `kind`, `output` (optional), `click` (optional, for `outside`: `output`, `x`, `y`, `width`, `height`, `button`) | UI |
 | `bubble_click` | `bubble` | UI |
 | `overflow_click` | `area` | UI |
 | `status` | | control |
@@ -110,7 +110,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 
 ### Activity
 
-Each monitor has an island of its own. `present` carries what one island shows, and `output` names its monitor; after `hello` the daemon sends one for every monitor. Without `output`, the activity is for every island, as before the compositor names its monitors. `resting` is only for UIs of earlier releases, which had one island mirrored on every monitor; the daemon no longer sends it. An `event` names in `output` the island it happened on, so a click expands the activity on that monitor only.
+Each monitor has an island of its own. `present` carries what one island shows, and `output` names its monitor; after `hello` the daemon sends one for every monitor. Without `output`, the activity is for every island, as before the compositor names its monitors. `resting` is only for UIs of earlier releases, which had one island mirrored on every monitor; the daemon no longer sends it. An `event` names in `output` the island it happened on, so a click expands the activity on that monitor only. An `outside` event carries the `click` that closed the activity, on whichever monitor it happened, in that monitor's logical pixels, with Qt's button (1 left, 2 right, 4 middle); once the activity is gone, the daemon clicks there again through a virtual pointer, so the window under it gets the click.
 
 `present` carries the activity on screen:
 
