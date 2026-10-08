@@ -355,6 +355,7 @@ impl Daemon {
                 width: click.width,
                 height: click.height,
                 button,
+                scroll: click.scroll.map(|scroll| (scroll.x, scroll.y)),
             };
             if let Err(error) = compositor.click(&click.output, again) {
                 tracing::debug!(%error, "can't pass the click on");
@@ -550,11 +551,13 @@ impl Daemon {
                 }
             }
             (Some(Role::Ui), ClientMessage::OverflowClick { area }) => self.list_hidden(area),
+            (Some(Role::Ui), ClientMessage::PassOn { click }) => self.pass_on(click),
             (
                 Some(_),
                 ClientMessage::Event { .. }
                 | ClientMessage::BubbleClick { .. }
-                | ClientMessage::OverflowClick { .. },
+                | ClientMessage::OverflowClick { .. }
+                | ClientMessage::PassOn { .. },
             ) => {
                 self.reply_error(id, ErrorCode::NotAllowed, "only the ui sends events");
             }

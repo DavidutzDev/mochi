@@ -21,7 +21,7 @@ pub use bubbles::{Area, Bubble, BubbleId, Overflow, Stacking};
 pub use contributions::Contribution;
 pub use messages::{
     Activity, ActivityId, Click, ClientMessage, CompositorStatus, DaemonMessage, ErrorCode,
-    EventKind, PluginState, PluginStatus, Role, Status,
+    EventKind, PluginState, PluginStatus, Role, Scroll, Status,
 };
 pub use theme::{
     Anchor, Appearance, Color, ColorError, Colors, Layout, Mode, Motion, Notch, Text, Theme,

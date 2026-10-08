@@ -123,6 +123,16 @@ Singleton {
         });
     }
 
+    // A scroll the island caught that belongs to the window under it,
+    // without closing anything; the daemon scrolls there once the island
+    // lets go. `click` is as in outsideClick, with `scroll` {x, y}.
+    function passOn(click: var): void {
+        send({
+            "type": "pass_on",
+            "click": click
+        });
+    }
+
     function bubbleClick(id: int): void {
         send({
             type: "bubble_click",

@@ -82,7 +82,8 @@ Command arguments are always strings, as typed on the command line. The daemon c
 |---|---|---|
 | `hello` | `api`, `role` | everyone, first |
 | `command` | `module`, `action`, `args` (optional, defaults to `[]`) | UI and control |
-| `event` | `activity`, `kind`, `output` (optional), `click` (optional, for `outside`: `output`, `x`, `y`, `width`, `height`, `button`) | UI |
+| `event` | `activity`, `kind`, `output` (optional), `click` (optional, for `outside`: `output`, `x`, `y`, `width`, `height`, `button`, and `scroll` `{x, y}` for a scroll) | UI |
+| `pass_on` | `click`, as in `event`: a scroll the island caught without closing anything, which the daemon passes on | UI |
 | `bubble_click` | `bubble` | UI |
 | `overflow_click` | `area` | UI |
 | `status` | | control |

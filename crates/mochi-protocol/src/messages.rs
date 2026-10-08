@@ -52,6 +52,9 @@ pub enum ClientMessage {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         click: Option<Click>,
     },
+    /// A scroll the island caught that belongs to the window under it, once
+    /// the island lets go there. UI only, never answered.
+    PassOn { click: Click },
     /// A click on a bubble. UI only, never answered.
     BubbleClick { bubble: BubbleId },
     /// A click on an area's "+N", for the bubbles it leaves out. The daemon
@@ -262,8 +265,19 @@ pub struct Click {
     pub y: f64,
     pub width: f64,
     pub height: f64,
-    /// Qt's button: 1 left, 2 right, 4 middle.
+    /// Qt's button: 1 left, 2 right, 4 middle; 0 for a scroll.
     pub button: u32,
+    /// A scroll instead of a click: Qt's wheel angles, 120 a notch,
+    /// positive away from the user and to the right.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scroll: Option<Scroll>,
+}
+
+/// A wheel or touchpad scroll, as Qt reports it.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct Scroll {
+    pub x: f64,
+    pub y: f64,
 }
 
 #[cfg(test)]
@@ -335,7 +349,19 @@ mod tests {
                 width: 1920.0,
                 height: 1080.0,
                 button: 1,
+                scroll: None,
             }),
+        });
+        round_trip_client(ClientMessage::PassOn {
+            click: Click {
+                output: "DP-3".into(),
+                x: 10.0,
+                y: 20.0,
+                width: 1920.0,
+                height: 1080.0,
+                button: 0,
+                scroll: Some(Scroll { x: 0.0, y: -120.0 }),
+            },
         });
         round_trip_client(ClientMessage::BubbleClick {
             bubble: BubbleId(3),

@@ -416,6 +416,27 @@ impl Client {
             extent(click.height),
         );
         pointer.frame();
+        if let Some((across, along)) = click.scroll {
+            // Wayland scrolls the other way round, 15 for a notch of 120.
+            pointer.axis_source(wl_pointer::AxisSource::Wheel);
+            for (axis, delta) in [
+                (wl_pointer::Axis::VerticalScroll, -along),
+                (wl_pointer::Axis::HorizontalScroll, across),
+            ] {
+                if delta == 0.0 {
+                    continue;
+                }
+                let notches = delta / 120.0;
+                if notches.fract() == 0.0 {
+                    pointer.axis_discrete(time, axis, notches * 15.0, notches as i32);
+                } else {
+                    pointer.axis(time, axis, notches * 15.0);
+                }
+            }
+            pointer.frame();
+            tracing::debug!(output, x = click.x, y = click.y, "passed a scroll on");
+            return;
+        }
         pointer.button(time, click.button, wl_pointer::ButtonState::Pressed);
         pointer.frame();
         pointer.button(time + 1, click.button, wl_pointer::ButtonState::Released);

@@ -197,6 +197,9 @@ pub struct Click {
     pub height: f64,
     /// A Linux button code, like `BTN_LEFT`.
     pub button: u32,
+    /// A scroll there instead of a click, in Qt's wheel angles: 120 a
+    /// notch, positive away from the user and to the right.
+    pub scroll: Option<(f64, f64)>,
 }
 
 /// Linux's codes for the mouse buttons.

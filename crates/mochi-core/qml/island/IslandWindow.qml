@@ -130,16 +130,41 @@ PanelWindow {
                 Daemon.outsideClick(Daemon.activityFor(root.panelElsewhere), root.panelElsewhere, click);
         }
         // The catch takes the scroll wheel too, and a surface can't pass an
-        // event on to the window underneath. A scroll outside a notice the
-        // user didn't open releases the catch instead, so the next scroll
-        // reaches the page; the notice stays until it times out.
+        // event on to the window underneath, so the daemon scrolls there
+        // again once the island lets go. A notice the user didn't open
+        // stops catching and stays until it times out; a panel closes, as
+        // on a click.
         onWheel: wheel => {
-            if (root.catching && !root.modal && !root.overlaid && !root.activity.expanded)
+            if (root.overlaid)
+                return;
+            const here = root.screen?.name ?? "";
+            const scroll = {
+                "output": here,
+                "x": wheel.x,
+                "y": wheel.y,
+                "width": root.width,
+                "height": root.height,
+                "button": 0,
+                "scroll": {
+                    "x": wheel.angleDelta.x,
+                    "y": wheel.angleDelta.y
+                }
+            };
+            // A notice the user didn't open lets go, and the scroll goes on
+            // to the window under it; the notice stays.
+            if (root.catching && !root.modal && !root.activity.expanded) {
                 root.released = {
                     "id": root.activity.id,
                     "module": root.activity.module,
                     "key": root.activity.key ?? null
                 };
+                Daemon.passOn(scroll);
+            } else if (root.modal || root.catching) {
+                // A panel closes, as on a click, and the window scrolls.
+                Daemon.outsideClick(root.activity, here, scroll);
+            } else if (root.panelElsewhere !== "") {
+                Daemon.outsideClick(Daemon.activityFor(root.panelElsewhere), root.panelElsewhere, scroll);
+            }
         }
     }
 
