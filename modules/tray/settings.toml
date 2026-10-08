@@ -6,3 +6,6 @@
 # pinned = []
 # Apps never shown.
 # hidden = []
+# Old X11 tray icons (XEmbed), like Wine's: Mochi starts KDE's
+# xembedsniproxy for them when it's installed and not running already.
+# xembed = true

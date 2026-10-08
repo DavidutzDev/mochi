@@ -5,6 +5,11 @@ import qs.island
 // activates the app, a right click opens its menu here, a middle click does
 // its second action. In a menu, entries with more open as a page of their
 // own; Escape or the back arrow goes up a level, then back to the apps.
+//
+// The keyboard works too: the arrows move between the apps or the
+// entries, Enter activates an app or picks an entry, Shift+Enter or the
+// Menu key opens an app's menu, and Left goes back up from a submenu. The
+// app under the pointer or the arrows shows its tooltip under them.
 Item {
     id: root
 
@@ -44,14 +49,88 @@ Item {
 
     // A new menu starts at its top.
     onMenuChanged: {
-        if (menu === null || menu.key !== shownKey)
+        if (menu === null || menu.key !== shownKey) {
             path = [];
+            current = -1;
+        }
         shownKey = menu?.key ?? "";
     }
     property string shownKey: ""
 
+    // The app or the entry the arrows are on; -1 for none yet.
+    property int current: -1
+    onPathChanged: current = -1
+    readonly property var currentItem: menu === null && current >= 0 ? items[current] ?? null : null
+    // The app whose tooltip shows: under the pointer, or else the arrows'.
+    property var hovered: null
+    readonly property string tooltip: ((hovered ?? currentItem)?.tooltip ?? "").trim()
+
     focus: true
     Keys.onEscapePressed: back()
+    Keys.onPressed: event => {
+        const shift = (event.modifiers & Qt.ShiftModifier) !== 0;
+        if (menu === null)
+            appKey(event, shift);
+        else
+            menuKey(event);
+    }
+
+    // The arrows over the grid of apps.
+    function appKey(event: var, shift: bool): void {
+        const count = items.length;
+        if (count === 0)
+            return;
+        const step = {
+            [Qt.Key_Left]: -1,
+            [Qt.Key_Right]: 1,
+            [Qt.Key_Up]: -columns,
+            [Qt.Key_Down]: columns
+        }[event.key];
+        if (step !== undefined) {
+            current = current < 0 ? 0 : Math.max(0, Math.min(count - 1, current + step));
+            event.accepted = true;
+        } else if (current >= 0 && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)) {
+            Daemon.command("tray", shift ? "menu" : "activate", [items[current].key]);
+            event.accepted = true;
+        } else if (current >= 0 && event.key === Qt.Key_Menu) {
+            Daemon.command("tray", "menu", [items[current].key]);
+            event.accepted = true;
+        }
+    }
+
+    // The arrows over a menu's entries, skipping separators and what's off.
+    function menuKey(event: var): void {
+        const usable = index => {
+            const entry = entries[index];
+            return entry && !entry.separator && entry.enabled;
+        };
+        const move = direction => {
+            for (let index = current + direction; index >= 0 && index < entries.length; index += direction)
+                if (usable(index))
+                    return index;
+            return current;
+        };
+        switch (event.key) {
+        case Qt.Key_Down:
+            current = move(1);
+            break;
+        case Qt.Key_Up:
+            current = current < 0 ? move(1) : move(-1);
+            break;
+        case Qt.Key_Return:
+        case Qt.Key_Enter:
+        case Qt.Key_Right:
+            if (usable(current) && (event.key !== Qt.Key_Right || entries[current].submenu))
+                choose(entries[current]);
+            break;
+        case Qt.Key_Left:
+            back();
+            break;
+        default:
+            return;
+        }
+        event.accepted = true;
+    }
 
     function back(): void {
         if (path.length > 0)
@@ -122,9 +201,11 @@ Item {
                     width: root.tileWidth
                     height: 86
                     radius: Theme.radiusField
+                    required property int index
+
                     // Unimportant for now, its app says.
                     opacity: tile.modelData.passive ? 0.6 : 1
-                    color: area.containsMouse ? Theme.raised : Theme.surface
+                    color: area.containsMouse || root.current === index ? Theme.raised : Theme.surface
 
                     AppIcon {
                         id: tileIcon
@@ -167,6 +248,12 @@ Item {
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
                         cursorShape: Qt.PointingHandCursor
+                        onContainsMouseChanged: {
+                            if (containsMouse)
+                                root.hovered = tile.modelData;
+                            else if (root.hovered?.key === tile.modelData.key)
+                                root.hovered = null;
+                        }
                         onClicked: mouse => {
                             const key = tile.modelData.key;
                             if (mouse.button === Qt.RightButton)
@@ -179,6 +266,20 @@ Item {
                     }
                 }
             }
+        }
+
+        // What the app says about itself, like Discord's unread count.
+        Text {
+            visible: root.menu === null && root.tooltip !== ""
+            width: parent.width
+            text: root.tooltip
+            wrapMode: Text.Wrap
+            maximumLineCount: 3
+            elide: Text.ElideRight
+            textFormat: Text.PlainText
+            color: Theme.muted
+            font.pixelSize: Theme.textCaption
+            font.family: Theme.fontFamily
         }
 
         // The menu.
@@ -221,6 +322,7 @@ Item {
                         id: row
 
                         required property var modelData
+                        required property int index
                         readonly property bool separator: modelData.separator ?? false
 
                         width: entryColumn.width
@@ -238,7 +340,7 @@ Item {
                             visible: !row.separator
                             anchors.fill: parent
                             radius: Theme.radiusControl
-                            color: entryArea.containsMouse && row.modelData.enabled ? Theme.raised : "transparent"
+                            color: (entryArea.containsMouse || root.current === row.index) && row.modelData.enabled ? Theme.raised : "transparent"
                             opacity: row.modelData.enabled ? 1 : 0.45
 
                             // A checkmark or a radio dot, when it has one.

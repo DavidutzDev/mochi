@@ -6,6 +6,8 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- The tray drawer takes the keyboard: arrows, Enter to activate, Shift+Enter or the Menu key for an app's menu, and arrows, Enter and Left in menus. Tooltips show under the drawer's apps and beside pinned bubbles when the pointer rests on them.
+- XEmbed tray icons, from old X11 apps: the tray starts KDE's `xembedsniproxy` when it's installed and not running, which turns them into StatusNotifierItems. `xembed = false` turns it off.
 - WPA Enterprise networks join from the Network page: the prompt asks for the user name with the password, and joins with PEAP and MSCHAPv2.
 - Hidden networks: **Hidden…** on the Network page, or `mochi ipc network hidden`, asks for the network's name and security on the island.
 - Mochi is NetworkManager's secret agent: a password it needs later, like a saved network's that changed or a connection started with nmcli, is asked on the island, with a note when the last one didn't work. Wi-Fi and 802.1X passwords only; a VPN's go to another agent.

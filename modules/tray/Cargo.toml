@@ -16,7 +16,7 @@ png.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tokio = { workspace = true, features = ["macros", "process", "rt", "sync", "time"] }
 tracing.workspace = true
 zbus.workspace = true
 

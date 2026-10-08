@@ -466,10 +466,10 @@ A new module: the apps' tray icons.
 - [x] Icons and attention state, from the icon theme, the app's own icon folder, or the pixmaps the app sends
 - [x] Click to activate, right click for the app's menu (DBusMenu) in Mochi's style with submenus as pages, middle click, scroll
 - [x] Where it lives: a tray bubble that opens a drawer on the island, and a bubble of their own for apps in `pinned`. Attention makes the bubble breathe
-- [ ] Tooltips on hover in the drawer and on pinned bubbles
-- [ ] Keyboard in the drawer and the menus: arrows, Enter
+- [x] Tooltips on hover in the drawer and on pinned bubbles
+- [x] Keyboard in the drawer and the menus: arrows, Enter
 - [ ] Follow a menu's changes while it's open (`LayoutUpdated`)
-- [ ] XEmbed tray icons, through a bridge like xembedsniproxy
+- [x] XEmbed tray icons, through a bridge like xembedsniproxy
 
 ### Network
 

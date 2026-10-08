@@ -14,7 +14,13 @@
 //! [module.tray]
 //! pinned = ["discord"]   # apps with a bubble of their own, by id or title
 //! hidden = []            # apps never shown
+//! xembed = true          # old X11 tray icons, through xembedsniproxy
 //! ```
+//!
+//! Old X11 apps, like Wine's and some games, draw their tray icon with
+//! XEmbed instead. KDE's `xembedsniproxy` turns those into
+//! StatusNotifierItems, so Mochi starts it when it's installed and no
+//! other copy runs, and stops it with the module.
 //!
 //! Icons their app marks as passive, unimportant for now, stay in the
 //! drawer, dimmed.
@@ -47,11 +53,74 @@ static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 #[derive(Debug, Default)]
 pub struct Tray;
 
-#[derive(Debug, Default, Deserialize, PartialEq, schemars::JsonSchema)]
+#[derive(Debug, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     pinned: Vec<String>,
     hidden: Vec<String>,
+    /// Old X11 tray icons, through xembedsniproxy when it's installed.
+    xembed: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            pinned: Vec::new(),
+            hidden: Vec::new(),
+            xembed: true,
+        }
+    }
+}
+
+/// The bridge from XEmbed icons to StatusNotifierItems.
+const XEMBED_PROXY: &str = "xembedsniproxy";
+
+/// Starts the XEmbed bridge, unless it runs already, isn't installed or
+/// there's no X server; it stops when the returned child is dropped.
+fn start_xembed() -> Option<tokio::process::Child> {
+    if !mochi_core::process::installed(XEMBED_PROXY) {
+        return None;
+    }
+    if std::env::var_os("DISPLAY").is_none() {
+        tracing::info!("no DISPLAY, so no XEmbed tray icons");
+        return None;
+    }
+    if running(XEMBED_PROXY) {
+        tracing::debug!("xembedsniproxy runs already");
+        return None;
+    }
+    match tokio::process::Command::new(XEMBED_PROXY)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+    {
+        Ok(child) => {
+            tracing::info!("started xembedsniproxy for XEmbed tray icons");
+            Some(child)
+        }
+        Err(error) => {
+            tracing::warn!(%error, "can't start xembedsniproxy");
+            None
+        }
+    }
+}
+
+/// Whether a process of the user's is called `name`.
+fn running(name: &str) -> bool {
+    std::fs::read_dir("/proc")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .any(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .is_some_and(|pid| pid.bytes().all(|byte| byte.is_ascii_digit()))
+                && std::fs::read_to_string(entry.path().join("comm"))
+                    .is_ok_and(|comm| comm.trim() == name)
+        })
 }
 
 impl Settings {
@@ -89,6 +158,18 @@ impl Module for Tray {
             .map_err(|error| error.to_string())
     }
 
+    fn needs(&self, table: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
+        let settings: Settings = mochi_core::settings(table).unwrap_or_default();
+        if settings.xembed {
+            vec![mochi_core::Need::new(
+                XEMBED_PROXY,
+                "Old X11 tray icons (XEmbed), from KDE's plasma-workspace",
+            )]
+        } else {
+            Vec::new()
+        }
+    }
+
     fn actions(&self) -> Vec<ActionSpec> {
         let app = || ArgSpec::string("app", "The app's key, as `list` shows it");
         vec![
@@ -123,6 +204,8 @@ impl Module for Tray {
             let settings: Settings = ctx.settings()?;
             let (changes_sender, mut changes) = mpsc::unbounded_channel();
             let connection = sni::start(changes_sender).await?;
+            // After the watcher, which the bridge registers its icons with.
+            let _xembed = settings.xembed.then(start_xembed).flatten();
             let (updates_sender, mut updates) = mpsc::unbounded_channel();
             let mut state = State {
                 settings,
