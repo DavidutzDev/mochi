@@ -164,6 +164,12 @@ impl Default for Notch {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Motion {
+    /// Turns animations off: views appear and change at once, and the
+    /// island takes its new shape without a spring.
+    pub reduced: bool,
+    /// How fast every animation runs: 2 is twice as fast, 0.5 half.
+    #[schemars(range(min = 0.25, max = 3.0))]
+    pub speed: f64,
     #[schemars(range(min = 0.5, max = 12.0))]
     pub spring: f64,
     /// Between 0 and 1. Lower values bounce more.
@@ -188,6 +194,8 @@ pub struct Motion {
 impl Default for Motion {
     fn default() -> Self {
         Self {
+            reduced: false,
+            speed: 1.0,
             spring: 4.0,
             damping: 0.32,
             fade_in_ms: 220,

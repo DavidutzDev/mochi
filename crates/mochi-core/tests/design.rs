@@ -7,7 +7,9 @@
 //! - spacing or a radius above 2 pixels (`spacing: 10`, `radius: 12`);
 //! - a margin above 0 (`anchors.margins: 6`); negative ones, which widen a
 //!   click target, are fine;
-//! - a color (`"#ff0000"`, `Qt.rgba(...)`).
+//! - a color (`"#ff0000"`, `Qt.rgba(...)`);
+//! - an animation's duration (`duration: 300`), which then ignores the
+//!   theme's speed and reduced motion: `Theme.duration(300)` follows them.
 //!
 //! A line that needs one says why in a `// design:` comment on it. The views
 //! that broke these rules before the scales existed are listed with their
@@ -87,6 +89,9 @@ fn breaks_scale(line: &str) -> bool {
         if number_after(code, key).is_some_and(|value| value > 0.0) {
             return true;
         }
+    }
+    if number_after(code, "duration").is_some() {
+        return true;
     }
     let hex = code.match_indices("\"#").any(|(at, _)| {
         let digits: String = code[at + 2..]
@@ -184,6 +189,7 @@ fn finds_raw_values() {
         "anchors.margins: 6",
         "color: \"#ff0000\"",
         "color: Qt.rgba(1, 1, 1, 0.5)",
+        "duration: 300",
     ] {
         assert!(breaks_scale(line), "{line}");
     }
@@ -198,6 +204,7 @@ fn finds_raw_values() {
         "font.pixelSize: 9 // design: the badge fits in a 14 pixel dot",
         "text: \"#1 in charts\"",
         "spacing: 4 + Theme.spaceSmall",
+        "duration: Theme.duration(300)",
     ] {
         assert!(!breaks_scale(line), "{line}");
     }

@@ -59,14 +59,14 @@ Item {
         NumberAnimation {
             from: 0.15
             to: 0.85
-            duration: 1300
+            duration: Theme.duration(1300)
             easing.type: Easing.InOutSine
         }
 
         NumberAnimation {
             from: 0.85
             to: 0.15
-            duration: 1300
+            duration: Theme.duration(1300)
             easing.type: Easing.InOutSine
         }
     }

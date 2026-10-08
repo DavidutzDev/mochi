@@ -29,12 +29,12 @@ Row {
                 // Each bar has its own rhythm, so they never line up.
                 NumberAnimation {
                     to: 14 - bar.index * 3
-                    duration: 260 + bar.index * 90
+                    duration: Theme.duration(260 + bar.index * 90)
                     easing.type: Easing.InOutSine
                 }
                 NumberAnimation {
                     to: 4 + bar.index * 2
-                    duration: 300 + bar.index * 70
+                    duration: Theme.duration(300 + bar.index * 70)
                     easing.type: Easing.InOutSine
                 }
                 onRunningChanged: {

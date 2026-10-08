@@ -22,13 +22,13 @@ Item {
 
             NumberAnimation {
                 to: 0.35
-                duration: 900
+                duration: Theme.duration(900)
                 easing.type: Easing.InOutSine
             }
 
             NumberAnimation {
                 to: 1
-                duration: 900
+                duration: Theme.duration(900)
                 easing.type: Easing.InOutSine
             }
         }

@@ -81,16 +81,26 @@ Singleton {
     readonly property int rowHeight: 44
     readonly property int tileHeight: 96
 
-    readonly property real spring: tokens?.motion.spring ?? 4.0
-    readonly property real damping: tokens?.motion.damping ?? 0.32
-    readonly property int fadeIn: tokens?.motion.fade_in_ms ?? 220
-    readonly property int fadeOut: tokens?.motion.fade_out_ms ?? 120
-    readonly property int fadeDelay: tokens?.motion.fade_delay_ms ?? 90
-    readonly property int fast: tokens?.motion.fast_ms ?? 150
-    readonly property int move: tokens?.motion.move_ms ?? 350
+    // Motion. `reduced` turns animations off: every duration is 0, and the
+    // spring settles at once without a bounce. `speed` scales the rest:
+    // durations divide by it, and the spring's stiffness grows with its
+    // square, so the island settles that much faster too.
+    readonly property bool reducedMotion: tokens?.motion.reduced ?? false
+    readonly property real speed: Math.max(tokens?.motion.speed ?? 1, 0.05)
+    function duration(ms: real): int {
+        return reducedMotion ? 0 : Math.round(ms / speed);
+    }
+    readonly property real spring: reducedMotion ? 100 : (tokens?.motion.spring ?? 4.0) * speed * speed
+    readonly property real damping: reducedMotion ? 1 : tokens?.motion.damping ?? 0.32
+    readonly property int fadeIn: duration(tokens?.motion.fade_in_ms ?? 220)
+    readonly property int fadeOut: duration(tokens?.motion.fade_out_ms ?? 120)
+    readonly property int fadeDelay: duration(tokens?.motion.fade_delay_ms ?? 90)
+    readonly property int fast: duration(tokens?.motion.fast_ms ?? 150)
+    readonly property int move: duration(tokens?.motion.move_ms ?? 350)
     // Material 3's expressive spatial curve: a slight overshoot, for things
     // that move or resize. Use with `easing.type: Easing.BezierSpline`.
-    readonly property var overshoot: [0.38, 1.21, 0.22, 1.0, 1, 1]
+    // Without motion, no overshoot either.
+    readonly property var overshoot: reducedMotion ? [0.2, 0, 0, 1, 1, 1] : [0.38, 1.21, 0.22, 1.0, 1, 1]
 
     readonly property string fontFamily: tokens?.text.family || (inter.status === FontLoader.Ready ? inter.name : "Inter")
     // The clocks.

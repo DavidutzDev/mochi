@@ -360,6 +360,12 @@ fn check_theme(theme: &Theme) -> Result<(), String> {
             motion.spring
         ));
     }
+    if !(motion.speed.is_finite() && motion.speed > 0.0) {
+        return Err(format!(
+            "motion.speed must be above 0, got {}",
+            motion.speed
+        ));
+    }
     if !(motion.damping > 0.0 && motion.damping <= 1.0) {
         return Err(format!(
             "motion.damping must be above 0 and at most 1, got {}",

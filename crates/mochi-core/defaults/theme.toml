@@ -58,6 +58,11 @@
 # ear_radius = 10
 
 [motion]
+# Turn animations off: views appear and change at once, and the island takes
+# its new shape without a spring.
+# reduced = false
+# How fast every animation runs: 2 is twice as fast, 0.5 half as fast.
+# speed = 1.0
 # The island's resize spring: stiffness, and damping between 0 and 1
 # (lower bounces more).
 # spring = 4.0

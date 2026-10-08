@@ -45,13 +45,13 @@ Item {
 
         NumberAnimation {
             to: 0.45
-            duration: 800
+            duration: Theme.duration(800)
             easing.type: Easing.InOutSine
         }
 
         NumberAnimation {
             to: 1
-            duration: 800
+            duration: Theme.duration(800)
             easing.type: Easing.InOutSine
         }
     }

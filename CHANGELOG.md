@@ -6,6 +6,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- Motion settings in `[motion]`: `reduced = true` turns animations off, so views appear and change at once and the island takes its shape without a spring, and `speed` makes every animation faster or slower. Every animation goes through `Theme.duration(ms)`, and the design check rejects a fixed duration.
 - niri and Sway through their IPC, like Hyprland: the focused output, exact also when focus moves to an empty workspace, and where windows are, for picking a window to capture or share. On niri, its casts say what's being shared, for the Sharing bubble, from the moment Mochi starts. Switchable shares still need Hyprland, which makes the monitor they share.
 - `mochi doctor` checks what Mochi needs around it and says what to install or change: the daemon and the UI, the config, Quickshell's version, the fonts, the compositor's protocols and what each is for, the portal and its share picker, another notification daemon, and the programs the enabled modules and plugins run. Modules say which with `Module::needs`, and plugins with `[backend] needs`. It fails when something is broken.
 - A test compiles every QML view, the core's and each module's, in Quickshell with Qt's offscreen platform, so a view with a syntax error, an unknown type or a property that doesn't exist fails the build. The Nix package runs it.

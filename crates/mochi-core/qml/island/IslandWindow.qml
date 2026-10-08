@@ -20,7 +20,7 @@ PanelWindow {
 
     Behavior on attached {
         NumberAnimation {
-            duration: 350
+            duration: Theme.duration(350)
             easing.type: Easing.OutCubic
         }
     }
