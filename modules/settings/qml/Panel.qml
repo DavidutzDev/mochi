@@ -25,8 +25,6 @@ Item {
     property string option: ""
     property string query: ""
     property bool editing: false
-    // Changes are tried, not kept, until Keep.
-    property bool previewing: false
 
     readonly property var current: sections.find(entry => entry.id === section) ?? sections[0] ?? null
     readonly property var error: settings.error ?? null
@@ -184,7 +182,7 @@ Item {
         const list = enabled.filter(module => module !== id);
         if (on)
             list.push(id);
-        Daemon.command("settings", previewing ? "preview" : "set", ["config.modules", JSON.stringify(list)]);
+        Daemon.command("settings", "set", ["config.modules", JSON.stringify(list)]);
     }
 
     // The editor closes once the daemon took what it saved.
@@ -499,13 +497,6 @@ Item {
                 }
 
                 Button {
-                    text: "Preview"
-                    icon: "visibility"
-                    tone: root.previewing ? "accent" : "ghost"
-                    onClicked: root.previewing = !root.previewing
-                }
-
-                Button {
                     visible: !content.searching && root.current !== null && root.sectionModified(root.current)
                     text: "Reset"
                     icon: "restart_alt"
@@ -741,7 +732,6 @@ Item {
                                     prefix: content.searching ? root.prefix(modelData) : ""
                                     error: root.error?.path === modelData ? root.error.message : ""
                                     highlighted: root.option === modelData
-                                    preview: root.previewing
                                     onPopup: (kind, anchor) => root.openPopup(kind, row, anchor)
                                     onEditToml: root.edit()
                                     onHighlightedChanged: {
@@ -761,8 +751,9 @@ Item {
         }
     }
 
-    // What's being tried: kept as changes, or dropped. A reload drops it
-    // too.
+    // What something else is trying, like `mochi ipc settings preview`:
+    // kept as changes, or dropped. A reload drops it too. The panel's own
+    // changes apply and are kept at once.
     Rectangle {
         id: tried
 
@@ -814,10 +805,7 @@ Item {
                 text: "Keep"
                 icon: "check"
                 tone: "accent"
-                onClicked: {
-                    root.previewing = false;
-                    Daemon.command("settings", "keep", []);
-                }
+                onClicked: Daemon.command("settings", "keep", [])
             }
         }
     }

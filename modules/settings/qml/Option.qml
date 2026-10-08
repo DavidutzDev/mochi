@@ -33,13 +33,10 @@ Item {
             pending = undefined;
     }
 
-    // Tried without being kept, while the panel previews.
-    property bool preview: false
-
     function send(value: var): void {
         sending.stop();
         settle.stop();
-        Daemon.command("settings", preview ? "preview" : "set", [field.path, JSON.stringify(value)]);
+        Daemon.command("settings", "set", [field.path, JSON.stringify(value)]);
     }
 
     // For values that move, like a slider being dragged.
