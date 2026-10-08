@@ -30,6 +30,8 @@ pub(crate) struct Model {
     screencasts: u32,
     /// The same, by what they capture.
     captured: BTreeMap<String, u32>,
+    /// IPC connected once already: a new connection may have missed events.
+    ipc_seen: bool,
 }
 
 #[derive(Debug, Default)]
@@ -201,6 +203,29 @@ impl Model {
     pub fn reset_screencasts(&mut self) {
         self.screencasts = 0;
         self.captured.clear();
+    }
+
+    /// IPC connected. Counts from before a reconnect may be stale, and go;
+    /// on the first connection they can only be ones a module gave back
+    /// with [`Model::assume_captures`], which stay.
+    pub fn ipc_connected(&mut self) {
+        if std::mem::replace(&mut self.ipc_seen, true) {
+            self.reset_screencasts();
+        }
+    }
+
+    /// Captures that started before Mochi did, which Hyprland never reports
+    /// again: at least one screencast, and one capture of each target. Their
+    /// stops come as usual.
+    pub fn assume_captures(&mut self, captured: &[String]) {
+        if captured.is_empty() {
+            return;
+        }
+        self.screencasts = self.screencasts.max(captured.len() as u32);
+        for target in captured {
+            let count = self.captured.entry(target.clone()).or_default();
+            *count = (*count).max(1);
+        }
     }
 
     fn focused_output(&self) -> Option<String> {
@@ -406,6 +431,24 @@ mod tests {
         assert!(model.snapshot().screencast);
         model.reset_screencasts();
         assert!(!model.snapshot().screencast);
+    }
+
+    #[test]
+    fn captures_from_before_survive_the_first_connection() {
+        let mut model = Model::default();
+        model.assume_captures(&["MOCHI-SHARE".into()]);
+        model.ipc_connected();
+        assert!(model.snapshot().screencast);
+        assert_eq!(model.snapshot().captured, ["MOCHI-SHARE"]);
+        // Its stop comes as usual.
+        model.ipc_screencast(false);
+        model.ipc_captured("MOCHI-SHARE".into(), false);
+        assert!(!model.snapshot().screencast);
+        assert!(model.snapshot().captured.is_empty());
+        // A reconnect may have missed events.
+        model.assume_captures(&["DP-3".into()]);
+        model.ipc_connected();
+        assert!(model.snapshot().captured.is_empty());
     }
 
     #[test]

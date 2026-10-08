@@ -17,7 +17,10 @@
 //!
 //! The bubble follows the compositor's screencast state, which Hyprland
 //! reports on its event socket.
+//!
+//! A restart of mochid doesn't end a share: see [`saved`].
 
+mod saved;
 mod switch;
 mod windows;
 
@@ -32,6 +35,7 @@ use mochi_core::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 
+use crate::saved::Saved;
 use crate::switch::{OUTPUT, Session, Source};
 use crate::windows::Window;
 
@@ -156,16 +160,21 @@ impl Module for Share {
                 settings: ctx.settings()?,
                 ..State::default()
             };
-            // A switchable monitor left by a crash shares nothing now.
-            state.stop(&ctx).await;
+            state.resume(&ctx).await;
             state.capturing(&ctx, &compositor.borrow());
-            ctx.publish_state(Value::Null);
             loop {
                 tokio::select! {
                     event = ctx.next_event() => match event {
                         None => {
                             state.finish(&ctx, String::new());
-                            state.stop(&ctx).await;
+                            if state.session.as_ref().is_some_and(Session::is_captured) {
+                                // The app still captures the monitor; the
+                                // next start carries on with the share.
+                                tracing::info!("leaving the switchable monitor to the next start");
+                                state.save(&ctx);
+                            } else {
+                                state.stop(&ctx).await;
+                            }
                             return Ok(());
                         }
                         Some(ModuleEvent::Command(command)) => state.command(&ctx, command).await,
@@ -268,9 +277,40 @@ struct State {
     capturing_since: Option<Instant>,
     /// The switchable share running now.
     session: Option<Session>,
+    /// What the compositor said was captured, when last saved.
+    saved_captures: Vec<String>,
 }
 
 impl State {
+    /// Picks up where the last run left off: gives the compositor back the
+    /// captures that were running, and carries on with the switchable share
+    /// while its monitor is still there. A monitor without a share to go
+    /// with it, left by a crash, shares nothing now and goes.
+    async fn resume(&mut self, ctx: &ModuleCtx) {
+        let saved = Saved::load(ctx.session_dir()).unwrap_or_default();
+        ctx.compositor().assume_captures(saved.captured.clone());
+        let exists = outputs(ctx).iter().any(|(name, ..)| name == OUTPUT);
+        let session = saved
+            .session
+            .as_ref()
+            .and_then(|session| session.resume(Instant::now()));
+        match session {
+            Some(session) if exists => {
+                tracing::info!(source = ?session.source, "carrying on with the switchable share");
+                ctx.publish_state(session.payload());
+                self.session = Some(session);
+            }
+            _ => self.stop(ctx).await,
+        }
+    }
+
+    /// Writes down what a restart needs to carry on.
+    fn save(&mut self, ctx: &ModuleCtx) {
+        let captured = ctx.compositor().state().captured;
+        Saved::new(captured.clone(), self.session.as_ref()).save(ctx.session_dir());
+        self.saved_captures = captured;
+    }
+
     async fn command(&mut self, ctx: &ModuleCtx, command: ModuleCommand) {
         let args = &command.args;
         let result = match command.action.as_str() {
@@ -417,6 +457,7 @@ impl State {
         );
         session.framerate = framerate;
         session.resolution = resolution;
+        self.save(ctx);
         Ok(())
     }
 
@@ -454,6 +495,7 @@ impl State {
                 session.source = source;
                 ctx.publish_state(session.payload());
             }
+            self.save(ctx);
             self.finish(ctx, String::new());
             return Ok(());
         }
@@ -465,6 +507,7 @@ impl State {
             match self.start(ctx, source, quality).await {
                 Ok(()) => {
                     tracing::info!("sharing the switchable monitor");
+                    self.save(ctx);
                     self.finish(ctx, format!("[SELECTION]/screen:{OUTPUT}\n"));
                     return Ok(());
                 }
@@ -541,6 +584,7 @@ impl State {
     async fn stop(&mut self, ctx: &ModuleCtx) {
         self.session = None;
         ctx.publish_state(Value::Null);
+        self.save(ctx);
         let exists = ctx
             .compositor()
             .state()
@@ -596,6 +640,9 @@ impl State {
         if let Some(session) = &mut self.session {
             let shared = state.captured.iter().any(|target| target == OUTPUT);
             session.captured(shared, Instant::now());
+        }
+        if state.captured != self.saved_captures {
+            self.save(ctx);
         }
         let active = state.screencast;
         self.capturing_since = match (active, self.capturing_since) {

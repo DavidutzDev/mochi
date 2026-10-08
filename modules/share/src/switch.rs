@@ -43,6 +43,27 @@ pub enum Source {
 }
 
 impl Source {
+    /// Reads back what [`Source::to_json`] wrote.
+    pub fn from_json(value: &Value) -> Option<Self> {
+        let text = |key: &str| value.get(key)?.as_str().map(str::to_owned);
+        let number = |key: &str| value.get(key)?.as_i64();
+        Some(match value.get("kind")?.as_str()? {
+            "screen" => Self::Screen(text("output")?),
+            "window" => Self::Window {
+                address: text("address")?,
+                title: text("title").unwrap_or_default(),
+            },
+            "area" => Self::Area {
+                output: text("output")?,
+                x: number("x")?,
+                y: number("y")?,
+                width: number("width")?,
+                height: number("height")?,
+            },
+            _ => return None,
+        })
+    }
+
     pub fn to_json(&self) -> Value {
         match self {
             Self::Screen(output) => json!({ "kind": "screen", "output": output }),
@@ -97,6 +118,20 @@ impl Session {
             busy_since: None,
             quiet_since: Some(now),
         }
+    }
+
+    /// A share that ran before mochid restarted: the app had it already, so
+    /// it ends a few seconds after nothing captures `OUTPUT`, as any share.
+    pub fn resumed(source: Source, now: Instant) -> Self {
+        Self {
+            shared: true,
+            ..Self::new(source, now)
+        }
+    }
+
+    /// Something captures `OUTPUT` now.
+    pub fn is_captured(&self) -> bool {
+        self.busy_since.is_some()
     }
 
     /// Follows whether something captures `OUTPUT`.
@@ -186,6 +221,45 @@ mod tests {
     fn session() -> (Session, Instant) {
         let now = Instant::now();
         (Session::new(Source::Screen("DP-3".into()), now), now)
+    }
+
+    #[test]
+    fn sources_read_back() {
+        let sources = [
+            Source::Screen("DP-3".into()),
+            Source::Window {
+                address: "0x5a1b".into(),
+                title: "Discord".into(),
+            },
+            Source::Area {
+                output: "HDMI-A-1".into(),
+                x: -4,
+                y: 8,
+                width: 640,
+                height: 360,
+            },
+        ];
+        for source in sources {
+            assert_eq!(Source::from_json(&source.to_json()), Some(source));
+        }
+        assert_eq!(Source::from_json(&json!({ "kind": "nope" })), None);
+    }
+
+    #[test]
+    fn a_resumed_share_carries_on_while_captured() {
+        let start = Instant::now();
+        let mut session = Session::resumed(Source::Screen("DP-3".into()), start);
+        // The captures Mochi gave back arrive a moment later.
+        session.captured(true, start + SECOND / 10);
+        assert!(session.is_captured());
+        assert!(!session.ended(start + 60 * SECOND));
+        // The app stops: over a few seconds later, not after 30.
+        session.captured(false, start + 60 * SECOND);
+        assert!(session.ended(start + 60 * SECOND + GRACE));
+
+        // Nothing captures it after the restart: the app stopped meanwhile.
+        let lone = Session::resumed(Source::Screen("DP-3".into()), start);
+        assert!(lone.ended(start + GRACE));
     }
 
     #[test]

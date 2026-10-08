@@ -60,6 +60,9 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- A restart of mochid, or a reload that restarted the share module, froze a running switchable share: Mochi removed `MOCHI-SHARE` under the app, which had to stop sharing and share again. Mochi now leaves the monitor while the app captures it, and the next start carries on with the same source and quality.
+- After a restart, Mochi didn't know a share was running, since Hyprland only reports captures as they start and stop: no bubble, and a switchable share it couldn't switch. The share module writes down what's captured and gives it back to the compositor when mochid starts again. `Compositor::assume_captures` takes captures from before Mochi started, and the first IPC connection no longer clears them.
+
 - When `mochi reload` restarted the idle module, it left a second clock waiting behind the shown one, and its `hover` then watched the hidden one.
 - Discord's notifications showed their Markdown as typed, like `**TEST**`. The notifications module reads it now: `**bold**`, `*italic*`, `__underline__`, `~~strike~~`, `` `code` ``, `[text](url)` links, and `||spoilers||`, shown as "spoiler". Plain `https://` links in any app's notifications become links, and `<s>`, `<strong>`, `<em>`, `<del>` and `<strike>` are kept. `markdown = false` in `[module.notifications]` turns it off.
 - A plugin's override that fails to load gives way to the builtin view, on the island and in bubbles, and `mochid`'s log has the error.

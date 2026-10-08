@@ -200,7 +200,7 @@ async fn run(
                         client.done = true;
                     }
                     Some(hyprland::Event::Connected) => {
-                        client.model.reset_screencasts();
+                        client.model.ipc_connected();
                         client.done = true;
                     }
                     None => focus = None,
@@ -273,6 +273,10 @@ impl Client {
                 }
                 None => tracing::warn!(?id, "the workspace is gone"),
             },
+            Action::AssumeCaptures(captured) => {
+                self.model.assume_captures(&captured);
+                self.done = true;
+            }
         }
     }
 }

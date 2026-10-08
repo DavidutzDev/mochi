@@ -165,6 +165,7 @@ pub type StateReceiver = watch::Receiver<State>;
 #[derive(Debug)]
 pub(crate) enum Action {
     ActivateWorkspace(WorkspaceId),
+    AssumeCaptures(Vec<String>),
 }
 
 /// A cheap, cloneable handle to the compositor.
@@ -290,6 +291,16 @@ impl Compositor {
         hyprland::remove_output(dir, name, focused.as_deref())
             .await
             .map_err(|error| CompositorError::Ipc(error.to_string()))
+    }
+
+    /// Gives back captures that were running before Mochi started, by
+    /// target, which Hyprland only reports when they start or stop: a
+    /// module that kept track of them across a restart tells the model, so
+    /// `screencast` and `captured` say them until they stop.
+    pub fn assume_captures(&self, captured: Vec<String>) {
+        if !captured.is_empty() {
+            let _ = self.actions.send(Action::AssumeCaptures(captured));
+        }
     }
 
     /// Whether [`Compositor::windows`] can work here.
