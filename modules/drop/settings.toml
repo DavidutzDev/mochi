@@ -6,5 +6,7 @@
 # paths (wl-copy) and open (xdg-open). Images convert between PNG, JPEG,
 # WebP, GIF, BMP, TIFF and ICO in Mochi itself; to SVG with vtracer, and
 # HEIC, AVIF and images to PDF with ImageMagick. Videos and sound convert
-# with ffmpeg, documents with LibreOffice, Markdown and HTML with pandoc.
+# with ffmpeg, documents with LibreOffice, Markdown and HTML with pandoc,
+# and archives between ZIP, 7z and the tars with bsdtar, or unzip, tar, zip
+# and 7z.
 # actions = ["zip", "extract", "merge", "convert", "copy", "open"]

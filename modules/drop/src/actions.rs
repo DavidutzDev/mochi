@@ -39,6 +39,11 @@ pub enum Step {
     /// Convert an image in Mochi itself, to the format `output`'s
     /// extension says.
     Image { input: PathBuf, output: PathBuf },
+    /// A file the steps before write, for stopping to remove; it does
+    /// nothing itself.
+    Output(PathBuf),
+    /// Remove a scratch folder, once what's in it is packed.
+    Remove(PathBuf),
 }
 
 impl Step {
@@ -75,7 +80,8 @@ impl Plan {
             .filter_map(|step| match step {
                 Step::MakeDir(folder) => Some(folder.clone()),
                 Step::Move { to, .. } => Some(to.clone()),
-                Step::Image { output, .. } => Some(output.clone()),
+                Step::Image { output, .. } | Step::Output(output) => Some(output.clone()),
+                Step::Remove(_) => None,
                 Step::Run { program, args, .. } if WRITES_LAST.contains(&program.as_str()) => {
                     args.last().map(PathBuf::from)
                 }
@@ -98,7 +104,7 @@ struct Format {
     from: &'static [Kind],
 }
 
-const FORMATS: [Format; 20] = [
+const FORMATS: [Format; 26] = [
     Format {
         extension: "png",
         label: "PNG",
@@ -199,6 +205,36 @@ const FORMATS: [Format; 20] = [
         label: "Markdown",
         from: &[Kind::Document, Kind::Text],
     },
+    Format {
+        extension: "zip",
+        label: "ZIP",
+        from: &[Kind::Archive],
+    },
+    Format {
+        extension: "7z",
+        label: "7z",
+        from: &[Kind::Archive],
+    },
+    Format {
+        extension: "tar",
+        label: "tar",
+        from: &[Kind::Archive],
+    },
+    Format {
+        extension: "tar.gz",
+        label: "tar.gz",
+        from: &[Kind::Archive],
+    },
+    Format {
+        extension: "tar.xz",
+        label: "tar.xz",
+        from: &[Kind::Archive],
+    },
+    Format {
+        extension: "tar.zst",
+        label: "tar.zst",
+        from: &[Kind::Archive],
+    },
 ];
 
 /// Image formats Mochi reads and writes itself.
@@ -209,6 +245,35 @@ fn extension(path: &Path) -> String {
     path.extension()
         .map(|extension| extension.to_string_lossy().to_lowercase())
         .unwrap_or_default()
+}
+
+/// A file's extension, whole for a compressed tar: `tar.gz`, not `gz`.
+fn full_extension(path: &Path) -> String {
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    if let Some((_, compression)) = name.split_once(".tar.") {
+        return format!("tar.{compression}");
+    }
+    match extension(path).as_str() {
+        "tgz" => "tar.gz".to_owned(),
+        "txz" => "tar.xz".to_owned(),
+        "tbz2" => "tar.bz2".to_owned(),
+        other => other.to_owned(),
+    }
+}
+
+/// A file's name without its extension, all of it for a compressed tar.
+fn full_stem(path: &Path) -> String {
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    match name.to_lowercase().find(".tar.") {
+        Some(at) => name[..at].to_owned(),
+        None => stem(path),
+    }
 }
 
 /// The same format under another spelling, like jpeg and jpg.
@@ -356,6 +421,10 @@ pub fn missing(
     hint(
         wants("extract") && has(Kind::Archive) && !any(&["bsdtar", "unzip", "tar", "7z"]),
         "Install libarchive (bsdtar) to extract archives",
+    );
+    hint(
+        wants("convert") && has(Kind::Archive) && !any(&["bsdtar", "7z"]),
+        "Install libarchive (bsdtar) or 7-Zip to convert to and from 7z",
     );
     let pdfs = files.iter().filter(|file| file.kind == Kind::Pdf).count();
     hint(
@@ -548,7 +617,7 @@ fn convert(
     let inputs: Vec<&Dropped> = files
         .iter()
         .filter(|file| {
-            format.from.contains(&file.kind) && !same_format(&extension(&file.path), target)
+            format.from.contains(&file.kind) && !same_format(&full_extension(&file.path), target)
         })
         .collect();
     if inputs.is_empty() {
@@ -566,7 +635,7 @@ fn convert(
             .parent()
             .unwrap_or_else(|| Path::new("/"))
             .to_path_buf();
-        let out = unique(&directory, &stem(&file.path), target);
+        let out = unique(&directory, &full_stem(&file.path), target);
         match convert_one(file, &out, target, installed) {
             Ok(more) => {
                 steps.extend(more);
@@ -680,8 +749,98 @@ fn convert_one(
                 &directory,
             )])
         }
+        (Kind::Archive, _) => repack(file, out, target, &directory, installed),
         _ => Err(format!("{} doesn't convert to {target}", name(&file.path))),
     }
+}
+
+/// The program GNU tar compresses a format with, when it needs one.
+fn compressor(target: &str) -> Option<&'static str> {
+    match target {
+        "tar.gz" => Some("gzip"),
+        "tar.xz" => Some("xz"),
+        "tar.zst" => Some("zstd"),
+        _ => None,
+    }
+}
+
+/// An archive in another format: its files out into a scratch folder,
+/// then packed again. bsdtar reads and writes them all; without it,
+/// unzip, tar and 7z read, and zip, tar and 7z write.
+fn repack(
+    file: &Dropped,
+    out: &Path,
+    target: &str,
+    directory: &Path,
+    installed: &impl Fn(&str) -> bool,
+) -> Result<Vec<Step>, String> {
+    let source = full_extension(&file.path);
+    let scratch = directory.join(format!(
+        ".mochi-repack-{}-{}",
+        std::process::id(),
+        full_stem(out)
+    ));
+    let (input, folder) = (os(&file.path), os(&scratch));
+    let unpack = if installed("bsdtar") {
+        Step::run(
+            "bsdtar",
+            vec!["-xf".into(), input, "-C".into(), folder],
+            directory,
+        )
+    } else if source == "zip" && installed("unzip") {
+        Step::run(
+            "unzip",
+            vec!["-q".into(), input, "-d".into(), folder],
+            directory,
+        )
+    } else if matches!(source.as_str(), "7z" | "rar" | "zip") && installed("7z") {
+        let mut into = OsString::from("-o");
+        into.push(&folder);
+        Step::run("7z", vec!["x".into(), "-y".into(), into, input], directory)
+    } else if source.starts_with("tar") && installed("tar") {
+        Step::run(
+            "tar",
+            vec!["-xf".into(), input, "-C".into(), folder],
+            directory,
+        )
+    } else {
+        return Err(format!("reading .{source} archives needs bsdtar"));
+    };
+    // Packed from inside the folder, so the archive holds what was in the
+    // old one, not the folder.
+    let pack = if installed("bsdtar") {
+        Step::run(
+            "bsdtar",
+            vec!["-a".into(), "-cf".into(), os(out), ".".into()],
+            &scratch,
+        )
+    } else if target == "zip" && installed("zip") {
+        Step::run(
+            "zip",
+            vec!["-r".into(), "-q".into(), os(out), ".".into()],
+            &scratch,
+        )
+    } else if target == "7z" && installed("7z") {
+        Step::run(
+            "7z",
+            vec!["a".into(), "-y".into(), os(out), ".".into()],
+            &scratch,
+        )
+    } else if target.starts_with("tar")
+        && installed("tar")
+        && compressor(target).is_none_or(installed)
+    {
+        Step::run("tar", vec!["-caf".into(), os(out), ".".into()], &scratch)
+    } else {
+        return Err(format!("writing .{target} archives needs bsdtar"));
+    };
+    Ok(vec![
+        Step::MakeDir(scratch.clone()),
+        unpack,
+        pack,
+        Step::Output(out.to_owned()),
+        Step::Remove(scratch),
+    ])
 }
 
 fn name(path: &Path) -> String {
@@ -822,6 +981,36 @@ mod tests {
                 .iter()
                 .all(|action| !action.convert)
         );
+    }
+
+    #[test]
+    fn archives_convert_to_other_archives() {
+        let everything = |_: &str| true;
+        let seven = [file("/nowhere/backup.7z", Kind::Archive)];
+        let found = ids(&offered(&seven, &all(), &everything));
+        for format in ["to-zip", "to-tar", "to-tar.gz", "to-tar.xz", "to-tar.zst"] {
+            assert!(found.contains(&format.to_owned()), "{format}");
+        }
+        assert!(!found.contains(&"to-7z".to_owned()));
+        // A compressed tar is that format, not "gz".
+        let tarball = [file("/nowhere/backup.tar.gz", Kind::Archive)];
+        assert!(!ids(&offered(&tarball, &all(), &everything)).contains(&"to-tar.gz".to_owned()));
+        let zip = plan("to-zip", &tarball, &|program: &str| {
+            program == "tar" || program == "zip"
+        })
+        .unwrap();
+        assert!(matches!(zip.steps[0], Step::MakeDir(_)));
+        assert_eq!(args(&zip.steps[1])[0], "-xf");
+        assert_eq!(
+            args(&zip.steps[2]),
+            ["-r", "-q", "/nowhere/backup.zip", "."]
+        );
+        assert!(matches!(zip.steps[4], Step::Remove(_)));
+        // Stopping removes the new archive and the scratch folder.
+        assert!(zip.made().contains(&PathBuf::from("/nowhere/backup.zip")));
+        assert_eq!(zip.made().len(), 2);
+        // Without a program that reads it, a 7z stays.
+        assert!(plan("to-zip", &seven, &|program: &str| program == "zip").is_err());
     }
 
     #[test]

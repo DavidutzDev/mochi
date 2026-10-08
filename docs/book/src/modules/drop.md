@@ -22,8 +22,9 @@ Under **Convert to**, a button for each format the files convert to:
 | sound | MP3, Ogg, FLAC, WAV | `ffmpeg` |
 | Word, Writer, Excel, PowerPoint files | PDF, Word, ODT, HTML | LibreOffice (`soffice`) |
 | documents, Markdown, HTML | Markdown, Word, ODT, HTML | `pandoc` |
+| archives: ZIP, 7z, tar and compressed tars, RAR to read | ZIP, 7z, tar, tar.gz, tar.xz, tar.zst | `bsdtar` (libarchive) for all of them; or `unzip`, `tar` and `7z` to read and `zip`, `tar` and `7z` to write, with `gzip`, `xz` and `zstd` for the compressed tars |
 
-A JPEG has no transparency, so transparent pixels land on white; an icon is at most 256 pixels a side.
+A JPEG has no transparency, so transparent pixels land on white; an icon is at most 256 pixels a side. An archive converts by extracting into a scratch folder next to it and packing that again, so the new one holds the same files and folders; the scratch folder goes once it's done, or when you stop it.
 
 While an action runs, a bubble next to the island shows what the files are and a ring that fills as it goes, from ffmpeg's own progress for videos and sound; the panel can close meanwhile. Resting the pointer on the bubble says what it's doing and how far, and a click opens the panel again. There, **Stop**, or `mochi ipc drop stop`, ends it: the program it runs is killed, and what it made, finished or half written, is removed. The dropped files are never touched. When it finishes with the panel closed, the island says how it went.
 

@@ -383,16 +383,14 @@ impl State {
                 }
             }
         }
-        // LibreOffice's folder of its own.
+        // The scratch folders.
         if let Some(parent) = self.files.first().and_then(|file| file.path.parent())
             && let Ok(entries) = std::fs::read_dir(parent)
         {
             for entry in entries.flatten() {
-                if entry
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with(".mochi-convert-")
-                {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                // LibreOffice's folder, and an archive's scratch folder.
+                if name.starts_with(".mochi-convert-") || name.starts_with(".mochi-repack-") {
                     let _ = std::fs::remove_dir_all(entry.path());
                 }
             }
@@ -523,6 +521,10 @@ async fn execute(plan: &Plan, progress: &mpsc::UnboundedSender<f64>) -> Result<(
             Step::MakeDir(folder) => tokio::fs::create_dir_all(folder)
                 .await
                 .map_err(|error| format!("can't make {}: {error}", folder.display()))?,
+            Step::Output(_) => {}
+            Step::Remove(folder) => {
+                let _ = tokio::fs::remove_dir_all(folder).await;
+            }
             Step::Move { from, to } => {
                 tokio::fs::rename(from, to)
                     .await
