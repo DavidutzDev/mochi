@@ -30,7 +30,7 @@ pub fn steps() -> Vec<ContributionSpec> {
                 "chapter": "capture",
                 "since": "0.0.2",
                 "place": "bubble",
-                "caption": "A screen recording shows as a bubble; a click stops it and it lands in the same place.",
+                "caption": "A screen recording shows as a bubble; a click opens Stop and the screens to go on to, and it lands in the same place.",
                 "payload": {
                     "area": "center-right"
                 }

@@ -7,8 +7,10 @@
 //! frame, saves it and copies it, and the island shows it with buttons to
 //! copy, edit, delete or open its folder. `record` picks the same way over
 //! the live screens and records through gpu-screen-recorder; a bubble with a
-//! timer shows while it runs, and clicking it, `stop` or `record` again ends
-//! it. A window recording goes through the screen-cast portal, whose picker
+//! timer shows while it runs, and `stop` or `record` again ends it. Clicking
+//! the bubble opens its controls: Stop, and for a whole screen the other
+//! screens to go on recording on, which `switch` does too (see `takes`). A
+//! window recording goes through the screen-cast portal, whose picker
 //! chooses the window.
 //!
 //! The overlay saves each output's frozen frame to the module's data
@@ -21,6 +23,7 @@ mod crop;
 mod files;
 mod history;
 mod record;
+mod takes;
 mod thumbs;
 mod tour;
 
@@ -45,6 +48,7 @@ use tokio::task::JoinHandle;
 
 use crate::crop::Rect;
 use crate::record::{Options, Recording, Target};
+use crate::takes::Takes;
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
@@ -251,6 +255,15 @@ impl Module for Capture {
             ActionSpec::new("screenshot", "Take a screenshot").arg(mode()),
             ActionSpec::new("record", "Start recording, or stop the recording").arg(mode()),
             ActionSpec::new("stop", "Stop recording"),
+            ActionSpec::new(
+                "switch",
+                "Go on recording on another screen, for a recording of a whole screen",
+            )
+            .arg(
+                ArgSpec::string("output", "The screen; the next one when left out")
+                    .optional()
+                    .source("output"),
+            ),
             ActionSpec::new("cancel", "Close the picker"),
             ActionSpec::new("mode", "Switch what the picker captures").arg(ArgSpec::choice(
                 "mode",
@@ -373,7 +386,8 @@ impl Module for Capture {
                 tokio::spawn(async move { record::probe(&program).await })
             });
             let (thumbs, mut thumbnails) = mpsc::unbounded_channel();
-            let mut state = State::new(settings, ctx.data_dir().to_owned(), thumbs);
+            let (joins, mut joined) = mpsc::unbounded_channel();
+            let mut state = State::new(settings, ctx.data_dir().to_owned(), thumbs, joins);
             state.publish_history(&ctx);
             loop {
                 tokio::select! {
@@ -390,12 +404,13 @@ impl Module for Capture {
                         Some(ModuleEvent::Command(command)) => state.command(&ctx, command).await,
                         Some(ModuleEvent::Ended { activity, .. }) => state.ended(activity),
                         Some(ModuleEvent::BubbleClicked(bubble)) if state.bubble == Some(bubble) => {
-                            state.stop_recording();
+                            state.open_controls(&ctx);
                         }
                         Some(_) => {}
                     },
                     result = finished(&mut state.recording) => state.recorded(&ctx, result),
                     Some(thumb) = thumbnails.recv() => state.thumbnailed(&ctx, thumb),
+                    Some(result) = joined.recv() => state.joined(&ctx, result),
                 }
             }
         })
@@ -411,9 +426,9 @@ async fn probed(probe: &mut Option<JoinHandle<record::Probe>>) -> record::Probe 
 }
 
 /// Waits for the recording to end, or forever without one.
-async fn finished(recording: &mut Option<Recording>) -> Result<(), String> {
-    match recording {
-        Some(recording) => recording.finished().await,
+async fn finished(live: &mut Option<Live>) -> Result<(), String> {
+    match live {
+        Some(live) => live.recording.finished().await,
         None => std::future::pending().await,
     }
 }
@@ -535,6 +550,49 @@ struct Setup {
     container: record::Container,
 }
 
+/// The recording running, and what it started with, to start it again on
+/// another screen.
+#[derive(Debug)]
+struct Live {
+    recording: Recording,
+    target: Target,
+    setup: Setup,
+    /// When the first part started, for the bubble's time.
+    started: SystemTime,
+    /// The parts before this one, once it changed screens.
+    takes: Option<Takes>,
+}
+
+impl Live {
+    /// The screen it records, for a whole screen.
+    fn output(&self) -> Option<&str> {
+        match &self.target {
+            Target::Output(name) => Some(name),
+            _ => None,
+        }
+    }
+
+    fn payload(&self, screens: &[String]) -> Value {
+        let started_ms = self
+            .started
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_or(0, |since| since.as_millis() as u64);
+        json!({
+            "started_ms": started_ms,
+            "output": self.output(),
+            // The screens it can go on to: none for a region or a window.
+            "screens": if self.output().is_some() { screens } else { &[] },
+        })
+    }
+}
+
+/// The screen after `current`, going round.
+fn next_screen(screens: &[String], current: &str) -> Option<String> {
+    let at = screens.iter().position(|name| name == current);
+    let next = at.map_or(0, |at| (at + 1) % screens.len());
+    screens.get(next).filter(|name| *name != current).cloned()
+}
+
 /// A file the island shows after a capture.
 #[derive(Debug)]
 struct Saved {
@@ -554,8 +612,10 @@ struct State {
     frames: PathBuf,
     sessions: u64,
     session: Option<Session>,
-    recording: Option<Recording>,
+    recording: Option<Live>,
     bubble: Option<BubbleId>,
+    /// The recording's controls, open from a click on its bubble.
+    controls: Option<ActivityId>,
     last: Option<Saved>,
     /// The newest captures in the folders, for the hub page.
     history: Vec<history::Entry>,
@@ -573,6 +633,8 @@ struct State {
     /// Videos ffmpeg made no thumbnail of, not to try again.
     no_thumbnail: HashSet<PathBuf>,
     thumbs: mpsc::UnboundedSender<Thumb>,
+    /// Where a recording's parts come back joined.
+    joins: mpsc::UnboundedSender<Result<PathBuf, String>>,
 }
 
 /// News from the thumbnail maker.
@@ -583,7 +645,12 @@ enum Thumb {
 }
 
 impl State {
-    fn new(settings: Settings, frames: PathBuf, thumbs: mpsc::UnboundedSender<Thumb>) -> Self {
+    fn new(
+        settings: Settings,
+        frames: PathBuf,
+        thumbs: mpsc::UnboundedSender<Thumb>,
+        joins: mpsc::UnboundedSender<Result<PathBuf, String>>,
+    ) -> Self {
         Self {
             screenshots: files::folder(
                 &settings.screenshots,
@@ -603,6 +670,7 @@ impl State {
             session: None,
             recording: None,
             bubble: None,
+            controls: None,
             last: None,
             history: Vec::new(),
             preview: None,
@@ -613,6 +681,7 @@ impl State {
             thumbnailing: false,
             no_thumbnail: HashSet::new(),
             thumbs,
+            joins,
         }
     }
 
@@ -633,6 +702,7 @@ impl State {
                 }
                 None => Err("nothing is recording".into()),
             },
+            "switch" => self.switch(ctx, args.str("output")).await,
             "cancel" => {
                 self.close(ctx);
                 Ok(())
@@ -872,6 +942,9 @@ impl State {
         if self.preview == Some(activity) {
             self.preview = None;
         }
+        if self.controls == Some(activity) {
+            self.controls = None;
+        }
     }
 
     async fn choose(&mut self, ctx: &ModuleCtx, mode: Mode) -> Result<(), String> {
@@ -1071,8 +1144,50 @@ impl State {
         target: Target,
         setup: Setup,
     ) -> Result<(), String> {
+        let started = std::fs::create_dir_all(&self.recordings)
+            .map_err(|error| format!("cannot create {}: {error}", self.recordings.display()))
+            .and_then(|()| {
+                let name = files::timestamp(&self.settings.recording_name, SystemTime::now());
+                let file = files::unused(&self.recordings, &name, setup.container.as_str());
+                self.spawn_recorder(ctx, &target, &setup, file)
+            });
+        let recording = match started {
+            Ok(recording) => recording,
+            Err(message) => {
+                self.failed(ctx, Kind::Recording, &message);
+                return Err(message);
+            }
+        };
+        let live = Live {
+            started: recording.started,
+            recording,
+            target,
+            setup,
+            takes: None,
+        };
+        self.bubble = Some(
+            ctx.show_bubble(
+                BubbleSpec::new("Recording")
+                    .wide("RecordingWide")
+                    .key("recording")
+                    .area(Area::CenterRight)
+                    .order(-10)
+                    .payload(live.payload(&screens(ctx))),
+            ),
+        );
+        self.recording = Some(live);
+        Ok(())
+    }
+
+    fn spawn_recorder(
+        &self,
+        ctx: &ModuleCtx,
+        target: &Target,
+        setup: &Setup,
+        file: PathBuf,
+    ) -> Result<Recording, String> {
         // The size of what's recorded, to scale it down, never up.
-        let size = match &target {
+        let size = match target {
             Target::Region(area) => Some((area.width.round() as u32, area.height.round() as u32)),
             Target::Output(name) => ctx
                 .compositor()
@@ -1083,41 +1198,6 @@ impl State {
                 .map(|output| (output.width, output.height)),
             Target::Portal => None,
         };
-        let recording = match self.spawn_recorder(&target, setup, size) {
-            Ok(recording) => recording,
-            Err(message) => {
-                self.failed(ctx, Kind::Recording, &message);
-                return Err(message);
-            }
-        };
-        let started_ms = recording
-            .started
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_or(0, |since| since.as_millis() as u64);
-        self.bubble = Some(
-            ctx.show_bubble(
-                BubbleSpec::new("Recording")
-                    .wide("RecordingWide")
-                    .key("recording")
-                    .area(Area::CenterRight)
-                    .order(-10)
-                    .payload(json!({ "started_ms": started_ms })),
-            ),
-        );
-        self.recording = Some(recording);
-        Ok(())
-    }
-
-    fn spawn_recorder(
-        &self,
-        target: &Target,
-        setup: Setup,
-        size: Option<(u32, u32)>,
-    ) -> Result<Recording, String> {
-        std::fs::create_dir_all(&self.recordings)
-            .map_err(|error| format!("cannot create {}: {error}", self.recordings.display()))?;
-        let name = files::timestamp(&self.settings.recording_name, SystemTime::now());
-        let file = files::unused(&self.recordings, &name, setup.container.as_str());
         let mut audio = Vec::new();
         if setup.desktop {
             audio.push(self.settings.audio.as_str());
@@ -1142,18 +1222,123 @@ impl State {
     }
 
     fn stop_recording(&self) {
-        if let Some(recording) = &self.recording {
-            recording.stop();
+        if let Some(live) = &self.recording {
+            live.recording.stop();
         }
+    }
+
+    /// Goes on recording on `output`, or the next screen: stops the recorder,
+    /// which finishes this part, and starts it again there. The parts join
+    /// once the recording stops.
+    async fn switch(&mut self, ctx: &ModuleCtx, output: Option<&str>) -> Result<(), String> {
+        let live = self.recording.as_mut().ok_or("nothing is recording")?;
+        let current = live
+            .output()
+            .ok_or("only a recording of a whole screen changes screens")?
+            .to_owned();
+        let screens = screens(ctx);
+        let output = match output {
+            Some(name) if screens.iter().any(|screen| screen == name) => name.to_owned(),
+            Some(name) => return Err(format!("there's no screen named {name}")),
+            None => next_screen(&screens, &current).ok_or("there's no other screen")?,
+        };
+        if output == current {
+            return Ok(());
+        }
+        live.recording.stop();
+        if tokio::time::timeout(Duration::from_secs(5), live.recording.finished())
+            .await
+            .is_err()
+        {
+            return Err("the recorder didn't stop".into());
+        }
+        let file = live.recording.file.clone();
+        let takes = match live.takes.take() {
+            Some(mut takes) => {
+                takes.parts.push(file);
+                takes
+            }
+            None => match Takes::begin(&file) {
+                Ok(takes) => takes,
+                Err(error) => {
+                    // Keeps what it recorded as it is.
+                    self.recorded(ctx, Ok(()));
+                    return Err(format!("couldn't keep the first part: {error}"));
+                }
+            },
+        };
+        let target = Target::Output(output);
+        let next = takes.next();
+        let setup = live.setup.clone();
+        let started = self.spawn_recorder(ctx, &target, &setup, next);
+        let live = self.recording.as_mut().ok_or("nothing is recording")?;
+        live.takes = Some(takes);
+        match started {
+            Ok(recording) => {
+                tracing::info!(from = %current, to = ?target, "the recording changed screens");
+                live.recording = recording;
+                live.target = target;
+                let payload = live.payload(&screens);
+                if let Some(bubble) = self.bubble {
+                    ctx.update_bubble(bubble, payload.clone());
+                }
+                if let Some(controls) = self.controls {
+                    ctx.update(controls, payload);
+                }
+                Ok(())
+            }
+            Err(message) => {
+                // What it recorded so far is still saved.
+                self.recorded(ctx, Ok(()));
+                Err(message)
+            }
+        }
+    }
+
+    /// The recording's controls on the island, from a click on its bubble:
+    /// the time, Stop, and the screens to go on to. A second click closes
+    /// them.
+    fn open_controls(&mut self, ctx: &ModuleCtx) {
+        if let Some(controls) = self.controls.take() {
+            ctx.withdraw(controls);
+            return;
+        }
+        let Some(live) = &self.recording else {
+            return;
+        };
+        self.controls = Some(
+            ctx.present(
+                ActivitySpec::new("Controls")
+                    .key("recording-controls")
+                    .priority(Priority::HIGH)
+                    .payload(live.payload(&screens(ctx))),
+            ),
+        );
     }
 
     /// The recorder exited, after `stop` or on its own.
     fn recorded(&mut self, ctx: &ModuleCtx, result: Result<(), String>) {
-        let Some(recording) = self.recording.take() else {
+        let Some(live) = self.recording.take() else {
             return;
         };
         if let Some(bubble) = self.bubble.take() {
             ctx.hide_bubble(bubble);
+        }
+        if let Some(controls) = self.controls.take() {
+            ctx.withdraw(controls);
+        }
+        let recording = live.recording;
+        if let Some(mut takes) = live.takes {
+            // A part that failed to start is already the last one.
+            if takes.parts.last() != Some(&recording.file) {
+                takes.parts.push(recording.file);
+            }
+            tracing::info!(parts = takes.parts.len(), "joining the recording's parts");
+            let joins = self.joins.clone();
+            tokio::spawn(async move {
+                let _ = joins.send(takes::join(takes).await);
+            });
+            return;
         }
         let written = std::fs::metadata(&recording.file).is_ok_and(|file| file.len() > 0);
         match (result, written) {
@@ -1172,6 +1357,24 @@ impl State {
                 self.failed(ctx, Kind::Recording, &record::explain(&message));
             }
             (Ok(()), false) => self.failed(ctx, Kind::Recording, "the recorder wrote nothing"),
+        }
+    }
+
+    /// A recording that changed screens, joined into one file.
+    fn joined(&mut self, ctx: &ModuleCtx, result: Result<PathBuf, String>) {
+        match result {
+            Ok(path) => {
+                tracing::info!(path = %path.display(), "recorded");
+                self.saved(
+                    ctx,
+                    Saved {
+                        kind: Kind::Recording,
+                        path,
+                        clipboard: None,
+                    },
+                );
+            }
+            Err(message) => self.failed(ctx, Kind::Recording, &message),
         }
     }
 
@@ -1445,11 +1648,27 @@ impl State {
     /// Finishes a recording when the daemon stops, so the file stays
     /// playable.
     async fn shut_down(&mut self) {
-        if let Some(recording) = &mut self.recording {
-            recording.stop();
-            let _ = tokio::time::timeout(Duration::from_secs(5), recording.finished()).await;
+        if let Some(live) = &mut self.recording {
+            live.recording.stop();
+            let _ = tokio::time::timeout(Duration::from_secs(5), live.recording.finished()).await;
+            // Parts of one size join by copy in a moment. Past the wait, they
+            // stay in their folder.
+            if let Some(mut takes) = live.takes.take() {
+                takes.parts.push(live.recording.file.clone());
+                let _ = tokio::time::timeout(Duration::from_secs(10), takes::join(takes)).await;
+            }
         }
     }
+}
+
+/// The screens, by name.
+fn screens(ctx: &ModuleCtx) -> Vec<String> {
+    ctx.compositor()
+        .state()
+        .outputs
+        .iter()
+        .map(|output| output.name.clone())
+        .collect()
 }
 
 /// `output x y width height`, from the overlay.
@@ -1615,6 +1834,16 @@ mod tests {
 
         assert_eq!(parse_layout("DP-3 0 0 1920"), None);
         assert_eq!(parse_layout(""), None);
+    }
+
+    #[test]
+    fn the_next_screen_goes_round() {
+        let screens = ["DP-1".to_owned(), "HDMI-A-1".to_owned()];
+        assert_eq!(next_screen(&screens, "DP-1").as_deref(), Some("HDMI-A-1"));
+        assert_eq!(next_screen(&screens, "HDMI-A-1").as_deref(), Some("DP-1"));
+        assert_eq!(next_screen(&screens, "gone").as_deref(), Some("DP-1"));
+        assert_eq!(next_screen(&screens[..1], "DP-1"), None);
+        assert_eq!(next_screen(&[], "DP-1"), None);
     }
 
     #[test]
