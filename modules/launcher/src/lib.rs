@@ -151,7 +151,7 @@ impl Module for Launcher {
                     .rest(),
             ),
             ActionSpec::new("launch", "Start an app by desktop id, like firefox.desktop")
-                .arg(ArgSpec::string("id", "Desktop id, or id:action")),
+                .arg(ArgSpec::string("id", "Desktop id, or id:action").source("desktop-id")),
             ActionSpec::new(
                 "activate",
                 "Pick a result; the launcher sends this on Enter or a click",

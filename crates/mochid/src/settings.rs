@@ -875,6 +875,50 @@ mod tests {
     }
 
     #[test]
+    fn every_argument_source_is_one_the_panel_knows() {
+        // As modules/settings/qml/Option.qml's valuesFor lists them.
+        const KNOWN: [&str; 19] = [
+            "module",
+            "app",
+            "audio-device",
+            "tray-app",
+            "player",
+            "hub-card",
+            "output",
+            "hub-page",
+            "audio-output",
+            "audio-input",
+            "audio-app",
+            "audio-target",
+            "bluetooth-device",
+            "brightness-display",
+            "desktop-id",
+            "power-profile",
+            "settings-section",
+            "wifi-network",
+            "vpn",
+        ];
+        let catalog = modules::catalog(Path::new("/nonexistent/config.toml")).unwrap();
+        let mut found = 0;
+        for module in &catalog.modules {
+            for action in module.actions() {
+                for arg in action.args {
+                    if let Some(source) = arg.source {
+                        assert!(
+                            KNOWN.contains(&source.as_str()),
+                            "{} {}: {source}",
+                            module.id(),
+                            action.name
+                        );
+                        found += 1;
+                    }
+                }
+            }
+        }
+        assert!(found >= 15, "{found}");
+    }
+
+    #[test]
     fn every_module_has_a_section_with_fields() {
         let catalog = modules::catalog(Path::new("/nonexistent/config.toml")).unwrap();
         let sections = sections(&catalog);

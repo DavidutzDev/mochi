@@ -91,6 +91,7 @@ An argument:
 | `choices` | `[]` | The words a `choice` takes. |
 | `optional` | `false` | May be left out; only trailing arguments can be optional. |
 | `rest` | `false` | Takes every remaining word, joined with spaces; only the last argument. |
+| `source` | none | Where its values come from, so the settings panel offers them in a menu when an option runs this action: `output`, `app`, `desktop-id`, `player`, `hub-page`, `audio-output` and the others the builtin modules use. |
 
 The backend gets the arguments as an object: `{"minutes": 25, "label": "Write"}`. A left-out optional argument isn't there.
 

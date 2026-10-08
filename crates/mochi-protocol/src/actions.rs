@@ -59,6 +59,11 @@ pub struct ArgSpec {
     /// can be `rest`.
     #[serde(default)]
     pub rest: bool,
+    /// Where its values come from, so the settings panel offers them in a
+    /// menu: `output`, `hub-page`, `audio-target`, `app`, `player`, … The
+    /// command line takes any word as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 impl ArgSpec {
@@ -69,6 +74,7 @@ impl ArgSpec {
             kind,
             optional: false,
             rest: false,
+            source: None,
         }
     }
 
@@ -104,6 +110,12 @@ impl ArgSpec {
 
     pub fn rest(mut self) -> Self {
         self.rest = true;
+        self
+    }
+
+    /// Where its values come from: see [`ArgSpec::source`].
+    pub fn source(mut self, source: impl Into<String>) -> Self {
+        self.source = Some(source.into());
         self
     }
 }

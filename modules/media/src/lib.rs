@@ -127,10 +127,10 @@ impl Module for Media {
                 "previous-player",
                 "Show the previous player, until it stops",
             ),
-            ActionSpec::new("player", "Show a player, until it stops").arg(ArgSpec::string(
-                "name",
-                "The player's name, like spotify or firefox",
-            )),
+            ActionSpec::new("player", "Show a player, until it stops").arg(
+                ArgSpec::string("name", "The player's name, like spotify or firefox")
+                    .source("player"),
+            ),
         ]
     }
 

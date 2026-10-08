@@ -113,10 +113,9 @@ impl Module for Workspaces {
     fn actions(&self) -> Vec<ActionSpec> {
         vec![
             ActionSpec::new("switch", "Switch a monitor to one of its workspaces")
-                .arg(ArgSpec::string(
-                    "output",
-                    "Monitor connector name, like DP-3",
-                ))
+                .arg(
+                    ArgSpec::string("output", "Monitor connector name, like DP-3").source("output"),
+                )
                 .arg(ArgSpec::string("workspace", "Workspace name").rest()),
             ActionSpec::new(
                 "show",
@@ -127,7 +126,8 @@ impl Module for Workspaces {
                     "output",
                     "Monitor connector name; the one under the pointer when left out",
                 )
-                .optional(),
+                .optional()
+                .source("output"),
             ),
         ]
     }

@@ -81,6 +81,17 @@ PanelWindow {
     WlrLayershell.layer: modal || overlaid ? WlrLayer.Overlay : WlrLayer.Top
     WlrLayershell.keyboardFocus: modal || overlaid ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
+    // Whether a point is on the island or a pill, not outside them.
+    function inside(x: real, y: real): bool {
+        const over = item => {
+            if (!item || !item.visible)
+                return false;
+            const point = item.mapFromItem(null, x, y);
+            return point.x >= 0 && point.y >= 0 && point.x < item.width && point.y < item.height;
+        };
+        return over(island) || pills.some(over);
+    }
+
     // Every pill on screen, for the regions below.
     property list<Item> pills
     function addPill(pill: Item): void {
@@ -135,7 +146,10 @@ PanelWindow {
         // stops catching and stays until it times out; a panel closes, as
         // on a click.
         onWheel: wheel => {
-            if (root.overlaid)
+            // A scroll over the island or a bubble that nothing there took,
+            // like a list already at its end, is the panel's own: it never
+            // counts as outside.
+            if (root.overlaid || root.inside(wheel.x, wheel.y))
                 return;
             const here = root.screen?.name ?? "";
             const scroll = {

@@ -173,7 +173,7 @@ impl Module for Tray {
     }
 
     fn actions(&self) -> Vec<ActionSpec> {
-        let app = || ArgSpec::string("app", "The app's key, as `list` shows it");
+        let app = || ArgSpec::string("app", "The app's key, as `list` shows it").source("tray-app");
         vec![
             ActionSpec::new("toggle", "Open the drawer, or close it"),
             ActionSpec::new("open", "Open the drawer"),

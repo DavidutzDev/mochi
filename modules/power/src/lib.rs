@@ -166,10 +166,10 @@ impl Module for Power {
             ActionSpec::new("reboot", "Restart the machine"),
             ActionSpec::new("firmware", "Restart into the firmware setup"),
             ActionSpec::new("shutdown", "Turn the machine off"),
-            ActionSpec::new("profile", "Switch the power profile").arg(ArgSpec::string(
-                "name",
-                "power-saver, balanced or performance",
-            )),
+            ActionSpec::new("profile", "Switch the power profile").arg(
+                ArgSpec::string("name", "power-saver, balanced or performance")
+                    .source("power-profile"),
+            ),
             ActionSpec::new("awake", "Keep the screen on and the machine awake").arg(
                 ArgSpec::choice("state", "On, off, or flip it", ["on", "off", "toggle"]).optional(),
             ),

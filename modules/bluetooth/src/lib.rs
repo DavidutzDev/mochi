@@ -102,7 +102,11 @@ impl Module for Bluetooth {
     fn actions(&self) -> Vec<ActionSpec> {
         let state =
             || ArgSpec::choice("state", "On, off, or flip it", ["on", "off", "toggle"]).optional();
-        let device = || ArgSpec::string("device", "The device's name or address").rest();
+        let device = || {
+            ArgSpec::string("device", "The device's name or address")
+                .rest()
+                .source("bluetooth-device")
+        };
         vec![
             ActionSpec::new("power", "Turn Bluetooth on or off").arg(state()),
             ActionSpec::new("powered", "Succeed when Bluetooth is on, for scripts"),

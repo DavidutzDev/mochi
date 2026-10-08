@@ -128,6 +128,7 @@ impl Module for Brightness {
                 "all, backlight, external, or a monitor's output or model; all by default",
             )
             .optional()
+            .source("brightness-display")
         };
         vec![
             ActionSpec::new("up", "Brighter by the step").arg(display()),

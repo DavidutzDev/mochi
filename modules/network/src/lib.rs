@@ -104,7 +104,7 @@ impl Module for Network {
     fn actions(&self) -> Vec<ActionSpec> {
         let state =
             || ArgSpec::choice("state", "On, off, or flip it", ["on", "off", "toggle"]).optional();
-        let name = |what: &'static str| ArgSpec::string("name", what).rest();
+        let name = |what: &'static str| ArgSpec::string("name", what).rest().source("wifi-network");
         vec![
             ActionSpec::new("wifi", "Turn Wi-Fi on or off").arg(state()),
             ActionSpec::new("airplane", "Turn every radio off, or back on").arg(state()),
@@ -137,7 +137,7 @@ impl Module for Network {
             ActionSpec::new("forget", "Forget a saved Wi-Fi network")
                 .arg(name("The network's name")),
             ActionSpec::new("vpn", "Start or stop a VPN")
-                .arg(ArgSpec::string("name", "The VPN's name"))
+                .arg(ArgSpec::string("name", "The VPN's name").source("vpn"))
                 .arg(state()),
         ]
     }

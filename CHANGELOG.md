@@ -7,6 +7,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 ### Added
 
 - Menus for options with known values in the settings panel, with a search, and several picks for lists: apps installed, audio outputs and microphones, tray apps, players, hub cards, modules. A command option, like the idle clock's click, picks a module, one of its actions and its arguments. Command lines like the lock, the logout, the terminal and the screenshot editor offer ready-made ones for what's installed, and lists of fixed values, like drop's actions, pick from them. Schemas mark these with `x-source` and `x-suggest`, and the snapshot carries every module's `actions`. The tray publishes its apps in its state.
+- A command option's arguments each get a control of their own: a menu for a choice or for values Mochi knows (monitors, hub pages, audio devices and apps, Bluetooth devices, displays, desktop apps, power profiles, settings sections, Wi-Fi networks and VPNs, players, tray apps), a switch, or a field. Actions mark these with `ArgSpec::source`, and plugin manifests with `source` on an argument.
 - Bubble tooltips: resting the pointer on a bubble for `[bubbles] tooltip_ms`, 600 ms by default, shows more about it beside it. Every builtin bubble has one, from the track playing to who uses the microphone. Modules set one with `BubbleSpec::tooltip`, or a bubble view with a `tooltip` property; the protocol's `Bubble` and `bubbles` message gain `tooltip` and `tooltip_ms`. The tray's pinned bubbles use it instead of their own popup.
 - A progress bubble while an action on dropped files runs, with an icon for what the files are and a ring that fills, from ffmpeg's progress for videos and sound. The panel can close meanwhile; a click on the bubble opens it again, and the island says how it went when it's done.
 - Stop an action on dropped files: **Stop** in the panel, or `mochi ipc drop stop`, kills the program it runs and removes what it made, so a long conversion started by mistake leaves nothing behind.
@@ -43,6 +44,10 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 - A preview layer in the daemon: options tried without being kept, applied at once over the changes and gone on reload. `mochi ipc settings preview` uses it, with Keep and Drop in the panel, and the tour shows the island's looks through it. `SettingsOp::Preview`, `Keep` and `Drop`.
 - `ModuleCtx::pause_island` shows only the caller's activities and bubbles; the others wait and come back after, and a fleeting one like a volume change ends instead.
 - `mochi_core::config::state_dir`, the `$XDG_STATE_HOME/mochi` modules keep their files in.
+
+### Fixed
+
+- Scrolling in a panel, like the settings, closed it when the list under the pointer was already at its end: the scroll fell through to the catch for scrolls outside. Scrolls over the island and the bubbles never count as outside now.
 
 ### Changed
 

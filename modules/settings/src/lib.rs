@@ -43,7 +43,8 @@ impl Module for Settings {
                     "section",
                     "A section, like colors, island or a module's id, or an option's path",
                 )
-                .optional(),
+                .optional()
+                .source("settings-section"),
             ),
             ActionSpec::new("close", "Close the settings"),
             ActionSpec::new("set", "Change an option").arg(path()).arg(

@@ -118,6 +118,7 @@ impl Module for Audio {
                 "target",
                 "output, input, a device's name, an app's name for all its streams, or a stream's id",
             )
+            .source("audio-target")
         };
         vec![
             ActionSpec::new("toggle", "Open the mixer on the island, or close it"),
@@ -133,23 +134,26 @@ impl Module for Audio {
                 ArgSpec::choice("state", "Mute, unmute, or flip it", ["on", "off", "toggle"])
                     .optional(),
             ),
-            ActionSpec::new("output", "Play sound through another output").arg(ArgSpec::string(
-                "name",
-                "The device's name, as the mixer lists it",
-            )),
-            ActionSpec::new("input", "Record from another input").arg(ArgSpec::string(
-                "name",
-                "The device's name, as the mixer lists it",
-            )),
+            ActionSpec::new("output", "Play sound through another output").arg(
+                ArgSpec::string("name", "The device's name, as the mixer lists it")
+                    .source("audio-output"),
+            ),
+            ActionSpec::new("input", "Record from another input").arg(
+                ArgSpec::string("name", "The device's name, as the mixer lists it")
+                    .source("audio-input"),
+            ),
             ActionSpec::new("move", "Play an app through another output")
-                .arg(ArgSpec::string(
-                    "app",
-                    "An app's name for all its streams, or a stream's id",
-                ))
-                .arg(ArgSpec::string(
-                    "device",
-                    "The output's name or description, or output for the one in use",
-                )),
+                .arg(
+                    ArgSpec::string("app", "An app's name for all its streams, or a stream's id")
+                        .source("audio-app"),
+                )
+                .arg(
+                    ArgSpec::string(
+                        "device",
+                        "The output's name or description, or output for the one in use",
+                    )
+                    .source("audio-output"),
+                ),
             ActionSpec::new(
                 "meters",
                 "Run the level meters for a view of the mixer; the mixer sends this",

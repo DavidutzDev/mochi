@@ -180,6 +180,10 @@ pub struct Arg {
     /// Takes every remaining word.
     #[serde(default)]
     pub rest: bool,
+    /// Where its values come from, for the settings panel's menus, like
+    /// `output` or `app`.
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 impl Arg {
@@ -302,6 +306,7 @@ impl Manifest {
                         kind: kind(arg).expect("checked on load"),
                         optional: arg.optional,
                         rest: arg.rest,
+                        source: arg.source.clone(),
                     })
                     .collect(),
             })

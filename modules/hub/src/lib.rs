@@ -114,7 +114,8 @@ impl Module for Hub {
             ActionSpec::new("toggle", "Open the hub, or close it when open"),
             ActionSpec::new("open", "Open the hub").arg(
                 ArgSpec::string("page", "A page as module/id, like notifications/history")
-                    .optional(),
+                    .optional()
+                    .source("hub-page"),
             ),
             ActionSpec::new("close", "Close the hub"),
             ActionSpec::new(

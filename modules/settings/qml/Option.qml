@@ -42,9 +42,12 @@ Item {
     // the module or the action, or the ready-made commands.
     property string menu: "value"
     readonly property bool multiple: menu === "value" && field.kind === "list"
-    readonly property bool searchable: menu === "value" && (source !== "" || choices().length > 8)
-    // Something not in the menu may be typed too.
-    readonly property bool custom: menu === "value" && ["app", "audio-device", "tray-app", "player"].includes(source)
+    // The source of the menu open now: the field's, or a command's
+    // argument's.
+    readonly property string menuSource: menu === "value" ? source : menu.startsWith("arg:") ? (argAt(Number(menu.slice(4)))?.source ?? "") : ""
+    readonly property bool searchable: menuSource !== "" || choices().length > 8
+    // Something not in the menu may be typed too: names that change.
+    readonly property bool custom: menuSource !== "" && !["module", "hub-card", "hub-page", "settings-section", "power-profile"].includes(menuSource)
 
     function openMenu(kind: string, anchor: Item): void {
         menu = kind;
@@ -55,6 +58,28 @@ Item {
     readonly property string commandModule: source === "command" ? ((value ?? [])[0] ?? "") : ""
     readonly property string commandAction: source === "command" ? ((value ?? [])[1] ?? "") : ""
     readonly property var commandSpec: (Daemon.state("settings")?.actions?.[commandModule] ?? []).find(action => action.name === commandAction) ?? null
+    readonly property var commandArgs: commandSpec?.args ?? []
+
+    function argAt(index: int): var {
+        return commandArgs[index] ?? null;
+    }
+
+    // What a command's argument is set to, "" when it isn't.
+    function argValue(index: int): string {
+        return String((value ?? [])[2 + index] ?? "");
+    }
+
+    // Sets one of a command's arguments, keeping the ones before it and
+    // dropping empty ones at the end, which are optional.
+    function setArg(index: int, text: string): void {
+        const parts = (value ?? []).slice(0, Math.max(2, (value ?? []).length));
+        while (parts.length < 2 + index + 1)
+            parts.push("");
+        parts[2 + index] = text;
+        while (parts.length > 2 && parts[parts.length - 1] === "")
+            parts.pop();
+        sendNow(parts);
+    }
 
     // The daemon's answer replaces what was on the way.
     onFieldChanged: {
@@ -255,7 +280,118 @@ Item {
 
     // The values a source offers now, as {value, label, detail, icon}.
     function sourceChoices(): var {
+        return valuesFor(source);
+    }
+
+    function valuesFor(source: string): var {
+        const named = (items, detail) => items.map(name => ({
+                        "value": name,
+                        "label": name,
+                        "detail": detail ?? ""
+                    }));
         switch (source) {
+        case "output":
+            return Quickshell.screens.map(screen => screen.name).filter(name => !name.startsWith("MOCHI-")).map(name => ({
+                        "value": name,
+                        "label": name,
+                        "detail": Quickshell.screens.find(screen => screen.name === name)?.model ?? ""
+                    }));
+        case "hub-page":
+            return Daemon.offered("hub", "page").map(page => ({
+                        "value": `${page.module}/${page.id}`,
+                        "label": page.title,
+                        "detail": `${page.module}/${page.id}`,
+                        "icon": page.icon
+                    }));
+        case "audio-output":
+            return (Daemon.state("audio")?.outputs ?? []).map(device => ({
+                        "value": device.name,
+                        "label": device.description,
+                        "detail": device.name
+                    }));
+        case "audio-input":
+            return (Daemon.state("audio")?.inputs ?? []).map(device => ({
+                        "value": device.name,
+                        "label": device.description,
+                        "detail": device.name
+                    }));
+        case "audio-app":
+            return named((Daemon.state("audio")?.apps ?? []).map(app => app.name), "Playing now");
+        case "audio-target":
+            return [
+                {
+                    "value": "output",
+                    "label": "Output",
+                    "detail": "The output in use"
+                },
+                {
+                    "value": "input",
+                    "label": "Input",
+                    "detail": "The microphone in use"
+                }
+            ].concat(valuesFor("audio-output"), valuesFor("audio-input"), valuesFor("audio-app"));
+        case "bluetooth-device":
+            {
+                const bluetooth = Daemon.state("bluetooth");
+                return (bluetooth?.paired ?? []).concat(bluetooth?.found ?? []).map(device => ({
+                            "value": device.name,
+                            "label": device.name,
+                            "detail": device.address ?? "",
+                            "icon": device.icon
+                        }));
+            }
+        case "brightness-display":
+            return [
+                {
+                    "value": "all",
+                    "label": "All",
+                    "detail": "Every display"
+                },
+                {
+                    "value": "backlight",
+                    "label": "Backlight",
+                    "detail": "The laptop's screen"
+                },
+                {
+                    "value": "external",
+                    "label": "External",
+                    "detail": "Monitors over DDC/CI"
+                }
+            ].concat((Daemon.state("brightness")?.displays ?? []).filter(display => display.id !== "backlight").map(display => ({
+                        "value": display.id,
+                        "label": display.name,
+                        "detail": display.id
+                    })));
+        case "desktop-id":
+            return valuesFor("app").map(app => Object.assign({}, app, {
+                    "value": `${app.value}.desktop`
+                }));
+        case "power-profile":
+            return named(Daemon.state("power")?.profiles ?? []);
+        case "settings-section":
+            return (Daemon.state("settings")?.sections ?? []).map(section => ({
+                        "value": section.id,
+                        "label": section.title,
+                        "icon": section.icon
+                    }));
+        case "wifi-network":
+            {
+                const network = Daemon.state("network");
+                return (network?.networks ?? []).map(wifi => ({
+                            "value": wifi.ssid,
+                            "label": wifi.ssid,
+                            "detail": wifi.saved ? "Saved" : "In range"
+                        })).concat((network?.vpns ?? []).map(vpn => ({
+                            "value": vpn.id,
+                            "label": vpn.id,
+                            "detail": "VPN"
+                        })));
+            }
+        case "vpn":
+            return (Daemon.state("network")?.vpns ?? []).map(vpn => ({
+                        "value": vpn.id,
+                        "label": vpn.id
+                    }));
         case "module":
             return (Daemon.state("settings")?.modules ?? []).map(module => ({
                         "value": module.id,
@@ -342,6 +478,21 @@ Item {
                         "label": command.join(" ")
                     }));
         }
+        if (menu.startsWith("arg:")) {
+            const arg = argAt(Number(menu.slice(4)));
+            const values = arg?.kind?.type === "choice" ? (arg.kind.values ?? []).map(word => ({
+                        "value": word,
+                        "label": word
+                    })) : valuesFor(arg?.source ?? "");
+            // An optional one may be left out.
+            return arg?.optional ? [
+                {
+                    "value": "",
+                    "label": "Leave out",
+                    "detail": "Its default"
+                }
+            ].concat(values) : values;
+        }
         if (source !== "")
             return sourceChoices();
         const options = (root.field.choices ?? []).map(choice => ({
@@ -366,6 +517,8 @@ Item {
         case "suggest":
             return JSON.stringify(value ?? []) === choice;
         }
+        if (menu.startsWith("arg:"))
+            return argValue(Number(menu.slice(4))) === choice;
         if (multiple)
             return (value ?? []).map(String).includes(choice);
         return (value ?? "") === choice;
@@ -383,6 +536,10 @@ Item {
             return;
         case "suggest":
             sendNow(JSON.parse(choice));
+            return;
+        }
+        if (menu.startsWith("arg:")) {
+            setArg(Number(menu.slice(4)), choice);
             return;
         }
         if (multiple) {
@@ -832,15 +989,69 @@ Item {
                 }
             }
 
-            // What the action takes, named in the field.
-            Entry {
-                visible: (root.commandSpec?.args ?? []).length > 0
-                width: parent.width
-                text: (root.value ?? []).slice(2).join(" ")
-                placeholder: (root.commandSpec?.args ?? []).map(arg => arg.optional ? `[${arg.name}]` : arg.name).join(" ")
-                onAccepted: text => {
-                    const args = text.trim() === "" ? [] : text.trim().split(/\s+/);
-                    root.sendNow([root.commandModule, root.commandAction].concat(args));
+            // What the action takes, one row each: a menu for a choice
+            // or for values Mochi knows, a field for the rest.
+            Repeater {
+                model: root.commandArgs
+
+                Row {
+                    id: argRow
+
+                    required property var modelData
+                    required property int index
+                    readonly property string kind: modelData.kind?.type ?? "string"
+                    readonly property bool menuArg: kind === "choice" || (modelData.source ?? "") !== ""
+
+                    spacing: Theme.spaceSmall
+
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 72
+                        text: argRow.modelData.optional ? `${argRow.modelData.name}?` : argRow.modelData.name
+                        elide: Text.ElideRight
+                        color: Theme.muted
+                        font.pixelSize: Theme.textCaption
+                        font.family: Theme.fontFamily
+                    }
+
+                    DropButton {
+                        id: argMenu
+
+                        visible: argRow.menuArg
+                        width: 200
+                        text: {
+                            const current = root.argValue(argRow.index);
+                            if (current === "")
+                                return argRow.modelData.optional ? "Default" : "Choose…";
+                            const found = root.valuesFor(argRow.modelData.source ?? "").find(choice => choice.value === current);
+                            return found?.label ?? current;
+                        }
+                        muted: root.argValue(argRow.index) === ""
+                        onClicked: root.openMenu(`arg:${argRow.index}`, argMenu)
+                    }
+
+                    Switch {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: argRow.kind === "bool"
+                        checked: ["on", "true", "yes"].includes(root.argValue(argRow.index))
+                        onToggled: checked => root.setArg(argRow.index, checked ? "on" : "off")
+                    }
+
+                    Entry {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: !argRow.menuArg && argRow.kind !== "bool"
+                        width: 200
+                        text: root.argValue(argRow.index)
+                        placeholder: argRow.modelData.help ?? ""
+                        horizontalAlignment: argRow.kind === "int" || argRow.kind === "float" ? TextInput.AlignRight : TextInput.AlignLeft
+                        onAccepted: text => {
+                            const trimmed = text.trim();
+                            const numeric = argRow.kind === "int" || argRow.kind === "float";
+                            if (numeric && trimmed !== "" && Number.isNaN(Number(trimmed.replace(/^\+/, ""))))
+                                return;
+                            root.setArg(argRow.index, trimmed);
+                        }
+                    }
                 }
             }
         }
