@@ -43,24 +43,33 @@ Item {
             radius: Theme.radiusField
             color: Theme.raised
 
-            Symbol {
-                anchors.centerIn: parent
-                visible: !root.screenshot || root.failed || image.status !== Image.Ready
-                name: root.failed ? "close" : root.screenshot ? "camera" : "video"
-                size: 28
-                color: root.failed ? Theme.danger : Theme.muted
-            }
-
             Image {
                 id: image
 
+                // A screenshot shows itself, a recording a frame once it's
+                // made.
+                readonly property string picture: root.screenshot ? (root.payload.path ?? "") : (root.payload.thumbnail ?? "")
+
                 anchors.fill: parent
-                visible: root.screenshot && !root.failed
-                source: visible && root.payload.path ? `file://${root.payload.path}` : ""
+                visible: !root.failed
+                source: visible && picture ? `file://${picture}` : ""
                 sourceSize.width: 256
                 fillMode: Image.PreserveAspectCrop
                 asynchronous: true
                 cache: false
+            }
+
+            // What it was until the picture comes, then a play mark over a
+            // recording's frame.
+            Symbol {
+                readonly property bool shown: image.status === Image.Ready
+
+                anchors.centerIn: parent
+                visible: root.failed || !shown || !root.screenshot
+                name: root.failed ? "close" : shown ? "play_circle" : root.screenshot ? "camera" : "video"
+                size: 28
+                filled: shown
+                color: root.failed ? Theme.danger : shown ? Theme.foreground : Theme.muted
             }
         }
 

@@ -44,7 +44,7 @@ The picker sends `audio`, `microphone`, `framerate`, `resolution`, `frame`, `reg
 
 ## The Captures page
 
-The hub has a Captures page: the newest 40 screenshots and recordings in their folders, newest first, with a thumbnail of each screenshot. Files other tools saved there show up too. Click one to open it in the preview card; each row also copies it, opens a screenshot in the editor, opens its folder or deletes it. Its Screenshot and Record buttons close the hub before the picker opens, so the hub isn't in the capture. `mochi ipc hub open capture/history` opens the page.
+The hub has a Captures page: the newest 40 screenshots and recordings in their folders, newest first, each with a thumbnail. A recording's is a frame ffmpeg picks among its first, made once in the background and kept in `$XDG_CACHE_HOME/mochi/thumbnails`; the card after a recording shows it too, once it's ready. Without ffmpeg, recordings show a camera instead. Files other tools saved there show up too. Click one to open it in the preview card; each row also copies it, opens a screenshot in the editor, opens its folder or deletes it. Its Screenshot and Record buttons close the hub before the picker opens, so the hub isn't in the capture. `mochi ipc hub open capture/history` opens the page.
 
 `copy`, `edit`, `delete` and `open` take a file from the history, like `mochi ipc capture delete <path>`; without one they work on the last capture. Only files the history lists can be deleted this way.
 

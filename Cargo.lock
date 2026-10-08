@@ -864,6 +864,7 @@ dependencies = [
 name = "mochi-module-capture"
 version = "0.0.7"
 dependencies = [
+ "blake3",
  "include_dir",
  "libc",
  "mochi-core",

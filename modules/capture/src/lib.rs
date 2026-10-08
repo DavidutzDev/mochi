@@ -21,9 +21,10 @@ mod crop;
 mod files;
 mod history;
 mod record;
+mod thumbs;
 mod tour;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::{Duration, Instant, SystemTime};
@@ -39,6 +40,7 @@ use mochi_core::{
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::process::Command;
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 
 use crate::crop::Rect;
@@ -199,6 +201,7 @@ impl Module for Capture {
             ));
         }
         needs.push(mochi_core::Need::new("xdg-open", "Open on a capture"));
+        needs.push(mochi_core::Need::new("ffmpeg", "Thumbnails of recordings"));
         needs
     }
 
@@ -338,7 +341,8 @@ impl Module for Capture {
                 let program = settings.recorder.first().cloned().unwrap_or_default();
                 tokio::spawn(async move { record::probe(&program).await })
             });
-            let mut state = State::new(settings, ctx.data_dir().to_owned());
+            let (thumbs, mut thumbnails) = mpsc::unbounded_channel();
+            let mut state = State::new(settings, ctx.data_dir().to_owned(), thumbs);
             state.publish_history(&ctx);
             loop {
                 tokio::select! {
@@ -359,6 +363,7 @@ impl Module for Capture {
                         Some(_) => {}
                     },
                     result = finished(&mut state.recording) => state.recorded(&ctx, result),
+                    Some(thumb) = thumbnails.recv() => state.thumbnailed(&ctx, thumb),
                 }
             }
         })
@@ -520,10 +525,26 @@ struct State {
     preview: Option<ActivityId>,
     /// The video codec the probe picked, when it picked one.
     codec: Option<&'static str>,
+    /// What the card shows, to add a recording's thumbnail once it's made.
+    preview_payload: Value,
+    /// Where thumbnails go; `None` without a home.
+    thumbnails: Option<PathBuf>,
+    /// Thumbnails are being made.
+    thumbnailing: bool,
+    /// Videos ffmpeg made no thumbnail of, not to try again.
+    no_thumbnail: HashSet<PathBuf>,
+    thumbs: mpsc::UnboundedSender<Thumb>,
+}
+
+/// News from the thumbnail maker.
+#[derive(Debug)]
+enum Thumb {
+    Failed(PathBuf),
+    Done,
 }
 
 impl State {
-    fn new(settings: Settings, frames: PathBuf) -> Self {
+    fn new(settings: Settings, frames: PathBuf, thumbs: mpsc::UnboundedSender<Thumb>) -> Self {
         Self {
             screenshots: files::folder(
                 &settings.screenshots,
@@ -547,6 +568,11 @@ impl State {
             history: Vec::new(),
             preview: None,
             codec: None,
+            preview_payload: Value::Null,
+            thumbnails: thumbs::folder(),
+            thumbnailing: false,
+            no_thumbnail: HashSet::new(),
+            thumbs,
         }
     }
 
@@ -1058,8 +1084,9 @@ impl State {
             "folder": folder_of(&saved.path).display().to_string(),
             "copied": self.settings.copy,
             "editable": saved.kind == Kind::Screenshot && !self.settings.editor.is_empty(),
+            "thumbnail": self.thumbnail_of(&saved.path).filter(|_| saved.kind == Kind::Recording),
         });
-        self.preview = Some(ctx.present(self.preview_spec(payload)));
+        self.present_preview(ctx, payload);
         self.last = Some(saved);
         self.publish_history(ctx);
     }
@@ -1067,7 +1094,18 @@ impl State {
     /// Looks at the folders again and tells the hub page.
     fn publish_history(&mut self, ctx: &ModuleCtx) {
         self.history = history::scan(&[&self.screenshots, &self.recordings], history::SHOWN);
-        let entries: Vec<Value> = self.history.iter().map(history::Entry::to_json).collect();
+        let entries: Vec<Value> = self
+            .history
+            .iter()
+            .map(|entry| {
+                let mut value = entry.to_json();
+                if !entry.screenshot {
+                    value["thumbnail"] = json!(self.thumbnail_of(&entry.path));
+                }
+                value
+            })
+            .collect();
+        self.make_thumbnails();
         ctx.publish_state(json!({
             "captures": entries,
             "editable": !self.settings.editor.is_empty(),
@@ -1123,6 +1161,7 @@ impl State {
             "folder": folder_of(&saved.path).display().to_string(),
             "copied": false,
             "editable": saved.kind == Kind::Screenshot && !self.settings.editor.is_empty(),
+            "thumbnail": self.thumbnail_of(&saved.path).filter(|_| saved.kind == Kind::Recording),
         });
         // Opened from the hub's page: the hub holds the keyboard.
         let close = ctx.call("hub", "close", &[]);
@@ -1132,7 +1171,7 @@ impl State {
                 Err(error) => tracing::warn!(%error, "could not close the hub"),
             }
         });
-        self.preview = Some(ctx.present(self.preview_spec(payload)));
+        self.present_preview(ctx, payload);
         self.last = Some(saved);
         Ok(())
     }
@@ -1153,7 +1192,7 @@ impl State {
             "editable": !self.settings.editor.is_empty(),
             "folder": null,
         });
-        self.preview = Some(ctx.present(self.preview_spec(payload)));
+        self.present_preview(ctx, payload);
         self.last = Some(Saved {
             kind: Kind::Screenshot,
             path,
@@ -1165,7 +1204,82 @@ impl State {
     fn failed(&mut self, ctx: &ModuleCtx, kind: Kind, message: &str) {
         tracing::warn!(kind = kind.as_str(), %message, "capture failed");
         let payload = json!({ "kind": kind.as_str(), "error": message });
-        self.preview = Some(ctx.present(self.preview_spec(payload)));
+        self.present_preview(ctx, payload);
+    }
+
+    /// Shows the card, and keeps what it shows to add a thumbnail later.
+    fn present_preview(&mut self, ctx: &ModuleCtx, payload: Value) {
+        self.preview = Some(ctx.present(self.preview_spec(payload.clone())));
+        self.preview_payload = payload;
+    }
+
+    /// The thumbnail of a recording, once it's made.
+    fn thumbnail_of(&self, path: &Path) -> Option<String> {
+        let folder = self.thumbnails.as_ref()?;
+        let modified = std::fs::metadata(path)
+            .and_then(|file| file.modified())
+            .ok()?;
+        let thumbnail = thumbs::path(folder, path, modified);
+        thumbnail.is_file().then(|| thumbnail.display().to_string())
+    }
+
+    /// Makes the recordings' missing thumbnails, one after the other in
+    /// the background; each comes back as a [`Thumb`].
+    fn make_thumbnails(&mut self) {
+        if self.thumbnailing || !mochi_core::process::installed("ffmpeg") {
+            return;
+        }
+        let Some(folder) = self.thumbnails.clone() else {
+            return;
+        };
+        let missing: Vec<(PathBuf, PathBuf)> = self
+            .history
+            .iter()
+            .filter(|entry| !entry.screenshot && !self.no_thumbnail.contains(&entry.path))
+            .map(|entry| {
+                (
+                    entry.path.clone(),
+                    thumbs::path(&folder, &entry.path, entry.modified),
+                )
+            })
+            .filter(|(_, thumbnail)| !thumbnail.is_file())
+            .collect();
+        if missing.is_empty() {
+            return;
+        }
+        self.thumbnailing = true;
+        let made = self.thumbs.clone();
+        tokio::spawn(async move {
+            for (video, thumbnail) in missing {
+                if let Err(error) = thumbs::make(&video, &thumbnail).await {
+                    tracing::debug!(video = %video.display(), %error, "no thumbnail");
+                    let _ = made.send(Thumb::Failed(video));
+                }
+            }
+            let _ = made.send(Thumb::Done);
+        });
+    }
+
+    /// A batch of thumbnails is made: the page and the card get them.
+    fn thumbnailed(&mut self, ctx: &ModuleCtx, thumb: Thumb) {
+        match thumb {
+            Thumb::Failed(video) => {
+                self.no_thumbnail.insert(video);
+            }
+            Thumb::Done => {
+                self.thumbnailing = false;
+                self.publish_history(ctx);
+                if let (Some(preview), Some(path)) =
+                    (self.preview, self.preview_payload["path"].as_str())
+                    && self.preview_payload["kind"] == "recording"
+                    && self.preview_payload["thumbnail"].is_null()
+                    && let Some(thumbnail) = self.thumbnail_of(Path::new(path))
+                {
+                    self.preview_payload["thumbnail"] = json!(thumbnail);
+                    ctx.update(preview, self.preview_payload.clone());
+                }
+            }
+        }
     }
 
     fn preview_spec(&self, payload: Value) -> ActivitySpec {

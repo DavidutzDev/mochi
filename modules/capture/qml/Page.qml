@@ -97,6 +97,8 @@ Item {
 
             required property var modelData
             readonly property bool screenshot: modelData.kind === "screenshot"
+            // A screenshot shows itself, a recording a frame once it's made.
+            readonly property string picturePath: screenshot ? modelData.path : (modelData.thumbnail ?? "")
 
             width: list.width
             height: 60
@@ -112,27 +114,29 @@ Item {
                     anchors.fill: parent
                     radius: Theme.radiusControl
                     color: Theme.raised
-                    visible: !row.screenshot || picture.status !== Image.Ready
-                }
-
-                Symbol {
-                    anchors.centerIn: parent
-                    visible: !row.screenshot
-                    name: "video"
-                    size: 20
-                    color: Theme.muted
+                    visible: picture.status !== Image.Ready
                 }
 
                 Image {
                     id: picture
 
                     anchors.fill: parent
-                    visible: row.screenshot
-                    source: row.screenshot ? `file://${row.modelData.path.split("/").map(encodeURIComponent).join("/")}` : ""
+                    source: row.picturePath ? `file://${row.picturePath.split("/").map(encodeURIComponent).join("/")}` : ""
                     sourceSize.width: 128
                     sourceSize.height: 80
                     fillMode: Image.PreserveAspectCrop
                     asynchronous: true
+                }
+
+                // A recording: a camera before its frame comes, then a
+                // play mark over it.
+                Symbol {
+                    anchors.centerIn: parent
+                    visible: !row.screenshot
+                    name: picture.status === Image.Ready ? "play_circle" : "video"
+                    size: 20
+                    filled: picture.status === Image.Ready
+                    color: picture.status === Image.Ready ? Theme.foreground : Theme.muted
                 }
             }
 

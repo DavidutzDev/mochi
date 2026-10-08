@@ -406,12 +406,12 @@ Screenshots and recordings from the island. Decided on 2026-10-04: our own froze
 - [ ] Try keyboard use in the picker (arrows, Enter, Escape, M) on a real session; the tests here only used the pointer and the CLI
 - [ ] Record a real video once `programs.gpu-screen-recorder.enable` is on
 - [x] Window positions on other compositors: niri and Sway IPC
-- [ ] A thumbnail for recordings
+- [x] A thumbnail for recordings
 - [x] A region across several monitors: regions are global, the first overlay sends the layout, a drag keeps going into the next screen and the other screens draw their part as it moves; each screen it touches saves its frame and `crop::join` puts them together at the finest scale, transparent where no screen is. Tested on Hyprland through IPC; a real drag across still needs trying by hand. Recordings stay on one screen
 - [ ] Recording a region across screens, if gpu-screen-recorder can
 - [x] Capture every screen at once: the All screens mode, `mochi ipc capture screenshot all`
 - [x] A hub page for captures: the latest screenshots and recordings as a history, with thumbnails, and the preview card's copy, edit, open folder and delete on each
-- [ ] Thumbnails for recordings: a frame from each video, made once and kept
+- [x] Thumbnails for recordings: a frame from each video, made once and kept
 - [x] Pick the quality of a recording and of a screen share: frame rate presets (15, 30, 60, 90, 120 fps) and resolution presets (480p, 720p, 1080p, 1440p), in the picker and as settings. Recordings pass gpu-screen-recorder `-f` and `-s`; a switchable share sets `MOCHI-SHARE`'s refresh rate and size. A share that isn't switchable stays the app's to choose
 
 ### Share
