@@ -1,0 +1,8 @@
+# Drop: files dragged onto the island. It names what came and offers the
+# actions that fit, for which a program is installed.
+[module.drop]
+# The actions to offer: zip (with zip or bsdtar), extract (bsdtar, unzip,
+# tar or 7z), merge for PDFs (pdfunite or qpdf), png, jpg and webp to
+# convert images (ImageMagick), copy for the paths (wl-copy) and open
+# (xdg-open).
+# actions = ["zip", "extract", "merge", "png", "jpg", "webp", "copy", "open"]

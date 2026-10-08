@@ -37,6 +37,7 @@
 - [Notes](modules/notes.md)
 - [Emoji](modules/emoji.md)
 - [Colors](modules/colors.md)
+- [Drop](modules/drop.md)
 - [Settings](modules/settings.md)
 - [Tour](modules/tour.md)
 

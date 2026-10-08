@@ -201,7 +201,8 @@ Item {
         flipX: root.atRight
         flipY: root.atBottom
         color: Theme.background
-        border: Theme.border
+        // Files held over it: it takes them.
+        border: dropZone.containsDrag ? Theme.accent : Theme.border
     }
 
     // The views, in a focus scope: a view that wants keys sets `focus: true`
@@ -237,6 +238,33 @@ Item {
     HoverHandler {
         id: hover
         onHoveredChanged: Daemon.eventFor(root.activity, hovered ? "hover_enter" : "hover_leave")
+    }
+
+    // Files dragged over the island go to the drop module, when it runs:
+    // it says where to let go, then offers what to do with them.
+    DropArea {
+        id: dropZone
+
+        anchors.fill: parent
+        enabled: Daemon.modules.includes("drop")
+        onEntered: drag => {
+            if (!drag.hasUrls) {
+                drag.accepted = false;
+                return;
+            }
+            drag.accept(Qt.CopyAction);
+            Daemon.command("drop", "hover", ["on"]);
+        }
+        onExited: Daemon.command("drop", "hover", ["off"])
+        onDropped: drop => {
+            const files = drop.urls.map(url => url.toString()).filter(url => url.startsWith("file://"));
+            if (files.length === 0) {
+                Daemon.command("drop", "hover", ["off"]);
+                return;
+            }
+            drop.accept(Qt.CopyAction);
+            Daemon.command("drop", "files", [files.join("\n")]);
+        }
     }
 
     // Left click expands or collapses, or goes to the module.

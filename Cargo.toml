@@ -35,6 +35,7 @@ mochi-module-nightlight = { path = "modules/nightlight" }
 mochi-module-notifications = { path = "modules/notifications" }
 mochi-module-performance = { path = "modules/performance" }
 mochi-module-colors = { path = "modules/colors" }
+mochi-module-drop = { path = "modules/drop" }
 mochi-module-emoji = { path = "modules/emoji" }
 mochi-module-notes = { path = "modules/notes" }
 mochi-module-widgets = { path = "modules/widgets" }

@@ -6,6 +6,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- Drop files on the island, the `drop` module: while files hover, the island's outline turns to the accent and it says to drop them; once dropped, it names what came and offers what fits: compress, extract, merge PDFs, convert images to PNG, JPEG or WebP, copy the paths, open. Each action shows when a program for it is installed. New files go next to the dropped ones under a free name, and Show opens their folder. `mochi ipc drop files` and `run` do the same from a script. It's on in newly generated configs; add `drop` to `modules` in yours.
 - The hub's home is editable: the pencil in the navbar outlines the cards, a drag moves one, its minus takes it off and "More cards" puts it back. Done keeps the result in the hub's new `order` and `hidden` settings, through `changes.toml`, and `mochi ipc hub arrange` does the same from a script. The hub stays open while it saves.
 - A volume card on the hub's home, from the audio module: the output's volume as a slider, with the icon muting it.
 - `Module::live_settings` names the settings a module applies while it runs. A reload that changes only those sends `ModuleEvent::Reconfigured` with the new table instead of restarting the module. The hub's `order` and `hidden` are the first.

@@ -927,6 +927,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-drop"
+version = "0.0.7"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-emoji"
 version = "0.0.7"
 dependencies = [
@@ -1272,6 +1285,7 @@ dependencies = [
  "mochi-module-clipboard",
  "mochi-module-colors",
  "mochi-module-demo",
+ "mochi-module-drop",
  "mochi-module-emoji",
  "mochi-module-hub",
  "mochi-module-idle",

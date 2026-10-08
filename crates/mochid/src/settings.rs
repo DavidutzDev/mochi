@@ -764,6 +764,7 @@ fn icon(module: &str) -> &'static str {
         "capture" => "screenshot_region",
         "clipboard" => "content_paste",
         "colors" => "colorize",
+        "drop" => "place_item",
         "emoji" => "mood",
         "hub" => "space_dashboard",
         "idle" => "bedtime",
