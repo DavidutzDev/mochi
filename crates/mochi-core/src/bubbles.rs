@@ -23,7 +23,7 @@ pub use mochi_protocol::spec::BubbleSpec;
 
 /// The user's placement for all of one module's bubbles:
 /// `[bubbles.<module>]` in `config.toml`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Placement {
     pub area: Option<Area>,

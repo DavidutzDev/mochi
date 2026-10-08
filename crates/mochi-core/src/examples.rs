@@ -33,7 +33,7 @@ pub fn uncommented(example: &str) -> String {
 }
 
 /// `key = value`, where the key is a bare TOML key.
-fn is_default(line: &str) -> bool {
+pub(crate) fn is_default(line: &str) -> bool {
     line.split_once(" = ").is_some_and(|(key, _)| {
         !key.is_empty()
             && key

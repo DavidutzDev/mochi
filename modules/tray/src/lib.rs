@@ -46,7 +46,7 @@ static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 #[derive(Debug, Default)]
 pub struct Tray;
 
-#[derive(Debug, Default, Deserialize, PartialEq)]
+#[derive(Debug, Default, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     pinned: Vec<String>,
@@ -72,6 +72,10 @@ impl Module for Tray {
 
     fn settings_example(&self) -> &'static str {
         include_str!("../settings.toml")
+    }
+
+    fn settings_schema(&self) -> Option<Value> {
+        Some(mochi_core::options::schema_of::<Settings>())
     }
 
     fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {

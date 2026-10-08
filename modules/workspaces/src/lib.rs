@@ -49,7 +49,7 @@ const SHOW_KEY: &str = "workspaces-show";
 #[derive(Debug, Default)]
 pub struct Workspaces;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     timeout_ms: u64,
@@ -93,6 +93,10 @@ impl Module for Workspaces {
 
     fn settings_example(&self) -> &'static str {
         include_str!("../settings.toml")
+    }
+
+    fn settings_schema(&self) -> Option<serde_json::Value> {
+        Some(mochi_core::options::schema_of::<Settings>())
     }
 
     fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {

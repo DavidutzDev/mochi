@@ -40,7 +40,7 @@ static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 #[derive(Debug, Default)]
 pub struct Share;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     switchable: bool,
@@ -85,6 +85,10 @@ impl Module for Share {
 
     fn settings_example(&self) -> &'static str {
         include_str!("../settings.toml")
+    }
+
+    fn settings_schema(&self) -> Option<Value> {
+        Some(mochi_core::options::schema_of::<Settings>())
     }
 
     fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {

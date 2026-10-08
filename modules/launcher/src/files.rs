@@ -44,7 +44,7 @@ const MASK: WatchMask = WatchMask::CREATE
 const CHECK: Duration = Duration::from_secs(1);
 
 /// `[module.launcher.files]`.
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct FilesSettings {
     /// Where to look; empty for the home folder.

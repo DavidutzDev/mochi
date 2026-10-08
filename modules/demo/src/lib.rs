@@ -118,6 +118,7 @@ impl Module for Demo {
                     ModuleEvent::Clicked(_)
                     | ModuleEvent::Hovered { .. }
                     | ModuleEvent::State { .. }
+                    | ModuleEvent::Settings(_)
                     | ModuleEvent::Offers(_) => {
                         continue;
                     }

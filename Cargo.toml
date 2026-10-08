@@ -54,6 +54,7 @@ inotify = { version = "0.11", default-features = false }
 libc = "0.2"
 libpulse-binding = "2"
 nucleo-matcher = "0.3"
+schemars = "1"
 png = "0.18"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -142,15 +142,21 @@ pub fn load_config(path: &Path, modules: Option<&[String]>) -> Result<Config, Co
     if let Some(modules) = modules {
         config.modules = modules.to_vec();
     }
-    let catalog = catalog(path)?;
-    let builtin = catalog.modules;
-    let available: Vec<&str> = builtin
+    check_config(&config, &catalog(path)?, path)?;
+    Ok(config)
+}
+
+/// Checks a config against the modules there are, as [`load_config`] does.
+/// `path` only labels errors.
+pub fn check_config(config: &Config, catalog: &Catalog, path: &Path) -> Result<(), ConfigError> {
+    let available: Vec<&str> = catalog
+        .modules
         .iter()
         .map(|module| module.id())
         .chain(catalog.listed.iter().map(|listed| listed.id.as_str()))
         .collect();
     config.check(&available, path)?;
-    for module in &builtin {
+    for module in &catalog.modules {
         module
             .check_settings(&config.settings(module.id()))
             .map_err(|error| {
@@ -167,7 +173,7 @@ pub fn load_config(path: &Path, modules: Option<&[String]>) -> Result<Config, Co
             }
         }
     }
-    Ok(config)
+    Ok(())
 }
 
 /// The `config.toml` a new user gets.

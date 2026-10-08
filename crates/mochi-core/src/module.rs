@@ -59,6 +59,15 @@ pub trait Module: Send + 'static {
         }
     }
 
+    /// The JSON schema of its `[module.<id>]` table, which the settings
+    /// panel builds its rows from: usually
+    /// `Some(options::schema_of::<Settings>())`, with the settings type
+    /// deriving `JsonSchema`. `None` leaves the table to the panel's TOML
+    /// editor.
+    fn settings_schema(&self) -> Option<Value> {
+        None
+    }
+
     /// What it offers other modules, like a page for the hub. Unused when
     /// the module it's for isn't enabled.
     fn contributions(&self) -> Vec<ContributionSpec> {
@@ -163,6 +172,11 @@ pub enum Request {
     WatchState {
         module: String,
     },
+    /// Reads or changes the settings, for the settings panel.
+    Settings {
+        op: SettingsOp,
+        reply: oneshot::Sender<Result<Value, String>>,
+    },
     /// Runs another module's action.
     Call {
         module: String,
@@ -170,6 +184,27 @@ pub enum Request {
         args: Vec<String>,
         reply: oneshot::Sender<Result<Option<String>, CallError>>,
     },
+}
+
+/// What the settings panel asks the daemon. Paths start with the file:
+/// `theme.colors.accent`, `config.module.osd.timeout_ms`.
+#[derive(Debug, Clone, PartialEq)]
+pub enum SettingsOp {
+    /// Every section with its fields and their values: what
+    /// [`ModuleEvent::Settings`] brings after each change.
+    Snapshot,
+    /// Sets an option, as the panel sends it; `null` unsets it.
+    Set { path: String, value: Value },
+    /// Puts an option, or every option of a section, back to its default.
+    Reset { path: String },
+    /// Drops every change the panel made, back to what the files say.
+    Discard,
+    /// A section as TOML, for its editor.
+    Text { path: String },
+    /// Replaces a section with the TOML its editor sends.
+    Edit { path: String, text: String },
+    /// Every option that isn't at its default, as `nix` or `toml`.
+    Export { format: String },
 }
 
 /// What the daemon tells a module.
@@ -196,6 +231,9 @@ pub enum ModuleEvent {
         module: String,
         state: Value,
     },
+    /// The settings changed: the new [`SettingsOp::Snapshot`]. Only the
+    /// settings module gets it.
+    Settings(Value),
     /// What the enabled modules offer this one, like the launcher's
     /// providers: every [`Contribution`] whose `target` is this module. Comes
     /// once at the start, then whenever a reload changes it.
@@ -418,6 +456,21 @@ impl ModuleCtx {
             answer
                 .await
                 .unwrap_or_else(|_| Err(CallError::Failed("the daemon stopped".into())))
+        }
+    }
+
+    /// Reads or changes the settings. The answer is the snapshot or the
+    /// text the op asks for, or `null`.
+    pub fn settings_op(
+        &self,
+        op: SettingsOp,
+    ) -> impl Future<Output = Result<Value, String>> + Send + 'static {
+        let (reply, answer) = oneshot::channel();
+        self.send(Request::Settings { op, reply });
+        async move {
+            answer
+                .await
+                .unwrap_or_else(|_| Err("the daemon stopped".to_owned()))
         }
     }
 

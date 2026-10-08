@@ -17,7 +17,9 @@ pub fn next_framerate(framerate: u32) -> u32 {
 
 /// How tall a video is at most. A source no taller keeps its size: nothing
 /// is ever scaled up.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
 pub enum Resolution {
     /// The source's own size.
     #[default]

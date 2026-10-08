@@ -55,7 +55,7 @@ const MAX_FRAMERATE: i64 = 240;
 #[derive(Debug, Default)]
 pub struct Capture;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     screenshots: String,
@@ -114,7 +114,7 @@ impl Kind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 enum Mode {
     Region,
@@ -175,6 +175,10 @@ impl Module for Capture {
 
     fn settings_example(&self) -> &'static str {
         include_str!("../settings.toml")
+    }
+
+    fn settings_schema(&self) -> Option<Value> {
+        Some(mochi_core::options::schema_of::<Settings>())
     }
 
     fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {

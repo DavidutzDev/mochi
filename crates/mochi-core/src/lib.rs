@@ -8,10 +8,13 @@ pub mod actions;
 pub mod arbiter;
 pub mod assets;
 pub mod bubbles;
+pub mod changes;
 pub mod config;
 pub mod contributions;
 pub mod examples;
 pub mod module;
+pub mod nix;
+pub mod options;
 pub mod process;
 pub mod quality;
 pub mod supervisor;
@@ -20,6 +23,8 @@ pub mod supervisor;
 /// Compositor state and actions, from [`ModuleCtx::compositor`].
 pub use mochi_compositor as compositor;
 pub use mochi_protocol::{ActionSpec, ActivityId, Area, ArgSpec, BubbleId, Contribution};
+/// For [`Module::settings_schema`].
+pub use schemars;
 /// For [`Module::check_settings`].
 pub use toml;
 
@@ -32,7 +37,7 @@ pub use config::{
 pub use contributions::ContributionSpec;
 pub use module::{
     ActivityIds, Assets, BoxFuture, CallError, Module, ModuleCommand, ModuleCtx, ModuleError,
-    ModuleEvent, ModuleRequest, Reply, Request, settings,
+    ModuleEvent, ModuleRequest, Reply, Request, SettingsOp, settings,
 };
 
 /// The core QML: `shell.qml` and the island. Modules add their views under

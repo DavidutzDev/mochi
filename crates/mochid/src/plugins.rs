@@ -583,6 +583,8 @@ fn on_event(event: ModuleEvent, link: &mut Link, outgoing: &mpsc::UnboundedSende
             link.offers = Some(offers.clone());
             ToPlugin::Offers { offers }
         }
+        // Only the builtin settings module gets these.
+        ModuleEvent::Settings(_) => return,
     };
     let _ = outgoing.send(message);
 }

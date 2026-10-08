@@ -3,11 +3,12 @@
 
 use std::fmt;
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::Area;
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Theme {
     pub colors: Colors,
@@ -16,7 +17,7 @@ pub struct Theme {
     pub text: Text,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 /// Color roles. The defaults are "Obsidian": a black island that blends into
 /// the bezel, graphite layers on it, and one accent used sparingly.
@@ -65,7 +66,7 @@ impl Default for Colors {
 }
 
 /// Where the island sits and what shape it takes. Sizes in logical pixels.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Layout {
     pub mode: Mode,
@@ -76,22 +77,31 @@ pub struct Layout {
     /// Gap between the screen edges and everything on them in island mode.
     /// Notch mode always touches the edge.
     #[serde(alias = "top_margin")]
+    #[schemars(range(min = 0, max = 48))]
     pub margin: u32,
     /// Gap between the island and bubbles, and between areas that meet.
+    #[schemars(range(min = 0, max = 32))]
     pub spacing: u32,
     /// Height of the idle island and of bubbles. Windows make room for this
     /// much.
+    #[schemars(range(min = 20, max = 64))]
     pub idle_height: u32,
+    #[schemars(range(min = 4, max = 32))]
     pub padding: u32,
     /// Largest corner radius. Short islands are fully rounded pills.
+    #[schemars(range(min = 0, max = 48))]
     pub max_radius: u32,
     /// Corners of small controls: chips, badges, icon buttons.
+    #[schemars(range(min = 0, max = 24))]
     pub radius_small: u32,
     /// Corners of rows and buttons.
+    #[schemars(range(min = 0, max = 32))]
     pub radius_medium: u32,
     /// Corners of cards and tiles.
+    #[schemars(range(min = 0, max = 40))]
     pub radius_large: u32,
     /// The tallest the island can grow, in pixels.
+    #[schemars(range(min = 200, max = 1600))]
     pub surface_height: u32,
     pub notch: Notch,
 }
@@ -116,7 +126,7 @@ impl Default for Layout {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum Mode {
     /// Floats apart from the edge, rounded all around.
@@ -127,7 +137,7 @@ pub enum Mode {
 }
 
 /// The screen edge everything sits against.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum Anchor {
     #[default]
@@ -136,10 +146,11 @@ pub enum Anchor {
 }
 
 /// Settings that only apply in notch mode.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Notch {
     /// Radius of the concave corners where the notch meets the edge.
+    #[schemars(range(min = 0, max = 32))]
     pub ear_radius: u32,
 }
 
@@ -150,20 +161,27 @@ impl Default for Notch {
 }
 
 /// Animation constants. The spring values feed QML's `SpringAnimation`.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Motion {
+    #[schemars(range(min = 0.5, max = 12.0))]
     pub spring: f64,
     /// Between 0 and 1. Lower values bounce more.
+    #[schemars(range(min = 0.05, max = 1.0))]
     pub damping: f64,
+    #[schemars(range(min = 0, max = 1000))]
     pub fade_in_ms: u32,
+    #[schemars(range(min = 0, max = 1000))]
     pub fade_out_ms: u32,
     /// How long the new view waits before fading in, so the shape moves
     /// first.
+    #[schemars(range(min = 0, max = 500))]
     pub fade_delay_ms: u32,
     /// Small state changes: colors, hovers.
+    #[schemars(range(min = 0, max = 600))]
     pub fast_ms: u32,
     /// Things moving or resizing inside a view, with a slight overshoot.
+    #[schemars(range(min = 0, max = 1200))]
     pub move_ms: u32,
 }
 
@@ -184,27 +202,34 @@ impl Default for Motion {
 /// The type scale, in pixels: four sizes and one for big numbers. An empty
 /// `family` uses Inter, which Mochi's packages bring, or the system font
 /// without it; an empty `display_family` keeps `family`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Text {
     pub family: String,
     /// For the clocks, on the idle island and in the hub.
     pub display_family: String,
     /// Labels, metadata and fine print.
+    #[schemars(range(min = 8, max = 20))]
     pub caption: u32,
     /// Everything else: rows, buttons, messages.
+    #[schemars(range(min = 9, max = 24))]
     pub body: u32,
     /// Card, track and section titles.
+    #[schemars(range(min = 10, max = 32))]
     pub title: u32,
     /// Page titles.
+    #[schemars(range(min = 12, max = 48))]
     pub headline: u32,
     /// Big numbers, like a clock.
+    #[schemars(range(min = 20, max = 96))]
     pub display: u32,
     /// Before 0.0.7's scale: read as `caption`. Not sent to the UI.
     #[serde(skip_serializing)]
+    #[schemars(skip)]
     pub label: Option<u32>,
     /// Before 0.0.7's scale: read as `body`. Not sent to the UI.
     #[serde(skip_serializing)]
+    #[schemars(skip)]
     pub subtitle: Option<u32>,
 }
 
@@ -253,6 +278,16 @@ impl Color {
     /// For the defaults above, which are known to be valid.
     fn fixed(value: &str) -> Self {
         Self::try_from(value.to_owned()).expect("default colors are valid")
+    }
+}
+
+impl JsonSchema for Color {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Color".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({ "type": "string", "format": "color" })
     }
 }
 

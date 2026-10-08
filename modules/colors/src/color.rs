@@ -19,7 +19,7 @@ pub struct Color {
 }
 
 /// The ways a color can be written.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Format {
     Hex,

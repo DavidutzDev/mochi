@@ -5,6 +5,7 @@ mod daemon;
 mod ipc;
 mod modules;
 mod plugins;
+mod settings;
 
 use std::ffi::OsString;
 use std::io::IsTerminal;
@@ -21,6 +22,7 @@ use tracing_subscriber::EnvFilter;
 
 use crate::daemon::{Daemon, Files, Inputs};
 use crate::modules::Runner;
+use crate::settings::Store;
 
 #[derive(Debug, Parser)]
 #[command(version, about)]
@@ -195,9 +197,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
         }
     }
     let config_file = args.config.unwrap_or_else(|| paths.config_file());
-    let theme_file = config_file.with_file_name("theme.toml");
-    let config = modules::load_config(&config_file, args.modules.as_deref())?;
-    let theme = mochi_core::config::load_theme(&theme_file)?;
+    let (store, loaded) = Store::load(&config_file, args.modules)?;
 
     // Claim the socket before touching anything a running daemon uses.
     std::fs::create_dir_all(&paths.runtime_dir)
@@ -226,10 +226,9 @@ async fn run(args: Args) -> anyhow::Result<()> {
 
     let files = Files {
         config: config_file,
-        theme: theme_file,
-        modules: args.modules,
     };
-    let mut daemon = Daemon::new(runner, files, theme);
+    let config = loaded.config.clone();
+    let mut daemon = Daemon::new(runner, files, store, loaded);
     daemon.apply(&config)?;
     tracing::info!(modules = ?config.modules, "started modules");
 

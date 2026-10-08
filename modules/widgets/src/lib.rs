@@ -49,7 +49,7 @@ const ZONES: Duration = Duration::from_secs(600);
 #[derive(Debug, Default)]
 pub struct Widgets;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     grid: u32,
@@ -72,6 +72,10 @@ impl Module for Widgets {
 
     fn settings_example(&self) -> &'static str {
         include_str!("../settings.toml")
+    }
+
+    fn settings_schema(&self) -> Option<Value> {
+        Some(mochi_core::options::schema_of::<Settings>())
     }
 
     fn check_settings(&self, table: &toml::Table) -> Result<(), String> {

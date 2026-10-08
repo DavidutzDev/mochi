@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::{env, fs, io};
 
 use mochi_protocol::Theme;
+use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::bubbles::Placement;
@@ -114,7 +115,7 @@ pub struct Config {
 }
 
 /// `[island]`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct IslandConfig {
     pub panels: Panels,
@@ -124,7 +125,7 @@ pub struct IslandConfig {
 
 /// Which monitor everything that isn't a panel shows on: notifications,
 /// the volume, the media card, every other notice.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Notices {
     /// Every monitor's island.
@@ -138,7 +139,7 @@ pub enum Notices {
 }
 
 /// What a click outside the island closes.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ClickOutside {
     /// Whatever the island shows, except the idle island and quick notices
@@ -151,7 +152,7 @@ pub enum ClickOutside {
 }
 
 /// Which monitor a panel, a view that takes the keyboard, opens on.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Panels {
     /// The monitor with keyboard focus.
@@ -176,16 +177,19 @@ pub enum Panels {
 /// order = 1
 /// wide = true         # the module's wide views with text, if it has them
 /// ```
-#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, JsonSchema)]
 #[serde(default)]
 pub struct BubblesConfig {
     /// Bubbles shown per area; the rest are counted instead.
+    #[schemars(range(min = 1, max = 12))]
     pub max_per_area: usize,
     /// Each area stacks its bubbles into one, the most important in front.
     pub stack: bool,
     /// How long a bubble with news stays in front of its stack.
+    #[schemars(range(min = 0, max = 15000))]
     pub news_ms: u64,
     #[serde(flatten)]
+    #[schemars(skip)]
     pub modules: BTreeMap<String, Placement>,
 }
 
@@ -236,6 +240,14 @@ impl Config {
     /// `path` only labels errors.
     pub fn parse(text: &str, path: &Path) -> Result<Self, ConfigError> {
         toml::from_str(text).map_err(|error| ConfigError::invalid(path, error.to_string()))
+    }
+
+    /// From the file already read as a table, with changes laid over it.
+    /// `path` only labels errors.
+    pub fn from_table(table: toml::Table, path: &Path) -> Result<Self, ConfigError> {
+        toml::Value::Table(table)
+            .try_into()
+            .map_err(|error: toml::de::Error| ConfigError::invalid(path, error.to_string()))
     }
 
     /// Checks the module names against the modules that exist.
@@ -295,6 +307,27 @@ pub fn parse_theme(text: &str, path: &Path) -> Result<Theme, ConfigError> {
     }
     check_theme(&theme).map_err(|message| ConfigError::invalid(path, message))?;
     Ok(theme)
+}
+
+/// `theme.toml` already read as a table, with changes laid over it. `path`
+/// only labels errors.
+pub fn theme_from_table(table: toml::Table, path: &Path) -> Result<Theme, ConfigError> {
+    let mut theme: Theme = toml::Value::Table(table)
+        .try_into()
+        .map_err(|error: toml::de::Error| ConfigError::invalid(path, error.to_string()))?;
+    theme.text.migrate();
+    check_theme(&theme).map_err(|message| ConfigError::invalid(path, message))?;
+    Ok(theme)
+}
+
+/// A TOML file as a table, empty when it doesn't exist.
+pub fn read_table(path: &Path) -> Result<toml::Table, ConfigError> {
+    match read_optional(path)? {
+        Some(text) => {
+            toml::from_str(&text).map_err(|error| ConfigError::invalid(path, error.to_string()))
+        }
+        None => Ok(toml::Table::new()),
+    }
 }
 
 /// The renamed keys `theme.toml` still uses, for `mochi config check`.

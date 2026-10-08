@@ -29,7 +29,7 @@ use serde_json::Value;
 pub const DEFAULT_TIMEOUT_MS: u64 = 2000;
 
 /// `[module.launcher.engines.<bang>]`: a web search, asked with `!<bang>`.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Engine {
     pub title: String,
@@ -105,7 +105,7 @@ pub fn web_url(url: &str, query: &str) -> String {
 
 /// `[module.launcher.providers.<name>]`: changes a provider, or adds a
 /// script one.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct ProviderSettings {
     /// `false` turns it off.

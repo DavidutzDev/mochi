@@ -12,6 +12,7 @@ include_dir.workspace = true
 libc.workspace = true
 mochi-core.workspace = true
 png.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "process", "rt", "sync", "time"] }

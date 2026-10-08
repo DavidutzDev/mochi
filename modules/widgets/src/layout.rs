@@ -24,6 +24,7 @@
 use std::fmt::Write as _;
 use std::path::Path;
 
+use mochi_core::nix;
 use serde::{Deserialize, Serialize};
 
 pub const FILE: &str = "widgets.toml";
@@ -166,11 +167,11 @@ impl Layout {
         for widget in &self.widgets {
             out.push_str("  {\n");
             let fields: [(&str, String); 9] = [
-                ("id", nix_string(&widget.id)),
-                ("module", nix_string(&widget.module)),
-                ("widget", nix_string(&widget.widget)),
-                ("output", nix_string(&widget.output)),
-                ("anchor", nix_string(widget.anchor.as_str())),
+                ("id", nix::string(&widget.id)),
+                ("module", nix::string(&widget.module)),
+                ("widget", nix::string(&widget.widget)),
+                ("output", nix::string(&widget.output)),
+                ("anchor", nix::string(widget.anchor.as_str())),
                 ("x", widget.x.to_string()),
                 ("y", widget.y.to_string()),
                 ("width", widget.width.to_string()),
@@ -185,7 +186,7 @@ impl Layout {
             if !widget.settings.is_empty() {
                 out.push_str("    settings = {\n");
                 for (key, value) in &widget.settings {
-                    let _ = writeln!(out, "      {} = {};", nix_key(key), nix_value(value));
+                    let _ = writeln!(out, "      {} = {};", nix::key(key), nix::value(value));
                 }
                 out.push_str("    };\n");
             }
@@ -193,58 +194,6 @@ impl Layout {
         }
         out.push(']');
         out
-    }
-}
-
-fn nix_string(text: &str) -> String {
-    let escaped = text
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace("${", "\\${")
-        .replace('\n', "\\n");
-    format!("\"{escaped}\"")
-}
-
-fn nix_key(key: &str) -> String {
-    let bare = key
-        .chars()
-        .next()
-        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
-        && key
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-' || c == '\'');
-    if bare {
-        key.to_owned()
-    } else {
-        nix_string(key)
-    }
-}
-
-fn nix_value(value: &toml::Value) -> String {
-    match value {
-        toml::Value::String(text) => nix_string(text),
-        toml::Value::Integer(number) => number.to_string(),
-        toml::Value::Float(number) => {
-            let text = number.to_string();
-            if text.contains('.') {
-                text
-            } else {
-                format!("{text}.0")
-            }
-        }
-        toml::Value::Boolean(flag) => flag.to_string(),
-        toml::Value::Datetime(time) => nix_string(&time.to_string()),
-        toml::Value::Array(items) => {
-            let items: Vec<String> = items.iter().map(nix_value).collect();
-            format!("[ {} ]", items.join(" "))
-        }
-        toml::Value::Table(table) => {
-            let fields: Vec<String> = table
-                .iter()
-                .map(|(key, value)| format!("{} = {};", nix_key(key), nix_value(value)))
-                .collect();
-            format!("{{ {} }}", fields.join(" "))
-        }
     }
 }
 

@@ -11,7 +11,7 @@ use mochi_core::supervisor::{Supervisor, UiEvent};
 use mochi_core::{
     ActivitySpec, Arbiter, Assets, Bubbles, CallError, ClickOutside, Config, Effect, Module,
     ModuleCommand, ModuleError, ModuleEvent, ModuleRequest, Notices, Panels, Priority, Reply,
-    Request,
+    Request, SettingsOp,
 };
 use mochi_plugins::manifest::CORE_ID;
 use mochi_protocol::{
@@ -26,6 +26,10 @@ use tokio::task::JoinError;
 
 use crate::ipc::{ConnectionEvent, ConnectionId};
 use crate::modules::{self, Runner};
+use crate::settings::{self, Store};
+
+/// The module that shows the settings panel, which hears about changes.
+const SETTINGS: &str = "settings";
 
 /// How long a new Quickshell process gets to say hello.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -91,7 +95,11 @@ pub struct Daemon {
     bubbles: Bubbles,
     clients: HashMap<ConnectionId, Client>,
     theme: Theme,
+    /// The config the modules run with.
+    config: Config,
     files: Files,
+    /// The files as read and the settings panel's changes over them.
+    store: Store,
     runner: Runner,
     /// Attached once the shell is written; `None` only during startup.
     supervisor: Option<Supervisor>,
@@ -124,13 +132,10 @@ pub struct Daemon {
 #[derive(Debug)]
 pub struct Files {
     pub config: PathBuf,
-    pub theme: PathBuf,
-    /// `--modules`, which keeps replacing the file's list on reload.
-    pub modules: Option<Vec<String>>,
 }
 
 impl Daemon {
-    pub fn new(runner: Runner, files: Files, theme: Theme) -> Self {
+    pub fn new(runner: Runner, files: Files, store: Store, loaded: settings::Loaded) -> Self {
         let compositor = runner.compositor.clone();
         Self {
             order: Vec::new(),
@@ -140,8 +145,10 @@ impl Daemon {
             arbiter: Arbiter::new(),
             bubbles: Bubbles::default(),
             clients: HashMap::new(),
-            theme,
+            theme: loaded.theme,
+            config: loaded.config,
             files,
+            store,
             runner,
             supervisor: None,
             shell: Vec::new(),
@@ -707,26 +714,24 @@ impl Daemon {
     /// Reloads `theme.toml` and `config.toml`. A file with an error changes
     /// nothing: the daemon keeps running as it was.
     fn on_reload(&mut self, id: ConnectionId) {
-        let loaded = mochi_core::config::load_theme(&self.files.theme).and_then(|theme| {
-            modules::load_config(&self.files.config, self.files.modules.as_deref())
-                .map(|config| (theme, config))
-        });
-        let (theme, config) = match loaded {
+        let loaded = match self.store.reload() {
             Ok(loaded) => loaded,
             Err(error) => {
                 self.reply_error(id, ErrorCode::InvalidConfig, error.to_string());
                 return;
             }
         };
-        if let Err(error) = self.apply(&config) {
+        // Restarts what ended, and picks up plugins' new files, even when the
+        // config is the same.
+        if let Err(error) = self.apply(&loaded.config) {
             self.reply_error(id, ErrorCode::Internal, format!("{error:#}"));
             return;
         }
-
-        self.theme = theme.clone();
-        self.broadcast(&DaemonMessage::Theme {
-            theme: Box::new(theme),
-        });
+        self.config = loaded.config.clone();
+        if let Err(error) = self.run_with(loaded) {
+            self.reply_error(id, ErrorCode::Internal, format!("{error:#}"));
+            return;
+        }
         let modules = self.order.iter().map(|id| (*id).to_owned()).collect();
         self.broadcast(&DaemonMessage::Modules { modules });
         self.broadcast(&DaemonMessage::Contributions {
@@ -734,6 +739,46 @@ impl Daemon {
         });
         tracing::info!(modules = ?self.order, "reloaded config.toml and theme.toml");
         self.reply(id, DaemonMessage::Ok);
+    }
+
+    /// The settings panel reading or changing the settings. A change applies
+    /// at once, like a reload that only touches what changed.
+    fn on_settings(&mut self, op: SettingsOp) -> Result<Value, String> {
+        let op = match op {
+            SettingsOp::Snapshot => return Ok(self.store.snapshot()),
+            SettingsOp::Text { path } => return self.store.text(&path).map(Value::String),
+            SettingsOp::Export { format } => return self.store.export(&format).map(Value::String),
+            SettingsOp::Set { path, value } => settings::Op::Set { path, value },
+            SettingsOp::Reset { path } => settings::Op::Reset { path },
+            SettingsOp::Discard => settings::Op::Discard,
+            SettingsOp::Edit { path, text } => settings::Op::Edit { path, text },
+        };
+        let loaded = self.store.change(&op)?;
+        self.run_with(loaded)
+            .map_err(|error| format!("{error:#}"))?;
+        Ok(Value::Null)
+    }
+
+    /// Runs with a new config and theme: applies the config when it changed
+    /// and sends the theme when it did, then tells the settings panel.
+    fn run_with(&mut self, loaded: settings::Loaded) -> anyhow::Result<()> {
+        if loaded.config != self.config {
+            self.apply(&loaded.config)?;
+            self.config = loaded.config;
+            let modules = self.order.iter().map(|id| (*id).to_owned()).collect();
+            self.broadcast(&DaemonMessage::Modules { modules });
+            self.broadcast(&DaemonMessage::Contributions {
+                contributions: self.contributions(),
+            });
+        }
+        if loaded.theme != self.theme {
+            self.theme = loaded.theme;
+            self.broadcast(&DaemonMessage::Theme {
+                theme: Box::new(self.theme.clone()),
+            });
+        }
+        self.notify(SETTINGS, ModuleEvent::Settings(self.store.snapshot()));
+        Ok(())
     }
 
     fn contributions(&self) -> Vec<Contribution> {
@@ -820,6 +865,10 @@ impl Daemon {
                 reply,
             } => {
                 self.on_call(module, &target, &action, &args, reply);
+                return;
+            }
+            Request::Settings { op, reply } => {
+                let _ = reply.send(self.on_settings(op));
                 return;
             }
         };

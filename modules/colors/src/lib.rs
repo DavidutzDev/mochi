@@ -53,7 +53,7 @@ const LENS: i64 = 11;
 #[derive(Debug, Default)]
 pub struct Colors;
 
-#[derive(Debug, Deserialize, PartialEq)]
+#[derive(Debug, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     format: Format,
@@ -82,6 +82,10 @@ impl Module for Colors {
 
     fn settings_example(&self) -> &'static str {
         include_str!("../settings.toml")
+    }
+
+    fn settings_schema(&self) -> Option<Value> {
+        Some(mochi_core::options::schema_of::<Settings>())
     }
 
     fn check_settings(&self, table: &mochi_core::toml::Table) -> Result<(), String> {

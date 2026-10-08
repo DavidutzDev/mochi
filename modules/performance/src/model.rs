@@ -5,7 +5,7 @@
 use std::time::{Duration, Instant};
 
 /// The levels of one reading, from the settings. 0 turns one off.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Limits {
     pub notice: u32,

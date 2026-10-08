@@ -13,6 +13,7 @@ inotify.workspace = true
 libc.workspace = true
 mochi-core.workspace = true
 nucleo-matcher.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["fs", "macros", "process", "rt", "sync"] }
