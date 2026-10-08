@@ -6,6 +6,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- Night light, the `nightlight` module: warmer screens through the compositor's gamma control (`wlr-gamma-control-unstable-v1`), with no other program. It turns on by hand, between two times, or from sunset to sunrise at your latitude and longitude, fading over `fade_minutes`; by hand lasts until the schedule changes next. The hub has a tile, and `mochi ipc nightlight on`, `off`, `toggle`, `auto`, `temperature` and `status` drive it. `mochi doctor` lists the protocol. It's on in newly generated configs; add `nightlight` to `modules` in yours.
 - Keep awake, in the power module: a switch on the hub's Power page and `mochi ipc power awake [on|off|toggle]`. It holds a logind inhibitor for idle and sleep, and the island inhibits idle through Wayland's protocol, so hypridle, swayidle and automatic suspend all wait. A cup bubble stays while it's on, and a click on it turns it off.
 - A privacy dot, the `privacy` module: a bubble next to the island while an app records from a microphone, in orange, or has a camera open, in green, a ring while the microphone is muted. A click mutes the microphone or unmutes it, and the wide bubble names the apps. The camera comes from the processes with `/dev/video*` open. It's on in newly generated configs; add `privacy` to `modules` in yours.
 - The audio module's state lists the apps recording from an input under `recording`, without Mochi's meters or recordings of an output.

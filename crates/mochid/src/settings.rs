@@ -770,6 +770,7 @@ fn icon(module: &str) -> &'static str {
         "launcher" => "search",
         "media" => "music_note",
         "network" => "wifi",
+        "nightlight" => "nightlight",
         "notes" => "sticky_note_2",
         "notifications" => "notifications",
         "osd" => "tune",

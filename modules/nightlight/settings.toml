@@ -1,0 +1,15 @@
+# Night light: warmer screens in the evening, through the compositor's
+# gamma control. Turn off other night lights, like wlsunset or hyprsunset.
+[module.nightlight]
+# How warm, in kelvin, from 1000 to 6000. Daylight is 6500.
+# temperature = 4000
+# When it turns on by itself: "manual" only by hand, "times" from `start` to
+# `end`, or "sun" from sunset to sunrise at `latitude` and `longitude`.
+# schedule = "manual"
+# start = "20:00"
+# end = "07:00"
+# Where you are, for "sun": north and east are positive.
+# latitude = 0.0
+# longitude = 0.0
+# How long a schedule takes to warm up or cool down, in minutes.
+# fade_minutes = 30

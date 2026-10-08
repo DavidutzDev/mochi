@@ -1012,6 +1012,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-nightlight"
+version = "0.0.7"
+dependencies = [
+ "include_dir",
+ "libc",
+ "mochi-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "wayland-client",
+ "wayland-protocols-wlr",
+]
+
+[[package]]
 name = "mochi-module-notes"
 version = "0.0.7"
 dependencies = [
@@ -1262,6 +1278,7 @@ dependencies = [
  "mochi-module-launcher",
  "mochi-module-media",
  "mochi-module-network",
+ "mochi-module-nightlight",
  "mochi-module-notes",
  "mochi-module-notifications",
  "mochi-module-osd",

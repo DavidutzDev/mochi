@@ -66,7 +66,7 @@ impl Report {
 
 /// The protocols Mochi looks for, any of a group doing, and what they're
 /// for. The first is required: without it there is no island.
-const PROTOCOLS: [(&[&str], &str, bool); 6] = [
+const PROTOCOLS: [(&[&str], &str, bool); 7] = [
     (
         &["zwlr_layer_shell_v1"],
         "the island, the bubbles and the widgets",
@@ -96,6 +96,7 @@ const PROTOCOLS: [(&[&str], &str, bool); 6] = [
         "blur behind the island",
         false,
     ),
+    (&["zwlr_gamma_control_manager_v1"], "night light", false),
 ];
 
 /// Runs every check and prints the report. Fails when something is broken.

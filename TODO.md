@@ -578,7 +578,7 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [ ] Coding agents' status on the island: working, waiting for you, or done, for T3 Code and Claude Code through their hooks
 - [x] A privacy indicator: a dot on the island while the microphone or camera is in use, with a mic mute; the audio module already sees recording apps
 - [x] Keep awake: a toggle that blocks idle and sleep
-- [ ] Night light, through hyprsunset or wlsunset
+- [x] Night light, through wlr-gamma-control itself rather than hyprsunset or wlsunset
 - [ ] A focus timer, built in (the pomodoro example plugin shows the idea)
 - [x] Brightness: the laptop's backlight and external monitors over DDC/CI with ddcutil, with the OSD and a slider tile (replaces "Laptop screen brightness" under OSD)
 

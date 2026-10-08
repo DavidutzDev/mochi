@@ -19,6 +19,7 @@
 - [Media](modules/media.md)
 - [Audio](modules/audio.md)
 - [Network](modules/network.md)
+- [Night light](modules/nightlight.md)
 - [Bluetooth](modules/bluetooth.md)
 - [Battery](modules/battery.md)
 - [Brightness](modules/brightness.md)

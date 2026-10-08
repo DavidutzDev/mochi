@@ -37,6 +37,7 @@ mochi-module-idle.workspace = true
 mochi-module-launcher.workspace = true
 mochi-module-media.workspace = true
 mochi-module-network.workspace = true
+mochi-module-nightlight.workspace = true
 mochi-module-notifications.workspace = true
 mochi-module-performance.workspace = true
 mochi-module-osd.workspace = true
