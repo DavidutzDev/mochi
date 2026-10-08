@@ -6,6 +6,8 @@ mod ipc;
 mod modules;
 mod plugins;
 mod settings;
+#[cfg(test)]
+mod views_check;
 
 use std::ffi::OsString;
 use std::io::IsTerminal;

@@ -53,11 +53,12 @@ rustPlatform.buildRustPackage {
   ];
   # libpulse for the OSD module.
   buildInputs = [ libpulseaudio ];
-  # The plugin installer's tests clone a repository of their own, and one
-  # runs the Python example plugin.
+  # The plugin installer's tests clone a repository of their own, one runs
+  # the Python example plugin, and one compiles every view with Quickshell.
   nativeCheckInputs = [
     git
     python3
+    quickshell
   ];
 
   # The unit ships with /usr/bin paths; point them at this package. mochid
