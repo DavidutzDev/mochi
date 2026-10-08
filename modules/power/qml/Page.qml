@@ -1,7 +1,8 @@
 import QtQuick
 import qs.island
 
-// The hub page: one tile per power action, then the power profiles. Tiles
+// The hub page: one tile per power action, keep awake, then the power
+// profiles. Tiles
 // that end the session ask first: the first click turns "Shut down" into
 // "Shut down?", a second click within a few seconds acts. Acting closes the
 // hub.
@@ -80,6 +81,20 @@ Item {
                     onClicked: root.press(modelData)
                 }
             }
+        }
+
+        Item {
+            width: 1
+            height: Theme.spaceSmall
+        }
+
+        SwitchRow {
+            width: parent.width
+            icon: "coffee"
+            title: "Keep awake"
+            subtitle: "No screen lock, screen off or sleep while it's on"
+            checked: root.payload?.awake ?? false
+            onToggled: checked => Daemon.command("power", "awake", [checked ? "on" : "off"])
         }
 
         Item {

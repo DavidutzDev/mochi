@@ -19,6 +19,13 @@ ShellRoot {
                 screen: screen.modelData
             }
 
+            // The power module's keep awake: the compositor doesn't go idle
+            // while the island is on screen.
+            IdleInhibitor {
+                window: island
+                enabled: Daemon.state("power")?.awake ?? false
+            }
+
             EdgeReserve {
                 screen: screen.modelData
                 atBottom: island.atBottom

@@ -5,3 +5,5 @@
 # logind ends the session. Like: lock = ["hyprlock"]
 # lock = []
 # logout = []
+# Keep awake has no settings: `mochi ipc power awake` or the switch on the
+# hub's Power page turns it on, and a click on its bubble turns it off.

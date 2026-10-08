@@ -22,6 +22,14 @@ pub trait Manager {
     fn suspend(&self, interactive: bool) -> zbus::Result<()>;
     fn hibernate(&self, interactive: bool) -> zbus::Result<()>;
     fn set_reboot_to_firmware_setup(&self, enable: bool) -> zbus::Result<()>;
+    /// Holds off `what` while the returned file stays open.
+    fn inhibit(
+        &self,
+        what: &str,
+        who: &str,
+        why: &str,
+        mode: &str,
+    ) -> zbus::Result<zbus::zvariant::OwnedFd>;
 }
 
 /// The calling user: `self` resolves to whoever asks.

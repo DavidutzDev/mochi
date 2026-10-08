@@ -1,8 +1,13 @@
 //! Power: lock, log out, suspend, hibernate, reboot, reboot to firmware and
-//! shut down, plus power profiles. It has no island view of its own: it
-//! offers the hub a page, and the CLI runs the same actions. Buttons only
-//! show for what logind allows; profiles only when power-profiles-daemon
-//! runs.
+//! shut down, plus power profiles and keep awake. It has no island view of
+//! its own: it offers the hub a page, and the CLI runs the same actions.
+//! Buttons only show for what logind allows; profiles only when
+//! power-profiles-daemon runs.
+//!
+//! Keep awake holds a logind inhibitor for idle and sleep, which hypridle
+//! and automatic suspend respect, and the island asks the compositor not to
+//! go idle through Wayland's idle inhibit, which swayidle respects. A
+//! bubble stays while it's on; a click on it turns it off.
 //!
 //! Settings in `config.toml`, all optional:
 //!
@@ -23,8 +28,8 @@ use std::process::Stdio;
 use futures_util::StreamExt;
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActionSpec, ArgSpec, Assets, BoxFuture, ContributionSpec, Module, ModuleCommand, ModuleCtx,
-    ModuleError, ModuleEvent,
+    ActionSpec, Area, ArgSpec, Assets, BoxFuture, BubbleId, BubbleSpec, ContributionSpec, Module,
+    ModuleCommand, ModuleCtx, ModuleError, ModuleEvent,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -163,6 +168,9 @@ impl Module for Power {
                 "name",
                 "power-saver, balanced or performance",
             )),
+            ActionSpec::new("awake", "Keep the screen on and the machine awake").arg(
+                ArgSpec::choice("state", "On, off, or flip it", ["on", "off", "toggle"]).optional(),
+            ),
         ]
     }
 
@@ -196,12 +204,28 @@ impl Module for Power {
                 Some((proxy, _)) => proxy.active_profile().await.ok(),
                 None => None,
             };
-            ctx.publish_state(state(&buttons, names.as_ref(), active));
+            let mut awake = Awake::default();
+            let mut active = active;
+            ctx.publish_state(state(&buttons, names.as_ref(), active.clone(), awake.on()));
 
             loop {
                 tokio::select! {
                     event = ctx.next_event() => match event {
                         None => return Ok(()),
+                        Some(ModuleEvent::Command(command)) if command.action == "awake" => {
+                            let on = match command.args.str("state") {
+                                Some("on") => true,
+                                Some("off") => false,
+                                _ => !awake.on(),
+                            };
+                            let result = awake.set(&ctx, &manager, on).await;
+                            ctx.publish_state(state(&buttons, names.as_ref(), active.clone(), awake.on()));
+                            command.reply(result);
+                        }
+                        Some(ModuleEvent::BubbleClicked(_)) => {
+                            let _ = awake.set(&ctx, &manager, false).await;
+                            ctx.publish_state(state(&buttons, names.as_ref(), active.clone(), awake.on()));
+                        }
                         Some(ModuleEvent::Command(command)) => {
                             let target = Target {
                                 system: &system,
@@ -215,8 +239,8 @@ impl Module for Power {
                         Some(_) => {}
                     },
                     Some(change) = next_change(&mut changes) => {
-                        let active = change.get().await.ok();
-                        ctx.publish_state(state(&buttons, names.as_ref(), active));
+                        active = change.get().await.ok();
+                        ctx.publish_state(state(&buttons, names.as_ref(), active.clone(), awake.on()));
                     }
                 }
             }
@@ -224,8 +248,62 @@ impl Module for Power {
     }
 }
 
+/// Keep awake: the logind inhibitor while it's on, and its bubble.
+#[derive(Debug, Default)]
+struct Awake {
+    inhibitor: Option<zbus::zvariant::OwnedFd>,
+    bubble: Option<BubbleId>,
+}
+
+impl Awake {
+    fn on(&self) -> bool {
+        self.inhibitor.is_some()
+    }
+
+    /// Takes the inhibitor or lets it go. Closing its file ends it.
+    async fn set(
+        &mut self,
+        ctx: &ModuleCtx,
+        manager: &ManagerProxy<'static>,
+        on: bool,
+    ) -> Result<(), String> {
+        if on == self.on() {
+            return Ok(());
+        }
+        if on {
+            let inhibitor = manager
+                .inhibit("idle:sleep", "Mochi", "Keep awake is on", "block")
+                .await
+                .map_err(describe)?;
+            self.inhibitor = Some(inhibitor);
+            self.bubble = Some(
+                ctx.show_bubble(
+                    BubbleSpec::new("Awake")
+                        .key("awake")
+                        .area(Area::Right)
+                        .group("status")
+                        .order(-1),
+                ),
+            );
+            tracing::info!("keeping awake");
+        } else {
+            self.inhibitor = None;
+            if let Some(bubble) = self.bubble.take() {
+                ctx.hide_bubble(bubble);
+            }
+            tracing::info!("no longer keeping awake");
+        }
+        Ok(())
+    }
+}
+
 /// What the page shows.
-fn state(buttons: &[Button], profiles: Option<&Vec<String>>, active: Option<String>) -> Value {
+fn state(
+    buttons: &[Button],
+    profiles: Option<&Vec<String>>,
+    active: Option<String>,
+    awake: bool,
+) -> Value {
     json!({
         "buttons": buttons
             .iter()
@@ -238,6 +316,7 @@ fn state(buttons: &[Button], profiles: Option<&Vec<String>>, active: Option<Stri
             .collect::<Vec<_>>(),
         "profiles": profiles.cloned().unwrap_or_default(),
         "profile": active,
+        "awake": awake,
     })
 }
 
@@ -367,8 +446,9 @@ mod tests {
     #[test]
     fn state_lists_buttons_and_profiles() {
         let names = vec!["power-saver".to_owned(), "balanced".to_owned()];
-        let state = state(&BUTTONS[..1], Some(&names), Some("balanced".into()));
+        let state = state(&BUTTONS[..1], Some(&names), Some("balanced".into()), true);
         assert_eq!(state["buttons"][0]["label"], "Lock");
+        assert_eq!(state["awake"], true);
         assert_eq!(state["profiles"], json!(["power-saver", "balanced"]));
         assert_eq!(state["profile"], "balanced");
 
@@ -378,7 +458,7 @@ mod tests {
     }
 
     fn state_without_profiles() -> Value {
-        state(&BUTTONS, None, None)
+        state(&BUTTONS, None, None, false)
     }
 }
 
