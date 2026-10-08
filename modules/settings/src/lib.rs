@@ -112,9 +112,16 @@ impl Module for Settings {
             while let Some(event) = ctx.next_event().await {
                 match event {
                     ModuleEvent::Command(command) => panel.command(&ctx, command).await,
+                    // A snapshot is large, and every view parses it, so it
+                    // goes out only while the panel shows; opening it sends
+                    // the latest.
                     ModuleEvent::Settings(snapshot) => {
                         panel.snapshot = snapshot;
-                        panel.publish(&ctx);
+                        if panel.shown.is_some() {
+                            panel.publish(&ctx);
+                        } else {
+                            panel.stale = true;
+                        }
                     }
                     ModuleEvent::Ended { activity, .. } if panel.shown == Some(activity) => {
                         panel.shown = None;
@@ -138,6 +145,8 @@ struct Panel {
     error: Option<Value>,
     /// The section open in the TOML editor: `{path, text}`.
     editor: Option<Value>,
+    /// The published state is older than the snapshot.
+    stale: bool,
 }
 
 impl Panel {
@@ -280,6 +289,9 @@ impl Panel {
             return;
         }
         ctx.close_other_panels();
+        if self.stale {
+            self.publish(ctx);
+        }
         let spec = ActivitySpec::new("Panel")
             .key("settings")
             .priority(Priority::URGENT)
@@ -295,7 +307,8 @@ impl Panel {
         }
     }
 
-    fn publish(&self, ctx: &ModuleCtx) {
+    fn publish(&mut self, ctx: &ModuleCtx) {
+        self.stale = false;
         let mut state = self.snapshot.clone();
         if !state.is_object() {
             state = json!({});

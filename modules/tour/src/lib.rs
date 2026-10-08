@@ -45,7 +45,7 @@ pub struct Tour;
 struct Settings {
     install: bool,
     updates: bool,
-    #[schemars(range(min = 2, max = 30))]
+    #[schemars(range(min = 2, max = 20))]
     seconds_per_step: u64,
 }
 
@@ -54,7 +54,7 @@ impl Default for Settings {
         Self {
             install: true,
             updates: true,
-            seconds_per_step: 5,
+            seconds_per_step: 4,
         }
     }
 }
@@ -135,6 +135,7 @@ impl Module for Tour {
             let mut offered = false;
             loop {
                 let due = tour.run.as_ref().and_then(|run| run.due);
+                let cycle = tour.run.as_ref().and_then(|run| run.cycle_at);
                 tokio::select! {
                     event = ctx.next_event() => match event {
                         None => {
@@ -152,6 +153,7 @@ impl Module for Tour {
                         tour.offer(&ctx);
                     }
                     () = sleep_until(due) => tour.step_by(&ctx, 1).await,
+                    () = sleep_until(cycle) => tour.cycle(&ctx).await,
                 }
             }
         })
@@ -178,8 +180,15 @@ struct Run {
     confirming: bool,
     /// When it moves on by itself.
     due: Option<Instant>,
-    /// The step tried options through the preview layer.
-    previewing: bool,
+    /// Tried for the whole tour: the island's border in the accent, so it
+    /// stands out on the dim screen.
+    glow: Vec<(String, Value)>,
+    /// The frame of the step's look showing, and when the next comes.
+    frame: usize,
+    cycle_at: Option<Instant>,
+    /// What's being tried now, so a step that tries the same sends
+    /// nothing: every look re-themes the whole shell.
+    tried: Option<Vec<(String, Value)>>,
 }
 
 #[derive(Debug, Default)]
@@ -290,12 +299,20 @@ impl State {
 
     /// The modules there are, from the settings, for the cards of the ones
     /// that are off.
-    async fn known(ctx: &ModuleCtx) -> Vec<Known> {
+    async fn known(ctx: &ModuleCtx) -> (Vec<Known>, Option<String>) {
         let Ok(snapshot) = ctx.settings_op(SettingsOp::Snapshot).await else {
-            return Vec::new();
+            return (Vec::new(), None);
         };
+        let accent = snapshot["sections"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .flat_map(|section| section["fields"].as_array().into_iter().flatten())
+            .find(|field| field["path"] == "theme.colors.accent")
+            .and_then(|field| field["value"].as_str())
+            .map(str::to_owned);
         let sections = snapshot["sections"].as_array().cloned().unwrap_or_default();
-        snapshot["modules"]
+        let known = snapshot["modules"]
             .as_array()
             .into_iter()
             .flatten()
@@ -315,7 +332,8 @@ impl State {
                     id,
                 }
             })
-            .collect()
+            .collect();
+        (known, accent)
     }
 
     /// Starts the tour: `all`, `new`, or by default the one offered, or
@@ -336,7 +354,7 @@ impl State {
                 None => None,
             },
         };
-        let known = Self::known(ctx).await;
+        let (known, accent) = Self::known(ctx).await;
         let steps = steps::build(&self.offers, &known, news);
         if steps.is_empty() {
             return Err("nothing new since the last tour".into());
@@ -356,22 +374,18 @@ impl State {
         );
         ctx.close_other_panels();
         ctx.pause_island(true);
-        let spec = ActivitySpec::new("Stage")
-            .key("stage")
-            .priority(Priority::TOP)
-            .uninterruptible()
-            .overlay("Dim")
-            .payload(Value::Null);
-        let stage = ctx.present(spec);
         self.run = Some(Run {
             steps,
             index,
             news: news.is_some(),
-            stage,
+            stage: ActivityId(0),
             bubble: None,
             confirming: false,
             due: None,
-            previewing: false,
+            glow: glow(accent.as_deref()),
+            frame: 0,
+            cycle_at: None,
+            tried: None,
         });
         self.show(ctx).await;
         Ok(())
@@ -395,8 +409,11 @@ impl State {
     }
 
     /// Shows the current step: its view, its bubble, the look it tries.
+    /// Each step is a new activity in another of two identical views, so
+    /// the island moves between them as between any two: the old view
+    /// fades out, the shape springs to the new size, the new one fades in.
     async fn show(&mut self, ctx: &ModuleCtx) {
-        let seconds = self.settings.seconds_per_step;
+        let pace = self.settings.seconds_per_step as f64;
         let Some(run) = &mut self.run else {
             return;
         };
@@ -415,32 +432,69 @@ impl State {
             ));
         }
 
-        let op = if !step.preview.is_empty() {
-            run.previewing = true;
-            Some(SettingsOp::Preview {
-                values: step.preview.clone(),
-                replace: true,
-            })
-        } else if run.previewing {
-            run.previewing = false;
-            Some(SettingsOp::Drop)
+        let seconds = step.seconds(pace);
+        let now = Instant::now();
+        run.due = Some(now + Duration::from_secs_f64(seconds));
+        run.frame = 0;
+        run.cycle_at = (step.frames.len() > 1)
+            .then(|| now + Duration::from_secs_f64(seconds / step.frames.len() as f64));
+        let view = if run.index % 2 == 0 {
+            "Stage"
         } else {
-            None
+            "StageAlt"
         };
-        run.due = Some(Instant::now() + Duration::from_secs(seconds));
-        ctx.update(run.stage, run.payload(seconds));
-        if let Some(op) = op
-            && let Err(error) = ctx.settings_op(op).await
-        {
+        let spec = ActivitySpec::new(view)
+            .key("stage")
+            .priority(Priority::TOP)
+            .uninterruptible()
+            .overlay("Dim")
+            .payload(run.payload(seconds));
+        run.stage = ctx.present(spec);
+        Self::try_look(ctx, run).await;
+    }
+
+    /// The next frame of a look that cycles, like the accent colors.
+    async fn cycle(&mut self, ctx: &ModuleCtx) {
+        let pace = self.settings.seconds_per_step as f64;
+        let Some(run) = &mut self.run else {
+            return;
+        };
+        let step = &run.steps[run.index];
+        let count = step.frames.len().max(1);
+        run.frame = (run.frame + 1) % count;
+        let each = step.seconds(pace) / count as f64;
+        run.cycle_at =
+            (run.frame + 1 < count).then(|| Instant::now() + Duration::from_secs_f64(each));
+        Self::try_look(ctx, run).await;
+    }
+
+    /// Tries the glow and the step's look of the moment, in place of what
+    /// was tried before.
+    async fn try_look(ctx: &ModuleCtx, run: &mut Run) {
+        let step = &run.steps[run.index];
+        let mut values = run.glow.clone();
+        if let Some(frame) = step.frames.get(run.frame) {
+            values.extend(frame.iter().cloned());
+        }
+        if run.tried.as_ref() == Some(&values) {
+            return;
+        }
+        run.tried = Some(values.clone());
+        let op = SettingsOp::Preview {
+            values,
+            replace: true,
+        };
+        if let Err(error) = ctx.settings_op(op).await {
             tracing::warn!(%error, step = %step.id, "can't show this look");
         }
     }
 
     fn confirm(&mut self, ctx: &ModuleCtx, asking: bool) -> Result<(), String> {
-        let seconds = self.settings.seconds_per_step;
+        let pace = self.settings.seconds_per_step as f64;
         let run = self.run.as_mut().ok_or("no tour is running")?;
+        let seconds = run.steps[run.index].seconds(pace);
         run.confirming = asking;
-        run.due = (!asking).then(|| Instant::now() + Duration::from_secs(seconds));
+        run.due = (!asking).then(|| Instant::now() + Duration::from_secs_f64(seconds));
         ctx.update(run.stage, run.payload(seconds));
         Ok(())
     }
@@ -455,9 +509,7 @@ impl State {
         if let Some(bubble) = run.bubble {
             ctx.hide_bubble(bubble);
         }
-        if run.previewing
-            && let Err(error) = ctx.settings_op(SettingsOp::Drop).await
-        {
+        if let Err(error) = ctx.settings_op(SettingsOp::Drop).await {
             tracing::warn!(%error, "can't put the look back");
         }
         ctx.pause_island(false);
@@ -513,8 +565,25 @@ impl State {
     }
 }
 
+/// The island's border and shadow in the accent, for the whole tour.
+fn glow(accent: Option<&str>) -> Vec<(String, Value)> {
+    let Some(accent) = accent else {
+        return Vec::new();
+    };
+    // #rrggbb, or #aarrggbb with the alpha dropped.
+    let digits = accent.trim_start_matches('#');
+    let rgb = &digits[digits.len().saturating_sub(6)..];
+    if rgb.len() != 6 {
+        return Vec::new();
+    }
+    vec![
+        ("theme.colors.border".to_owned(), json!(format!("#cc{rgb}"))),
+        ("theme.colors.shadow".to_owned(), json!(format!("#80{rgb}"))),
+    ]
+}
+
 impl Run {
-    fn payload(&self, seconds: u64) -> Value {
+    fn payload(&self, seconds: f64) -> Value {
         let step = &self.steps[self.index];
         json!({
             "step": step,

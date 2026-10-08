@@ -35,13 +35,17 @@ Item {
     }
 
     Rectangle {
+        id: shade
+
         anchors.fill: parent
         color: "black" // design: a dim layer is black at an opacity
-        opacity: 0.55
+        opacity: 0
+        Component.onCompleted: opacity = 0.55
 
         Behavior on opacity {
             NumberAnimation {
-                duration: Theme.move
+                duration: Theme.move * 2
+                easing.type: Easing.OutCubic
             }
         }
     }
@@ -79,9 +83,41 @@ Item {
         }
     }
 
-    // The step's caption, or the question whether to stop.
+    // The step's caption, or the question whether to stop. It rises in
+    // when the tour starts, and its text slides in with each step.
     Rectangle {
         id: panel
+
+        property real rise: Theme.spaceHuge * 2
+        opacity: 0
+        transform: Translate {
+            y: Theme.anchor === "bottom" ? -panel.rise : panel.rise
+        }
+        Component.onCompleted: {
+            opacity = 1;
+            rise = 0;
+        }
+
+        Behavior on rise {
+            NumberAnimation {
+                duration: Theme.move * 1.5
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: Theme.overshoot
+            }
+        }
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.move
+            }
+        }
+
+        Behavior on height {
+            NumberAnimation {
+                duration: Theme.move
+                easing.type: Easing.OutCubic
+            }
+        }
 
         // Across the screen from the island, so it never covers it.
         anchors.horizontalCenter: parent.horizontalCenter
@@ -100,6 +136,44 @@ Item {
             y: Theme.padding
             width: parent.width - Theme.padding * 2
             spacing: Theme.spaceSmall
+
+            // Each step's text slides in from the side it comes from.
+            property real shift: 0
+            property int last: root.index
+            transform: Translate {
+                x: column.shift
+            }
+
+            Connections {
+                target: root
+
+                function onIndexChanged(): void {
+                    column.shift = root.index > column.last ? Theme.spaceHuge : -Theme.spaceHuge;
+                    column.last = root.index;
+                    column.opacity = 0;
+                    entering.restart();
+                }
+            }
+
+            ParallelAnimation {
+                id: entering
+
+                NumberAnimation {
+                    target: column
+                    property: "shift"
+                    to: 0
+                    duration: Theme.move
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: Theme.overshoot
+                }
+
+                NumberAnimation {
+                    target: column
+                    property: "opacity"
+                    to: 1
+                    duration: Theme.fadeIn
+                }
+            }
 
             Row {
                 visible: !root.confirming

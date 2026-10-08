@@ -90,9 +90,10 @@ pub struct Step {
     pub place: String,
     pub payload: Value,
     /// Options the step tries while it shows, by path: a look of the
-    /// island, say. Never kept.
+    /// island, say. Never kept. With several frames, the step cycles
+    /// through them.
     #[serde(skip)]
-    pub preview: Vec<(String, Value)>,
+    pub frames: Vec<Vec<(String, Value)>>,
     /// A card's or a widget's size, `[width, height]` in pixels.
     pub size: Option<[u32; 2]>,
     /// More properties the view takes, like a widget's `settings`.
@@ -120,7 +121,7 @@ impl Step {
             since,
             place: "text".to_owned(),
             payload: Value::Null,
-            preview: Vec::new(),
+            frames: Vec::new(),
             size: None,
             properties: Value::Null,
         }
@@ -162,7 +163,7 @@ impl Step {
                 .unwrap_or("island")
                 .to_owned(),
             payload: options.get("payload").cloned().unwrap_or(Value::Null),
-            preview: Vec::new(),
+            frames: Vec::new(),
             size,
             properties: options.get("properties").cloned().unwrap_or(Value::Null),
         })
@@ -193,6 +194,17 @@ fn arrived(module: &str) -> Version {
     }
 }
 
+impl Step {
+    /// How long it shows, from the tour's pace: cards of the tour's own
+    /// are quick to read, a module's view gets the full time.
+    pub fn seconds(&self, pace: f64) -> f64 {
+        match self.place.as_str() {
+            "text" | "off" | "look" => pace * 0.6,
+            _ => pace,
+        }
+    }
+}
+
 /// The island's looks, tried for a moment each.
 fn looks() -> Vec<Step> {
     let look = |id: &str,
@@ -200,15 +212,21 @@ fn looks() -> Vec<Step> {
                 title: &str,
                 icon: &str,
                 caption: &str,
-                preview: Vec<(&str, Value)>| {
+                frames: Vec<Vec<(&str, Value)>>| {
         let mut step = Step::text(id, "island", since, title, icon, caption);
         step.place = "look".to_owned();
-        step.preview = preview
+        step.frames = frames
             .into_iter()
-            .map(|(path, value)| (path.to_owned(), value))
+            .map(|frame| {
+                frame
+                    .into_iter()
+                    .map(|(path, value)| (path.to_owned(), value))
+                    .collect()
+            })
             .collect();
         step
     };
+    let accents = ["#30d158", "#0a84ff", "#bf5af2", "#ff375f", "#ff9f0a"];
     vec![
         look(
             "notch",
@@ -216,7 +234,7 @@ fn looks() -> Vec<Step> {
             "Notch",
             "crop_16_9",
             "Island or notch: the notch sits against the edge with curved ears. Settings › Layout › Mode.",
-            vec![("theme.layout.mode", json!("notch"))],
+            vec![vec![("theme.layout.mode", json!("notch"))]],
         ),
         look(
             "bottom",
@@ -224,7 +242,7 @@ fn looks() -> Vec<Step> {
             "Top or bottom",
             "vertical_align_bottom",
             "Everything can sit at the bottom edge instead. Settings › Layout › Anchor.",
-            vec![("theme.layout.anchor", json!("bottom"))],
+            vec![vec![("theme.layout.anchor", json!("bottom"))]],
         ),
         look(
             "accent",
@@ -232,7 +250,27 @@ fn looks() -> Vec<Step> {
             "Colors",
             "palette",
             "Every color is yours to pick, live, with the accent used sparingly. Settings › Colors.",
-            vec![("theme.colors.accent", json!("#30d158"))],
+            accents
+                .iter()
+                .map(|accent| vec![("theme.colors.accent", json!(accent))])
+                .collect(),
+        ),
+        look(
+            "border",
+            Version(0, 0, 4),
+            "Border and shadow",
+            "border_style",
+            "A hairline around the island and the bubbles, and a soft shadow under them, in any color, or none.",
+            accents
+                .iter()
+                .map(|accent| {
+                    let rgb = accent.trim_start_matches('#');
+                    vec![
+                        ("theme.colors.border", json!(format!("#ff{rgb}"))),
+                        ("theme.colors.shadow", json!(format!("#99{rgb}"))),
+                    ]
+                })
+                .collect(),
         ),
         look(
             "stack",
@@ -240,7 +278,7 @@ fn looks() -> Vec<Step> {
             "Stacked bubbles",
             "bubble_chart",
             "Bubbles can stack, the most important in front; hovering fans them out. Settings › Bubbles.",
-            vec![("config.bubbles.stack", json!(true))],
+            vec![vec![("config.bubbles.stack", json!(true))]],
         ),
     ]
 }
