@@ -23,6 +23,7 @@
 //! ```
 
 mod notice;
+mod tour;
 
 use std::collections::BTreeMap;
 use std::time::Duration;
@@ -30,8 +31,8 @@ use std::time::Duration;
 use include_dir::{Dir, include_dir};
 use mochi_core::compositor::{Backend, Compositor, StateReceiver};
 use mochi_core::{
-    ActionSpec, ActivitySpec, ArgSpec, Args, Assets, BoxFuture, Module, ModuleCtx, ModuleError,
-    ModuleEvent, Priority, SamePriority,
+    ActionSpec, ActivitySpec, ArgSpec, Args, Assets, BoxFuture, ContributionSpec, Module,
+    ModuleCtx, ModuleError, ModuleEvent, Priority, SamePriority,
 };
 use serde::Deserialize;
 
@@ -89,6 +90,10 @@ impl Module for Workspaces {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn contributions(&self) -> Vec<ContributionSpec> {
+        tour::steps()
     }
 
     fn settings_example(&self) -> &'static str {

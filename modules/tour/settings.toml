@@ -1,0 +1,11 @@
+# Tour: a guided tour of Mochi, with made-up data in every view. It offers
+# itself the first time Mochi starts, and after an update with what's new.
+# `mochi ipc tour start` runs it any time, as does "Tour" in the launcher.
+[module.tour]
+# Offer the whole tour the first time Mochi starts.
+# install = true
+# After an update, offer a short tour of what's new since the last tour.
+# updates = true
+# How long each step shows before the next, in seconds. Space goes on
+# sooner.
+# seconds_per_step = 5

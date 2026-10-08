@@ -39,6 +39,7 @@ mochi-module-osd = { path = "modules/osd" }
 mochi-module-power = { path = "modules/power" }
 mochi-module-settings = { path = "modules/settings" }
 mochi-module-share = { path = "modules/share" }
+mochi-module-tour = { path = "modules/tour" }
 mochi-module-tray = { path = "modules/tray" }
 mochi-module-workspaces = { path = "modules/workspaces" }
 

@@ -19,6 +19,7 @@
 mod agent;
 mod bluez;
 mod model;
+mod tour;
 
 use std::time::{Duration, Instant};
 
@@ -85,7 +86,7 @@ impl Module for Bluetooth {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "card", "status", "Card", "Bluetooth")
                 .icon("bluetooth")
                 .order(2)
@@ -93,7 +94,9 @@ impl Module for Bluetooth {
             ContributionSpec::new("hub", "page", "page", "Page", "Bluetooth")
                 .icon("bluetooth")
                 .order(16),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

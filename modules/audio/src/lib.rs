@@ -22,6 +22,7 @@
 mod meter;
 mod mixer;
 mod pulse;
+mod tour;
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -98,11 +99,13 @@ impl Module for Audio {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "page", "mixer", "Page", "Sound")
                 .icon("volume")
                 .order(20),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

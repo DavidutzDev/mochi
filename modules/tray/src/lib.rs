@@ -22,6 +22,7 @@
 mod item;
 mod menu;
 mod sni;
+mod tour;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
@@ -29,7 +30,7 @@ use std::path::PathBuf;
 use include_dir::{Dir, include_dir};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Assets, BoxFuture, BubbleId, BubbleSpec,
-    Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    ContributionSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -68,6 +69,10 @@ impl Module for Tray {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn contributions(&self) -> Vec<ContributionSpec> {
+        tour::steps()
     }
 
     fn settings_example(&self) -> &'static str {

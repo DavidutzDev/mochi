@@ -25,6 +25,8 @@ Item {
     property string option: ""
     property string query: ""
     property bool editing: false
+    // Changes are tried, not kept, until Keep.
+    property bool previewing: false
 
     readonly property var current: sections.find(entry => entry.id === section) ?? sections[0] ?? null
     readonly property var error: settings.error ?? null
@@ -182,7 +184,7 @@ Item {
         const list = enabled.filter(module => module !== id);
         if (on)
             list.push(id);
-        Daemon.command("settings", "set", ["config.modules", JSON.stringify(list)]);
+        Daemon.command("settings", previewing ? "preview" : "set", ["config.modules", JSON.stringify(list)]);
     }
 
     // The editor closes once the daemon took what it saved.
@@ -489,6 +491,21 @@ Item {
                 spacing: Theme.spaceSmall
 
                 Button {
+                    visible: !content.searching && root.current?.module === "tour"
+                    text: "Take the tour"
+                    icon: "tour"
+                    tone: "accent"
+                    onClicked: Daemon.command("tour", "start", [])
+                }
+
+                Button {
+                    text: "Preview"
+                    icon: "visibility"
+                    tone: root.previewing ? "accent" : "ghost"
+                    onClicked: root.previewing = !root.previewing
+                }
+
+                Button {
                     visible: !content.searching && root.current !== null && root.sectionModified(root.current)
                     text: "Reset"
                     icon: "restart_alt"
@@ -548,7 +565,7 @@ Item {
 
             anchors.top: about.visible ? about.bottom : header.bottom
             anchors.topMargin: Theme.spaceMedium
-            anchors.bottom: parent.bottom
+            anchors.bottom: tried.visible ? tried.top : parent.bottom
             anchors.bottomMargin: Theme.spaceMedium
             x: Theme.spaceSmall
             width: parent.width - Theme.spaceSmall * 2
@@ -724,6 +741,7 @@ Item {
                                     prefix: content.searching ? root.prefix(modelData) : ""
                                     error: root.error?.path === modelData ? root.error.message : ""
                                     highlighted: root.option === modelData
+                                    preview: root.previewing
                                     onPopup: (kind, anchor) => root.openPopup(kind, row, anchor)
                                     onEditToml: root.edit()
                                     onHighlightedChanged: {
@@ -738,6 +756,67 @@ Item {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    // What's being tried: kept as changes, or dropped. A reload drops it
+    // too.
+    Rectangle {
+        id: tried
+
+        visible: root.settings.previewing === true
+        anchors.left: rule.right
+        anchors.leftMargin: Theme.spaceLarge
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.spaceLarge
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Theme.spaceMedium
+        height: Theme.controlHeight + Theme.spaceSmall * 2
+        radius: Theme.radiusField
+        color: Theme.surface
+
+        Row {
+            x: Theme.spaceMedium
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.spaceSmall
+
+            Symbol {
+                anchors.verticalCenter: parent.verticalCenter
+                name: "visibility"
+                size: Theme.textTitle
+                color: Theme.accent
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Trying changes. They apply, but aren't kept."
+                color: Theme.foreground
+                font.pixelSize: Theme.textBody
+                font.family: Theme.fontFamily
+            }
+        }
+
+        Row {
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.spaceSmall
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.spaceSmall
+
+            Button {
+                text: "Drop"
+                tone: "ghost"
+                onClicked: Daemon.command("settings", "drop", [])
+            }
+
+            Button {
+                text: "Keep"
+                icon: "check"
+                tone: "accent"
+                onClicked: {
+                    root.previewing = false;
+                    Daemon.command("settings", "keep", []);
                 }
             }
         }

@@ -15,6 +15,7 @@
 mod recents;
 mod search;
 mod tones;
+mod tour;
 
 use std::path::PathBuf;
 
@@ -79,11 +80,13 @@ impl Module for Emoji {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         // No view: the launcher shows what `search` answers.
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("launcher", "provider", "emoji", "", "Emoji")
                 .icon("face-smile")
                 .options(json!({ "prefix": ":", "search": "search", "pick": "pick" })),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

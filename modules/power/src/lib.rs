@@ -16,6 +16,7 @@
 //! ```
 
 mod system;
+mod tour;
 
 use std::process::Stdio;
 
@@ -154,11 +155,13 @@ impl Module for Power {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "page", "power", "Page", "Power")
                 .icon("power")
                 .order(90),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {

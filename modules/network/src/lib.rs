@@ -17,6 +17,7 @@
 
 mod model;
 mod nm;
+mod tour;
 
 use std::time::Duration;
 
@@ -83,7 +84,7 @@ impl Module for Network {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "card", "status", "Card", "Network")
                 .icon("wifi")
                 .order(1)
@@ -91,7 +92,9 @@ impl Module for Network {
             ContributionSpec::new("hub", "page", "page", "Page", "Network")
                 .icon("wifi")
                 .order(15),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

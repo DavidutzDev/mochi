@@ -22,6 +22,7 @@
 
 mod saved;
 mod switch;
+mod tour;
 mod windows;
 
 use std::time::{Duration, Instant};
@@ -30,7 +31,8 @@ use include_dir::{Dir, include_dir};
 use mochi_core::quality::{self, Resolution};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Args, Assets, BoxFuture, BubbleId,
-    BubbleSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    BubbleSpec, ContributionSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent,
+    Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -85,6 +87,10 @@ impl Module for Share {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn contributions(&self) -> Vec<ContributionSpec> {
+        tour::steps()
     }
 
     fn settings_example(&self) -> &'static str {

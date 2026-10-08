@@ -21,6 +21,7 @@ mod crop;
 mod files;
 mod history;
 mod record;
+mod tour;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -169,11 +170,13 @@ impl Module for Capture {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "page", "history", "Page", "Captures")
                 .icon("camera")
                 .order(35),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn settings_example(&self) -> &'static str {

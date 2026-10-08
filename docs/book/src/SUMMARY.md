@@ -35,6 +35,7 @@
 - [Emoji](modules/emoji.md)
 - [Colors](modules/colors.md)
 - [Settings](modules/settings.md)
+- [Tour](modules/tour.md)
 
 # Building on Mochi
 

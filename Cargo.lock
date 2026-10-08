@@ -1055,6 +1055,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-tour"
+version = "0.0.7"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-tray"
 version = "0.0.7"
 dependencies = [
@@ -1187,6 +1200,7 @@ dependencies = [
  "mochi-module-power",
  "mochi-module-settings",
  "mochi-module-share",
+ "mochi-module-tour",
  "mochi-module-tray",
  "mochi-module-widgets",
  "mochi-module-workspaces",

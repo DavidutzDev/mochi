@@ -39,6 +39,7 @@ mochi-module-osd.workspace = true
 mochi-module-power.workspace = true
 mochi-module-settings.workspace = true
 mochi-module-share.workspace = true
+mochi-module-tour.workspace = true
 mochi-module-tray.workspace = true
 mochi-module-workspaces.workspace = true
 mochi-protocol.workspace = true

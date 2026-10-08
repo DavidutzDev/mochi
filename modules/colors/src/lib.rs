@@ -20,6 +20,7 @@
 mod color;
 mod history;
 mod screen;
+mod tour;
 
 use std::path::PathBuf;
 use std::time::Duration;
@@ -95,7 +96,7 @@ impl Module for Colors {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "card", "recent", "Card", "Colors")
                 .icon("palette")
                 .order(45)
@@ -108,7 +109,9 @@ impl Module for Colors {
                 "search": "search",
                 "pick": "pick-result",
             })),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

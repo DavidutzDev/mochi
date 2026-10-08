@@ -4,6 +4,8 @@
 //! every view shows its own. Views change them with the actions below,
 //! typed into on the desktop.
 
+mod tour;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -34,7 +36,7 @@ impl Module for Notes {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("widgets", "widget", "todo", "Todo", "To-do")
                 .icon("check")
                 .options(json!({
@@ -72,7 +74,9 @@ impl Module for Notes {
                         },
                     ],
                 })),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

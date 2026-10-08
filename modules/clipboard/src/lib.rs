@@ -14,6 +14,7 @@ mod history;
 mod search;
 mod secret;
 mod store;
+mod tour;
 mod wayland;
 
 use std::collections::HashSet;
@@ -129,7 +130,7 @@ impl Module for Clipboard {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "card", "history", "Card", "Clipboard")
                 .icon("clipboard")
                 .order(30)
@@ -137,7 +138,9 @@ impl Module for Clipboard {
             ContributionSpec::new("hub", "page", "history", "Page", "Clipboard")
                 .icon("clipboard")
                 .order(30),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

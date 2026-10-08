@@ -8,6 +8,8 @@
 //! `mochi ipc settings open colors`. The launcher finds sections and
 //! options by name.
 
+mod tour;
+
 use include_dir::{Dir, include_dir};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, CallError, ContributionSpec,
@@ -57,6 +59,14 @@ impl Module for Settings {
                 "discard",
                 "Drop every change made here, back to what the files say",
             ),
+            ActionSpec::new(
+                "preview",
+                "Try an option without keeping it; a reload forgets it",
+            )
+            .arg(path())
+            .arg(ArgSpec::string("value", "Its value as JSON").rest()),
+            ActionSpec::new("keep", "Keep what's being tried, as changes"),
+            ActionSpec::new("drop", "Stop trying, back to the changes"),
             ActionSpec::new("text", "Print a section as TOML").arg(path()),
             ActionSpec::new("edit", "Replace a section with TOML")
                 .arg(path())
@@ -79,14 +89,16 @@ impl Module for Settings {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("launcher", "provider", "settings", "", "Settings").options(
                 json!({
                     "search": "search",
                     "pick": "pick-result",
                 }),
             ),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {
@@ -168,6 +180,21 @@ impl Panel {
                     .await
             }
             "discard" => self.change(ctx, "", SettingsOp::Discard).await,
+            "preview" => {
+                let path = arg("path");
+                match serde_json::from_str::<Value>(&arg("value")) {
+                    Ok(value) => {
+                        let op = SettingsOp::Preview {
+                            values: vec![(path.clone(), value)],
+                            replace: false,
+                        };
+                        self.change(ctx, &path, op).await
+                    }
+                    Err(error) => Err(format!("the value isn't JSON: {error}")),
+                }
+            }
+            "keep" => self.change(ctx, "", SettingsOp::Keep).await,
+            "drop" => self.change(ctx, "", SettingsOp::Drop).await,
             "edit" => {
                 let path = arg("path");
                 let op = SettingsOp::Edit {

@@ -14,6 +14,7 @@
 
 mod catalog;
 mod layout;
+mod tour;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -85,7 +86,7 @@ impl Module for Widgets {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("widgets", "widget", "clock", "Clock", "Clock")
                 .icon("clock")
                 .options(json!({
@@ -135,7 +136,9 @@ impl Module for Widgets {
                         },
                     ],
                 })),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

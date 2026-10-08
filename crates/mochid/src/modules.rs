@@ -21,7 +21,7 @@ use crate::daemon::{ModuleExit, ModuleSlot};
 use crate::plugins::PluginModule;
 
 /// What a generated `config.toml` turns on: the whole shell.
-pub const DEFAULT_MODULES: [&str; 22] = [
+pub const DEFAULT_MODULES: [&str; 23] = [
     "idle",
     "osd",
     "workspaces",
@@ -44,6 +44,7 @@ pub const DEFAULT_MODULES: [&str; 22] = [
     "emoji",
     "colors",
     "settings",
+    "tour",
 ];
 
 /// Every module compiled into this binary, fresh: a module runs once, so a
@@ -73,6 +74,7 @@ pub fn builtin() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_emoji::Emoji),
         Box::new(mochi_module_colors::Colors),
         Box::new(mochi_module_settings::Settings),
+        Box::new(mochi_module_tour::Tour),
     ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));
@@ -345,6 +347,41 @@ fn contributions(module: &dyn Module) -> Vec<Contribution> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every tour step a module offers can show: a caption, a release, and
+    /// a view the module has.
+    #[test]
+    fn tour_steps_are_complete() {
+        let mut count = 0;
+        for module in builtin() {
+            for spec in module.contributions() {
+                let offer = spec.into_contribution(module.id());
+                if offer.target != "tour" || offer.kind != "step" {
+                    continue;
+                }
+                count += 1;
+                let name = format!("{}/{}", offer.module, offer.id);
+                let text = |key: &str| offer.options[key].as_str().unwrap_or_default().to_owned();
+                assert!(!text("caption").is_empty(), "{name} has no caption");
+                let since: Vec<&str> = text("since").leak().split('.').collect();
+                assert!(
+                    since.len() == 3 && since.iter().all(|part| part.parse::<u32>().is_ok()),
+                    "{name} has no release in `since`"
+                );
+                assert!(
+                    module.assets().has_view(&offer.view),
+                    "{name} shows {}, which {} doesn't have",
+                    offer.view,
+                    offer.module
+                );
+                assert!(
+                    !text("caption").contains('`'),
+                    "{name}: captions are plain text"
+                );
+            }
+        }
+        assert!(count > 20, "only {count} tour steps");
+    }
 
     /// `mochi plugins` refuses these ids without mochid at hand.
     #[test]

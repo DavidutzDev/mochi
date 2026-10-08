@@ -13,12 +13,14 @@
 //! hover_delay_ms = 350
 //! ```
 
+mod tour;
+
 use std::time::Duration;
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActivitySpec, Assets, BoxFuture, CallError, Module, ModuleCtx, ModuleError, ModuleEvent,
-    Priority,
+    ActivitySpec, Assets, BoxFuture, CallError, ContributionSpec, Module, ModuleCtx, ModuleError,
+    ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -60,6 +62,10 @@ impl Module for Idle {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn contributions(&self) -> Vec<ContributionSpec> {
+        tour::steps()
     }
 
     fn settings_example(&self) -> &'static str {

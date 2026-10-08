@@ -40,6 +40,7 @@ mod markup;
 mod note;
 mod saved;
 mod server;
+mod tour;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -124,7 +125,7 @@ impl Module for Notifications {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "card", "missed", "Card", "Notifications")
                 .icon("bell")
                 .order(5)
@@ -132,7 +133,9 @@ impl Module for Notifications {
             ContributionSpec::new("hub", "page", "history", "Page", "Notifications")
                 .icon("bell")
                 .order(20),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

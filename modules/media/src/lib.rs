@@ -27,6 +27,7 @@
 
 mod mpris;
 mod notice;
+mod tour;
 
 use std::time::{Duration, Instant};
 
@@ -95,7 +96,7 @@ impl Module for Media {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "card", "now-playing", "Card", "Now playing")
                 .icon("music")
                 .order(10)
@@ -104,7 +105,9 @@ impl Module for Media {
             ContributionSpec::new("widgets", "widget", "now-playing", "Card", "Now playing")
                 .icon("music")
                 .options(json!({ "size": [24, 8], "min": [18, 7], "max": [40, 9] })),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

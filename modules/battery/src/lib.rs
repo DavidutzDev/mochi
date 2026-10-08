@@ -18,6 +18,7 @@
 //! ```
 
 mod model;
+mod tour;
 mod upower;
 
 use std::time::Duration;
@@ -112,7 +113,7 @@ impl Module for BatteryModule {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "card", "level", "Card", "Battery")
                 .icon("bolt")
                 .order(17)
@@ -121,7 +122,9 @@ impl Module for BatteryModule {
             ContributionSpec::new("widgets", "widget", "level", "Card", "Battery")
                 .icon("bolt")
                 .options(json!({ "size": [18, 6], "min": [12, 5], "max": [30, 10] })),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

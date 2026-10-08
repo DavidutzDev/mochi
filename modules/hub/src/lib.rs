@@ -15,6 +15,8 @@
 //! gets the same size, `width` and `height` in the settings, so the panel
 //! doesn't jump when switching; a page that doesn't fit scrolls.
 
+mod tour;
+
 use include_dir::{Dir, include_dir};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, ContributionSpec, Module,
@@ -99,12 +101,14 @@ impl Module for Hub {
 
     // The hub's own card goes through the same door as everyone else's.
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "card", "clock", "Clock", "Today")
                 .icon("clock")
                 .order(3)
                 .options(json!({ "span": 1, "rows": 1 })),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {

@@ -23,6 +23,7 @@
 
 mod model;
 mod sample;
+mod tour;
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -226,7 +227,7 @@ impl Module for Performance {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![
+        let mut offers = vec![
             ContributionSpec::new("hub", "page", "page", "Page", "Performance")
                 .icon("chip")
                 .order(18),
@@ -243,7 +244,9 @@ impl Module for Performance {
                         "description": format!("Show the {title} graph"),
                     })),
                 })),
-        ]
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {

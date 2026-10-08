@@ -9,6 +9,7 @@ A panel with every option: the theme, the island, the bubbles, which modules run
 - A dot marks an option you changed in the panel, and its section in the sidebar. Hovering the option shows a button that undoes the change, back to what your files say, and Reset in the header does it for the whole section. Double-clicking a slider does the same.
 - Typing in the search box looks through every option's name and description. `@modified` lists the ones you changed in the panel. Up and Down move through the sidebar, Ctrl+F goes back to the search box, and Escape closes the menu, the editor, the search, then the panel.
 - The font options list the fonts installed, each drawn in itself, with a search; a font that isn't installed shows in red.
+- **Preview** tries changes without keeping them. They apply at once, but stay in memory: a bar offers **Keep**, which makes them changes like any other, or **Drop**. A reload drops them too, and Copy leaves them out.
 - TOML shows the section as TOML, every option at its value, to edit by hand. Save checks it first and shows what's wrong instead of changing anything. Options for which the panel has no control, like the launcher's providers, are edited there.
 - Copy gives everything that isn't a default as Nix, the `settings` and `theme` attributes of home-manager's `programs.mochi`, ready to paste. Copy as TOML gives `config.toml` and `theme.toml` instead.
 
@@ -26,6 +27,7 @@ When `changes.toml` has an option that no longer fits, after an update renamed i
 | `set <path> <json>` | Sets an option, like `set theme.colors.accent '"#30d158"'`. `null` unsets it. |
 | `reset <path>` | Undoes the change to an option, or to each option of a section, back to what the files say. |
 | `discard` | Drops every change. |
+| `preview <path> <json>`, `keep`, `drop` | Tries an option without keeping it, then keeps or drops what's being tried. |
 | `text <path>`, `edit <path> <toml>` | A section as TOML, and replacing it. |
 | `export [nix\|toml]`, `copy [nix\|toml]` | Prints, or copies, every option that isn't at its default. |
 

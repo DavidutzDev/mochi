@@ -18,13 +18,14 @@
 mod audio;
 mod locks;
 mod notice;
+mod tour;
 
 use std::time::Duration;
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActivitySpec, Assets, BoxFuture, Module, ModuleCtx, ModuleError, ModuleEvent, Priority,
-    SamePriority,
+    ActivitySpec, Assets, BoxFuture, ContributionSpec, Module, ModuleCtx, ModuleError, ModuleEvent,
+    Priority, SamePriority,
 };
 use serde::Deserialize;
 use tokio::sync::mpsc;
@@ -83,6 +84,10 @@ impl Module for Osd {
 
     fn assets(&self) -> Assets {
         Assets::new(&QML, concat!(env!("CARGO_MANIFEST_DIR"), "/qml"))
+    }
+
+    fn contributions(&self) -> Vec<ContributionSpec> {
+        tour::steps()
     }
 
     fn settings_example(&self) -> &'static str {
