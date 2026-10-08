@@ -119,7 +119,8 @@ impl Module for Demo {
                     | ModuleEvent::Hovered { .. }
                     | ModuleEvent::State { .. }
                     | ModuleEvent::Settings(_)
-                    | ModuleEvent::Offers(_) => {
+                    | ModuleEvent::Offers(_)
+                    | ModuleEvent::Reconfigured(_) => {
                         continue;
                     }
                     ModuleEvent::BubbleClicked(clicked) => {

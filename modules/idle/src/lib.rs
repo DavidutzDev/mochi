@@ -136,7 +136,8 @@ impl Module for Idle {
                     | ModuleEvent::BubbleClicked(_)
                     | ModuleEvent::State { .. }
                     | ModuleEvent::Settings(_)
-                    | ModuleEvent::Offers(_) => {}
+                    | ModuleEvent::Offers(_)
+                    | ModuleEvent::Reconfigured(_) => {}
                 }
             }
             Ok(())

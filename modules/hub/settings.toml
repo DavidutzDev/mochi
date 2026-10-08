@@ -6,3 +6,8 @@
 # and what is taller scrolls. It never grows past the screen.
 # width = 860
 # height = 480
+# The home's cards in this order, as module/id like "network/status"; the
+# ones not listed follow. The pencil in the hub's navbar arranges them.
+# order = []
+# Cards to leave off the home, the same way.
+# hidden = []

@@ -315,6 +315,7 @@ impl Runner {
         self.generation += 1;
         let slot = ModuleSlot {
             contributions: contributions(module.as_ref()),
+            live: module.live_settings(),
             assets: module.assets(),
             actions: module.actions(),
             events: Some(events),

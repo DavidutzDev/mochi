@@ -562,9 +562,9 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [x] A design system in `Theme`: a type scale (four sizes and display), a spacing scale, radii for surfaces, fields and controls, heights, Inter and Material Symbols; the core controls and the hub use it
 - [x] Every module's views moved onto the scale, emptying `crates/mochi-core/tests/design-baseline.txt`
 - [x] A check in `nix flake check` that rejects raw pixel sizes and colors in module QML, so views can't drift from the scale again (`crates/mochi-core/tests/design.rs`)
-- [ ] The hub's Home as a control center: tiles of one height with their label inside, slider tiles (volume, brightness) with a `›` to their page, and an icon-only footer instead of the labelled tab
+- [x] The hub's Home as a control center: tiles of one height with their label inside, slider tiles (volume, brightness) with a `›` to their page, and an icon-only footer instead of the labelled tab
 - [x] The hub sized to its content, its outline animating between pages instead of one fixed size for all of them
-- [ ] An editable control center: choose the tiles and drag them into place, reusing the widgets editor's drag and snap
+- [x] An editable control center: drag cards into place, take them off and put them back, kept as the hub's `order` and `hidden`
 - [x] Shared components (now to be used by every module): a panel header (back, title, actions), fading edges where a list scrolls, rolling digits for the clock and percentages, a light along a panel's top edge that follows the pointer and pulses while something works, switch rows and slider rows
 - [x] Theme presets: named palettes in a picker with preview cards, applied live
 - [x] A light mode for every preset (replaces "Light variant of the palette" under Design system)

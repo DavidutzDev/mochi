@@ -226,7 +226,8 @@ impl Module for Notifications {
                             | ModuleEvent::Hovered { .. }
                             | ModuleEvent::State { .. }
                             | ModuleEvent::Settings(_)
-                            | ModuleEvent::Offers(_),
+                            | ModuleEvent::Offers(_)
+                            | ModuleEvent::Reconfigured(_),
                         ) => {}
                     },
                 }

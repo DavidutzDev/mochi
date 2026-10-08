@@ -44,6 +44,8 @@ pub struct ModuleSlot {
     pub assets: Assets,
     pub actions: Vec<ActionSpec>,
     pub contributions: Vec<Contribution>,
+    /// The settings it applies while running: see `Module::live_settings`.
+    pub live: &'static [&'static str],
     /// Which start of the module this is, to tell its exit from an earlier
     /// run's after a reload.
     pub generation: u64,
@@ -208,7 +210,20 @@ impl Daemon {
                 .modules
                 .get(id)
                 .is_some_and(|slot| slot.events.is_none());
-            if !wanted.contains(&id) || changed || replaced || ended {
+            let live = changed
+                && !replaced
+                && !ended
+                && wanted.contains(&id)
+                && self.settings.get(id).is_some_and(|old| {
+                    let live = self.modules.get(id).map_or(&[][..], |slot| slot.live);
+                    only_live(old, &config.settings(id), live)
+                });
+            if live {
+                let settings = config.settings(id);
+                self.notify(id, ModuleEvent::Reconfigured(settings.clone()));
+                self.settings.insert(id, settings);
+                tracing::info!(module = id, "reconfigured");
+            } else if !wanted.contains(&id) || changed || replaced || ended {
                 self.stop(id);
                 updated |= replaced;
             }
@@ -1172,4 +1187,35 @@ fn overrides(
         }
     }
     overrides
+}
+
+/// Whether `new` differs from `old` only in `live` keys.
+fn only_live(old: &mochi_core::toml::Table, new: &mochi_core::toml::Table, live: &[&str]) -> bool {
+    old.keys()
+        .chain(new.keys())
+        .all(|key| old.get(key) == new.get(key) || live.contains(&key.as_str()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_live_keys_spare_a_restart() {
+        let table =
+            |text: &str| -> mochi_core::toml::Table { mochi_core::toml::from_str(text).unwrap() };
+        let old = table("width = 860\norder = [\"a/b\"]");
+        assert!(only_live(
+            &old,
+            &table("width = 860\norder = []"),
+            &["order"]
+        ));
+        assert!(only_live(&old, &table("width = 860"), &["order"]));
+        assert!(!only_live(
+            &old,
+            &table("width = 900\norder = []"),
+            &["order"]
+        ));
+        assert!(!only_live(&old, &table("order = []"), &["order"]));
+    }
 }

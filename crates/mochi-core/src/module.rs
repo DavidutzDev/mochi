@@ -59,6 +59,13 @@ pub trait Module: Send + 'static {
         }
     }
 
+    /// The keys of its `[module.<id>]` table it applies while running. A
+    /// reload that changes only these sends [`ModuleEvent::Reconfigured`]
+    /// instead of restarting the module, so what it shows stays open.
+    fn live_settings(&self) -> &'static [&'static str] {
+        &[]
+    }
+
     /// The programs it runs, given its `[module.<id>]` table, for `mochi
     /// doctor` to look for.
     fn needs(&self, _settings: &toml::Table) -> Vec<Need> {
@@ -296,6 +303,9 @@ pub enum ModuleEvent {
     /// providers: every [`Contribution`] whose `target` is this module. Comes
     /// once at the start, then whenever a reload changes it.
     Offers(Vec<Contribution>),
+    /// Its settings changed only in [`Module::live_settings`]: the whole
+    /// new `[module.<id>]` table.
+    Reconfigured(toml::Table),
 }
 
 /// What a module answers a command with: some output to hand back, or none.

@@ -33,7 +33,7 @@ use mochi_core::{
     ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
 use crate::meter::Peaks;
@@ -103,6 +103,10 @@ impl Module for Audio {
             ContributionSpec::new("hub", "page", "mixer", "Page", "Sound")
                 .icon("volume")
                 .order(20),
+            ContributionSpec::new("hub", "card", "volume", "Card", "Sound")
+                .icon("volume")
+                .order(11)
+                .options(json!({ "span": 2, "rows": 1, "page": "mixer" })),
         ];
         offers.extend(tour::steps());
         offers
