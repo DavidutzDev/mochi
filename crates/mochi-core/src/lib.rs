@@ -37,7 +37,7 @@ pub use config::{
 pub use contributions::ContributionSpec;
 pub use module::{
     ActivityIds, Assets, BoxFuture, CallError, Module, ModuleCommand, ModuleCtx, ModuleError,
-    ModuleEvent, ModuleRequest, Reply, Request, SettingsOp, settings,
+    ModuleEvent, ModuleRequest, Need, Reply, Request, SettingsOp, settings,
 };
 
 /// The core QML: `shell.qml` and the island. Modules add their views under

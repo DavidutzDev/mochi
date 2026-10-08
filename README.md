@@ -127,6 +127,7 @@ The first start writes `~/.config/mochi/config.toml` and `theme.toml`, with ever
 mochi config path     # where the files are
 mochi config check    # check them, with the errors mochid would give
 mochi reload          # apply changes without a restart
+mochi doctor          # check what Mochi needs around it, and what's missing
 ```
 
 `mochi reload` starts modules you added, stops the ones you removed and restarts the ones whose settings changed. A file with an error changes nothing.

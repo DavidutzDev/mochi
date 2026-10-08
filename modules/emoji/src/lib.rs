@@ -68,6 +68,13 @@ impl Module for Emoji {
         include_str!("../settings.toml")
     }
 
+    fn needs(&self, _settings: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
+        vec![mochi_core::Need::new(
+            "wl-copy",
+            "Copying emoji, while the clipboard module is off",
+        )]
+    }
+
     fn settings_schema(&self) -> Option<Value> {
         Some(mochi_core::options::schema_of::<Settings>())
     }

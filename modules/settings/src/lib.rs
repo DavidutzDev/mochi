@@ -88,6 +88,13 @@ impl Module for Settings {
         ]
     }
 
+    fn needs(&self, _settings: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
+        vec![mochi_core::Need::new(
+            "wl-copy",
+            "Copy as Nix or TOML, while the clipboard module is off",
+        )]
+    }
+
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
             ContributionSpec::new("launcher", "provider", "settings", "", "Settings").options(

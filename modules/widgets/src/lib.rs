@@ -75,6 +75,13 @@ impl Module for Widgets {
         include_str!("../settings.toml")
     }
 
+    fn needs(&self, _settings: &toml::Table) -> Vec<mochi_core::Need> {
+        vec![mochi_core::Need::new(
+            "wl-copy",
+            "Copy as Nix or TOML, while the clipboard module is off",
+        )]
+    }
+
     fn settings_schema(&self) -> Option<Value> {
         Some(mochi_core::options::schema_of::<Settings>())
     }

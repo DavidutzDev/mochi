@@ -107,6 +107,24 @@ impl Module for Launcher {
         include_str!("../settings.toml")
     }
 
+    fn needs(&self, table: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
+        let settings: Settings = mochi_core::settings(table).unwrap_or_default();
+        let mut needs = vec![
+            mochi_core::Need::new("xdg-open", "Opening files and web searches"),
+            mochi_core::Need::new(
+                "wl-copy",
+                "Copying results, while the clipboard module is off",
+            ),
+        ];
+        if let Some(terminal) = settings.terminal.first() {
+            needs.push(mochi_core::Need::new(
+                terminal,
+                "Running commands in a terminal",
+            ));
+        }
+        needs
+    }
+
     fn settings_schema(&self) -> Option<Value> {
         Some(mochi_core::options::schema_of::<Settings>())
     }

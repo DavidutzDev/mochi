@@ -2,6 +2,7 @@
 //! island shows, and keeps the Quickshell UI running.
 
 mod daemon;
+mod doctor;
 mod ipc;
 mod modules;
 mod plugins;
@@ -63,6 +64,8 @@ enum Command {
         #[command(subcommand)]
         action: ConfigAction,
     },
+    /// Check what Mochi needs around it and say what to install or change.
+    Doctor,
 }
 
 #[derive(Debug, Subcommand)]
@@ -86,6 +89,9 @@ fn main() -> ExitCode {
     let args = Args::parse();
     if let Some(Command::Config { action }) = &args.command {
         return config_main(action, args.config.clone());
+    }
+    if let Some(Command::Doctor) = &args.command {
+        return doctor_main(args.config.clone());
     }
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
@@ -123,6 +129,24 @@ fn config_file(config: Option<PathBuf>) -> anyhow::Result<PathBuf> {
     match config {
         Some(file) => Ok(file),
         None => Ok(Paths::from_env()?.config_file()),
+    }
+}
+
+/// `mochid doctor`: its report on the terminal, and failure when something
+/// is broken.
+#[allow(clippy::print_stderr)]
+fn doctor_main(config: Option<PathBuf>) -> ExitCode {
+    let result = config_file(config).and_then(|file| {
+        let runtime = tokio::runtime::Runtime::new()?;
+        runtime.block_on(doctor::run(&file))
+    });
+    match result {
+        Ok(true) => ExitCode::SUCCESS,
+        Ok(false) => ExitCode::FAILURE,
+        Err(error) => {
+            eprintln!("mochid: {error:#}");
+            ExitCode::FAILURE
+        }
     }
 }
 

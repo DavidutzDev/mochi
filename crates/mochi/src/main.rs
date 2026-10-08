@@ -84,6 +84,17 @@ enum Command {
         )]
         args: Vec<String>,
     },
+    /// Check what Mochi needs around it: the daemon, the config,
+    /// Quickshell, the fonts, the compositor's protocols, the portals and
+    /// the programs modules and plugins run. Says what to install or
+    /// change, and fails when something is broken.
+    ///
+    /// Runs `mochid doctor`.
+    Doctor {
+        /// The config.toml to check.
+        #[arg(long, value_name = "FILE")]
+        config: Option<PathBuf>,
+    },
     /// Print a completion script for a shell.
     ///
     /// For example, `mochi completions fish > ~/.config/fish/completions/mochi.fish`.
@@ -195,7 +206,16 @@ fn run(command: Command, json: bool) -> Result<(), String> {
             println!("reloaded config.toml and theme.toml");
             Ok(())
         }
-        Command::Config { args } => config(&args),
+        Command::Config { args } => mochid(&["config".into()], &args),
+        Command::Doctor { config } => {
+            let mut before: Vec<String> = Vec::new();
+            if let Some(config) = config {
+                before.push("--config".into());
+                before.push(config.to_string_lossy().into_owned());
+            }
+            before.push("doctor".into());
+            mochid(&before, &[])
+        }
         Command::Plugins { config, action } => plugins(config, action, json),
         Command::SharePick { allow_token } => share_pick(allow_token),
         Command::Completions { shell } => {
@@ -455,7 +475,9 @@ fn share_pick(allow_token: bool) -> Result<(), String> {
 
 /// Hands over to `mochid config`: the one next to this binary when there
 /// is one, so both come from the same build, otherwise the one in `PATH`.
-fn config(args: &[String]) -> Result<(), String> {
+/// Runs mochid, the one next to this program when there is one, with
+/// `before` then `args`.
+fn mochid(before: &[String], args: &[String]) -> Result<(), String> {
     use std::os::unix::process::CommandExt;
 
     let sibling = std::env::current_exe()
@@ -464,7 +486,7 @@ fn config(args: &[String]) -> Result<(), String> {
         .filter(|path| path.is_file());
     let program = sibling.map_or_else(|| "mochid".into(), PathBuf::into_os_string);
     let error = std::process::Command::new(&program)
-        .arg("config")
+        .args(before)
         .args(args)
         .exec();
     Err(format!("cannot run {}: {error}", program.to_string_lossy()))

@@ -183,6 +183,25 @@ impl Module for Capture {
         include_str!("../settings.toml")
     }
 
+    fn needs(&self, table: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
+        let settings: Settings = mochi_core::settings(table).unwrap_or_default();
+        let mut needs = Vec::new();
+        if let Some(recorder) = settings.recorder.first() {
+            needs.push(mochi_core::Need::new(recorder, "Recording the screen"));
+        }
+        if let Some(editor) = settings.editor.first() {
+            needs.push(mochi_core::Need::new(editor, "Edit on a screenshot"));
+        }
+        if settings.copy {
+            needs.push(mochi_core::Need::new(
+                "wl-copy",
+                "Copying captures to the clipboard",
+            ));
+        }
+        needs.push(mochi_core::Need::new("xdg-open", "Open on a capture"));
+        needs
+    }
+
     fn settings_schema(&self) -> Option<Value> {
         Some(mochi_core::options::schema_of::<Settings>())
     }

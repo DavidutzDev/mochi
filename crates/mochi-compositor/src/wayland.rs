@@ -37,6 +37,37 @@ const OUTPUT_VERSION: u32 = 4;
 /// `zwlr_foreign_toplevel_handle_v1.state` value for the focused window.
 const ACTIVATED: u32 = 2;
 
+/// Answers nothing: only the registry's list is read.
+struct Probe;
+
+impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for Probe {
+    fn event(
+        _: &mut Self,
+        _: &wl_registry::WlRegistry,
+        _: wl_registry::Event,
+        _: &GlobalListContents,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
+    }
+}
+
+pub(crate) fn globals() -> Result<Vec<String>, String> {
+    let connection = Connection::connect_to_env()
+        .map_err(|error| format!("cannot connect to the Wayland display: {error}"))?;
+    let (globals, _queue) = registry_queue_init::<Probe>(&connection)
+        .map_err(|error| format!("cannot read the Wayland globals: {error}"))?;
+    let mut names: Vec<String> = globals
+        .contents()
+        .clone_list()
+        .into_iter()
+        .map(|global| global.interface)
+        .collect();
+    names.sort();
+    names.dedup();
+    Ok(names)
+}
+
 pub(crate) fn start() -> Result<Compositor, String> {
     let connection = Connection::connect_to_env()
         .map_err(|error| format!("cannot connect to the Wayland display: {error}"))?;

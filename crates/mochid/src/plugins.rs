@@ -200,6 +200,16 @@ impl Module for PluginModule {
         }
     }
 
+    /// What its manifest's `[backend] needs` lists.
+    fn needs(&self, _settings: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
+        self.manifest
+            .backend
+            .iter()
+            .flat_map(|backend| &backend.needs)
+            .map(|program| mochi_core::Need::new(program, "Its backend").required())
+            .collect()
+    }
+
     /// The kinds its defaults have, with what the manifest's `[settings]`
     /// adds: choices, a range, a color.
     fn settings_schema(&self) -> Option<Value> {

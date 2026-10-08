@@ -59,6 +59,12 @@ pub trait Module: Send + 'static {
         }
     }
 
+    /// The programs it runs, given its `[module.<id>]` table, for `mochi
+    /// doctor` to look for.
+    fn needs(&self, _settings: &toml::Table) -> Vec<Need> {
+        Vec::new()
+    }
+
     /// The JSON schema of its `[module.<id>]` table, which the settings
     /// panel builds its rows from: usually
     /// `Some(options::schema_of::<Settings>())`, with the settings type
@@ -91,6 +97,32 @@ pub const PANELS: [&str; 7] = [
     "emoji",
     "settings",
 ];
+
+/// A program a module runs, and what for: what `mochi doctor` looks for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Need {
+    pub program: String,
+    /// What doesn't work without it, like "Copy in the color picker".
+    pub purpose: String,
+    /// Without it, the module itself doesn't work, rather than one feature.
+    pub required: bool,
+}
+
+impl Need {
+    pub fn new(program: impl Into<String>, purpose: impl Into<String>) -> Self {
+        Self {
+            program: program.into(),
+            purpose: purpose.into(),
+            required: false,
+        }
+    }
+
+    #[must_use]
+    pub fn required(mut self) -> Self {
+        self.required = true;
+        self
+    }
+}
 
 /// Reads a `[module.<id>]` table into a module's settings type.
 pub fn settings<T: DeserializeOwned>(table: &toml::Table) -> Result<T, toml::de::Error> {

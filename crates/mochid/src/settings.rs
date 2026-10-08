@@ -114,6 +114,11 @@ impl Store {
         }
     }
 
+    /// The settings panel has changes over the files.
+    pub fn has_changes(&self) -> bool {
+        !self.changes.is_empty()
+    }
+
     /// Reads the files again, for `mochi reload`. Changes they now say go
     /// away.
     pub fn reload(&mut self) -> Result<Loaded, ConfigError> {

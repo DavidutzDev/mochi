@@ -128,6 +128,18 @@ impl Module for Power {
         include_str!("../settings.toml")
     }
 
+    fn needs(&self, table: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
+        let settings: Settings = mochi_core::settings(table).unwrap_or_default();
+        let mut needs = Vec::new();
+        if let Some(lock) = settings.lock.first() {
+            needs.push(mochi_core::Need::new(lock, "Lock"));
+        }
+        if let Some(logout) = settings.logout.first() {
+            needs.push(mochi_core::Need::new(logout, "Log out"));
+        }
+        needs
+    }
+
     fn settings_schema(&self) -> Option<Value> {
         Some(mochi_core::options::schema_of::<Settings>())
     }

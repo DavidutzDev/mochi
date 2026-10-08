@@ -218,6 +218,15 @@ impl Module for Performance {
         include_str!("../settings.toml")
     }
 
+    fn needs(&self, _settings: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
+        // Only an NVIDIA GPU is read through a program.
+        if std::path::Path::new("/proc/driver/nvidia").exists() {
+            vec![mochi_core::Need::new("nvidia-smi", "The GPU's readings")]
+        } else {
+            Vec::new()
+        }
+    }
+
     fn settings_schema(&self) -> Option<Value> {
         Some(mochi_core::options::schema_of::<Settings>())
     }

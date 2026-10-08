@@ -13,7 +13,10 @@ Every option is in them, commented, with its default. They turn on the whole she
 mochi config path     # where the files are
 mochi config check    # check them, without a running daemon
 mochi reload          # apply your changes, without a restart
+mochi doctor          # check everything Mochi needs around it
 ```
+
+`mochi doctor` checks what Mochi needs around it and says what to install or change: whether mochid runs and the UI is connected, the config, Quickshell's version, the fonts, which Wayland protocols your compositor offers and what each is for, the portal and its share picker, whether another notification daemon holds the name, and the programs your modules and plugins run, like `gpu-screen-recorder` or `satty`. Each line is ✓ fine, ! something works less well, or ✗ broken, and the command fails when one is broken.
 
 ## Keys
 

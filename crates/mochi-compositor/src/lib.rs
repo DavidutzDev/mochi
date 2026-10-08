@@ -309,6 +309,27 @@ impl Compositor {
     }
 }
 
+/// The interfaces the session's compositor offers, like
+/// `zwlr_layer_shell_v1`, for `mochi doctor`.
+pub fn globals() -> Result<Vec<String>, String> {
+    wayland::globals()
+}
+
+/// The compositor the session runs, from the variables it sets for its
+/// clients: `Hyprland`, `niri`, `sway`, or `None` for another.
+pub fn running() -> Option<&'static str> {
+    let set = |name: &str| std::env::var_os(name).is_some_and(|value| !value.is_empty());
+    if set("HYPRLAND_INSTANCE_SIGNATURE") {
+        Some("Hyprland")
+    } else if set("NIRI_SOCKET") {
+        Some("niri")
+    } else if set("SWAYSOCK") {
+        Some("sway")
+    } else {
+        None
+    }
+}
+
 /// Connects to the compositor of the current session. Must run inside a
 /// tokio runtime. Never fails: without a usable compositor the handle reports
 /// [`Backend::Unsupported`].
