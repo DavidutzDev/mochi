@@ -7,6 +7,8 @@ Item {
     id: root
 
     property var payload: ({})
+    // What the pointer resting on it shows beside it.
+    readonly property string tooltip: "Clipboard history paused · click to resume"
 
     implicitWidth: 26
     implicitHeight: 26

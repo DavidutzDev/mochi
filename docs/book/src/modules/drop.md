@@ -25,6 +25,8 @@ Under **Convert to**, a button for each format the files convert to:
 
 A JPEG has no transparency, so transparent pixels land on white; an icon is at most 256 pixels a side.
 
+While an action runs, a bubble next to the island shows what the files are and a ring that fills as it goes, from ffmpeg's own progress for videos and sound; the panel can close meanwhile. Resting the pointer on the bubble says what it's doing and how far, and a click opens the panel again. When it finishes with the panel closed, the island says how it went.
+
 When something dropped needs a program that isn't installed, the panel says which, like "Install ffmpeg to convert videos", and the other files still convert: an image and a video dropped together still offer GIF for the image.
 
 An action shows only when a program for it is installed; `mochi doctor` lists the ones missing. New files go next to the first dropped one, and never over an old one: a second `Archive.zip` becomes `Archive 2.zip`, and an archive extracts into a new folder named after it. After an action, the island says what it made, with Show to open its folder, and closes a few seconds later. Escape closes it sooner.

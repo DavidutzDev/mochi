@@ -198,6 +198,10 @@ pub struct BubblesConfig {
     /// How long a bubble with news stays in front of its stack.
     #[schemars(range(min = 0, max = 15000))]
     pub news_ms: u64,
+    /// How long the pointer rests on a bubble before a tooltip with more
+    /// shows beside it; 0 never shows one.
+    #[schemars(range(min = 0, max = 5000))]
+    pub tooltip_ms: u64,
     #[serde(flatten)]
     #[schemars(skip)]
     pub modules: BTreeMap<String, Placement>,
@@ -209,6 +213,7 @@ impl Default for BubblesConfig {
             max_per_area: 4,
             stack: false,
             news_ms: 4000,
+            tooltip_ms: 600,
             modules: BTreeMap::new(),
         }
     }

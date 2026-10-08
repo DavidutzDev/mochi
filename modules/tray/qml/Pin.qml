@@ -1,17 +1,18 @@
 import QtQuick
-import Quickshell
 import qs.island
 
 // A pinned app's own bubble: its icon. A click activates the app, a right
 // click opens its menu, a middle click does its second action, and the
 // wheel scrolls on it. It breathes while the app asks for attention.
-// Resting the pointer on it shows the app's tooltip beside it, away from
-// the screen's edge.
+// Resting the pointer on it shows the app's tooltip beside it.
 Item {
     id: root
 
     property var payload: ({})
     readonly property string key: payload.key ?? ""
+    // What the pointer resting on it shows beside it: the app's own
+    // tooltip, under its name.
+    readonly property string tooltip: [payload.title, payload.tooltip].filter(part => part).join("\n")
 
     implicitWidth: 26
     implicitHeight: 26
@@ -47,10 +48,7 @@ Item {
 
     // Over the pill's own area, so every button lands here.
     MouseArea {
-        id: area
-
         anchors.fill: parent
-        hoverEnabled: true
         acceptedButtons: Qt.LeftButton | Qt.RightButton | Qt.MiddleButton
         cursorShape: Qt.PointingHandCursor
         onClicked: mouse => {
@@ -66,50 +64,6 @@ Item {
             const delta = vertical ? wheel.angleDelta.y : wheel.angleDelta.x;
             if (delta !== 0)
                 Daemon.command("tray", "scroll", [root.key, `${delta}`, vertical ? "vertical" : "horizontal"]);
-        }
-    }
-
-    // The pointer rested a moment, so passing over doesn't flash it.
-    Timer {
-        id: rest
-
-        interval: 500
-        running: area.containsMouse && (root.payload.tooltip ?? "") !== ""
-    }
-
-    PopupWindow {
-        readonly property bool below: Theme.anchor !== "bottom"
-
-        anchor.item: root
-        anchor.rect.y: below ? root.height + Theme.spaceSmall : -Theme.spaceSmall
-        anchor.rect.x: root.width / 2
-        anchor.edges: below ? Edges.Bottom : Edges.Top
-        anchor.gravity: below ? Edges.Bottom : Edges.Top
-        visible: area.containsMouse && !rest.running && (root.payload.tooltip ?? "") !== ""
-        implicitWidth: Math.min(tip.implicitWidth, 280) + Theme.padding * 2
-        implicitHeight: tip.implicitHeight + Theme.spaceSmall * 2
-        color: "transparent"
-
-        Rectangle {
-            anchors.fill: parent
-            radius: Theme.radiusField
-            color: Theme.background
-            border.color: Theme.border
-            border.width: 1
-
-            Text {
-                id: tip
-
-                x: Theme.padding
-                y: Theme.spaceSmall
-                width: Math.min(implicitWidth, 280)
-                text: root.payload.tooltip ?? ""
-                wrapMode: Text.Wrap
-                textFormat: Text.PlainText
-                color: Theme.foreground
-                font.pixelSize: Theme.textCaption
-                font.family: Theme.fontFamily
-            }
         }
     }
 }

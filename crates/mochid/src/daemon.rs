@@ -97,6 +97,8 @@ pub struct Daemon {
     states: BTreeMap<String, Value>,
     /// An arbiter for each monitor's island.
     islands: Islands,
+    /// `[bubbles] tooltip_ms`.
+    tooltip_ms: u64,
     bubbles: Bubbles,
     clients: HashMap<ConnectionId, Client>,
     theme: Theme,
@@ -148,6 +150,7 @@ impl Daemon {
             settings: BTreeMap::new(),
             states: BTreeMap::new(),
             islands: Islands::new(),
+            tooltip_ms: 600,
             bubbles: Bubbles::default(),
             clients: HashMap::new(),
             theme: loaded.theme,
@@ -271,6 +274,10 @@ impl Daemon {
         self.order = wanted;
         self.listed = catalog.listed;
         self.panels = config.island.panels;
+        if self.tooltip_ms != config.bubbles.tooltip_ms {
+            self.tooltip_ms = config.bubbles.tooltip_ms;
+            self.broadcast(&self.bubbles_message());
+        }
         self.notices = config.island.notices;
         self.islands
             .set_outside_expanded_only(config.island.click_outside == ClickOutside::Expanded);
@@ -1182,6 +1189,7 @@ impl Daemon {
             bubbles,
             overflow,
             stack: self.bubbles.stack(),
+            tooltip_ms: (self.tooltip_ms > 0).then_some(self.tooltip_ms),
         }
     }
 

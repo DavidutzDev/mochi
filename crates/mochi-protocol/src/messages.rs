@@ -112,6 +112,10 @@ pub enum DaemonMessage {
         /// Each area stacks its bubbles into one, when set.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         stack: Option<Stacking>,
+        /// How long the pointer rests on a bubble before its tooltip shows;
+        /// none means never.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tooltip_ms: Option<u64>,
     },
     /// Design tokens. Sent to the UI after `hello` and on reload.
     Theme { theme: Box<Theme> },
@@ -432,12 +436,14 @@ mod tests {
                 group: Some("status".into()),
                 priority: 50,
                 news: 3,
+                tooltip: Some("Song · Artist".into()),
             }],
             overflow: vec![Overflow {
                 area: Area::Right,
                 hidden: 2,
             }],
             stack: Some(Stacking { news_ms: 4000 }),
+            tooltip_ms: Some(600),
         });
         round_trip_daemon(DaemonMessage::Theme {
             theme: Box::default(),

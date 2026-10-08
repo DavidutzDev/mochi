@@ -179,6 +179,12 @@ Item {
                     // Under the view, so buttons inside the view get their
                     // own clicks. It covers half the gap on each side, so no
                     // spot in a group is dead.
+                    // Sees the pointer over the view too, whatever handles
+                    // its clicks.
+                    HoverHandler {
+                        id: pointer
+                    }
+
                     MouseArea {
                         anchors.fill: parent
                         enabled: !slot.leaving
@@ -224,6 +230,14 @@ Item {
                         property: "payload"
                         value: slot.payload
                         when: loader.item !== null
+                    }
+
+                    // More about it, once the pointer rests on it: the
+                    // view's own `tooltip`, or else its module's.
+                    BubbleTip {
+                        target: slot
+                        hovered: pointer.hovered && !slot.leaving
+                        text: loader.item?.tooltip ?? slot.bubble?.tooltip ?? ""
                     }
                 }
             }

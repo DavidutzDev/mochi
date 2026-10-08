@@ -88,6 +88,10 @@ pub struct Bubble {
     /// A stack brings a bubble whose news went up to the front for a while.
     #[serde(default, skip_serializing_if = "is_zero")]
     pub news: u64,
+    /// What the pointer resting on it shows beside it, unless its view says
+    /// more with a `tooltip` property of its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tooltip: Option<String>,
 }
 
 fn is_zero<T: Default + PartialEq>(value: &T) -> bool {

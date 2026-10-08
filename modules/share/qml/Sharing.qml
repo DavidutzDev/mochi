@@ -5,6 +5,8 @@ import qs.island
 // color, breathing, so it's hard to forget.
 Item {
     property var payload: ({})
+    // What the pointer resting on it shows beside it.
+    readonly property string tooltip: "Your screen is being shared"
 
     implicitWidth: 26
     implicitHeight: 26

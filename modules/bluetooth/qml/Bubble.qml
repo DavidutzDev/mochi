@@ -8,6 +8,13 @@ Item {
 
     property var payload: ({})
     readonly property var battery: payload.battery ?? null
+    // What the pointer resting on it shows beside it.
+    readonly property string tooltip: {
+        if ((payload.count ?? 1) > 1)
+            return `${payload.count} devices connected`;
+        const name = payload.name ?? "A device";
+        return payload.battery != null ? `${name} · ${payload.battery}% battery` : `${name} connected`;
+    }
 
     implicitWidth: row.implicitWidth + 8
     implicitHeight: 26

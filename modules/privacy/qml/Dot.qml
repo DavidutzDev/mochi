@@ -10,6 +10,15 @@ Item {
     property var payload: ({})
     readonly property bool microphone: (payload.microphone ?? []).length > 0
     readonly property bool camera: (payload.camera ?? []).length > 0
+    // What the pointer resting on it shows beside it.
+    readonly property string tooltip: {
+        const lines = [];
+        if (microphone)
+            lines.push(`Microphone${payload.muted ? " (muted)" : ""}: ${payload.microphone.join(", ")}`);
+        if (camera)
+            lines.push(`Camera: ${payload.camera.join(", ")}`);
+        return lines.join("\n");
+    }
 
     implicitWidth: icons.implicitWidth + Theme.spaceSmall * 2
     implicitHeight: 26

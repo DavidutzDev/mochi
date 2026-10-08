@@ -259,6 +259,25 @@ pub fn offered(
     actions
 }
 
+/// The icon for an action on `files`, for its progress bubble: what the
+/// files are, or what it makes.
+pub fn icon(action: &str, files: &[Dropped]) -> &'static str {
+    match action {
+        "zip" => return "folder_zip",
+        "extract" => return "unarchive",
+        "merge" => return "picture_as_pdf",
+        _ => {}
+    }
+    match files.first().map(|file| file.kind) {
+        Some(Kind::Image) => "image",
+        Some(Kind::Video) => "movie",
+        Some(Kind::Audio) => "music_note",
+        Some(Kind::Pdf | Kind::Document | Kind::Text) => "description",
+        Some(Kind::Archive) => "folder_zip",
+        _ => "draft",
+    }
+}
+
 /// What to install for what was dropped, when the program that would
 /// handle it is missing: "Install ffmpeg to convert videos".
 pub fn missing(

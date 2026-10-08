@@ -23,8 +23,8 @@ use std::time::Duration;
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, ContributionSpec, Module,
-    ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Assets, BoxFuture, BubbleId, BubbleSpec,
+    ContributionSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -161,7 +161,7 @@ impl Module for DropModule {
             ),
             ActionSpec::new("run", "Do an action to the dropped files").arg(ArgSpec::string(
                 "action",
-                "zip, extract, merge, png, jpg, webp, copy or open",
+                "zip, extract, merge, copy, open, or to- and a format, like to-png",
             )),
             ActionSpec::new("show", "Show where the result went"),
             ActionSpec::new("close", "Close the panel"),
@@ -174,6 +174,7 @@ impl Module for DropModule {
             let table: mochi_core::toml::Table = ctx.settings()?;
             let settings = Settings::load(&table).unwrap_or_default();
             let (finished, mut results) = mpsc::unbounded_channel();
+            let (progress, mut progressed) = mpsc::unbounded_channel();
             let mut state = State {
                 enabled: settings.actions,
                 hint: None,
@@ -185,6 +186,9 @@ impl Module for DropModule {
                 result: None,
                 finished,
                 closing: None,
+                progress,
+                bubble: None,
+                working: Value::Null,
             };
             loop {
                 tokio::select! {
@@ -200,9 +204,14 @@ impl Module for DropModule {
                                 state.closing = None;
                             }
                         }
+                        // The progress bubble opens the panel again.
+                        Some(ModuleEvent::BubbleClicked(bubble)) if state.bubble == Some(bubble) => {
+                            state.open(&ctx);
+                        }
                         Some(_) => {}
                     },
                     Some((action, outcome)) = results.recv() => state.finish(&ctx, action, outcome),
+                    Some(fraction) = progressed.recv() => state.progressed(&ctx, fraction),
                     _ = sleep_until(state.closing), if state.closing.is_some() => {
                         state.closing = None;
                         state.close(&ctx);
@@ -237,6 +246,11 @@ struct State {
     finished: mpsc::UnboundedSender<(String, Outcome)>,
     /// When the panel closes, after an action is done.
     closing: Option<tokio::time::Instant>,
+    /// How far the running action is, from 0 to 1.
+    progress: mpsc::UnboundedSender<f64>,
+    /// The bubble while an action runs, and what it shows.
+    bubble: Option<BubbleId>,
+    working: Value,
 }
 
 impl State {
@@ -315,17 +329,64 @@ impl State {
         self.message = None;
         self.closing = None;
         self.update(ctx);
+        // A bubble follows it, so the panel can close meanwhile.
+        let label = actions::offered(&self.files, &self.enabled, &mochi_core::process::installed)
+            .into_iter()
+            .find(|offered| offered.id == action)
+            .map(|offered| offered.label)
+            .unwrap_or_else(|| action.to_owned());
+        self.working = json!({
+            "icon": actions::icon(action, &self.files),
+            "doing": if action.starts_with("to-") { format!("Converting to {label}") } else { label },
+            "files": files::summary(&self.files),
+            "progress": 0.0,
+        });
+        self.bubble = Some(ctx.show_bubble(self.bubble_spec()));
         let finished = self.finished.clone();
+        let progress = self.progress.clone();
         let action = action.to_owned();
         tokio::spawn(async move {
-            let outcome = execute(&plan).await.map(|()| plan);
+            let outcome = execute(&plan, &progress).await.map(|()| plan);
             let _ = finished.send((action, outcome));
         });
         Ok(())
     }
 
+    fn bubble_spec(&self) -> BubbleSpec {
+        BubbleSpec::new("Progress")
+            .key("progress")
+            .area(Area::CenterRight)
+            .order(-7)
+            .payload(self.working.clone())
+    }
+
+    /// The running action moved on.
+    fn progressed(&mut self, ctx: &ModuleCtx, fraction: f64) {
+        if let Some(bubble) = self.bubble {
+            self.working["progress"] = json!(fraction.clamp(0.0, 1.0));
+            ctx.update_bubble(bubble, self.working.clone());
+        }
+    }
+
     fn finish(&mut self, ctx: &ModuleCtx, action: String, outcome: Outcome) {
         self.running = None;
+        if let Some(bubble) = self.bubble.take() {
+            ctx.hide_bubble(bubble);
+        }
+        // Closed meanwhile: say how it went on the island.
+        if self.panel.is_none() {
+            let (icon, text) = match &outcome {
+                Ok(plan) => ("check_circle", plan.done.clone()),
+                Err(error) => ("error", error.clone()),
+            };
+            ctx.present(
+                ActivitySpec::new("Notice")
+                    .key("notice")
+                    .priority(Priority::HIGH)
+                    .timeout(DONE_TIMEOUT)
+                    .payload(json!({ "icon": icon, "text": text, "failed": outcome.is_err() })),
+            );
+        }
         match outcome {
             Ok(plan) => {
                 tracing::info!(action, done = %plan.done, "drop");
@@ -395,8 +456,11 @@ impl State {
 
 /// Runs a plan's steps in turn; the first to fail stops it, with what it
 /// printed.
-async fn execute(plan: &Plan) -> Result<(), String> {
-    for step in &plan.steps {
+async fn execute(plan: &Plan, progress: &mpsc::UnboundedSender<f64>) -> Result<(), String> {
+    let total = plan.steps.len().max(1) as f64;
+    for (index, step) in plan.steps.iter().enumerate() {
+        let done = index as f64;
+        let _ = progress.send(done / total);
         match step {
             Step::MakeDir(folder) => tokio::fs::create_dir_all(folder)
                 .await
@@ -426,6 +490,12 @@ async fn execute(plan: &Plan) -> Result<(), String> {
                     None,
                 )?;
             }
+            Step::Run { program, args, cwd } if program == "ffmpeg" => {
+                ffmpeg(args, cwd, |fraction| {
+                    let _ = progress.send((done + fraction) / total);
+                })
+                .await?;
+            }
             Step::Run { program, args, cwd } => {
                 let output = tokio::process::Command::new(program)
                     .args(args)
@@ -448,6 +518,88 @@ async fn execute(plan: &Plan) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Runs ffmpeg, reporting how far into the input it is, from its
+/// `-progress` lines against the length ffprobe reads.
+async fn ffmpeg(
+    args: &[std::ffi::OsString],
+    cwd: &std::path::Path,
+    report: impl Fn(f64),
+) -> Result<(), String> {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    let input = args
+        .iter()
+        .position(|arg| arg == "-i")
+        .and_then(|index| args.get(index + 1));
+    let length = match input {
+        Some(input) => duration(input).await,
+        None => None,
+    };
+    let mut child = tokio::process::Command::new("ffmpeg")
+        .args(["-progress", "pipe:1", "-nostats"])
+        .args(args)
+        .current_dir(cwd)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true)
+        .spawn()
+        .map_err(|error| format!("can't run ffmpeg: {error}"))?;
+    let mut said = String::new();
+    let mut errors = child.stderr.take().map(BufReader::new);
+    if let Some(stdout) = child.stdout.take() {
+        let mut lines = BufReader::new(stdout).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            // Microseconds, whatever the name says.
+            if let (Some(length), Some(time)) = (length, line.strip_prefix("out_time_us="))
+                && let Ok(micros) = time.trim().parse::<f64>()
+            {
+                report((micros / 1_000_000.0 / length).clamp(0.0, 1.0));
+            }
+        }
+    }
+    if let Some(errors) = &mut errors {
+        let _ = tokio::io::AsyncReadExt::read_to_string(errors, &mut said).await;
+    }
+    let status = child
+        .wait()
+        .await
+        .map_err(|error| format!("ffmpeg stopped: {error}"))?;
+    if status.success() {
+        Ok(())
+    } else {
+        let last = said
+            .lines()
+            .rev()
+            .find(|line| !line.trim().is_empty())
+            .unwrap_or("");
+        Err(format!("ffmpeg failed: {}", last.trim()))
+    }
+}
+
+/// How long a video or a sound lasts, in seconds, from ffprobe.
+async fn duration(input: &std::ffi::OsStr) -> Option<f64> {
+    let output = tokio::process::Command::new("ffprobe")
+        .args([
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "csv=p=0",
+        ])
+        .arg(input)
+        .stdin(Stdio::null())
+        .output()
+        .await
+        .ok()?;
+    String::from_utf8_lossy(&output.stdout)
+        .trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|length| *length > 0.0)
 }
 
 #[cfg(test)]
@@ -486,7 +638,7 @@ mod tests {
             done: "Done".into(),
             result: None,
         };
-        execute(&plan).await.unwrap();
+        execute(&plan, &mpsc::unbounded_channel().0).await.unwrap();
         assert_eq!(
             std::fs::read_to_string(dir.join("made/out.txt")).unwrap(),
             "hi\n"
@@ -499,7 +651,10 @@ mod tests {
             }],
             ..plan
         };
-        assert_eq!(execute(&failing).await, Err("sh failed: broken".into()));
+        assert_eq!(
+            execute(&failing, &mpsc::unbounded_channel().0).await,
+            Err("sh failed: broken".into())
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

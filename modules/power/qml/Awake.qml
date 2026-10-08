@@ -5,6 +5,8 @@ import qs.island
 // mistake. A click turns it off.
 Item {
     property var payload: ({})
+    // What the pointer resting on it shows beside it.
+    readonly property string tooltip: "Keep awake is on · click to turn it off"
 
     implicitWidth: 26
     implicitHeight: 26

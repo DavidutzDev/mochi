@@ -10,6 +10,10 @@
 # front for news_ms milliseconds, then goes back.
 # stack = false
 # news_ms = 4000
+# How long the pointer rests on a bubble before a tooltip says more about
+# it, in milliseconds: the track playing, the network, who uses the
+# microphone. 0 shows none.
+# tooltip_ms = 600
 
 # Each module puts its bubbles where it thinks best. A [bubbles.<module>]
 # section moves them, for example:

@@ -7,6 +7,13 @@ Item {
     id: root
 
     property var payload: ({})
+    // What the pointer resting on it shows beside it.
+    readonly property string tooltip: {
+        const parts = [payload.label ?? ""];
+        if (payload.vpn)
+            parts.push(`VPN ${payload.vpn}`);
+        return parts.filter(part => part).join(" · ");
+    }
 
     implicitWidth: 26
     implicitHeight: 26

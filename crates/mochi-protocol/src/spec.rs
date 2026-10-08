@@ -261,6 +261,10 @@ pub struct BubbleSpec {
     /// Showing it again over the one with the same key is news: a stack
     /// brings it to the front for a while. A new bubble always is.
     pub news: bool,
+    /// What the pointer resting on it shows beside it. A view can say more
+    /// with a `tooltip` property, worked out from its payload.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tooltip: Option<String>,
 }
 
 impl Default for BubbleSpec {
@@ -282,7 +286,14 @@ impl BubbleSpec {
             order: 0,
             priority: Priority::NORMAL,
             news: false,
+            tooltip: None,
         }
+    }
+
+    /// What the pointer resting on it shows beside it.
+    pub fn tooltip(mut self, text: impl Into<String>) -> Self {
+        self.tooltip = Some(text.into());
+        self
     }
 
     /// Replaces the module's bubble with the same key in place.

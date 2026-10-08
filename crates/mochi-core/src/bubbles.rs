@@ -325,6 +325,7 @@ fn bubble(placed: &Placed<'_>, wide: Option<&str>) -> Bubble {
         group: placed.group.map(str::to_owned),
         priority: placed.entry.spec.priority.0,
         news: placed.entry.news,
+        tooltip: placed.entry.spec.tooltip.clone(),
     }
 }
 

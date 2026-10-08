@@ -8,6 +8,13 @@ Item {
 
     property var payload: ({})
     readonly property color tint: payload.critical ? Theme.danger : Theme.accent
+    // What the pointer resting on it shows beside it.
+    readonly property string tooltip: {
+        const parts = [`Battery at ${payload.level ?? 0}%`];
+        if (payload.left)
+            parts.push(`${payload.left} left`);
+        return parts.join(" · ");
+    }
 
     implicitWidth: row.implicitWidth + 10
     implicitHeight: 26

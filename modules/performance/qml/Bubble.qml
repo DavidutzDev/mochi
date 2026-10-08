@@ -8,6 +8,8 @@ Item {
 
     property var payload: ({})
     readonly property var critical: payload.critical ?? []
+    // What the pointer resting on it shows beside it.
+    readonly property string tooltip: (payload.critical ?? []).map(reading => `${reading.label} at ${reading.value}`).join(" · ")
 
     implicitWidth: row.implicitWidth + 10
     implicitHeight: 26

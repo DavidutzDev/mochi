@@ -8,6 +8,8 @@ Item {
 
     property var payload: ({})
     readonly property bool attention: payload.attention ?? false
+    // What the pointer resting on it shows beside it.
+    readonly property string tooltip: attention ? "An app asks for attention" : "Tray"
 
     implicitWidth: 26
     implicitHeight: 26

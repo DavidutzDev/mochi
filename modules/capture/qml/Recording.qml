@@ -6,6 +6,8 @@ import qs.island
 // adds the time.
 Item {
     property var payload: ({})
+    // What the pointer resting on it shows beside it.
+    readonly property string tooltip: "Recording the screen · click to stop"
 
     implicitWidth: 26
     implicitHeight: 26

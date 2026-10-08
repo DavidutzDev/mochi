@@ -18,4 +18,6 @@ With `stack = true`, each area shows one bubble instead of a row: the most impor
 
 A bubble with news comes to the front for `news_ms`, 4 seconds by default, then goes back behind the most important one. News is a bubble appearing, or a change its module calls news: one more missed notification, another network, a device connecting, the battery turning critical, an app asking for attention in the tray, a reading turning critical. Changes that come all the time, like a timer or the CPU's use, never do. A module marks a showing as news with `BubbleSpec::news()`; a bubble's priority decides which is in front otherwise.
 
+Resting the pointer on a bubble for `tooltip_ms`, 600 milliseconds by default, shows a tooltip beside it with more: the track and the artist, the network and its VPN, the battery's time left, who uses the microphone or the camera, how far a conversion is. `tooltip_ms = 0` turns them off. A module sets one with `BubbleSpec::tooltip(text)`, and a bubble's view can work one out from its payload with a `tooltip` property, which wins.
+
 A stack holds every bubble of its area, so `max_per_area` doesn't apply to it.

@@ -9,6 +9,13 @@ Item {
     id: root
 
     property var payload: ({})
+    // What the pointer resting on it shows beside it.
+    readonly property string tooltip: {
+        const parts = [payload.title, payload.artist].filter(part => part);
+        if (payload.status === "paused")
+            parts.push("paused");
+        return parts.join(" · ");
+    }
 
     implicitWidth: 26
     implicitHeight: 26
