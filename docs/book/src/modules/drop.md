@@ -25,7 +25,7 @@ Under **Convert to**, a button for each format the files convert to:
 
 A JPEG has no transparency, so transparent pixels land on white; an icon is at most 256 pixels a side.
 
-While an action runs, a bubble next to the island shows what the files are and a ring that fills as it goes, from ffmpeg's own progress for videos and sound; the panel can close meanwhile. Resting the pointer on the bubble says what it's doing and how far, and a click opens the panel again. When it finishes with the panel closed, the island says how it went.
+While an action runs, a bubble next to the island shows what the files are and a ring that fills as it goes, from ffmpeg's own progress for videos and sound; the panel can close meanwhile. Resting the pointer on the bubble says what it's doing and how far, and a click opens the panel again. There, **Stop**, or `mochi ipc drop stop`, ends it: the program it runs is killed, and what it made, finished or half written, is removed. The dropped files are never touched. When it finishes with the panel closed, the island says how it went.
 
 When something dropped needs a program that isn't installed, the panel says which, like "Install ffmpeg to convert videos", and the other files still convert: an image and a video dropped together still offer GIF for the image.
 

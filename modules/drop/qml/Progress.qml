@@ -5,7 +5,7 @@ import qs.island
 // The bubble while an action on dropped files runs, so the panel can
 // close meanwhile: what the files are as an icon, and a ring that fills as
 // it goes. Before it can tell how far, the ring turns. A click opens the
-// panel again.
+// panel again, where Stop ends it.
 Item {
     id: root
 
@@ -16,7 +16,7 @@ Item {
         const parts = [`${payload.doing ?? "Working"}: ${payload.files ?? ""}`];
         if (progress > 0)
             parts.push(`${Math.round(progress * 100)}%`);
-        return parts.join(" · ");
+        return parts.join(" · ") + "\nClick to see it, or stop it";
     }
 
     implicitWidth: 26

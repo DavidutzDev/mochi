@@ -163,6 +163,7 @@ impl Module for DropModule {
                 "action",
                 "zip, extract, merge, copy, open, or to- and a format, like to-png",
             )),
+            ActionSpec::new("stop", "Stop the action running, and remove what it made"),
             ActionSpec::new("show", "Show where the result went"),
             ActionSpec::new("close", "Close the panel"),
         ]
@@ -189,6 +190,8 @@ impl Module for DropModule {
                 progress,
                 bubble: None,
                 working: Value::Null,
+                task: None,
+                making: Vec::new(),
             };
             loop {
                 tokio::select! {
@@ -251,6 +254,9 @@ struct State {
     /// The bubble while an action runs, and what it shows.
     bubble: Option<BubbleId>,
     working: Value,
+    /// The running action's task, which stopping drops, and what it makes.
+    task: Option<tokio::task::JoinHandle<()>>,
+    making: Vec<PathBuf>,
 }
 
 impl State {
@@ -307,6 +313,7 @@ impl State {
                 self.close(ctx);
                 Ok(())
             }
+            "stop" => self.stop(ctx),
             other => Err(format!("drop has no action {other}")),
         };
         command.reply(result);
@@ -342,13 +349,61 @@ impl State {
             "progress": 0.0,
         });
         self.bubble = Some(ctx.show_bubble(self.bubble_spec()));
+        self.making = plan.made();
         let finished = self.finished.clone();
         let progress = self.progress.clone();
         let action = action.to_owned();
-        tokio::spawn(async move {
+        self.task = Some(tokio::spawn(async move {
             let outcome = execute(&plan, &progress).await.map(|()| plan);
             let _ = finished.send((action, outcome));
-        });
+        }));
+        Ok(())
+    }
+
+    /// Stops the running action: dropping its task kills the program it
+    /// runs, then what it made goes, half written or not.
+    fn stop(&mut self, ctx: &ModuleCtx) -> Result<(), String> {
+        let task = self.task.take().ok_or("nothing is running")?;
+        task.abort();
+        let action = self.running.take().unwrap_or_default();
+        for path in std::mem::take(&mut self.making) {
+            let removed = if path.is_dir() {
+                std::fs::remove_dir_all(&path)
+            } else {
+                std::fs::remove_file(&path)
+            };
+            match removed {
+                Ok(()) => {
+                    tracing::debug!(path = %path.display(), "removed what a stopped action made")
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => {
+                    tracing::warn!(path = %path.display(), %error, "can't remove what a stopped action made")
+                }
+            }
+        }
+        // LibreOffice's folder of its own.
+        if let Some(parent) = self.files.first().and_then(|file| file.path.parent())
+            && let Ok(entries) = std::fs::read_dir(parent)
+        {
+            for entry in entries.flatten() {
+                if entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".mochi-convert-")
+                {
+                    let _ = std::fs::remove_dir_all(entry.path());
+                }
+            }
+        }
+        if let Some(bubble) = self.bubble.take() {
+            ctx.hide_bubble(bubble);
+        }
+        tracing::info!(action, "stopped");
+        self.message = Some("Stopped".to_owned());
+        self.failed = false;
+        self.result = None;
+        self.update(ctx);
         Ok(())
     }
 
@@ -370,6 +425,8 @@ impl State {
 
     fn finish(&mut self, ctx: &ModuleCtx, action: String, outcome: Outcome) {
         self.running = None;
+        self.task = None;
+        self.making.clear();
         if let Some(bubble) = self.bubble.take() {
             ctx.hide_bubble(bubble);
         }

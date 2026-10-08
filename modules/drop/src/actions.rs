@@ -60,6 +60,35 @@ pub struct Plan {
     pub result: Option<PathBuf>,
 }
 
+/// Programs whose last argument is the file they write.
+const WRITES_LAST: [&str; 7] = [
+    "ffmpeg", "pandoc", "magick", "convert", "vtracer", "pdfunite", "qpdf",
+];
+
+impl Plan {
+    /// What it makes: files and folders under new names, never the dropped
+    /// files. Stopping it removes them, half written or not.
+    pub fn made(&self) -> Vec<PathBuf> {
+        let mut made: Vec<PathBuf> = self
+            .steps
+            .iter()
+            .filter_map(|step| match step {
+                Step::MakeDir(folder) => Some(folder.clone()),
+                Step::Move { to, .. } => Some(to.clone()),
+                Step::Image { output, .. } => Some(output.clone()),
+                Step::Run { program, args, .. } if WRITES_LAST.contains(&program.as_str()) => {
+                    args.last().map(PathBuf::from)
+                }
+                Step::Run { .. } => None,
+            })
+            .chain(self.result.clone())
+            .collect();
+        made.sort();
+        made.dedup();
+        made
+    }
+}
+
 /// A format files convert to.
 struct Format {
     /// Its extension, which is also the action's id after `to-`.
@@ -792,6 +821,33 @@ mod tests {
             offered(&folder, &all(), &everything)
                 .iter()
                 .all(|action| !action.convert)
+        );
+    }
+
+    #[test]
+    fn plans_know_what_they_make() {
+        let everything = |_: &str| true;
+        let videos = [
+            file("/nowhere/a.mp4", Kind::Video),
+            file("/nowhere/b.mkv", Kind::Video),
+        ];
+        let webm = plan("to-webm", &videos, &everything).unwrap();
+        assert_eq!(
+            webm.made(),
+            [
+                PathBuf::from("/nowhere/a.webm"),
+                PathBuf::from("/nowhere/b.webm")
+            ]
+        );
+        let archive = [file("/nowhere/backup.zip", Kind::Archive)];
+        let extract = plan("extract", &archive, &everything).unwrap();
+        assert_eq!(extract.made(), [PathBuf::from("/nowhere/backup")]);
+        // Copying makes nothing to undo.
+        assert!(
+            plan("copy", &videos, &everything)
+                .unwrap()
+                .made()
+                .is_empty()
         );
     }
 

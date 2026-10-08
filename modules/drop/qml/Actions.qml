@@ -2,8 +2,9 @@ import QtQuick
 import qs.island
 
 // What was dropped and what to do with it: a button for each action that
-// fits. While one runs, its button says so; after, the result shows, with
-// a way to its folder. Escape closes it.
+// fits. While one runs, its button says so and Stop ends it, removing
+// what it made; after, the result shows, with a way to its folder. Escape
+// closes it.
 Item {
     id: root
 
@@ -100,6 +101,28 @@ Item {
                     enabled: !root.busy
                     onClicked: Daemon.command("drop", "run", [modelData.id])
                 }
+            }
+        }
+
+        // While an action runs: stopping it removes what it made.
+        Row {
+            visible: root.busy
+            spacing: Theme.spaceSmall
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Working…"
+                color: Theme.muted
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+            }
+
+            Button {
+                anchors.verticalCenter: parent.verticalCenter
+                icon: "stop"
+                text: "Stop"
+                tone: "danger"
+                onClicked: Daemon.command("drop", "stop", [])
             }
         }
 
