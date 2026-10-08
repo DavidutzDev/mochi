@@ -104,6 +104,37 @@ Item {
             }
         }
 
+        // For videos: which encoder the conversions use.
+        SectionLabel {
+            visible: (root.payload.encoders ?? []).length > 0 && root.formats.length > 0
+            text: "Video encoder"
+        }
+
+        Flow {
+            width: column.width
+            visible: (root.payload.encoders ?? []).length > 0 && root.formats.length > 0
+            spacing: Theme.spaceSmall
+
+            Repeater {
+                model: [
+                    {
+                        "id": "auto",
+                        "label": "Auto"
+                    }
+                ].concat(root.payload.encoders ?? [])
+
+                Button {
+                    required property var modelData
+                    readonly property bool picked: (root.payload.encoder || "auto") === modelData.id
+
+                    text: modelData.label
+                    tone: picked ? "accent" : "ghost"
+                    enabled: !root.busy
+                    onClicked: Daemon.command("drop", "encoder", [modelData.id])
+                }
+            }
+        }
+
         // While an action runs: stopping it removes what it made.
         Row {
             visible: root.busy

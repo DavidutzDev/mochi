@@ -17,8 +17,9 @@
 # The recorder, with any options of your own. It needs to speak
 # gpu-screen-recorder's options.
 # recorder = ["gpu-screen-recorder"]
-# The video codec, like "h264_vulkan" or "hevc". "" picks one: a hardware
-# encoder when the GPU has one, otherwise Vulkan, and the CPU as a last resort.
+# The video codec recordings start with, like "h264_vulkan" or "hevc". ""
+# picks one: a hardware encoder when the GPU has one, otherwise Vulkan, and
+# the CPU as a last resort.
 # codec = ""
 # The frame rate and the resolution recordings start with; the picker
 # steps through 15, 30, 60, 90 and 120 fps, and "native", "480p", "720p",
@@ -26,6 +27,10 @@
 # keeping its shape, and never up.
 # framerate = 60
 # resolution = "native"
+# The file a recording goes in: "mp4", "mkv", which survives the recorder
+# stopping hard, or "webm", which takes only AV1, VP9 and VP8. The picker
+# steps through these and through the codecs the recorder has.
+# container = "mp4"
 # The sound to record, and the microphone the picker can add. "" for none.
 # audio = "default_output"
 # microphone = "default_input"

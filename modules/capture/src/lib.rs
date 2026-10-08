@@ -71,6 +71,8 @@ struct Settings {
     recorder: Vec<String>,
     framerate: u32,
     resolution: Resolution,
+    /// The file a recording goes in: mp4, mkv or webm.
+    container: record::Container,
     #[schemars(extend("x-source" = "audio-device"))]
     audio: String,
     #[schemars(extend("x-source" = "audio-device"))]
@@ -95,6 +97,7 @@ impl Default for Settings {
             recorder: vec!["gpu-screen-recorder".into()],
             framerate: 60,
             resolution: Resolution::Native,
+            container: record::Container::Mp4,
             audio: "default_output".into(),
             microphone: "default_input".into(),
             record_audio: true,
@@ -279,6 +282,29 @@ impl Module for Capture {
                 )
                 .optional(),
             ),
+            ActionSpec::new(
+                "codec",
+                "Set the recording's video codec, or step to the next the recorder has",
+            )
+            .arg(
+                ArgSpec::string(
+                    "codec",
+                    "Like h264, hevc, av1 or auto; the next when left out",
+                )
+                .optional(),
+            ),
+            ActionSpec::new(
+                "container",
+                "Set the recording's file format, or step to the next",
+            )
+            .arg(
+                ArgSpec::choice(
+                    "container",
+                    "mp4, mkv or webm; the next when left out",
+                    ["mp4", "mkv", "webm"],
+                )
+                .optional(),
+            ),
             ActionSpec::new("layout", "Where the screens are; the overlay sends this")
                 .arg(ArgSpec::int("session", "The picker it belongs to"))
                 .arg(ArgSpec::string("screens", "Each screen as name x y width height").rest()),
@@ -351,8 +377,9 @@ impl Module for Capture {
             state.publish_history(&ctx);
             loop {
                 tokio::select! {
-                    codec = probed(&mut probe) => {
-                        state.codec = codec;
+                    found = probed(&mut probe) => {
+                        state.codec = found.pick;
+                        state.codecs = found.codecs;
                         probe = None;
                     }
                     event = ctx.next_event() => match event {
@@ -376,9 +403,9 @@ impl Module for Capture {
 }
 
 /// Waits for the codec probe, or forever once it answered.
-async fn probed(probe: &mut Option<JoinHandle<Option<&'static str>>>) -> Option<&'static str> {
+async fn probed(probe: &mut Option<JoinHandle<record::Probe>>) -> record::Probe {
     match probe {
-        Some(probe) => probe.await.ok().flatten(),
+        Some(probe) => probe.await.unwrap_or_default(),
         None => std::future::pending().await,
     }
 }
@@ -451,6 +478,8 @@ impl Session {
             "microphone": self.setup.microphone,
             "framerate": self.setup.framerate,
             "resolution": self.setup.resolution.as_str(),
+            "codec": record::codec_label(&self.setup.codec),
+            "container": self.setup.container.as_str(),
             "output": self.output,
             "frames": frames.display().to_string(),
             "windows": self.windows.as_ref().map(|windows| windows
@@ -494,13 +523,16 @@ impl Session {
 }
 
 /// What a recording hears, and its quality.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct Setup {
     /// The desktop audio, `audio` in the settings.
     desktop: bool,
     microphone: bool,
     framerate: u32,
     resolution: Resolution,
+    /// The video codec; empty for the recorder's pick.
+    codec: String,
+    container: record::Container,
 }
 
 /// A file the island shows after a capture.
@@ -530,6 +562,8 @@ struct State {
     preview: Option<ActivityId>,
     /// The video codec the probe picked, when it picked one.
     codec: Option<&'static str>,
+    /// Every codec the recorder lists here, for the picker to step through.
+    codecs: Vec<String>,
     /// What the card shows, to add a recording's thumbnail once it's made.
     preview_payload: Value,
     /// Where thumbnails go; `None` without a home.
@@ -573,6 +607,7 @@ impl State {
             history: Vec::new(),
             preview: None,
             codec: None,
+            codecs: Vec::new(),
             preview_payload: Value::Null,
             thumbnails: thumbs::folder(),
             thumbnailing: false,
@@ -623,6 +658,58 @@ impl State {
                 let asked = args.str("resolution").and_then(Resolution::parse);
                 self.change_setup(ctx, |setup| {
                     setup.resolution = asked.unwrap_or_else(|| setup.resolution.next());
+                })
+            }
+            "codec" => {
+                let container = self
+                    .session
+                    .as_ref()
+                    .map_or(self.settings.container, |session| session.setup.container);
+                let choices = self.codec_choices(container);
+                let asked = args.str("codec").map(str::to_owned);
+                match asked {
+                    Some(codec) if codec != "auto" && !self.codecs.contains(&codec) => {
+                        Err(format!("{codec} isn't one the recorder lists here"))
+                    }
+                    asked => self.change_setup(ctx, |setup| {
+                        setup.codec = match asked {
+                            Some(codec) if codec == "auto" => String::new(),
+                            Some(codec) => codec,
+                            None => {
+                                let at = choices.iter().position(|codec| *codec == setup.codec);
+                                choices
+                                    .get(at.map_or(0, |at| (at + 1) % choices.len().max(1)))
+                                    .cloned()
+                                    .unwrap_or_default()
+                            }
+                        };
+                    }),
+                }
+            }
+            "container" => {
+                let asked = args.str("container").and_then(record::Container::parse);
+                let choices: Vec<String> = self.codecs.clone();
+                // A container no codec here fits is skipped, once the
+                // recorder said which it has.
+                let fits = |container: record::Container| {
+                    choices.is_empty() || choices.iter().any(|codec| container.takes(codec))
+                };
+                self.change_setup(ctx, |setup| {
+                    setup.container = asked.unwrap_or_else(|| {
+                        let mut next = setup.container.next();
+                        while !fits(next) && next != setup.container {
+                            next = next.next();
+                        }
+                        next
+                    });
+                    // WebM takes only some codecs: the first that fits.
+                    if !setup.container.takes(&setup.codec) {
+                        setup.codec = choices
+                            .iter()
+                            .find(|codec| setup.container.takes(codec))
+                            .cloned()
+                            .unwrap_or_default();
+                    }
                 })
             }
             "layout" => self.layout(ctx, args).await,
@@ -796,7 +883,7 @@ impl State {
             return Err(format!("can't pick a {} here", mode.as_str()));
         }
         if session.kind == Kind::Recording && mode == Mode::Window {
-            let setup = session.setup;
+            let setup = session.setup.clone();
             self.close(ctx);
             return self.start_recording(ctx, Target::Portal, setup);
         }
@@ -812,7 +899,26 @@ impl State {
             microphone: self.settings.record_microphone,
             framerate: self.settings.framerate,
             resolution: self.settings.resolution,
+            // WebM takes only some codecs, so it names one.
+            codec: if self.settings.container.takes(&self.settings.codec) {
+                self.settings.codec.clone()
+            } else {
+                self.codec_choices(self.settings.container)
+                    .into_iter()
+                    .find(|codec| !codec.is_empty())
+                    .unwrap_or_default()
+            },
+            container: self.settings.container,
         }
+    }
+
+    /// The codecs to step through: the recorder's pick, then each it lists
+    /// that goes in the container.
+    fn codec_choices(&self, container: record::Container) -> Vec<String> {
+        std::iter::once(String::new())
+            .chain(self.codecs.iter().cloned())
+            .filter(|codec| container.takes(codec))
+            .collect()
     }
 
     fn change_setup(
@@ -877,7 +983,7 @@ impl State {
             return Ok(());
         }
         if session.kind == Kind::Recording {
-            let setup = session.setup;
+            let setup = session.setup.clone();
             // A whole screen records the output itself, which follows a
             // change of resolution.
             let target = match session.mode {
@@ -1011,7 +1117,7 @@ impl State {
         std::fs::create_dir_all(&self.recordings)
             .map_err(|error| format!("cannot create {}: {error}", self.recordings.display()))?;
         let name = files::timestamp(&self.settings.recording_name, SystemTime::now());
-        let file = files::unused(&self.recordings, &name, "mp4");
+        let file = files::unused(&self.recordings, &name, setup.container.as_str());
         let mut audio = Vec::new();
         if setup.desktop {
             audio.push(self.settings.audio.as_str());
@@ -1024,10 +1130,10 @@ impl State {
             framerate: setup.framerate,
             limit: record::limit(setup.resolution, size),
             audio,
-            codec: if self.settings.codec.is_empty() {
+            codec: if setup.codec.is_empty() {
                 self.codec
             } else {
-                Some(self.settings.codec.as_str())
+                Some(setup.codec.as_str())
             },
         };
         let argv = record::command(&options, target, &file);
@@ -1432,6 +1538,8 @@ mod tests {
                 microphone: false,
                 framerate: 60,
                 resolution: Resolution::Native,
+                codec: String::new(),
+                container: record::Container::Mp4,
             },
             output: Some("DP-3".into()),
             windows,

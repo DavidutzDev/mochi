@@ -1,6 +1,11 @@
 # Drop: files dragged onto the island. It names what came and offers the
 # actions that fit.
 [module.drop]
+# The video encoder conversions start with, like "libx264", "libsvtav1" or
+# "h264_nvenc" for NVIDIA's; "" lets ffmpeg pick. The panel lists the ones
+# your ffmpeg has, and one that doesn't fit the file, like H.264 in WebM,
+# gives way to ffmpeg's pick.
+# video_encoder = ""
 # The actions to offer: zip (with zip or bsdtar), extract (bsdtar, unzip,
 # tar or 7z), merge for PDFs (pdfunite or qpdf), convert, copy for the
 # paths (wl-copy) and open (xdg-open). Images convert between PNG, JPEG,

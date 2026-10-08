@@ -46,6 +46,10 @@ pub struct DropModule;
 #[derive(Debug, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
+    /// The video encoder conversions start with; "" lets ffmpeg pick. The
+    /// panel lists the ones ffmpeg has.
+    #[schemars(extend("enum" = ["", "libx264", "libx265", "libsvtav1", "libaom-av1", "libvpx-vp9", "libvpx", "h264_nvenc", "hevc_nvenc", "av1_nvenc", "h264_amf"]))]
+    video_encoder: String,
     /// The actions to offer, when they fit: zip, extract, merge, convert,
     /// copy and open.
     #[schemars(extend("items" = { "type": "string", "enum": ["zip", "extract", "merge", "convert", "copy", "open"] }))]
@@ -55,6 +59,7 @@ struct Settings {
 impl Default for Settings {
     fn default() -> Self {
         Self {
+            video_encoder: String::new(),
             actions: actions::IDS.iter().map(|id| (*id).to_owned()).collect(),
         }
     }
@@ -165,6 +170,12 @@ impl Module for DropModule {
                 "zip, extract, merge, copy, open, or to- and a format, like to-png",
             )),
             ActionSpec::new("stop", "Stop the action running, and remove what it made"),
+            ActionSpec::new("encoder", "Pick the video encoder for conversions").arg(
+                ArgSpec::string(
+                    "encoder",
+                    "Like libx264 or h264_nvenc, or auto for ffmpeg's pick",
+                ),
+            ),
             ActionSpec::new("show", "Show where the result went"),
             ActionSpec::new("close", "Close the panel"),
         ]
@@ -193,6 +204,8 @@ impl Module for DropModule {
                 working: Value::Null,
                 task: None,
                 making: Vec::new(),
+                encoder: settings.video_encoder.clone(),
+                encoders: None,
             };
             loop {
                 tokio::select! {
@@ -255,6 +268,10 @@ struct State {
     /// The bubble while an action runs, and what it shows.
     bubble: Option<BubbleId>,
     working: Value,
+    /// The video encoder picked, "" for ffmpeg's own, and the ones ffmpeg
+    /// has, asked once.
+    encoder: String,
+    encoders: Option<Vec<&'static actions::Encoder>>,
     /// The running action's task, which stopping drops, and what it makes.
     task: Option<tokio::task::JoinHandle<()>>,
     making: Vec<PathBuf>,
@@ -286,6 +303,15 @@ impl State {
                     Err("none of those are files here".to_owned())
                 } else {
                     self.files = files;
+                    // The encoders, once, when videos first come.
+                    if self.encoders.is_none()
+                        && self
+                            .files
+                            .iter()
+                            .any(|file| file.kind == files::Kind::Video)
+                    {
+                        self.encoders = Some(ffmpeg_encoders());
+                    }
                     self.message = None;
                     self.failed = false;
                     self.result = None;
@@ -315,6 +341,20 @@ impl State {
                 Ok(())
             }
             "stop" => self.stop(ctx),
+            "encoder" => {
+                let asked = command.args.str("encoder").unwrap_or_default();
+                if asked == "auto" || asked.is_empty() {
+                    self.encoder.clear();
+                    self.update(ctx);
+                    Ok(())
+                } else if actions::ENCODERS.iter().any(|encoder| encoder.id == asked) {
+                    self.encoder = asked.to_owned();
+                    self.update(ctx);
+                    Ok(())
+                } else {
+                    Err(format!("no encoder {asked}"))
+                }
+            }
             other => Err(format!("drop has no action {other}")),
         };
         command.reply(result);
@@ -332,7 +372,10 @@ impl State {
         if !self.enabled.iter().any(|id| id == setting) {
             return Err(format!("{setting} is off in the settings"));
         }
-        let plan = actions::plan(action, &self.files, &mochi_core::process::installed)?;
+        let mut plan = actions::plan(action, &self.files, &mochi_core::process::installed)?;
+        if !self.encoder.is_empty() {
+            actions::use_encoder(&mut plan, &self.encoder);
+        }
         self.running = Some(action.to_owned());
         self.message = None;
         self.closing = None;
@@ -475,6 +518,18 @@ impl State {
                 }))
                 .collect::<Vec<_>>(),
             "missing": actions::missing(&self.files, &self.enabled, &mochi_core::process::installed),
+            // For videos: the encoders ffmpeg has, and the one picked.
+            "encoders": if self.files.iter().any(|file| file.kind == files::Kind::Video) {
+                self.encoders
+                    .as_deref()
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|encoder| json!({ "id": encoder.id, "label": encoder.label }))
+                    .collect::<Vec<_>>()
+            } else {
+                Vec::new()
+            },
+            "encoder": self.encoder,
             "running": self.running,
             "message": self.message,
             "failed": self.failed,
@@ -637,6 +692,40 @@ async fn ffmpeg(
             .unwrap_or("");
         Err(format!("ffmpeg failed: {}", last.trim()))
     }
+}
+
+/// The video encoders this ffmpeg has, among the ones offered; none
+/// without ffmpeg.
+fn ffmpeg_encoders() -> Vec<&'static actions::Encoder> {
+    let listing = std::process::Command::new("ffmpeg")
+        .args(["-hide_banner", "-encoders"])
+        .stdin(Stdio::null())
+        .stderr(Stdio::null())
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+        .unwrap_or_default();
+    // ffmpeg lists NVENC and AMF whatever the hardware: only the GPUs'
+    // makers here count.
+    let vendors: Vec<String> = std::fs::read_dir("/sys/class/drm")
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|card| std::fs::read_to_string(card.path().join("device/vendor")).ok())
+        .map(|vendor| vendor.trim().to_lowercase())
+        .collect();
+    let has = |vendor: &str| vendors.iter().any(|found| found == vendor);
+    actions::encoders(&listing)
+        .into_iter()
+        .filter(|encoder| {
+            if encoder.id.ends_with("_nvenc") {
+                has("0x10de")
+            } else if encoder.id.ends_with("_amf") {
+                has("0x1002")
+            } else {
+                true
+            }
+        })
+        .collect()
 }
 
 /// How long a video or a sound lasts, in seconds, from ffprobe.

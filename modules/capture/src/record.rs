@@ -199,8 +199,107 @@ pub fn video_codec(info: &str) -> Option<&'static str> {
         .find(|codec| codecs.contains(codec))
 }
 
+/// Every video codec `gpu-screen-recorder --info` lists, in its order.
+pub fn codecs(info: &str) -> Vec<String> {
+    info.lines()
+        .skip_while(|line| line.trim() != "section=video_codecs")
+        .skip(1)
+        .take_while(|line| !line.starts_with("section="))
+        .map(str::trim)
+        .filter(|codec| !codec.is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+/// What a codec is called on screen: `hevc_vulkan` reads "HEVC (Vulkan)".
+pub fn codec_label(codec: &str) -> String {
+    if codec.is_empty() {
+        return "Auto".to_owned();
+    }
+    let mut parts = codec.split('_');
+    let mut label = match parts.next().unwrap_or_default() {
+        "h264" => "H.264".to_owned(),
+        "hevc" => "HEVC".to_owned(),
+        "av1" => "AV1".to_owned(),
+        "vp8" => "VP8".to_owned(),
+        "vp9" => "VP9".to_owned(),
+        other => other.to_owned(),
+    };
+    let mut on = None;
+    for part in parts {
+        match part {
+            "hdr" => label.push_str(" HDR"),
+            "10bit" => label.push_str(" 10-bit"),
+            "vulkan" => on = Some("Vulkan"),
+            "software" => on = Some("CPU"),
+            other => label.push_str(&format!(" {other}")),
+        }
+    }
+    match on {
+        Some(on) => format!("{label} ({on})"),
+        None => label,
+    }
+}
+
+/// A container a recording goes in, by its extension.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Container {
+    /// Plays everywhere.
+    #[default]
+    Mp4,
+    /// Survives the recorder stopping hard.
+    Mkv,
+    /// For the web; only AV1, VP9 and VP8 go in it.
+    Webm,
+}
+
+impl Container {
+    pub const ALL: [Self; 3] = [Self::Mp4, Self::Mkv, Self::Webm];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Mp4 => "mp4",
+            Self::Mkv => "mkv",
+            Self::Webm => "webm",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|container| container.as_str() == text)
+    }
+
+    pub fn next(self) -> Self {
+        let at = Self::ALL
+            .iter()
+            .position(|container| *container == self)
+            .unwrap_or(0);
+        Self::ALL[(at + 1) % Self::ALL.len()]
+    }
+
+    /// Whether a codec goes in it; an empty one, the recorder's pick, does
+    /// except in WebM, where it must be named.
+    pub fn takes(self, codec: &str) -> bool {
+        match self {
+            Self::Webm => ["av1", "vp9", "vp8"].iter().any(|ok| codec.starts_with(ok)),
+            Self::Mp4 => !codec.starts_with("vp8"),
+            Self::Mkv => true,
+        }
+    }
+}
+
+/// What the recorder can do here: the codec to ask for by default, and
+/// every one it lists.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Probe {
+    pub pick: Option<&'static str>,
+    pub codecs: Vec<String>,
+}
+
 /// Asks the recorder which codecs work here.
-pub async fn probe(program: &str) -> Option<&'static str> {
+pub async fn probe(program: &str) -> Probe {
     let output = tokio::time::timeout(
         Duration::from_secs(10),
         Command::new(program)
@@ -209,12 +308,17 @@ pub async fn probe(program: &str) -> Option<&'static str> {
             .stderr(Stdio::null())
             .output(),
     )
-    .await
-    .ok()?
-    .ok()?;
-    let codec = video_codec(&String::from_utf8_lossy(&output.stdout));
-    tracing::info!(codec = codec.unwrap_or("auto"), "picked the video codec");
-    codec
+    .await;
+    let Ok(Ok(output)) = output else {
+        return Probe::default();
+    };
+    let info = String::from_utf8_lossy(&output.stdout);
+    let pick = video_codec(&info);
+    tracing::info!(codec = pick.unwrap_or("auto"), "picked the video codec");
+    Probe {
+        pick,
+        codecs: codecs(&info),
+    }
 }
 
 /// gpu-screen-recorder's usual failures, said short enough for the island
@@ -326,6 +430,23 @@ mod tests {
         let software = "section=video_codecs\nh264_software\n";
         assert_eq!(video_codec(software), None);
         assert_eq!(video_codec(""), None);
+    }
+
+    #[test]
+    fn lists_and_names_the_codecs() {
+        let info = "section=gpu_info\nvendor|nvidia\nsection=video_codecs\nh264\nhevc_10bit\nav1_vulkan\nsection=containers\nmp4\n";
+        assert_eq!(codecs(info), ["h264", "hevc_10bit", "av1_vulkan"]);
+        assert_eq!(codec_label("hevc_10bit"), "HEVC 10-bit");
+        assert_eq!(codec_label("av1_vulkan"), "AV1 (Vulkan)");
+        assert_eq!(codec_label("hevc_hdr_vulkan"), "HEVC HDR (Vulkan)");
+        assert_eq!(codec_label("h264_software"), "H.264 (CPU)");
+        assert_eq!(codec_label(""), "Auto");
+        assert!(
+            Container::Webm.takes("vp9")
+                && !Container::Webm.takes("h264")
+                && !Container::Webm.takes("")
+        );
+        assert_eq!(Container::Webm.next(), Container::Mp4);
     }
 
     #[test]

@@ -237,6 +237,103 @@ const FORMATS: [Format; 26] = [
     },
 ];
 
+/// A video encoder ffmpeg may have: its name, what it reads as, and the
+/// containers it goes in.
+#[derive(Debug)]
+pub struct Encoder {
+    pub id: &'static str,
+    pub label: &'static str,
+    containers: &'static [&'static str],
+}
+
+/// The video encoders a conversion can pick, in the order offered: on the
+/// CPU, then on NVIDIA's NVENC.
+pub const ENCODERS: [Encoder; 10] = [
+    Encoder {
+        id: "libx264",
+        label: "H.264",
+        containers: &["mp4", "mkv"],
+    },
+    Encoder {
+        id: "libx265",
+        label: "HEVC",
+        containers: &["mp4", "mkv"],
+    },
+    Encoder {
+        id: "libsvtav1",
+        label: "AV1",
+        containers: &["mp4", "mkv", "webm"],
+    },
+    Encoder {
+        id: "libaom-av1",
+        label: "AV1 (libaom)",
+        containers: &["mp4", "mkv", "webm"],
+    },
+    Encoder {
+        id: "libvpx-vp9",
+        label: "VP9",
+        containers: &["webm", "mkv", "mp4"],
+    },
+    Encoder {
+        id: "libvpx",
+        label: "VP8",
+        containers: &["webm", "mkv"],
+    },
+    Encoder {
+        id: "h264_nvenc",
+        label: "H.264 (NVIDIA)",
+        containers: &["mp4", "mkv"],
+    },
+    Encoder {
+        id: "hevc_nvenc",
+        label: "HEVC (NVIDIA)",
+        containers: &["mp4", "mkv"],
+    },
+    Encoder {
+        id: "av1_nvenc",
+        label: "AV1 (NVIDIA)",
+        containers: &["mp4", "mkv", "webm"],
+    },
+    Encoder {
+        id: "h264_amf",
+        label: "H.264 (AMD)",
+        containers: &["mp4", "mkv"],
+    },
+];
+
+/// The encoders `ffmpeg -encoders` lists, among the ones offered.
+pub fn encoders(listing: &str) -> Vec<&'static Encoder> {
+    let listed: Vec<&str> = listing
+        .lines()
+        .filter(|line| line.trim_start().starts_with('V'))
+        .filter_map(|line| line.split_whitespace().nth(1))
+        .collect();
+    ENCODERS
+        .iter()
+        .filter(|encoder| listed.contains(&encoder.id))
+        .collect()
+}
+
+/// Makes the video conversions in `plan` use `encoder`, where it goes in
+/// the file they write; the others keep ffmpeg's own pick.
+pub fn use_encoder(plan: &mut Plan, encoder: &str) {
+    let Some(encoder) = ENCODERS.iter().find(|known| known.id == encoder) else {
+        return;
+    };
+    for step in &mut plan.steps {
+        let Step::Run { program, args, .. } = step else {
+            continue;
+        };
+        let Some(out) = args.last().map(PathBuf::from) else {
+            continue;
+        };
+        if program == "ffmpeg" && encoder.containers.contains(&extension(&out).as_str()) {
+            let at = args.len() - 1;
+            args.splice(at..at, ["-c:v".into(), encoder.id.into()]);
+        }
+    }
+}
+
 /// Image formats Mochi reads and writes itself.
 const NATIVE_READ: [&str; 8] = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "tif", "tiff"];
 const NATIVE_WRITE: [&str; 7] = ["png", "jpg", "webp", "gif", "bmp", "tiff", "ico"];
@@ -1011,6 +1108,27 @@ mod tests {
         assert_eq!(zip.made().len(), 2);
         // Without a program that reads it, a 7z stays.
         assert!(plan("to-zip", &seven, &|program: &str| program == "zip").is_err());
+    }
+
+    #[test]
+    fn conversions_take_the_encoder_picked() {
+        let listing = " V....D libx264  H.264\n V....D h264_nvenc  NVENC\n A....D aac  AAC\n V..... libvpx-vp9  VP9\n";
+        let ids: Vec<&str> = encoders(listing).iter().map(|encoder| encoder.id).collect();
+        assert_eq!(ids, ["libx264", "libvpx-vp9", "h264_nvenc"]);
+
+        let everything = |_: &str| true;
+        let video = [file("/nowhere/clip.mkv", Kind::Video)];
+        let mut mp4 = plan("to-mp4", &video, &everything).unwrap();
+        use_encoder(&mut mp4, "h264_nvenc");
+        let words = args(&mp4.steps[0]);
+        assert_eq!(
+            &words[words.len() - 3..],
+            ["-c:v", "h264_nvenc", "/nowhere/clip.mp4"]
+        );
+        // H.264 doesn't go in WebM: ffmpeg picks.
+        let mut webm = plan("to-webm", &video, &everything).unwrap();
+        use_encoder(&mut webm, "h264_nvenc");
+        assert!(!args(&webm.steps[0]).contains(&"-c:v".to_owned()));
     }
 
     #[test]

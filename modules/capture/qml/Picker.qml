@@ -140,5 +140,22 @@ Item {
             text: (root.payload.resolution ?? "native") === "native" ? "Native" : root.payload.resolution
             onClicked: Daemon.command("capture", "resolution", [])
         }
+
+        // The encoder, and the file it writes: a click steps to the next.
+        Button {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: !root.screenshot
+            tone: "ghost"
+            text: root.payload.codec ?? "Auto"
+            onClicked: Daemon.command("capture", "codec", [])
+        }
+
+        Button {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: !root.screenshot
+            tone: "ghost"
+            text: (root.payload.container ?? "mp4").toUpperCase()
+            onClicked: Daemon.command("capture", "container", [])
+        }
     }
 }
