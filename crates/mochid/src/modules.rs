@@ -20,36 +20,7 @@ use tokio::sync::mpsc::UnboundedSender;
 use crate::daemon::{ModuleExit, ModuleSlot};
 use crate::plugins::PluginModule;
 
-/// What a generated `config.toml` turns on: the whole shell.
-pub const DEFAULT_MODULES: [&str; 27] = [
-    "idle",
-    "osd",
-    "workspaces",
-    "media",
-    "audio",
-    "notifications",
-    "launcher",
-    "hub",
-    "power",
-    "capture",
-    "share",
-    "clipboard",
-    "tray",
-    "network",
-    "bluetooth",
-    "battery",
-    "brightness",
-    "privacy",
-    "nightlight",
-    "drop",
-    "performance",
-    "widgets",
-    "notes",
-    "emoji",
-    "colors",
-    "settings",
-    "tour",
-];
+pub use mochi_core::config::DEFAULT_MODULES;
 
 /// Every module compiled into this binary, fresh: a module runs once, so a
 /// restart takes a new instance.

@@ -112,7 +112,7 @@ pub fn state_dir() -> Option<PathBuf> {
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// Enabled modules, by id.
+    /// Enabled modules, by id; every builtin one when left out.
     #[serde(default = "default_modules")]
     pub modules: Vec<String>,
     /// Settings per module: `[module.<id>]`.
@@ -223,8 +223,40 @@ impl BubblesConfig {
     }
 }
 
+/// The builtin modules a config turns on when it doesn't list `modules`,
+/// and a generated `config.toml` lists: the whole shell.
+pub const DEFAULT_MODULES: [&str; 27] = [
+    "idle",
+    "osd",
+    "workspaces",
+    "media",
+    "audio",
+    "notifications",
+    "launcher",
+    "hub",
+    "power",
+    "capture",
+    "share",
+    "clipboard",
+    "tray",
+    "network",
+    "bluetooth",
+    "battery",
+    "brightness",
+    "privacy",
+    "nightlight",
+    "drop",
+    "performance",
+    "widgets",
+    "notes",
+    "emoji",
+    "colors",
+    "settings",
+    "tour",
+];
+
 fn default_modules() -> Vec<String> {
-    vec!["idle".to_owned()]
+    DEFAULT_MODULES.iter().map(|id| (*id).to_owned()).collect()
 }
 
 impl Default for Config {
@@ -456,7 +488,9 @@ mod tests {
         let missing = Path::new("/nonexistent/mochi/config.toml");
         assert_eq!(Config::load(missing).unwrap(), Config::default());
         assert_eq!(load_theme(missing).unwrap(), Theme::default());
-        assert_eq!(Config::default().modules, ["idle"]);
+        // Without `modules`, the whole shell.
+        assert_eq!(Config::default().modules, DEFAULT_MODULES);
+        assert_eq!(Config::parse("", path()).unwrap().modules, DEFAULT_MODULES);
     }
 
     #[test]
@@ -485,6 +519,8 @@ mod tests {
     fn bubble_placements_parse_and_name_known_modules() {
         let config = Config::parse(
             r#"
+            modules = ["idle", "osd"]
+
             [bubbles]
             max_per_area = 3
 
@@ -506,7 +542,11 @@ mod tests {
         );
         config.check(AVAILABLE, path()).unwrap();
 
-        let unknown = Config::parse("[bubbles.radio]\narea = \"left\"", path()).unwrap();
+        let unknown = Config::parse(
+            "modules = [\"idle\"]\n[bubbles.radio]\narea = \"left\"",
+            path(),
+        )
+        .unwrap();
         let error = unknown.check(AVAILABLE, path()).unwrap_err().to_string();
         assert!(error.contains("radio"), "{error}");
 

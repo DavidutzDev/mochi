@@ -27,7 +27,7 @@ The [settings panel](modules/settings.md) changes the same options live. It keep
 modules = ["idle", "osd", "workspaces", "media", "notifications", "launcher", "hub", "power"]
 ```
 
-The modules to run, in this order. Each module's settings live in a `[module.<id>]` section; the [module pages](modules/idle.md) list them. A module left out of the list doesn't run, and its section is ignored.
+The modules to run, in this order. Without `modules`, every builtin module runs, so a new install has the whole shell; list them to pick fewer. Each module's settings live in a `[module.<id>]` section; the [module pages](modules/idle.md) list them. A module left out of the list doesn't run, and its section is ignored.
 
 `mochid --modules idle,osd` overrides the list for one run, which helps when trying things.
 

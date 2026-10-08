@@ -145,7 +145,8 @@ in
       description = ''
         The contents of {file}`$XDG_CONFIG_HOME/mochi/config.toml`. Left
         empty, home-manager doesn't manage the file and Mochi writes a
-        commented example on its first start. `mochi config init --print`
+        commented example on its first start. Without `modules`, every
+        builtin module runs. `mochi config init --print`
         shows every option with its default.
       '';
     };

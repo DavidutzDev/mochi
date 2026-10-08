@@ -24,7 +24,8 @@ programs.mochi = {
   # config.toml, as Nix. Leave it out and Mochi writes its commented
   # example on the first start instead.
   settings = {
-    modules = [ "idle" "osd" "workspaces" "media" "notifications" "launcher" "hub" "power" ];
+    # Every builtin module runs without this; list them to pick fewer.
+    # modules = [ "idle" "osd" "workspaces" "media" "launcher" "hub" ];
     module.idle.format = "HH:mm:ss";
     module.power.lock = [ "hyprlock" ];
     bubbles.media.area = "center-left";
