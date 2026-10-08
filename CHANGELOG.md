@@ -29,6 +29,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Changed
 
+- A quieter default look. `EdgeLight` no longer draws a hairline along every panel and card, nor a band of the accent that follows the pointer: it shows only while something works and in the flash when it's done, in a neutral grey unless the view gives it a color. The outline around the island, the bubbles and the hub is fainter, 5% white instead of 8%, in the default theme and the dark palette of every preset.
 - The demo module moved to `examples/demo`, and the Nix and Arch packages leave it out: it's for working on Mochi, with test views, the `mochi ipc demo` actions the daemon's tests drive, and `mochi ipc demo controls`. Builds from the repository still have it, as mochid's default `demo` feature.
 - The daemon sends only the contributions whose target module runs: an offer to a module that's off goes nowhere.
 

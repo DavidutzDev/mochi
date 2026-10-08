@@ -55,7 +55,7 @@ fn palettes(preset: &str) -> Option<(Palette, Palette)> {
                 "#000000",
                 "#ff453a",
                 "#30d158",
-                "#14ffffff",
+                "#0dffffff",
                 "#59000000",
             ],
             [
@@ -85,7 +85,7 @@ fn palettes(preset: &str) -> Option<(Palette, Palette)> {
                 "#11111b",
                 "#f38ba8",
                 "#a6e3a1",
-                "#14ffffff",
+                "#0dffffff",
                 "#59000000",
             ],
             [
@@ -115,7 +115,7 @@ fn palettes(preset: &str) -> Option<(Palette, Palette)> {
                 "#2e3440",
                 "#bf616a",
                 "#a3be8c",
-                "#14ffffff",
+                "#0dffffff",
                 "#59000000",
             ],
             [
@@ -145,7 +145,7 @@ fn palettes(preset: &str) -> Option<(Palette, Palette)> {
                 "#1d2021",
                 "#fb4934",
                 "#b8bb26",
-                "#14ffffff",
+                "#0dffffff",
                 "#59000000",
             ],
             [
@@ -175,7 +175,7 @@ fn palettes(preset: &str) -> Option<(Palette, Palette)> {
                 "#191724",
                 "#eb6f92",
                 "#9ccfd8",
-                "#14ffffff",
+                "#0dffffff",
                 "#59000000",
             ],
             [
@@ -205,7 +205,7 @@ fn palettes(preset: &str) -> Option<(Palette, Palette)> {
                 "#16161e",
                 "#f7768e",
                 "#9ece6a",
-                "#14ffffff",
+                "#0dffffff",
                 "#59000000",
             ],
             [
@@ -469,7 +469,7 @@ pub fn generate(pixels: &[[u8; 3]], light: bool) -> Vec<String> {
         on_accent,
         color(if light { 0.55 } else { 0.70 }, 0.17, 25.0),
         color(if light { 0.55 } else { 0.78 }, 0.15, 145.0),
-        if light { "#1a000000" } else { "#14ffffff" }.to_owned(),
+        if light { "#1a000000" } else { "#0dffffff" }.to_owned(),
         if light { "#26000000" } else { "#59000000" }.to_owned(),
     ]
 }

@@ -1,23 +1,23 @@
 import QtQuick
 
-// A line of light along the top edge of a panel, card or tile. At rest it's
-// a faint hairline; while hovered, a brighter band leans toward the pointer;
-// while `working`, the band sweeps back and forth; and `flash()` brightens
-// it briefly, when something finishes. It takes no clicks.
+// A line along the top edge of a panel, card or tile that says something
+// happens: while `working`, a band sweeps back and forth, and `flash()`
+// shows it briefly when something finishes. At rest, and under the
+// pointer, there's nothing: a glow on every edge reads as decoration. It
+// takes no clicks.
 Item {
     id: root
 
     // The corners it keeps clear of, usually its owner's radius.
     property real radius: Theme.radiusSurface
     property bool working: false
-    property color color: Theme.accent
+    // Neutral unless the owner means something by it, like a color picked.
+    property color color: Qt.alpha(Theme.foreground, 0.6)
 
-    // Where the band sits, from 0 at the left to 1 at the right.
-    property real position: 0.5
     property real sweep: 0
     property real flashing: 0
 
-    readonly property real lit: Math.max(flashing, working ? 0.9 : hover.hovered ? 0.55 : 0)
+    readonly property real lit: Math.max(flashing, working ? 0.9 : 0)
 
     function flash(): void {
         glow.restart();
@@ -27,30 +27,6 @@ Item {
     anchors.right: parent ? parent.right : undefined
     anchors.top: parent ? parent.top : undefined
     height: 2
-
-    HoverHandler {
-        id: hover
-
-        // On the owner, so its whole surface counts, not this thin line.
-        parent: root.parent
-        onPointChanged: {
-            if (hovered && root.parent)
-                root.position = Math.max(0, Math.min(1, point.position.x / Math.max(1, root.parent.width)));
-        }
-        onHoveredChanged: {
-            if (!hovered)
-                root.position = 0.5;
-        }
-    }
-
-    Behavior on position {
-        enabled: !root.working
-
-        SmoothedAnimation {
-            duration: Theme.move
-            velocity: -1
-        }
-    }
 
     SequentialAnimation on sweep {
         running: root.working && root.visible
@@ -91,36 +67,12 @@ Item {
         }
     }
 
-    // The hairline, there all the time.
-    Rectangle {
-        x: root.radius
-        width: Math.max(0, root.width - root.radius * 2)
-        height: 1
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-
-            GradientStop {
-                position: 0
-                color: "transparent"
-            }
-
-            GradientStop {
-                position: 0.5
-                color: Qt.alpha(Theme.foreground, 0.16)
-            }
-
-            GradientStop {
-                position: 1
-                color: "transparent"
-            }
-        }
-    }
-
     // The band.
     Rectangle {
         readonly property real room: Math.max(0, root.width - root.radius * 2 - width)
 
-        x: root.radius + room * (root.working ? root.sweep : root.position)
+        // Centered for a flash.
+        x: root.radius + room * (root.working ? root.sweep : 0.5)
         width: Math.max(0, (root.width - root.radius * 2) * 0.4)
         height: 1.5
         opacity: root.lit

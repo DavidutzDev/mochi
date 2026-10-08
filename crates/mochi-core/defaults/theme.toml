@@ -35,7 +35,7 @@
 # danger = "#ff453a"
 # success = "#30d158"
 # The hairline around the island and the bubbles; transparent for none.
-# border = "#14ffffff"
+# border = "#0dffffff"
 # The soft shadow under them; transparent for none.
 # shadow = "#59000000"
 

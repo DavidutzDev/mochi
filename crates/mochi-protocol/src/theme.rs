@@ -95,7 +95,7 @@ impl Default for Colors {
             on_accent: Color::fixed("#000000"),
             danger: Color::fixed("#ff453a"),
             success: Color::fixed("#30d158"),
-            border: Color::fixed("#14ffffff"),
+            border: Color::fixed("#0dffffff"),
             shadow: Color::fixed("#59000000"),
         }
     }

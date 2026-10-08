@@ -38,7 +38,7 @@ Singleton {
     readonly property color onAccent: tokens?.colors.on_accent ?? "#000000"
     readonly property color danger: tokens?.colors.danger ?? "#ff453a"
     readonly property color success: tokens?.colors.success ?? "#30d158"
-    readonly property color border: tokens?.colors.border ?? "#14ffffff"
+    readonly property color border: tokens?.colors.border ?? "#0dffffff"
     readonly property color shadow: tokens?.colors.shadow ?? "#59000000"
 
     // "island" or "notch".
