@@ -96,13 +96,23 @@ Item {
                 text: "Wi-Fi networks"
             }
 
-            Button {
+            Row {
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.wifiOn
-                tone: "ghost"
-                text: "Scan"
-                onClicked: Daemon.command("network", "scan", [])
+
+                // A network that doesn't say its name, asked on the island.
+                Button {
+                    tone: "ghost"
+                    text: "Hidden…"
+                    onClicked: Daemon.command("network", "hidden", [])
+                }
+
+                Button {
+                    tone: "ghost"
+                    text: "Scan"
+                    onClicked: Daemon.command("network", "scan", [])
+                }
             }
         }
 
@@ -147,7 +157,7 @@ Item {
                     const parts = [];
                     if (network.saved)
                         parts.push("Saved");
-                    parts.push(network.enterprise ? "Needs a user name" : network.secure ? "Secured" : "Open");
+                    parts.push(network.enterprise ? "Enterprise" : network.secure ? "Secured" : "Open");
                     return parts.join(" · ");
                 }
                 selected: network.connected ?? false

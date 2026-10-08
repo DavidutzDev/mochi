@@ -4,8 +4,11 @@
 //! offline, with a lock while a VPN runs. The hub has a Network page, with
 //! the Wi-Fi networks in range, the wired devices and the VPNs, and a card
 //! on its home with Wi-Fi, VPN and airplane mode tiles. Joining a new
-//! secured network asks for its password on the island. Connecting and
-//! disconnecting show a short notice.
+//! secured network asks for its password on the island, and for a user
+//! name too on WPA Enterprise; the page joins hidden networks by name.
+//! Mochi is also NetworkManager's secret agent, so a password it needs
+//! later, like a saved network's that changed, is asked there too.
+//! Connecting and disconnecting show a short notice.
 //!
 //! Settings in `config.toml`, all optional:
 //!
@@ -15,6 +18,7 @@
 //! notices = true   # a notice on the island when the connection changes
 //! ```
 
+mod agent;
 mod model;
 mod nm;
 mod tour;
@@ -32,7 +36,7 @@ use serde_json::json;
 use tokio::sync::mpsc;
 use zbus::Connection;
 
-use crate::nm::Snapshot;
+use crate::nm::{Credentials, Snapshot};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
@@ -117,6 +121,15 @@ impl Module for Network {
             .arg(ArgSpec::string("ssid", "The network's name"))
             .arg(ArgSpec::string("password", "Its password").rest()),
             ActionSpec::new(
+                "answer",
+                "Answer the prompt on the island; the prompt sends this",
+            )
+            .arg(ArgSpec::string(
+                "answer",
+                "JSON: password, and identity, ssid and security when asked",
+            )),
+            ActionSpec::new("hidden", "Join a network that doesn't say its name"),
+            ActionSpec::new(
                 "disconnect",
                 "Leave a Wi-Fi network, stop a VPN, or unplug a wired device in software",
             )
@@ -136,6 +149,10 @@ impl Module for Network {
             let (snapshots_sender, mut snapshots) = mpsc::unbounded_channel();
             tokio::spawn(nm::watch(connection.clone(), snapshots_sender));
             let (results_sender, mut results) = mpsc::unbounded_channel();
+            let (secrets_sender, mut secrets) = mpsc::unbounded_channel();
+            if let Err(error) = agent::start(&connection, secrets_sender).await {
+                tracing::info!(%error, "not NetworkManager's secret agent");
+            }
             let mut state = State {
                 settings,
                 connection,
@@ -152,7 +169,9 @@ impl Module for Network {
                     event = ctx.next_event() => match event {
                         None => return Ok(()),
                         Some(ModuleEvent::Command(command)) => state.command(&ctx, command).await,
-                        Some(ModuleEvent::Ended { activity, .. }) if state.prompt.as_ref().is_some_and(|prompt| prompt.1 == activity) => {
+                        // A secret request dropped unanswered tells
+                        // NetworkManager the user cancelled.
+                        Some(ModuleEvent::Ended { activity, .. }) if state.prompt.as_ref().is_some_and(|prompt| prompt.activity == activity) => {
                             state.prompt = None;
                         }
                         Some(ModuleEvent::BubbleClicked(_)) => {
@@ -167,6 +186,7 @@ impl Module for Network {
                     },
                     Some(snapshot) = snapshots.recv() => state.changed(&ctx, snapshot),
                     Some(result) = results.recv() => state.joined(&ctx, result).await,
+                    Some(request) = secrets.recv() => state.ask_secret(&ctx, request),
                 }
             }
         })
@@ -183,6 +203,34 @@ struct Joined {
 }
 
 #[derive(Debug)]
+struct Prompt {
+    activity: ActivityId,
+    asking: Asking,
+}
+
+/// What the prompt on the island asks for.
+#[derive(Debug)]
+enum Asking {
+    /// A new network's password, and its user name on WPA Enterprise.
+    Join { ssid: String, enterprise: bool },
+    /// A hidden network's name, its security and what that asks.
+    Hidden,
+    /// A password NetworkManager needs.
+    Secret(agent::Request),
+}
+
+/// What the prompt sends back.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct Answer {
+    ssid: String,
+    identity: String,
+    password: String,
+    /// For a hidden network: open, password or enterprise.
+    security: String,
+}
+
+#[derive(Debug)]
 struct State {
     settings: Settings,
     connection: Connection,
@@ -190,8 +238,8 @@ struct State {
     bubble: Option<BubbleId>,
     /// What the bubble shows, to tell news from a refresh.
     shown_status: serde_json::Value,
-    /// The password prompt on the island: the network's name, the activity.
-    prompt: Option<(String, ActivityId)>,
+    /// The prompt on the island, and what it asks for.
+    prompt: Option<Prompt>,
     /// While in airplane mode, the radios that were on: Wi-Fi, mobile,
     /// Bluetooth.
     airplane: Option<(bool, bool, bool)>,
@@ -263,7 +311,17 @@ impl State {
                 let ssid = args.str("ssid").unwrap_or_default().to_owned();
                 let password = args.str("password").unwrap_or_default().to_owned();
                 self.close_prompt(ctx);
-                self.join(&ssid, Some(&password)).await
+                self.join(&ssid, Given::Password(password)).await
+            }
+            "answer" => {
+                match serde_json::from_str::<Answer>(args.str("answer").unwrap_or_default()) {
+                    Ok(answer) => self.answer(ctx, answer).await,
+                    Err(error) => Err(format!("the answer isn't JSON: {error}")),
+                }
+            }
+            "hidden" => {
+                self.prompt(ctx, Asking::Hidden, json!({ "mode": "hidden" }));
+                Ok(())
             }
             "disconnect" => self.disconnect(&name).await,
             "forget" => self.forget(&name).await,
@@ -317,20 +375,68 @@ impl State {
             .into_iter()
             .find(|network| network.ssid == name)
             .ok_or_else(|| format!("no Wi-Fi network called {name} is in range"))?;
-        if network.enterprise {
-            return Err(format!(
-                "{name} asks for a user name; set it up once with nmcli or nm-connection-editor"
-            ));
-        }
         if network.secure {
-            self.ask_password(ctx, name);
+            let mode = if network.enterprise {
+                "enterprise"
+            } else {
+                "join"
+            };
+            self.prompt(
+                ctx,
+                Asking::Join {
+                    ssid: name.to_owned(),
+                    enterprise: network.enterprise,
+                },
+                json!({ "mode": mode, "ssid": name }),
+            );
             return Ok(());
         }
-        self.join(name, None).await
+        self.join(name, Given::Nothing).await
+    }
+
+    /// What the prompt sent, for what it asked.
+    async fn answer(&mut self, ctx: &ModuleCtx, answer: Answer) -> Result<(), String> {
+        let prompt = self.prompt.take().ok_or("nothing is being asked")?;
+        ctx.withdraw(prompt.activity);
+        match prompt.asking {
+            Asking::Join { ssid, enterprise } => {
+                let given = if enterprise {
+                    Given::Enterprise {
+                        identity: answer.identity,
+                        password: answer.password,
+                    }
+                } else {
+                    Given::Password(answer.password)
+                };
+                self.join(&ssid, given).await
+            }
+            Asking::Hidden => {
+                let ssid = answer.ssid.trim().to_owned();
+                if ssid.is_empty() {
+                    return Err("a hidden network needs its name".into());
+                }
+                let credentials = match answer.security.as_str() {
+                    "open" => Credentials::Open,
+                    "enterprise" => Credentials::Enterprise {
+                        identity: answer.identity,
+                        password: answer.password,
+                    },
+                    _ => Credentials::Password {
+                        password: answer.password,
+                        sae: false,
+                    },
+                };
+                self.join_hidden(&ssid, &credentials).await
+            }
+            Asking::Secret(request) => {
+                let _ = request.reply.send(Some(answer.password));
+                Ok(())
+            }
+        }
     }
 
     /// Joins a network not saved yet. The outcome comes back as [`Joined`].
-    async fn join(&self, ssid: &str, password: Option<&str>) -> Result<(), String> {
+    async fn join(&self, ssid: &str, given: Given) -> Result<(), String> {
         let snapshot = self.snapshot()?;
         let point = snapshot
             .access_points
@@ -339,9 +445,32 @@ impl State {
             .max_by_key(|point| point.strength)
             .ok_or_else(|| format!("no Wi-Fi network called {ssid} is in range"))?
             .clone();
-        let (saved, active) = nm::join(&self.connection, &point, password)
+        let (saved, active) = nm::join(&self.connection, &point, &given.credentials(point.sae))
             .await
             .map_err(|error| format!("{ssid}: {error}"))?;
+        self.follow(ssid, saved, active);
+        Ok(())
+    }
+
+    /// Joins a hidden network on the first Wi-Fi device.
+    async fn join_hidden(&self, ssid: &str, credentials: &Credentials) -> Result<(), String> {
+        let device = self
+            .snapshot()?
+            .devices
+            .iter()
+            .find(|device| device.wifi)
+            .ok_or("there's no Wi-Fi device")?
+            .path
+            .clone();
+        let (saved, active) = nm::join_hidden(&self.connection, &device, ssid, credentials)
+            .await
+            .map_err(|error| format!("{ssid}: {error}"))?;
+        self.follow(ssid, saved, active);
+        Ok(())
+    }
+
+    /// Waits for a new connection to come up, in the background.
+    fn follow(&self, ssid: &str, saved: String, active: String) {
         let connection = self.connection.clone();
         let results = self.results.clone();
         let ssid = ssid.to_owned();
@@ -349,7 +478,6 @@ impl State {
             let up = nm::settled(&connection, &active, CONNECT_LIMIT).await;
             let _ = results.send(Joined { ssid, saved, up });
         });
-        Ok(())
     }
 
     /// A new network failed to come up: forget it, so a wrong password
@@ -368,7 +496,21 @@ impl State {
         );
     }
 
-    fn ask_password(&mut self, ctx: &ModuleCtx, ssid: &str) {
+    /// NetworkManager needs a password: ask on the island.
+    fn ask_secret(&mut self, ctx: &ModuleCtx, request: agent::Request) {
+        tracing::info!(network = %request.name, retry = request.retry, "NetworkManager asks for a password");
+        let payload = json!({
+            "mode": "secret",
+            "ssid": request.name,
+            "identity": request.identity,
+            "retry": request.retry,
+        });
+        self.prompt(ctx, Asking::Secret(request), payload);
+    }
+
+    /// Puts a prompt on the island, in place of any other.
+    fn prompt(&mut self, ctx: &ModuleCtx, asking: Asking, payload: serde_json::Value) {
+        self.close_prompt(ctx);
         // The prompt takes the keyboard, as the hub does; only one can.
         let close = ctx.call("hub", "close", &[]);
         tokio::spawn(async move {
@@ -382,13 +524,16 @@ impl State {
             .priority(Priority::URGENT)
             .uninterruptible()
             .modal()
-            .payload(json!({ "ssid": ssid }));
-        self.prompt = Some((ssid.to_owned(), ctx.present(spec)));
+            .payload(payload);
+        self.prompt = Some(Prompt {
+            activity: ctx.present(spec),
+            asking,
+        });
     }
 
     fn close_prompt(&mut self, ctx: &ModuleCtx) {
-        if let Some((_, activity)) = self.prompt.take() {
-            ctx.withdraw(activity);
+        if let Some(prompt) = self.prompt.take() {
+            ctx.withdraw(prompt.activity);
         }
     }
 
@@ -501,6 +646,26 @@ impl State {
         }
         self.publish(ctx);
         Ok(())
+    }
+}
+
+/// What was typed to join a network in range.
+#[derive(Debug)]
+enum Given {
+    Nothing,
+    Password(String),
+    Enterprise { identity: String, password: String },
+}
+
+impl Given {
+    fn credentials(self, sae: bool) -> Credentials {
+        match self {
+            Self::Nothing => Credentials::Open,
+            Self::Password(password) => Credentials::Password { password, sae },
+            Self::Enterprise { identity, password } => {
+                Credentials::Enterprise { identity, password }
+            }
+        }
     }
 }
 

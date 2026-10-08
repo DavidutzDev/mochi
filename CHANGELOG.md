@@ -6,6 +6,9 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- WPA Enterprise networks join from the Network page: the prompt asks for the user name with the password, and joins with PEAP and MSCHAPv2.
+- Hidden networks: **Hidden…** on the Network page, or `mochi ipc network hidden`, asks for the network's name and security on the island.
+- Mochi is NetworkManager's secret agent: a password it needs later, like a saved network's that changed or a connection started with nmcli, is asked on the island, with a note when the last one didn't work. Wi-Fi and 802.1X passwords only; a VPN's go to another agent.
 - Thumbnails for recordings, on the hub's Captures page and in the card after a recording: a frame ffmpeg picks among the first ones, made once in the background and kept in `$XDG_CACHE_HOME/mochi/thumbnails`. `mochi doctor` lists ffmpeg.
 - Open windows in the launcher: the `windows` provider lists the windows on every workspace whose title or app matches what you type, above the apps, and Enter focuses one. `Compositor::toplevels` and `activate_toplevel` give modules every open window through wlr-foreign-toplevel-management, on Hyprland, Sway and niri alike.
 - Drop files on the island, the `drop` module: while files hover, the island's outline turns to the accent and it says to drop them; once dropped, it names what came and offers what fits: compress, extract, merge PDFs, convert images to PNG, JPEG or WebP, copy the paths, open. Each action shows when a program for it is installed. New files go next to the dropped ones under a free name, and Show opens their folder. `mochi ipc drop files` and `run` do the same from a script. It's on in newly generated configs; add `drop` to `modules` in yours.

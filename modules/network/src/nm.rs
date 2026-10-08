@@ -325,37 +325,113 @@ pub async fn activate(
     Ok(active.to_string())
 }
 
-/// Joins a Wi-Fi network for the first time, with its password when it has
-/// one. NetworkManager saves it. Returns the saved connection and the active
-/// one.
+/// What a Wi-Fi network asks to join it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Credentials {
+    Open,
+    /// A pre-shared key: WPA2, or WPA3 with `sae`.
+    Password {
+        password: String,
+        sae: bool,
+    },
+    /// 802.1X with a user name, as PEAP with MSCHAPv2, which eduroam and
+    /// most workplaces use.
+    Enterprise {
+        identity: String,
+        password: String,
+    },
+}
+
+/// A new Wi-Fi connection's settings, as NetworkManager takes them.
+fn wifi_settings<'a>(
+    ssid: &'a str,
+    hidden: bool,
+    credentials: &'a Credentials,
+) -> HashMap<&'static str, HashMap<&'static str, Value<'a>>> {
+    let mut wireless = HashMap::from([
+        ("ssid", Value::from(ssid.as_bytes().to_vec())),
+        ("mode", Value::from("infrastructure")),
+    ]);
+    if hidden {
+        wireless.insert("hidden", Value::from(true));
+    }
+    let mut settings = HashMap::from([("802-11-wireless", wireless)]);
+    match credentials {
+        Credentials::Open => {}
+        Credentials::Password { password, sae } => {
+            settings.insert(
+                "802-11-wireless-security",
+                HashMap::from([
+                    (
+                        "key-mgmt",
+                        Value::from(if *sae { "sae" } else { "wpa-psk" }),
+                    ),
+                    ("psk", Value::from(password.as_str())),
+                ]),
+            );
+        }
+        Credentials::Enterprise { identity, password } => {
+            settings.insert(
+                "802-11-wireless-security",
+                HashMap::from([("key-mgmt", Value::from("wpa-eap"))]),
+            );
+            settings.insert(
+                "802-1x",
+                HashMap::from([
+                    ("eap", Value::from(vec!["peap"])),
+                    ("identity", Value::from(identity.as_str())),
+                    ("password", Value::from(password.as_str())),
+                    ("phase2-auth", Value::from("mschapv2")),
+                ]),
+            );
+        }
+    }
+    settings
+}
+
+/// Joins a Wi-Fi network for the first time. NetworkManager saves it.
+/// Returns the saved connection and the active one.
 pub async fn join(
     connection: &Connection,
     point: &AccessPoint,
-    password: Option<&str>,
+    credentials: &Credentials,
+) -> zbus::Result<(String, String)> {
+    add_and_activate(
+        connection,
+        wifi_settings(&point.ssid, false, credentials),
+        &point.device,
+        &point.path,
+    )
+    .await
+}
+
+/// Joins a network that doesn't say its name, on a Wi-Fi device.
+pub async fn join_hidden(
+    connection: &Connection,
+    device: &str,
+    ssid: &str,
+    credentials: &Credentials,
+) -> zbus::Result<(String, String)> {
+    add_and_activate(
+        connection,
+        wifi_settings(ssid, true, credentials),
+        device,
+        "/",
+    )
+    .await
+}
+
+async fn add_and_activate(
+    connection: &Connection,
+    settings: HashMap<&'static str, HashMap<&'static str, Value<'_>>>,
+    device: &str,
+    point: &str,
 ) -> zbus::Result<(String, String)> {
     let manager = proxy(connection, PATH, SERVICE).await?;
-    let mut settings: HashMap<&str, HashMap<&str, Value<'_>>> = HashMap::new();
-    settings.insert(
-        "802-11-wireless",
-        HashMap::from([
-            ("ssid", Value::from(point.ssid.as_bytes().to_vec())),
-            ("mode", Value::from("infrastructure")),
-        ]),
-    );
-    if let Some(password) = password {
-        let key_mgmt = if point.sae { "sae" } else { "wpa-psk" };
-        settings.insert(
-            "802-11-wireless-security",
-            HashMap::from([
-                ("key-mgmt", Value::from(key_mgmt)),
-                ("psk", Value::from(password.to_owned())),
-            ]),
-        );
-    }
-    let device = zbus::zvariant::ObjectPath::try_from(point.device.as_str())?;
-    let point_path = zbus::zvariant::ObjectPath::try_from(point.path.as_str())?;
+    let device = zbus::zvariant::ObjectPath::try_from(device)?;
+    let point = zbus::zvariant::ObjectPath::try_from(point)?;
     let (saved, active): (OwnedObjectPath, OwnedObjectPath) = manager
-        .call("AddAndActivateConnection", &(settings, device, point_path))
+        .call("AddAndActivateConnection", &(settings, device, point))
         .await?;
     Ok((saved.to_string(), active.to_string()))
 }
@@ -440,5 +516,39 @@ mod tests {
         )]);
         assert!(saved_connection("/s/2", &vpn).unwrap().is_vpn());
         assert!(saved_connection("/s/3", &HashMap::new()).is_none());
+    }
+
+    #[test]
+    fn new_networks_say_how_to_join() {
+        let open = wifi_settings("Cafe", false, &Credentials::Open);
+        assert!(!open.contains_key("802-11-wireless-security"));
+        assert!(!open["802-11-wireless"].contains_key("hidden"));
+
+        let wpa3 = Credentials::Password {
+            password: "secret".into(),
+            sae: true,
+        };
+        let hidden = wifi_settings("Attic", true, &wpa3);
+        assert_eq!(hidden["802-11-wireless"]["hidden"], Value::from(true));
+        assert_eq!(
+            hidden["802-11-wireless-security"]["key-mgmt"],
+            Value::from("sae")
+        );
+        assert_eq!(
+            hidden["802-11-wireless-security"]["psk"],
+            Value::from("secret")
+        );
+
+        let work = Credentials::Enterprise {
+            identity: "ada@example.org".into(),
+            password: "pw".into(),
+        };
+        let eap = wifi_settings("eduroam", false, &work);
+        assert_eq!(
+            eap["802-11-wireless-security"]["key-mgmt"],
+            Value::from("wpa-eap")
+        );
+        assert_eq!(eap["802-1x"]["identity"], Value::from("ada@example.org"));
+        assert_eq!(eap["802-1x"]["eap"], Value::from(vec!["peap"]));
     }
 }

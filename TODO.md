@@ -476,9 +476,9 @@ A new module: the apps' tray icons.
 - [x] NetworkManager over D-Bus: devices, Wi-Fi networks, active and saved connections, read again after its signals
 - [x] A bubble with the connection, a Network page, a home card, notices on connecting and disconnecting
 - [x] Join Wi-Fi with a password asked on the island, forget networks, VPNs, airplane mode
-- [ ] WPA Enterprise: ask for the user name and password too
-- [ ] Hidden networks
-- [ ] Be NetworkManager's secret agent, so a changed password is asked on the island
+- [x] WPA Enterprise: ask for the user name and password too (PEAP with MSCHAPv2)
+- [x] Hidden networks
+- [x] Be NetworkManager's secret agent, so a changed password is asked on the island
 - [ ] Mobile broadband
 
 ### Bluetooth
