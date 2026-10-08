@@ -149,11 +149,17 @@ pub fn summary(files: &[Dropped]) -> String {
             (count > 0).then(|| kind.noun(count))
         })
         .collect();
-    match parts.as_slice() {
+    let text = match parts.as_slice() {
         [] => String::new(),
         [one] => one.clone(),
         [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
-    }
+    };
+    // It's a title: "An image and a video".
+    let mut letters = text.chars();
+    letters
+        .next()
+        .map(|first| first.to_uppercase().chain(letters).collect())
+        .unwrap_or_default()
 }
 
 /// A path for something new next to `beside`: `name`, or `name 2`,

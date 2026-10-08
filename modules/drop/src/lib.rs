@@ -357,6 +357,7 @@ impl State {
                     "convert": action.convert,
                 }))
                 .collect::<Vec<_>>(),
+            "missing": actions::missing(&self.files, &self.enabled, &mochi_core::process::installed),
             "running": self.running,
             "message": self.message,
             "failed": self.failed,

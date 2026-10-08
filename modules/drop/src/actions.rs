@@ -259,6 +259,64 @@ pub fn offered(
     actions
 }
 
+/// What to install for what was dropped, when the program that would
+/// handle it is missing: "Install ffmpeg to convert videos".
+pub fn missing(
+    files: &[Dropped],
+    enabled: &[String],
+    installed: &impl Fn(&str) -> bool,
+) -> Vec<String> {
+    let wants = |id: &str| enabled.iter().any(|enabled| enabled == id);
+    let has = |kind: Kind| files.iter().any(|file| file.kind == kind);
+    let any = |programs: &[&str]| programs.iter().any(|program| installed(program));
+    let mut hints = Vec::new();
+    let mut hint = |needed: bool, text: &str| {
+        if needed {
+            hints.push(text.to_owned());
+        }
+    };
+    if wants("convert") {
+        let tool = |kind: Kind, programs: &[&str]| has(kind) && !any(programs);
+        hint(
+            tool(Kind::Video, &["ffmpeg"]),
+            "Install ffmpeg to convert videos",
+        );
+        hint(
+            tool(Kind::Audio, &["ffmpeg"]),
+            "Install ffmpeg to convert sound",
+        );
+        hint(
+            tool(Kind::Image, &["vtracer"]),
+            "Install vtracer to convert images to SVG",
+        );
+        let unreadable = files.iter().any(|file| {
+            file.kind == Kind::Image && !NATIVE_READ.contains(&extension(&file.path).as_str())
+        });
+        hint(
+            unreadable && !any(&["magick", "convert"]),
+            "Install ImageMagick to convert HEIC, AVIF and SVG images",
+        );
+        hint(
+            tool(Kind::Document, &["soffice", "libreoffice"]),
+            "Install LibreOffice to convert documents",
+        );
+        hint(
+            tool(Kind::Text, &["pandoc"]),
+            "Install pandoc to convert Markdown and HTML",
+        );
+    }
+    hint(
+        wants("extract") && has(Kind::Archive) && !any(&["bsdtar", "unzip", "tar", "7z"]),
+        "Install libarchive (bsdtar) to extract archives",
+    );
+    let pdfs = files.iter().filter(|file| file.kind == Kind::Pdf).count();
+    hint(
+        wants("merge") && pdfs >= 2 && !any(&["pdfunite", "qpdf"]),
+        "Install poppler or qpdf to merge PDFs",
+    );
+    hints
+}
+
 /// How to do `action` to `files`, or why it can't be.
 pub fn plan(
     action: &str,
@@ -448,8 +506,12 @@ fn convert(
     if inputs.is_empty() {
         return Err(format!("nothing dropped converts to {}", format.label));
     }
+    // The files whose program is missing stay as they are; the others
+    // convert. Only when none can is it an error.
     let mut steps = Vec::new();
     let mut last = None;
+    let mut converted = 0;
+    let mut first_error = None;
     for file in &inputs {
         let directory = file
             .path
@@ -457,11 +519,22 @@ fn convert(
             .unwrap_or_else(|| Path::new("/"))
             .to_path_buf();
         let out = unique(&directory, &stem(&file.path), target);
-        steps.extend(convert_one(file, &out, target, installed)?);
-        last = Some(out);
+        match convert_one(file, &out, target, installed) {
+            Ok(more) => {
+                steps.extend(more);
+                last = Some(out);
+                converted += 1;
+            }
+            Err(error) => {
+                first_error.get_or_insert(error);
+            }
+        }
+    }
+    if converted == 0 {
+        return Err(first_error.unwrap_or_else(|| format!("nothing converts to {}", format.label)));
     }
     Ok(Plan {
-        done: match (inputs.len(), &last) {
+        done: match (converted, &last) {
             (1, Some(out)) => format!("Saved {}", name(out)),
             (count, _) => format!("Converted {count} files to {}", format.label),
         },
@@ -701,6 +774,29 @@ mod tests {
                 .iter()
                 .all(|action| !action.convert)
         );
+    }
+
+    #[test]
+    fn missing_programs_are_named() {
+        let nothing = |_: &str| false;
+        let files = [
+            file("/nowhere/clip.mp4", Kind::Video),
+            file("/nowhere/cat.webp", Kind::Image),
+        ];
+        assert_eq!(
+            missing(&files, &all(), &nothing),
+            [
+                "Install ffmpeg to convert videos",
+                "Install vtracer to convert images to SVG"
+            ]
+        );
+        // The image still converts to GIF without ffmpeg for the video.
+        let gif = plan("to-gif", &files, &nothing).unwrap();
+        assert_eq!(gif.steps.len(), 1);
+        let everything = |_: &str| true;
+        assert!(missing(&files, &all(), &everything).is_empty());
+        // Conversions turned off say nothing.
+        assert!(missing(&files, &["zip".to_owned()], &nothing).is_empty());
     }
 
     #[test]

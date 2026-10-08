@@ -49,8 +49,8 @@ Item {
         }
 
         Text {
-            visible: root.actions.length === 0 && root.formats.length === 0
-            text: "Nothing to do with these: install zip, ImageMagick or poppler for more"
+            visible: root.actions.length === 0 && root.formats.length === 0 && (root.payload.missing ?? []).length === 0
+            text: "Nothing to do with these"
             color: Theme.muted
             font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
@@ -99,6 +99,32 @@ Item {
                     tone: running ? "accent" : "neutral"
                     enabled: !root.busy
                     onClicked: Daemon.command("drop", "run", [modelData.id])
+                }
+            }
+        }
+
+        // What to install for the files nothing here handles yet.
+        Repeater {
+            model: root.payload.missing ?? []
+
+            Row {
+                required property string modelData
+
+                spacing: Theme.spaceSmall
+
+                Symbol {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "info"
+                    size: Theme.textBody
+                    color: Theme.muted
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: modelData
+                    color: Theme.muted
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
                 }
             }
         }
