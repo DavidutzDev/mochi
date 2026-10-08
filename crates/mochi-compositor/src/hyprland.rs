@@ -1,7 +1,8 @@
 //! Hyprland's IPC, used only for what the standard protocols don't say: which
-//! output has focus, and where windows are. Focusing an empty workspace on
-//! another monitor moves no window, so the standard window-based guess can't
-//! see it; Hyprland's event socket can.
+//! output has focus, where windows are, what's being shared, and monitors
+//! of Mochi's own. Focusing an empty workspace on another monitor moves no
+//! window, so the standard window-based guess can't see it; Hyprland's
+//! event socket can.
 //!
 //! The focused output name goes to the Wayland task, which owns the model.
 
@@ -13,9 +14,8 @@ use tokio::net::UnixStream;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::Window;
+use crate::ipc::Event;
 
-const FIRST_RETRY: Duration = Duration::from_secs(1);
-const MAX_RETRY: Duration = Duration::from_secs(30);
 /// The longest a blocking request may take.
 const BLOCKING_TIMEOUT: Duration = Duration::from_millis(100);
 
@@ -27,38 +27,9 @@ pub(crate) fn socket_dir() -> Option<PathBuf> {
     dir.join(".socket2.sock").exists().then_some(dir)
 }
 
-/// What Hyprland's events tell the Wayland task.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) enum Event {
-    /// The output with focus.
-    Focus(String),
-    /// A screencast started (true) or stopped.
-    Screencast(bool),
-    /// The same, with what it captures: a monitor's name, or a window's.
-    Captured { started: bool, target: String },
-    /// The event socket (re)connected: counts kept so far may be stale.
-    Connected,
-}
-
-/// Sends the focused output now, then every focus or screencast change.
-/// Reconnects with backoff if the socket closes. Ends when nobody listens
-/// any more.
-pub(crate) async fn watch(dir: PathBuf, focus: UnboundedSender<Event>) {
-    let mut retry = FIRST_RETRY;
-    loop {
-        match session(&dir, &focus).await {
-            Ok(()) => return,
-            Err(error) => {
-                tracing::warn!(%error, retry = ?retry, "lost Hyprland's event socket");
-                tokio::time::sleep(retry).await;
-                retry = (retry * 2).min(MAX_RETRY);
-            }
-        }
-    }
-}
-
-/// One connection. `Ok` means the receiver is gone.
-async fn session(dir: &Path, focus: &UnboundedSender<Event>) -> std::io::Result<()> {
+/// One connection: the focused output, then every focus or screencast
+/// change. `Ok` means the receiver is gone.
+pub(crate) async fn session(dir: &Path, focus: &UnboundedSender<Event>) -> std::io::Result<()> {
     // Connect to the events first, so no change slips in between the query
     // and the subscription.
     let events = UnixStream::connect(dir.join(".socket2.sock")).await?;

@@ -256,17 +256,28 @@ fn fonts(report: &mut Report) {
 
 fn compositor(report: &mut Report) {
     report.section("Compositor");
-    match mochi_core::compositor::running() {
-        Some("Hyprland") => {
-            report.ok("Hyprland: focus, screen sharing state, windows and switchable shares")
-        }
-        Some(other) => report.warn(
-            other,
-            "Its IPC gives the focus and windows; switchable shares need Hyprland.",
+    let running = mochi_core::compositor::running();
+    match running {
+        Some("Hyprland") => report.ok(
+            "Hyprland: the focus, windows, what's shared, and switchable shares",
         ),
-        None => report.warn(
+        Some("niri") => {
+            report.ok("niri: the focus, windows and what's shared");
+            report.warn(
+                "switchable shares need Hyprland",
+                "On niri, a share is the screen, window or area you pick; niri's own dynamic cast target switches too.",
+            );
+        }
+        Some("sway") => {
+            report.ok("Sway: the focus and windows");
+            report.warn(
+                "Sway doesn't say what's shared",
+                "No Sharing bubble, and switchable shares need Hyprland.",
+            );
+        }
+        _ => report.warn(
             "a compositor Mochi has no IPC for",
-            "Workspaces and the focus come from Wayland protocols only, where it has them.",
+            "Workspaces and the focus come from Wayland protocols only, where it has them; windows and what's shared are unknown.",
         ),
     }
     let globals: BTreeSet<String> = match mochi_core::compositor::globals() {
@@ -286,7 +297,11 @@ fn compositor(report: &mut Report) {
             ),
             (None, false) => report.warn(
                 format!("no {}: no {purpose}", names.join(" or ")),
-                "Your compositor doesn't offer it; the rest works.",
+                if names[0] == "ext_workspace_manager_v1" && running == Some("sway") {
+                    "Sway has it from 1.12."
+                } else {
+                    "Your compositor doesn't offer it; the rest works."
+                },
             ),
         }
     }

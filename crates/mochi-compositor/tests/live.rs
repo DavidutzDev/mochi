@@ -74,3 +74,16 @@ fn print(state: &State) {
         }
     }
 }
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "talks to the session's compositor; run with --ignored"]
+async fn lists_windows() {
+    let compositor = mochi_compositor::connect();
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    eprintln!("focused: {:?}", compositor.state().focused_output);
+    let windows = compositor.windows().await.expect("the compositor has IPC");
+    for window in &windows {
+        eprintln!("{window:?}");
+    }
+    assert!(!windows.is_empty(), "no windows");
+}

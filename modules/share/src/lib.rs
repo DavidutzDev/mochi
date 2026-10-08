@@ -412,7 +412,7 @@ impl State {
             command: Some(command),
             remember,
             // Only Hyprland makes monitors on request.
-            switchable: self.settings.switchable && ctx.compositor().knows_windows(),
+            switchable: self.settings.switchable && ctx.compositor().makes_outputs(),
             framerate: self.settings.framerate,
             resolution: self.settings.resolution,
             windows,

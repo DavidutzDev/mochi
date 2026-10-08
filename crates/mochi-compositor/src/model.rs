@@ -200,6 +200,15 @@ impl Model {
         self.captured.retain(|_, count| *count > 0);
     }
 
+    /// Every capture running, as niri says them all at once.
+    pub fn ipc_casts(&mut self, targets: &[String]) {
+        self.screencasts = targets.len() as u32;
+        self.captured.clear();
+        for target in targets.iter().filter(|target| !target.is_empty()) {
+            *self.captured.entry(target.clone()).or_default() += 1;
+        }
+    }
+
     pub fn reset_screencasts(&mut self) {
         self.screencasts = 0;
         self.captured.clear();
@@ -448,6 +457,17 @@ mod tests {
         // A reconnect may have missed events.
         model.assume_captures(&["DP-3".into()]);
         model.ipc_connected();
+        assert!(model.snapshot().captured.is_empty());
+    }
+
+    #[test]
+    fn a_list_of_casts_replaces_the_counts() {
+        let mut model = Model::default();
+        model.ipc_casts(&["DP-1".into(), "DP-1".into(), String::new()]);
+        assert!(model.snapshot().screencast);
+        assert_eq!(model.snapshot().captured, ["DP-1"]);
+        model.ipc_casts(&[]);
+        assert!(!model.snapshot().screencast);
         assert!(model.snapshot().captured.is_empty());
     }
 

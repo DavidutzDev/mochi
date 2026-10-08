@@ -29,8 +29,9 @@ use wayland_protocols_wlr::foreign_toplevel::v1::client::{
     zwlr_foreign_toplevel_manager_v1::{self, ZwlrForeignToplevelManagerV1},
 };
 
+use crate::ipc::{Event, Ipc};
 use crate::model::Model;
-use crate::{Action, Compositor, State, hyprland};
+use crate::{Action, Compositor, State};
 
 /// `wl_output` version 4 added the `name` and `description` events.
 const OUTPUT_VERSION: u32 = 4;
@@ -119,10 +120,10 @@ pub(crate) fn start() -> Result<Compositor, String> {
     }
 
     // Compositor IPC fills in what the protocols can't say.
-    let hyprland = hyprland::socket_dir();
-    let focus = hyprland.clone().map(|dir| {
+    let ipc = Ipc::find();
+    let focus = ipc.clone().map(|ipc| {
         let (sender, receiver) = mpsc::unbounded_channel();
-        tokio::spawn(hyprland::watch(dir, sender));
+        tokio::spawn(ipc.watch(sender));
         receiver
     });
 
@@ -131,7 +132,7 @@ pub(crate) fn start() -> Result<Compositor, String> {
         outputs = snapshot.outputs.len(),
         workspaces = snapshot.workspaces.len(),
         windows = toplevels.is_some(),
-        hyprland_ipc = focus.is_some(),
+        ipc = ipc.as_ref().map(Ipc::name),
         "connected to the compositor through ext-workspace-v1"
     );
     let (state_sender, state) = watch::channel(snapshot);
@@ -147,7 +148,7 @@ pub(crate) fn start() -> Result<Compositor, String> {
     Ok(Compositor {
         state,
         actions,
-        hyprland,
+        ipc,
     })
 }
 
@@ -157,7 +158,7 @@ async fn run(
     mut client: Client,
     state: watch::Sender<State>,
     mut actions: mpsc::UnboundedReceiver<Action>,
-    mut focus: Option<mpsc::UnboundedReceiver<hyprland::Event>>,
+    mut focus: Option<mpsc::UnboundedReceiver<Event>>,
 ) {
     let socket = match AsyncFd::new(Socket(connection.backend().poll_fd().as_raw_fd())) {
         Ok(socket) => socket,
@@ -218,19 +219,23 @@ async fn run(
             event = next_ipc(&mut focus) => {
                 drop(guard);
                 match event {
-                    Some(hyprland::Event::Focus(output)) => {
+                    Some(Event::Focus(output)) => {
                         client.model.ipc_focus(output);
                         client.done = true;
                     }
-                    Some(hyprland::Event::Screencast(active)) => {
+                    Some(Event::Screencast(active)) => {
                         client.model.ipc_screencast(active);
                         client.done = true;
                     }
-                    Some(hyprland::Event::Captured { started, target }) => {
+                    Some(Event::Captured { started, target }) => {
                         client.model.ipc_captured(target, started);
                         client.done = true;
                     }
-                    Some(hyprland::Event::Connected) => {
+                    Some(Event::Casts(targets)) => {
+                        client.model.ipc_casts(&targets);
+                        client.done = true;
+                    }
+                    Some(Event::Connected) => {
                         client.model.ipc_connected();
                         client.done = true;
                     }
@@ -245,9 +250,7 @@ async fn run(
 }
 
 /// The next report from IPC. Never returns when there is no IPC.
-async fn next_ipc(
-    focus: &mut Option<mpsc::UnboundedReceiver<hyprland::Event>>,
-) -> Option<hyprland::Event> {
+async fn next_ipc(focus: &mut Option<mpsc::UnboundedReceiver<Event>>) -> Option<Event> {
     match focus {
         Some(receiver) => receiver.recv().await,
         None => std::future::pending().await,

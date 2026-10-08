@@ -75,7 +75,7 @@ systemctl --user enable --now mochid
 
 `mochid` needs Quickshell 0.3.1 in its `PATH` and refuses to start with another version.
 
-Workspace information comes from the standard `ext-workspace-v1` Wayland protocol, so it works on any compositor that supports it, with no compositor-specific setup. The focused monitor comes from the focused window (`wlr-foreign-toplevel-management`); on Hyprland, its event socket makes that exact. `mochi status` shows what the daemon found.
+Workspace information comes from the standard `ext-workspace-v1` Wayland protocol, so it works on any compositor that supports it, with no compositor-specific setup: Hyprland, niri 25.08 and later, and Sway 1.12 and later. The focused monitor comes from the focused window (`wlr-foreign-toplevel-management`). On Hyprland, niri and Sway, their IPC makes that exact and says where windows are, for picking a window to capture or share. Hyprland and niri also say what's being shared, for the Sharing bubble, and only Hyprland makes the monitor a switchable share needs. `mochi status` shows what the daemon found, and `mochi doctor` what your compositor offers.
 
 ### Session
 

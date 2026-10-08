@@ -177,9 +177,10 @@ Mochi must work on any compositor that speaks the standard protocols (Hyprland, 
 - [x] Without a supported compositor, an `unsupported` state instead of an error; modules keep running
 - [x] `ModuleCtx::compositor()` for modules; `mochi status` shows the backend, outputs and workspace count
 - [x] Pure model unit-tested; live test against the session's compositor (`cargo test -p mochi-compositor --test live -- --ignored`), passing on Hyprland 0.56
-- [ ] Check which protocols niri, mango and Sway support: `ext-background-effect-v1`, `ext-workspace-v1`, `wlr-foreign-toplevel-management`
+- [x] Check which protocols niri and Sway support: niri 25.08 and Sway 1.12 have `ext-workspace-v1`, both have `wlr-foreign-toplevel-management`, niri 26.04 has `ext-background-effect-v1`; `mochi doctor` lists them for any compositor
+- [ ] The same for mango
 - [ ] Windows (title, app id) in the state, from the toplevel protocol already bound for focus, when a module needs them
-- [ ] niri: focused output from its IPC, like Hyprland, if its standard protocols leave the same gap
+- [x] niri and Sway: the focused output, windows and (niri) screencasts from their IPC
 - [ ] Keyboard layout, which has no standard protocol: per-compositor IPC (Hyprland first) behind the same handle
 - [ ] Fallback for compositors without background effects: apply a runtime rule where possible (Hyprland `hyprctl eval`), otherwise `mochi setup <compositor>` prints the config snippet
 
@@ -404,7 +405,7 @@ Screenshots and recordings from the island. Decided on 2026-10-04: our own froze
 - [x] Picking on another monitor than the one the picker opened on: every overlay asks for the keyboard, because Hyprland only sends the pointer to the surface holding it; tested with a real click on HDMI-A-1 after opening on DP-3
 - [ ] Try keyboard use in the picker (arrows, Enter, Escape, M) on a real session; the tests here only used the pointer and the CLI
 - [ ] Record a real video once `programs.gpu-screen-recorder.enable` is on
-- [ ] Window positions on other compositors: niri and Sway IPC
+- [x] Window positions on other compositors: niri and Sway IPC
 - [ ] A thumbnail for recordings
 - [x] A region across several monitors: regions are global, the first overlay sends the layout, a drag keeps going into the next screen and the other screens draw their part as it moves; each screen it touches saves its frame and `crop::join` puts them together at the finest scale, transparent where no screen is. Tested on Hyprland through IPC; a real drag across still needs trying by hand. Recordings stay on one screen
 - [ ] Recording a region across screens, if gpu-screen-recorder can
@@ -422,7 +423,8 @@ After capture, reusing its pickers.
 - [x] Clicking the sharing bubble asks again what to share, for the app sharing now. The portal can't change a running share, so with Switchable on (the default) the app shares `MOCHI-SHARE`, a Hyprland headless monitor far from the real ones, and Mochi draws a live copy of the screen, window or region on it; the bubble's picker changes the copy. The monitor goes 3 s after `screencastv2` stops reporting captures of it
 - [x] Keep the switchable copy's aspect: size `MOCHI-SHARE` to the first source instead of the largest screen (screens and areas; a window keeps the largest screen's)
 - [ ] `chooser_cmd` for xdg-desktop-portal-wlr
-- [ ] Screencast state on compositors other than Hyprland (PipeWire streams)
+- [x] Screencast state on niri, from its casts
+- [ ] Screencast state on Sway and others (PipeWire streams)
 
 ### Clipboard
 
@@ -582,8 +584,8 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 
 ### Checks and tools
 
-- [ ] A test that loads every QML view in a temporary shell, part of `nix flake check`, so a broken view fails the build
-- [ ] `mochi doctor`: checks the compositor's protocols, the portals, the fonts and the tools modules and plugins need, and says what to install
+- [x] A test that loads every QML view in a temporary shell, part of `nix flake check`, so a broken view fails the build
+- [x] `mochi doctor`: checks the compositor's protocols, the portals, the fonts and the tools modules and plugins need, and says what to install
 
 ## Integration and docs
 
@@ -613,7 +615,8 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 
 - [ ] Lua or WASM plugin backends
 - [ ] SDKs for other languages
-- [ ] Settings UI
+- [x] Settings UI: the settings module
+- [x] A guided tour, and a tour of what's new after each release: the tour module
 
 ## Open questions
 

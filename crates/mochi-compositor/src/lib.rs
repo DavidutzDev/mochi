@@ -10,15 +10,20 @@
 //! keep working.
 //!
 //! Compositor IPC only fills gaps the standards leave, and modules never see
-//! it: on Hyprland, its event socket reports the focused output exactly,
-//! including when focus moves to an empty workspace.
+//! it: on Hyprland, niri and Sway, it reports the focused output exactly,
+//! including when focus moves to an empty workspace, and where windows
+//! are; Hyprland and niri also say what's being shared, and Hyprland makes
+//! monitors of Mochi's own.
 //!
 //! Modules read the latest [`State`], wait for changes with
 //! [`Compositor::subscribe`], and act with methods like
 //! [`Compositor::activate_workspace`].
 
 mod hyprland;
+mod ipc;
 mod model;
+mod niri;
+mod sway;
 mod wayland;
 
 use std::fmt;
@@ -173,8 +178,8 @@ pub(crate) enum Action {
 pub struct Compositor {
     state: watch::Receiver<State>,
     actions: mpsc::UnboundedSender<Action>,
-    /// Hyprland's socket directory, under Hyprland.
-    hyprland: Option<std::path::PathBuf>,
+    /// The compositor's IPC, on Hyprland, niri and Sway.
+    ipc: Option<ipc::Ipc>,
 }
 
 impl Compositor {
@@ -185,7 +190,7 @@ impl Compositor {
         Self {
             state,
             actions,
-            hyprland: None,
+            ipc: None,
         }
     }
 
@@ -221,22 +226,24 @@ impl Compositor {
 impl Compositor {
     /// The windows on visible workspaces, topmost first. No standard
     /// protocol says where windows are, so this needs compositor IPC:
-    /// Hyprland's for now. Elsewhere it fails with
+    /// Hyprland's, niri's or Sway's. Elsewhere it fails with
     /// [`CompositorError::NoWindowGeometry`].
     pub async fn windows(&self) -> Result<Vec<Window>, CompositorError> {
-        let dir = self
-            .hyprland
-            .as_deref()
-            .ok_or(CompositorError::NoWindowGeometry)?;
-        hyprland::windows(dir)
+        let ipc = self.ipc.as_ref().ok_or(CompositorError::NoWindowGeometry)?;
+        ipc.windows()
             .await
             .map_err(|error| CompositorError::Ipc(error.to_string()))
+    }
+
+    /// Hyprland's socket directory, for what only it does.
+    fn hyprland(&self) -> Option<&std::path::Path> {
+        self.ipc.as_ref().and_then(ipc::Ipc::hyprland)
     }
 
     /// The monitor under the pointer, when the compositor says: Hyprland
     /// does. Blocks for at most a tenth of a second.
     pub fn pointer_output(&self) -> Option<String> {
-        hyprland::pointer_output(self.hyprland.as_deref()?)
+        hyprland::pointer_output(self.hyprland()?)
     }
 
     /// Makes a monitor of its own for Mochi, off to the side of the real
@@ -252,10 +259,7 @@ impl Compositor {
         height: u32,
         refresh: u32,
     ) -> Result<(), CompositorError> {
-        let dir = self
-            .hyprland
-            .as_deref()
-            .ok_or(CompositorError::NoVirtualOutputs)?;
+        let dir = self.hyprland().ok_or(CompositorError::NoVirtualOutputs)?;
         let focused = self.state().focused_output;
         hyprland::create_headless(dir, name, (width, height, refresh), focused.as_deref())
             .await
@@ -271,10 +275,7 @@ impl Compositor {
         height: u32,
         refresh: u32,
     ) -> Result<(), CompositorError> {
-        let dir = self
-            .hyprland
-            .as_deref()
-            .ok_or(CompositorError::NoVirtualOutputs)?;
+        let dir = self.hyprland().ok_or(CompositorError::NoVirtualOutputs)?;
         hyprland::set_mode(dir, name, (width, height, refresh))
             .await
             .map_err(|error| CompositorError::Ipc(error.to_string()))
@@ -283,10 +284,7 @@ impl Compositor {
     /// Removes a monitor made by [`Compositor::create_virtual_output`],
     /// keeping keyboard focus where it was.
     pub async fn remove_virtual_output(&self, name: &str) -> Result<(), CompositorError> {
-        let dir = self
-            .hyprland
-            .as_deref()
-            .ok_or(CompositorError::NoVirtualOutputs)?;
+        let dir = self.hyprland().ok_or(CompositorError::NoVirtualOutputs)?;
         let focused = self.state().focused_output;
         hyprland::remove_output(dir, name, focused.as_deref())
             .await
@@ -305,7 +303,13 @@ impl Compositor {
 
     /// Whether [`Compositor::windows`] can work here.
     pub fn knows_windows(&self) -> bool {
-        self.hyprland.is_some()
+        self.ipc.is_some()
+    }
+
+    /// Whether [`Compositor::create_virtual_output`] can work here: on
+    /// Hyprland.
+    pub fn makes_outputs(&self) -> bool {
+        self.hyprland().is_some()
     }
 }
 
@@ -382,7 +386,7 @@ mod tests {
         let compositor = Compositor {
             state,
             actions,
-            hyprland: None,
+            ipc: None,
         };
 
         assert_eq!(compositor.activate_workspace(WorkspaceId(1)), Ok(()));
