@@ -421,6 +421,7 @@ impl State {
                 Kind::Calculator => calculator(&rest, prefixed),
                 Kind::Commands => self.commands(&rest),
                 Kind::Files => self.files(&rest),
+                Kind::Windows => windows(&ctx.compositor().toplevels(), &rest, self.max_results),
                 Kind::Web { url } => web(&provider.title, url, &rest),
                 // Without a prefix, they have nothing to say to nothing.
                 Kind::Script { .. } | Kind::Module { .. } => {
@@ -488,7 +489,12 @@ impl State {
                         });
                     })
                 }
-                Kind::Apps | Kind::Calculator | Kind::Commands | Kind::Files | Kind::Web { .. } => {
+                Kind::Apps
+                | Kind::Calculator
+                | Kind::Commands
+                | Kind::Files
+                | Kind::Windows
+                | Kind::Web { .. } => {
                     continue;
                 }
             };
@@ -695,6 +701,19 @@ impl State {
         };
         match verb {
             Some(Verb::Launch(id)) => return self.launch(ctx, &id).await,
+            Some(Verb::Focus(id)) => {
+                self.close(ctx);
+                // Once the island has let go of the keyboard: the
+                // compositor gives it back to the window focused before,
+                // which would undo an activation sent sooner.
+                let compositor = ctx.compositor().clone();
+                tokio::spawn(async move {
+                    tokio::time::sleep(FOCUS_DELAY).await;
+                    if let Err(error) = compositor.activate_toplevel(id) {
+                        tracing::warn!(%error, "can't focus the window");
+                    }
+                });
+            }
             Some(Verb::Copy(text)) => {
                 self.close(ctx);
                 clipboard(ctx, "copy-text", text);
@@ -728,6 +747,9 @@ impl State {
     }
 }
 
+/// How long after closing the launcher a picked window gets focus.
+const FOCUS_DELAY: Duration = Duration::from_millis(150);
+
 /// A CSS color as QML reads it. CSS puts a hex color's alpha last
 /// (`#rrggbbaa`, `#rgba`), QML first (`#aarrggbb`); the rest is the same.
 fn qml_color(css: &str) -> String {
@@ -745,6 +767,38 @@ fn qml_color(css: &str) -> String {
         }
         _ => css.to_owned(),
     }
+}
+
+/// The open windows whose title or app has every word of `query`, the one
+/// focused most recently first. Nothing for an empty query: apps come
+/// first then.
+fn windows(open: &[mochi_core::compositor::Toplevel], query: &str, max: usize) -> Vec<Item> {
+    let words: Vec<String> = query.split_whitespace().map(str::to_lowercase).collect();
+    if words.is_empty() {
+        return Vec::new();
+    }
+    open.iter()
+        .filter(|window| {
+            let text = format!("{} {}", window.title, window.app_id).to_lowercase();
+            words.iter().all(|word| text.contains(word))
+        })
+        .take(max)
+        .map(|window| Item {
+            title: if window.title.is_empty() {
+                window.app_id.clone()
+            } else {
+                window.title.clone()
+            },
+            subtitle: Some(if window.focused {
+                format!("{} · focused", window.app_id)
+            } else {
+                window.app_id.clone()
+            }),
+            icon: Some(window.app_id.to_lowercase()).filter(|icon| !icon.is_empty()),
+            verb: Some(Verb::Focus(window.id)),
+            ..Item::default()
+        })
+        .collect()
 }
 
 /// A web search: the query as one result that opens the engine's page.
@@ -987,5 +1041,35 @@ mod settings_example {
             "launcher",
             include_str!("../settings.toml"),
         );
+    }
+}
+
+#[cfg(test)]
+mod windows_tests {
+    use mochi_core::compositor::Toplevel;
+
+    use super::*;
+
+    #[test]
+    fn windows_match_their_title_and_app() {
+        let window = |id, title: &str, app_id: &str, focused| Toplevel {
+            id,
+            title: title.into(),
+            app_id: app_id.into(),
+            focused,
+        };
+        let open = [
+            window(3, "Docs - Mozilla Firefox", "firefox", true),
+            window(7, "~/mochi", "kitty", false),
+            window(9, "", "Spotify", false),
+        ];
+        assert!(windows(&open, "", 10).is_empty());
+        let found = windows(&open, "fire docs", 10);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].verb, Some(Verb::Focus(3)));
+        assert_eq!(found[0].subtitle.as_deref(), Some("firefox · focused"));
+        let untitled = windows(&open, "spot", 10);
+        assert_eq!(untitled[0].title, "Spotify");
+        assert_eq!(untitled[0].icon.as_deref(), Some("spotify"));
     }
 }

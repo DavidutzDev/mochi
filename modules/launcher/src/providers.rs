@@ -131,6 +131,8 @@ pub enum Kind {
     Commands,
     /// Files and folders from the index.
     Files,
+    /// Open windows, on every workspace.
+    Windows,
     /// A search engine: `url` with `%s` where the query goes.
     Web {
         url: String,
@@ -174,6 +176,7 @@ pub fn providers(
     let mut providers = vec![
         builtin("calculator", "Calculator", Some("="), -10, Kind::Calculator),
         builtin("apps", "Apps", None, 0, Kind::Apps),
+        builtin("windows", "Windows", None, -5, Kind::Windows),
         builtin("commands", "Run", Some(">"), 10, Kind::Commands),
         builtin("files", "Files", Some("/"), 15, Kind::Files),
     ];
@@ -284,6 +287,8 @@ pub enum Verb {
     Run(String),
     /// A command, in the terminal from the settings.
     RunInTerminal(String),
+    /// Focuses an open window, by its compositor id.
+    Focus(u32),
 }
 
 /// One line in the list.
@@ -471,14 +476,14 @@ mod tests {
         let providers = providers(&settings, &BTreeMap::new(), &offers);
         assert_eq!(
             names(&providers),
-            ["apps", "calculator", "files", "web", "emoji"]
+            ["windows", "apps", "calculator", "files", "web", "emoji"]
         );
-        let web = &providers[3];
+        let web = &providers[4];
         assert_eq!(web.prefix.as_deref(), Some("!w"));
         assert_eq!(web.title, "web");
-        assert_eq!(providers[1].prefix, None);
+        assert_eq!(providers[2].prefix, None);
         assert_eq!(
-            providers[4].kind,
+            providers[5].kind,
             Kind::Module {
                 module: "emoji".into(),
                 search: "search".into(),
@@ -511,11 +516,12 @@ mod tests {
         assert_eq!(routed("> htop"), [("commands".into(), "htop".into())]);
         assert_eq!(routed("!wiki rust"), [("wiki".into(), "rust".into())]);
         assert_eq!(routed("!w rust"), [("web".into(), "rust".into())]);
-        // No prefix: apps, and the calculator for plain math.
+        // No prefix: apps, open windows, and the calculator for plain math.
         assert_eq!(
             routed("fire"),
             [
                 ("calculator".into(), "fire".into()),
+                ("windows".into(), "fire".into()),
                 ("apps".into(), "fire".into())
             ]
         );

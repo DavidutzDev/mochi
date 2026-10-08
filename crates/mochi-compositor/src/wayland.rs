@@ -15,7 +15,7 @@ use tokio::io::unix::AsyncFd;
 use tokio::sync::{mpsc, watch};
 use wayland_client::backend::WaylandError;
 use wayland_client::globals::{GlobalListContents, registry_queue_init};
-use wayland_client::protocol::{wl_output, wl_registry};
+use wayland_client::protocol::{wl_output, wl_registry, wl_seat};
 use wayland_client::{
     Connection, Dispatch, EventQueue, Proxy, QueueHandle, WEnum, event_created_child,
 };
@@ -102,12 +102,18 @@ pub(crate) fn start() -> Result<Compositor, String> {
         );
     }
 
+    // Activating a window names the seat whose focus it takes.
+    let seat: Option<wl_seat::WlSeat> = globals.bind(&handle, 1..=1, ()).ok();
+
     let mut client = Client {
         model: Model::default(),
         manager,
         workspaces: HashMap::new(),
         outputs,
+        handles: HashMap::new(),
+        seat,
         done: false,
+        windows_changed: false,
         finished: false,
     };
 
@@ -136,12 +142,16 @@ pub(crate) fn start() -> Result<Compositor, String> {
         "connected to the compositor through ext-workspace-v1"
     );
     let (state_sender, state) = watch::channel(snapshot);
+    let (toplevel_sender, toplevels) = watch::channel(client.model.toplevels());
     let (actions, action_receiver) = mpsc::unbounded_channel();
     tokio::spawn(run(
         connection,
         queue,
         client,
-        state_sender,
+        Senders {
+            state: state_sender,
+            toplevels: toplevel_sender,
+        },
         action_receiver,
         focus,
     ));
@@ -149,14 +159,21 @@ pub(crate) fn start() -> Result<Compositor, String> {
         state,
         actions,
         ipc,
+        toplevels,
     })
+}
+
+/// Where the snapshots go.
+struct Senders {
+    state: watch::Sender<State>,
+    toplevels: watch::Sender<Vec<crate::Toplevel>>,
 }
 
 async fn run(
     connection: Connection,
     mut queue: EventQueue<Client>,
     mut client: Client,
-    state: watch::Sender<State>,
+    senders: Senders,
     mut actions: mpsc::UnboundedReceiver<Action>,
     mut focus: Option<mpsc::UnboundedReceiver<Event>>,
 ) {
@@ -164,7 +181,7 @@ async fn run(
         Ok(socket) => socket,
         Err(error) => {
             tracing::error!(%error, "cannot watch the Wayland socket");
-            state.send_replace(State::default());
+            senders.state.send_replace(State::default());
             return;
         }
     };
@@ -176,7 +193,15 @@ async fn run(
         }
         if std::mem::take(&mut client.done) {
             let next = client.model.snapshot();
-            state.send_if_modified(|current| {
+            senders.state.send_if_modified(|current| {
+                let changed = *current != next;
+                *current = next;
+                changed
+            });
+        }
+        if std::mem::take(&mut client.windows_changed) {
+            let next = client.model.toplevels();
+            senders.toplevels.send_if_modified(|current| {
                 let changed = *current != next;
                 *current = next;
                 changed
@@ -246,7 +271,8 @@ async fn run(
     }
 
     // Tell modules there is nothing to rely on any more.
-    state.send_replace(State::default());
+    senders.state.send_replace(State::default());
+    senders.toplevels.send_replace(Vec::new());
 }
 
 /// The next report from IPC. Never returns when there is no IPC.
@@ -274,8 +300,13 @@ struct Client {
     workspaces: HashMap<u32, ExtWorkspaceHandleV1>,
     /// Bound outputs by registry name, to release them when they go away.
     outputs: HashMap<u32, wl_output::WlOutput>,
+    /// Window handles by protocol id, to activate them.
+    handles: HashMap<u32, ZwlrForeignToplevelHandleV1>,
+    seat: Option<wl_seat::WlSeat>,
     /// The compositor finished a batch of changes.
     done: bool,
+    /// A window opened, closed or changed its title, app or focus.
+    windows_changed: bool,
     /// The compositor will send no more workspace events.
     finished: bool,
 }
@@ -311,6 +342,11 @@ impl Client {
                 self.model.assume_captures(&captured);
                 self.done = true;
             }
+            Action::ActivateToplevel(id) => match (self.handles.get(&id), &self.seat) {
+                (Some(handle), Some(seat)) => handle.activate(seat),
+                (None, _) => tracing::warn!(id, "the window is gone"),
+                (_, None) => tracing::warn!("no seat to activate a window with"),
+            },
         }
     }
 }
@@ -514,7 +550,11 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for Client {
         _: &QueueHandle<Self>,
     ) {
         let id = toplevel.id().protocol_id();
+        client.handles.entry(id).or_insert_with(|| toplevel.clone());
         match event {
+            zwlr_foreign_toplevel_handle_v1::Event::Title { title } => {
+                client.model.toplevel_title(id, title);
+            }
             zwlr_foreign_toplevel_handle_v1::Event::OutputEnter { output } => {
                 client
                     .model
@@ -540,9 +580,12 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for Client {
             zwlr_foreign_toplevel_handle_v1::Event::Done => {
                 client.model.toplevel_done(id);
                 client.done = true;
+                client.windows_changed = true;
             }
             zwlr_foreign_toplevel_handle_v1::Event::Closed => {
                 client.model.toplevel_closed(id);
+                client.handles.remove(&id);
+                client.windows_changed = true;
                 toplevel.destroy();
             }
             _ => {}
@@ -555,5 +598,17 @@ fn bits<T>(value: WEnum<T>, known: impl Fn(T) -> u32) -> u32 {
     match value {
         WEnum::Value(value) => known(value),
         WEnum::Unknown(raw) => raw,
+    }
+}
+
+impl Dispatch<wl_seat::WlSeat, ()> for Client {
+    fn event(
+        _: &mut Self,
+        _: &wl_seat::WlSeat,
+        _: wl_seat::Event,
+        _: &(),
+        _: &Connection,
+        _: &QueueHandle<Self>,
+    ) {
     }
 }

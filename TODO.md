@@ -352,7 +352,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] Keybind examples for Hyprland's Lua config and other compositors (Getting started)
 - [x] Calculator and run-a-command results, as providers: `apps`, `calculator`, `commands`, script providers from `config.toml`, and plugin providers (`examples/plugins/emoji`)
 - [x] Built-in providers: files (`/`, an index of home), web searches (`!w` and the others), emoji (`:`, the emoji module) and colors (`#`, the colors module)
-- [ ] More built-in providers, like open windows or settings pages
+- [x] More built-in providers: open windows (settings pages come from the settings module)
 - [x] The file index follows changes as they happen (inotify) instead of rebuilding after 15 seconds
 - [ ] Watch the application directories instead of reading them on every open, if opening ever feels slow
 

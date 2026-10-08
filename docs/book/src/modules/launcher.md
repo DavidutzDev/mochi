@@ -11,6 +11,7 @@ Results come from providers. These are built in:
 | Provider | Prefix | Answers |
 |---|---|---|
 | `apps` | none | Your apps and their actions |
+| `windows` | none | Open windows on every workspace whose title or app has every word you typed, the one focused last first, above the apps. Enter focuses one and switches to its workspace. Needs wlr-foreign-toplevel-management, which Hyprland, Sway and niri have |
 | `calculator` | `=` | Math, like `=2^10` or `=sqrt(2)*pi`. Plain math like `2+2` works without the prefix, above the apps. Enter copies the result |
 | `commands` | `>` | A shell command, like `> htop`, with the ones you ran before. Enter runs it, Shift+Enter runs it in the terminal from `terminal` |
 | `files` | `/` | Files and folders in your home by name, from an index in memory. Enter opens one, Shift+Enter the folder it's in |

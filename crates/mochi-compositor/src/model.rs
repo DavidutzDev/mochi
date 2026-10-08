@@ -32,6 +32,8 @@ pub(crate) struct Model {
     captured: BTreeMap<String, u32>,
     /// IPC connected once already: a new connection may have missed events.
     ipc_seen: bool,
+    /// Focus changes so far, to order windows by when they had it.
+    focus_count: u64,
 }
 
 #[derive(Debug, Default)]
@@ -39,6 +41,9 @@ struct Toplevel {
     outputs: Vec<u32>,
     activated: bool,
     app_id: String,
+    title: String,
+    /// When it last had focus, counting focus changes; 0 for never.
+    focused_at: u64,
 }
 
 #[derive(Debug, Default)]
@@ -146,6 +151,10 @@ impl Model {
         self.toplevels.entry(toplevel).or_default().app_id = app_id;
     }
 
+    pub fn toplevel_title(&mut self, toplevel: u32, title: String) {
+        self.toplevels.entry(toplevel).or_default().title = title;
+    }
+
     pub fn toplevel_activated(&mut self, toplevel: u32, activated: bool) {
         self.toplevels.entry(toplevel).or_default().activated = activated;
     }
@@ -154,15 +163,34 @@ impl Model {
     /// its output. A window losing focus doesn't: focus went somewhere else,
     /// which that window's own `done` reports.
     pub fn toplevel_done(&mut self, toplevel: u32) {
-        let Some(window) = self.toplevels.get(&toplevel) else {
+        let Some(window) = self.toplevels.get_mut(&toplevel) else {
             return;
         };
         if window.activated {
+            if self.focused_window != Some(toplevel) {
+                self.focus_count += 1;
+                window.focused_at = self.focus_count;
+            }
             self.focused_window = Some(toplevel);
             if let Some(output) = window.outputs.first() {
                 self.window_focus = Some(*output);
             }
         }
+    }
+
+    /// Every window, the one focused most recently first.
+    pub fn toplevels(&self) -> Vec<crate::Toplevel> {
+        let mut windows: Vec<(&u32, &Toplevel)> = self.toplevels.iter().collect();
+        windows.sort_by_key(|(id, window)| (std::cmp::Reverse(window.focused_at), **id));
+        windows
+            .into_iter()
+            .map(|(id, window)| crate::Toplevel {
+                id: *id,
+                title: window.title.clone(),
+                app_id: window.app_id.clone(),
+                focused: self.focused_window == Some(*id),
+            })
+            .collect()
     }
 
     pub fn toplevel_closed(&mut self, toplevel: u32) {

@@ -146,6 +146,8 @@ pub enum CompositorError {
     NoWindowGeometry,
     #[error("this compositor can't make monitors of Mochi's own")]
     NoVirtualOutputs,
+    #[error("window {0} is gone")]
+    UnknownWindow(u32),
     #[error("the compositor's IPC failed: {0}")]
     Ipc(String),
 }
@@ -164,6 +166,16 @@ pub struct Window {
     pub floating: bool,
 }
 
+/// An open window, on any workspace, from wlr-foreign-toplevel-management.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Toplevel {
+    /// Stable while the window is open; for [`Compositor::activate_toplevel`].
+    pub id: u32,
+    pub title: String,
+    pub app_id: String,
+    pub focused: bool,
+}
+
 /// Wakes on every new snapshot; see [`Compositor::subscribe`].
 pub type StateReceiver = watch::Receiver<State>;
 
@@ -171,6 +183,7 @@ pub type StateReceiver = watch::Receiver<State>;
 pub(crate) enum Action {
     ActivateWorkspace(WorkspaceId),
     AssumeCaptures(Vec<String>),
+    ActivateToplevel(u32),
 }
 
 /// A cheap, cloneable handle to the compositor.
@@ -180,6 +193,9 @@ pub struct Compositor {
     actions: mpsc::UnboundedSender<Action>,
     /// The compositor's IPC, on Hyprland, niri and Sway.
     ipc: Option<ipc::Ipc>,
+    /// Every open window. Apart from `state`, so a title changing doesn't
+    /// wake everyone who watches the workspaces.
+    toplevels: watch::Receiver<Vec<Toplevel>>,
 }
 
 impl Compositor {
@@ -187,10 +203,12 @@ impl Compositor {
     pub fn unsupported() -> Self {
         let (_, state) = watch::channel(State::default());
         let (actions, _) = mpsc::unbounded_channel();
+        let (_, toplevels) = watch::channel(Vec::new());
         Self {
             state,
             actions,
             ipc: None,
+            toplevels,
         }
     }
 
@@ -203,6 +221,23 @@ impl Compositor {
     /// once no more snapshots will come.
     pub fn subscribe(&self) -> StateReceiver {
         self.state.clone()
+    }
+
+    /// Every open window on every workspace, the one focused most recently
+    /// first. Empty without wlr-foreign-toplevel-management.
+    pub fn toplevels(&self) -> Vec<Toplevel> {
+        self.toplevels.borrow().clone()
+    }
+
+    /// Focuses a window from [`Compositor::toplevels`], switching to its
+    /// workspace.
+    pub fn activate_toplevel(&self, id: u32) -> Result<(), CompositorError> {
+        if !self.toplevels.borrow().iter().any(|window| window.id == id) {
+            return Err(CompositorError::UnknownWindow(id));
+        }
+        self.actions
+            .send(Action::ActivateToplevel(id))
+            .map_err(|_| CompositorError::Unsupported)
     }
 
     /// Switches to a workspace on its output.
@@ -383,10 +418,12 @@ mod tests {
             captured: Vec::new(),
         });
         let (actions, mut received) = mpsc::unbounded_channel();
+        let (_, toplevels) = watch::channel(Vec::new());
         let compositor = Compositor {
             state,
             actions,
             ipc: None,
+            toplevels,
         };
 
         assert_eq!(compositor.activate_workspace(WorkspaceId(1)), Ok(()));
