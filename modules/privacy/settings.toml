@@ -1,5 +1,5 @@
-# Privacy: a dot next to the island while an app uses the microphone or the
-# camera. A click mutes the microphone, or unmutes it.
+# Privacy: a microphone or camera icon next to the island while an app uses
+# them. A click mutes the microphone, or unmutes it.
 [module.privacy]
 # Apps recording from a microphone, which the audio module reports; without
 # it, nothing shows for the microphone.

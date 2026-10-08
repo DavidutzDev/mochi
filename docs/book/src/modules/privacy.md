@@ -1,6 +1,6 @@
 # Privacy
 
-A dot next to the island while an app records from a microphone or has a camera open: orange for the microphone, green for the camera. A muted microphone's dot is a ring, since whoever records hears nothing. A click on the dot mutes the default microphone, or unmutes it.
+An icon next to the island while an app records from a microphone or has a camera open: a microphone in orange, a camera in green, or both. A muted microphone shows crossed out and grey, since whoever records hears nothing. A click on the bubble mutes the default microphone, or unmutes it.
 
 With `wide = true` in `[bubbles.privacy]`, the bubble names the apps:
 

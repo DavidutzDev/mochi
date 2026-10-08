@@ -12,7 +12,7 @@ pub fn steps() -> Vec<ContributionSpec> {
             .options(json!({
                 "chapter": "notices",
                 "since": "0.0.8",
-                "caption": "While an app listens to the microphone or watches through the camera, a dot stays next to the island. A click on it mutes the microphone.",
+                "caption": "While an app listens to the microphone or watches through the camera, its icon stays next to the island. A click on it mutes the microphone.",
                 "payload": {
                     "microphone": ["Discord"],
                     "camera": ["firefox"],

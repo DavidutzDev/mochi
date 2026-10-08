@@ -1,9 +1,9 @@
 import QtQuick
 import qs.island
 
-// The bubble while an app uses the microphone or the camera: an orange dot
-// for the microphone, a green one for the camera. A muted microphone's dot
-// is a ring, since whoever records hears nothing.
+// The bubble while an app uses the microphone or the camera: a microphone
+// in orange, a camera in green, or both. A muted microphone shows crossed
+// out, since whoever records hears nothing.
 Item {
     id: root
 
@@ -11,30 +11,30 @@ Item {
     readonly property bool microphone: (payload.microphone ?? []).length > 0
     readonly property bool camera: (payload.camera ?? []).length > 0
 
-    implicitWidth: dots.implicitWidth + Theme.spaceSmall * 2
+    implicitWidth: icons.implicitWidth + Theme.spaceSmall * 2
     implicitHeight: 26
 
     Row {
-        id: dots
+        id: icons
 
         anchors.centerIn: parent
         spacing: Theme.spaceTiny
 
-        Rectangle {
+        Symbol {
+            anchors.verticalCenter: parent.verticalCenter
             visible: root.microphone
-            width: 8
-            height: 8
-            radius: width / 2
-            color: root.payload.muted ? "transparent" : Theme.accent
-            border.width: root.payload.muted ? 2 : 0
-            border.color: Theme.accent
+            name: root.payload.muted ? "mic_off" : "mic"
+            size: 16
+            filled: true
+            color: root.payload.muted ? Theme.muted : Theme.accent
         }
 
-        Rectangle {
+        Symbol {
+            anchors.verticalCenter: parent.verticalCenter
             visible: root.camera
-            width: 8
-            height: 8
-            radius: width / 2
+            name: "videocam"
+            size: 16
+            filled: true
             color: Theme.success
         }
     }

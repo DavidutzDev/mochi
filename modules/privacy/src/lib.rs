@@ -1,7 +1,7 @@
-//! Privacy: a dot next to the island while an app records from a
-//! microphone or has a camera open, orange for the microphone and green
-//! for the camera. A click on it mutes the microphone or unmutes it, and
-//! the wide pill names the apps.
+//! Privacy: a bubble next to the island while an app records from a
+//! microphone or has a camera open: a microphone icon in orange, a camera
+//! in green. A click on it mutes the microphone or unmutes it, and the
+//! wide pill names the apps.
 //!
 //! The apps recording come from the audio module's state, which leaves out
 //! Mochi's own meters and recordings of what an output plays. The camera
