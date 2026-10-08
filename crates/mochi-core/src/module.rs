@@ -184,6 +184,9 @@ pub enum Request {
     WatchState {
         module: String,
     },
+    /// Pauses the island for everyone else, or resumes it: see
+    /// [`ModuleCtx::pause_island`].
+    PauseIsland(bool),
     /// Reads or changes the settings, for the settings panel.
     Settings {
         op: SettingsOp,
@@ -218,6 +221,16 @@ pub enum SettingsOp {
     Edit { path: String, text: String },
     /// Every option that isn't at its default, as `nix` or `toml`.
     Export { format: String },
+    /// Tries values without keeping them: they apply, but stay in memory,
+    /// and go on reload. `replace` drops what was being tried first.
+    Preview {
+        values: Vec<(String, Value)>,
+        replace: bool,
+    },
+    /// Keeps what's being tried, as changes.
+    Keep,
+    /// Stops trying, back to the changes.
+    Drop,
 }
 
 /// What the daemon tells a module.
@@ -470,6 +483,13 @@ impl ModuleCtx {
                 .await
                 .unwrap_or_else(|_| Err(CallError::Failed("the daemon stopped".into())))
         }
+    }
+
+    /// Pauses the island for every other module, like the tour does: only
+    /// this module's activities and bubbles show, and the others wait to
+    /// show after `pause_island(false)`. Ends when the module stops.
+    pub fn pause_island(&self, paused: bool) {
+        self.send(Request::PauseIsland(paused));
     }
 
     /// Reads or changes the settings. The answer is the snapshot or the

@@ -5,7 +5,7 @@
 //! JSON under `$XDG_STATE_HOME/mochi/`.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
@@ -40,13 +40,7 @@ impl History {
     /// `$XDG_STATE_HOME/mochi/launcher.json`, falling back to
     /// `~/.local/state`.
     pub fn default_path() -> Option<PathBuf> {
-        let state = std::env::var_os("XDG_STATE_HOME")
-            .filter(|value| !value.is_empty())
-            .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("HOME").map(|home| Path::new(&home).join(".local/state"))
-            })?;
-        Some(state.join("mochi").join("launcher.json"))
+        Some(mochi_core::config::state_dir()?.join("launcher.json"))
     }
 
     /// The score at `now`, 0 for something never launched.

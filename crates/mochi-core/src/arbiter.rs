@@ -95,6 +95,9 @@ pub struct Arbiter {
     /// Only activities the user opened, and modal ones, close on a click
     /// outside: `[island] click_outside = "expanded"`.
     outside_expanded_only: bool,
+    /// While set, only this module's activities show: see
+    /// [`Arbiter::set_exclusive`].
+    exclusive: Option<String>,
 }
 
 impl Arbiter {
@@ -110,8 +113,49 @@ impl Arbiter {
             .iter()
             .chain(self.suspended.iter().rev())
             .chain(&self.queue)
-            .find(|entry| entry.spec.priority <= Priority::IDLE && entry.spec.output.is_none())
+            .find(|entry| {
+                entry.spec.priority <= Priority::IDLE
+                    && entry.spec.output.is_none()
+                    && self.allowed(entry)
+            })
             .map(Entry::activity)
+    }
+
+    /// Pauses the island for everyone but `module`, like the tour: its
+    /// activities show, and every other module's wait, as they would
+    /// behind an activity that can't be interrupted, even at
+    /// [`Priority::TOP`]. A fleeting one, like a volume change, ends
+    /// instead, as it would be stale by then. `None` shows what waited.
+    pub fn set_exclusive(&mut self, module: Option<String>, now: Instant) {
+        if self.exclusive == module {
+            return;
+        }
+        self.exclusive = module;
+        match self.current.take() {
+            Some(current) if self.allowed(&current) => self.current = Some(current),
+            Some(mut current) => {
+                if current.spec.fleeting {
+                    self.ended(current, EndReason::Expired);
+                } else {
+                    current.suspend(now);
+                    self.suspended.push(current);
+                }
+                self.dirty = true;
+                self.promote(now);
+            }
+            None => self.promote(now),
+        }
+    }
+
+    /// The module the island is paused for, if any.
+    pub fn exclusive(&self) -> Option<&str> {
+        self.exclusive.as_deref()
+    }
+
+    fn allowed(&self, entry: &Entry) -> bool {
+        self.exclusive
+            .as_deref()
+            .is_none_or(|module| module == entry.module)
     }
 
     /// What the island shows now.
@@ -170,6 +214,14 @@ impl Arbiter {
         }
 
         let entry = Entry::new(id, module, spec);
+        if !self.allowed(&entry) {
+            if entry.spec.fleeting {
+                self.ended(entry, EndReason::Expired);
+            } else {
+                self.enqueue(entry);
+            }
+            return;
+        }
 
         match self.current.take() {
             None => self.show(entry, now),
@@ -334,21 +386,24 @@ impl Arbiter {
     }
 
     /// Shows the next activity after the shown one ended.
+    /// Only what's allowed while the island is paused.
     fn promote(&mut self, now: Instant) {
-        let resume = match (self.suspended.last(), self.queue.first()) {
-            (Some(suspended), Some(queued)) => suspended.spec.priority >= queued.spec.priority,
+        let suspended = self.suspended.iter().rposition(|entry| self.allowed(entry));
+        let queued = self.queue.iter().position(|entry| self.allowed(entry));
+        let resume = match (suspended, queued) {
+            (Some(suspended), Some(queued)) => {
+                self.suspended[suspended].spec.priority >= self.queue[queued].spec.priority
+            }
             (Some(_), None) => true,
             (None, Some(_)) => false,
             (None, None) => return,
         };
-        let entry = if resume {
-            self.suspended.pop()
-        } else {
-            Some(self.queue.remove(0))
+        let entry = match (resume, suspended, queued) {
+            (true, Some(index), _) => self.suspended.remove(index),
+            (_, _, Some(index)) => self.queue.remove(index),
+            _ => return,
         };
-        if let Some(entry) = entry {
-            self.show(entry, now);
-        }
+        self.show(entry, now);
     }
 
     fn replace(&mut self, slot: Slot, id: ActivityId, spec: ActivitySpec, now: Instant) {

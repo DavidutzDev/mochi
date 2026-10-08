@@ -298,6 +298,11 @@ impl Daemon {
         let now = Instant::now();
         self.arbiter.withdraw_all(module, now);
         self.bubbles.hide_all(module);
+        // A module that paused the island can't resume it any more.
+        if self.arbiter.exclusive() == Some(module) {
+            self.arbiter.set_exclusive(None, now);
+            self.bubbles.set_only(None);
+        }
         if self.states.remove(module).is_some() {
             self.broadcast(&DaemonMessage::State {
                 module: module.to_owned(),
@@ -752,6 +757,9 @@ impl Daemon {
             SettingsOp::Reset { path } => settings::Op::Reset { path },
             SettingsOp::Discard => settings::Op::Discard,
             SettingsOp::Edit { path, text } => settings::Op::Edit { path, text },
+            SettingsOp::Preview { values, replace } => settings::Op::Preview { values, replace },
+            SettingsOp::Keep => settings::Op::Keep,
+            SettingsOp::Drop => settings::Op::Drop,
         };
         let loaded = self.store.change(&op)?;
         self.run_with(loaded)
@@ -781,10 +789,14 @@ impl Daemon {
         Ok(())
     }
 
+    /// What the enabled modules offer the enabled ones: an offer to a
+    /// module that isn't running, like a tour step without the tour, goes
+    /// nowhere.
     fn contributions(&self) -> Vec<Contribution> {
         self.order
             .iter()
             .flat_map(|module| self.modules[module].contributions.clone())
+            .filter(|offer| self.order.contains(&offer.target.as_str()))
             .collect()
     }
 
@@ -865,6 +877,12 @@ impl Daemon {
                 reply,
             } => {
                 self.on_call(module, &target, &action, &args, reply);
+                return;
+            }
+            Request::PauseIsland(paused) => {
+                let only = paused.then(|| module.to_owned());
+                self.arbiter.set_exclusive(only.clone(), now);
+                self.bubbles.set_only(only);
                 return;
             }
             Request::Settings { op, reply } => {

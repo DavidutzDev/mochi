@@ -57,6 +57,8 @@ pub struct Bubbles {
     news: u64,
     /// Areas stack their bubbles, when set.
     stack: Option<mochi_protocol::Stacking>,
+    /// While set, only this module's bubbles show.
+    only: Option<String>,
     changed: bool,
 }
 
@@ -91,6 +93,15 @@ impl Bubbles {
     }
 
     /// Stacks each area's bubbles, or lays them side by side with `None`.
+    /// Shows only `module`'s bubbles while the island is paused for it;
+    /// the others stay, and come back with `None`.
+    pub fn set_only(&mut self, module: Option<String>) {
+        if self.only != module {
+            self.only = module;
+            self.changed = true;
+        }
+    }
+
     pub fn set_stack(&mut self, stack: Option<mochi_protocol::Stacking>) {
         if self.stack != stack {
             self.stack = stack;
@@ -225,6 +236,7 @@ impl Bubbles {
                     .get(&entry.module)
                     .and_then(|placement| placement.show)
                     != Some(false)
+                    && self.only.as_ref().is_none_or(|only| *only == entry.module)
             })
             .map(|entry| self.place(entry))
             .collect();

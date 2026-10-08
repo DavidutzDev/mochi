@@ -761,3 +761,36 @@ fn the_idle_island_rests_under_whatever_shows() {
     bench.submit("idle", idle().output("DP-3"));
     assert_eq!(bench.arbiter.resting(), None);
 }
+
+#[test]
+fn a_paused_island_shows_only_one_module_then_what_waited() {
+    let mut bench = Bench::new();
+    let pill = bench.submit("idle", idle());
+    let card = bench.submit("notifications", timed(4));
+    assert_eq!(bench.shown(), Some(card));
+
+    let now = bench.now;
+    bench.arbiter.set_exclusive(Some("tour".into()), now);
+    assert_eq!(bench.shown(), None);
+    assert!(bench.arbiter.resting().is_none(), "no idle island either");
+
+    let step = bench.submit("tour", ActivitySpec::new("Stage").uninterruptible());
+    assert_eq!(bench.shown(), Some(step));
+    // Others wait, even at the top priority; a fleeting one is dropped.
+    let urgent = bench.submit("capture", timed(3).priority(Priority::TOP));
+    let volume = bench.submit("osd", timed(2).priority(Priority::HIGH).fleeting());
+    assert_eq!(bench.shown(), Some(step));
+    assert!(bench.ended().contains(&(volume, EndReason::Expired)));
+    // Held, nothing runs out.
+    bench.advance(60 * SECOND);
+    assert_eq!(bench.shown(), Some(step));
+
+    let now = bench.now;
+    bench.arbiter.withdraw("tour", step, now).unwrap();
+    bench.arbiter.set_exclusive(None, now);
+    assert_eq!(bench.shown(), Some(urgent));
+    bench.advance(3 * SECOND);
+    assert_eq!(bench.shown(), Some(card));
+    bench.advance(4 * SECOND);
+    assert_eq!(bench.shown(), Some(pill));
+}

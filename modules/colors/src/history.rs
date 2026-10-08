@@ -9,11 +9,7 @@ use crate::color::Color;
 
 /// `$XDG_STATE_HOME/mochi/colors.json`, falling back to `~/.local/state`.
 pub fn state_file() -> Option<PathBuf> {
-    let state = std::env::var_os("XDG_STATE_HOME")
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join(".local/state")))?;
-    Some(state.join("mochi").join("colors.json"))
+    Some(mochi_core::config::state_dir()?.join("colors.json"))
 }
 
 #[derive(Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

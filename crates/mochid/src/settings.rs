@@ -50,6 +50,9 @@ pub struct Store {
     modules: Option<Vec<String>>,
     base: Tables,
     changes: Changes,
+    /// Changes being tried, over `changes`: the settings panel's preview,
+    /// or the tour showing a look. Never saved, and gone on reload.
+    preview: Changes,
     defaults: Tables,
     sections: Vec<Section>,
     available: Vec<Available>,
@@ -80,6 +83,7 @@ impl Store {
             modules,
             base: Tables::default(),
             changes: Changes::default(),
+            preview: Changes::default(),
             defaults: complete(defaults(&catalog), &sections),
             sections,
             available: available(&catalog),
@@ -159,35 +163,90 @@ impl Store {
     /// returns what the daemon now runs with.
     pub fn change(&mut self, op: &Op) -> Result<Loaded, String> {
         let mut changes = self.changes.clone();
+        let mut preview = self.preview.clone();
         match op {
             Op::Set { path, value } => {
-                let field = self.field(path)?;
-                let (file, parts) = File::split(path).ok_or("no such option")?;
-                match options::from_json(value, field.kind, field.items)? {
+                let (file, parts, value) = self.value(path, value)?;
+                // What's kept wins over what's tried.
+                changes::remove(preview.table_mut(file), &parts);
+                match value {
                     Some(value) => changes::set(changes.table_mut(file), &parts, value),
                     None => changes::remove(changes.table_mut(file), &parts),
                 }
             }
-            Op::Reset { path } => self.reset(&mut changes, path)?,
-            Op::Discard => changes = Changes::default(),
+            Op::Reset { path } => {
+                self.reset(&mut changes, path)?;
+                self.reset(&mut preview, path)?;
+            }
+            Op::Discard => {
+                changes = Changes::default();
+                preview = Changes::default();
+            }
             Op::Edit { path, text } => {
                 let (file, parts) = self.section_path(path)?;
                 let table: Table = toml::from_str(text).map_err(|error| error.to_string())?;
+                changes::remove(preview.table_mut(file), &parts);
                 let target = changes.table_mut(file);
                 changes::remove(target, &parts);
                 changes::set(target, &parts, Value::Table(table));
             }
+            Op::Preview { values, replace } => {
+                if *replace {
+                    preview = Changes::default();
+                }
+                for (path, value) in values {
+                    let (file, parts, value) = self.value(path, value)?;
+                    match value {
+                        Some(value) => changes::set(preview.table_mut(file), &parts, value),
+                        None => changes::remove(preview.table_mut(file), &parts),
+                    }
+                }
+            }
+            Op::Keep => {
+                for file in File::ALL {
+                    changes::merge(changes.table_mut(file), preview.table(file));
+                }
+                preview = Changes::default();
+            }
+            Op::Drop => preview = Changes::default(),
         }
         let changes = self.pruned(changes);
+        let preview = self.pruned_over(preview, &changes);
         let catalog = modules::catalog(&self.config_file).map_err(|error| error.to_string())?;
         let loaded = self
-            .resolve(&changes, &catalog)
+            .resolve(&layered(&changes, &preview), &catalog)
             .map_err(|error| match error {
                 ConfigError::Invalid { message, .. } => message,
                 other => other.to_string(),
             })?;
         self.keep(changes);
+        self.preview = preview;
         Ok(loaded)
+    }
+
+    /// An option's file, its path in the file, and the value the panel
+    /// sent as that option's TOML; `None` unsets it.
+    fn value<'a>(
+        &self,
+        path: &'a str,
+        value: &Json,
+    ) -> Result<(File, Vec<&'a str>, Option<Value>), String> {
+        let field = self.field(path)?;
+        let (file, parts) = File::split(path).ok_or("no such option")?;
+        Ok((
+            file,
+            parts,
+            options::from_json(value, field.kind, field.items)?,
+        ))
+    }
+
+    /// The preview without what the files and the changes already say.
+    fn pruned_over(&self, mut preview: Changes, changes: &Changes) -> Changes {
+        for file in File::ALL {
+            let under = changes::merged(self.base.get(file), changes.table(file));
+            changes::prune(preview.table_mut(file), &under, self.defaults.get(file));
+        }
+        preview
     }
 
     /// Drops the panel's change to an option, or to every option of a
@@ -219,11 +278,12 @@ impl Store {
     }
 
     /// A file as it applies: the defaults, the file over them, the changes
-    /// over that.
+    /// over that, and what's being tried on top.
     fn effective(&self, file: File) -> Table {
         let mut table = self.defaults.get(file).clone();
         changes::merge(&mut table, self.base.get(file));
         changes::merge(&mut table, self.changes.table(file));
+        changes::merge(&mut table, self.preview.table(file));
         table
     }
 
@@ -264,6 +324,7 @@ impl Store {
                             .unwrap_or(Json::Null);
                         // Changed here, not only different from the default.
                         let changed = changes::get(self.changes.table(file), &parts).is_some();
+                        let previewed = changes::get(self.preview.table(file), &parts).is_some();
                         let saved = if file == File::Config {
                             &saved_config
                         } else {
@@ -275,7 +336,8 @@ impl Store {
                         let mut field = serde_json::to_value(field).expect("serializes");
                         field["value"] = value;
                         field["saved"] = saved;
-                        field["changed"] = Json::Bool(changed);
+                        field["changed"] = Json::Bool(changed || previewed);
+                        field["previewed"] = Json::Bool(previewed);
                         field
                     })
                     .collect();
@@ -306,6 +368,7 @@ impl Store {
             "modules": modules,
             "enabled": enabled,
             "changes": !self.changes.is_empty(),
+            "previewing": !self.preview.is_empty(),
             "fixed_modules": self.modules.is_some(),
         })
     }
@@ -358,6 +421,15 @@ impl Store {
     }
 }
 
+/// `preview` laid over `changes`, as one set of changes.
+fn layered(changes: &Changes, preview: &Changes) -> Changes {
+    let mut out = changes.clone();
+    for file in File::ALL {
+        changes::merge(out.table_mut(file), preview.table(file));
+    }
+    out
+}
+
 fn binding(name: &str, table: Table) -> String {
     // A whole attribute set, even with one key: it pastes as one block.
     let mut out = format!("{name} = {{\n");
@@ -372,10 +444,28 @@ fn binding(name: &str, table: Table) -> String {
 /// without the ops that only read.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Op {
-    Set { path: String, value: Json },
-    Reset { path: String },
+    Set {
+        path: String,
+        value: Json,
+    },
+    Reset {
+        path: String,
+    },
     Discard,
-    Edit { path: String, text: String },
+    Edit {
+        path: String,
+        text: String,
+    },
+    /// Tries values without keeping them; `replace` drops what was being
+    /// tried first.
+    Preview {
+        values: Vec<(String, Json)>,
+        replace: bool,
+    },
+    /// Keeps what's being tried, as changes.
+    Keep,
+    /// Stops trying, back to the changes.
+    Drop,
 }
 
 /// Every option at its default: the theme's, and for `config.toml` each
@@ -610,6 +700,7 @@ fn icon(module: &str) -> &'static str {
         "performance" => "monitor_heart",
         "power" => "power_settings_new",
         "settings" => "settings",
+        "tour" => "tour",
         "share" => "screen_share",
         "tray" => "apps",
         "widgets" => "widgets",
@@ -854,6 +945,57 @@ mod tests {
                 })
                 .is_err()
         );
+        std::fs::remove_dir_all(config.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_preview_applies_without_being_saved() {
+        let config = temp("preview");
+        let (mut store, _) = Store::load(&config, None).unwrap();
+        let tried = |store: &mut Store, values: &[(&str, Json)], replace| {
+            store.change(&Op::Preview {
+                values: values
+                    .iter()
+                    .map(|(path, value)| ((*path).to_owned(), value.clone()))
+                    .collect(),
+                replace,
+            })
+        };
+        let loaded = tried(&mut store, &[("theme.layout.mode", json!("notch"))], false).unwrap();
+        assert_eq!(loaded.theme.layout.mode, mochi_protocol::Mode::Notch);
+        assert!(!Changes::path(&config).exists(), "a preview is never saved");
+        assert_eq!(store.snapshot()["previewing"], json!(true));
+
+        // Replacing drops what was tried before.
+        let loaded = tried(
+            &mut store,
+            &[("theme.colors.accent", json!("#30d158"))],
+            true,
+        )
+        .unwrap();
+        assert_eq!(loaded.theme.layout.mode, mochi_protocol::Mode::Island);
+        assert_eq!(loaded.theme.colors.accent.as_str(), "#30d158");
+        assert!(tried(&mut store, &[("theme.motion.damping", json!(5))], false).is_err());
+
+        // Keeping saves it as a change.
+        store.change(&Op::Keep).unwrap();
+        assert_eq!(store.snapshot()["previewing"], json!(false));
+        let saved = Changes::load(&Changes::path(&config)).unwrap();
+        assert_eq!(
+            changes::get(&saved.theme, &["colors", "accent"]),
+            Some(&Value::String("#30d158".into()))
+        );
+
+        // A reload forgets what was tried.
+        tried(
+            &mut store,
+            &[("theme.layout.anchor", json!("bottom"))],
+            false,
+        )
+        .unwrap();
+        let loaded = store.reload().unwrap();
+        assert_eq!(loaded.theme.layout.anchor, mochi_protocol::Anchor::Top);
+        assert_eq!(loaded.theme.colors.accent.as_str(), "#30d158");
         std::fs::remove_dir_all(config.parent().unwrap()).unwrap();
     }
 

@@ -98,6 +98,16 @@ impl Paths {
     }
 }
 
+/// `$XDG_STATE_HOME/mochi`, falling back to `~/.local/state/mochi`: what
+/// modules keep across logins, like histories.
+pub fn state_dir() -> Option<PathBuf> {
+    let state = env::var_os("XDG_STATE_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|home| Path::new(&home).join(".local/state")))?;
+    Some(state.join("mochi"))
+}
+
 /// `config.toml`.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
