@@ -56,7 +56,9 @@ pub struct Tray;
 #[derive(Debug, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
+    #[schemars(extend("x-source" = "tray-app"))]
     pinned: Vec<String>,
+    #[schemars(extend("x-source" = "tray-app"))]
     hidden: Vec<String>,
     /// Old X11 tray icons, through xembedsniproxy when it's installed.
     xembed: bool,
@@ -401,6 +403,24 @@ impl State {
         if let Some(panel) = self.panel {
             ctx.update(panel, self.payload());
         }
+
+        // Every app with an icon, hidden ones too, for the settings panel's
+        // `pinned` and `hidden`.
+        let mut apps: Vec<Value> = self
+            .items
+            .values()
+            .filter_map(|tracked| tracked.item.as_ref())
+            .map(|item| {
+                json!({
+                    "id": if item.id.is_empty() { item.name() } else { &item.id },
+                    "title": item.name(),
+                    "icon": item.icon,
+                })
+            })
+            .collect();
+        apps.sort_by_key(|app| app["title"].as_str().unwrap_or_default().to_lowercase());
+        apps.dedup_by(|a, b| a["id"] == b["id"]);
+        ctx.publish_state(json!({ "apps": apps }));
     }
 
     fn payload(&self) -> Value {

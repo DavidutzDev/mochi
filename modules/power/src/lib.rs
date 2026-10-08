@@ -46,7 +46,9 @@ pub struct Power;
 #[derive(Debug, Default, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
+    #[schemars(extend("x-suggest" = [["hyprlock"], ["swaylock"], ["gtklock"], ["loginctl", "lock-session"]]))]
     lock: Vec<String>,
+    #[schemars(extend("x-suggest" = [["hyprctl", "dispatch", "exit"], ["swaymsg", "exit"], ["niri", "msg", "action", "quit", "--skip-confirmation"], ["uwsm", "stop"]]))]
     logout: Vec<String>,
 }
 

@@ -828,18 +828,61 @@ Item {
     Rectangle {
         id: choices
 
+        // What's typed in the search, which also offers itself as a value.
+        property string query: ""
+        readonly property var owner: root.popupKind === "choice" ? root.popupOwner : null
+        readonly property var all: owner ? owner.choices() : []
+        readonly property var shown: {
+            const words = query.trim().toLowerCase();
+            if (words === "")
+                return all;
+            return all.filter(choice => `${choice.label} ${choice.value} ${choice.detail ?? ""}`.toLowerCase().includes(words));
+        }
+        // A typed value that isn't in the menu, offered as itself.
+        readonly property bool typed: (owner?.custom ?? false) && query.trim() !== "" && !all.some(choice => choice.value === query.trim())
+        readonly property bool searching: owner?.searchable ?? false
+
         visible: root.popupKind === "choice"
+        onVisibleChanged: {
+            query = "";
+            menuSearch.clear();
+            if (visible && searching)
+                Qt.callLater(() => menuSearch.forceActiveFocus());
+        }
         z: 10
         x: Math.min(root.popupAt.x, root.width - width - Theme.spaceMedium)
         y: Math.min(root.popupAt.y, root.height - height - Theme.spaceMedium)
-        width: 200
-        height: Math.min(menu.implicitHeight + Theme.spaceTiny * 2, 300)
+        width: searching ? 300 : 220
+        height: Math.min(menu.implicitHeight + (searching ? menuSearch.height + Theme.spaceTiny : 0) + Theme.spaceTiny * 2, 360)
         radius: Theme.radiusField
         color: Theme.raised
+
+        Entry {
+            id: menuSearch
+
+            visible: choices.searching
+            x: Theme.spaceTiny
+            y: Theme.spaceTiny
+            width: parent.width - Theme.spaceTiny * 2
+            placeholder: choices.owner?.custom ? "Search, or type one…" : "Search…"
+            live: true
+            onEdited: text => choices.query = text
+            onAccepted: text => {
+                const first = choices.typed ? text.trim() : choices.shown[0]?.value;
+                if (first === undefined)
+                    return;
+                choices.owner.pick(first);
+                // A list picks several, maybe from the same search: the
+                // menu and the search stay.
+                if (!choices.owner.multiple)
+                    root.closePopup();
+            }
+        }
 
         Flickable {
             anchors.fill: parent
             anchors.margins: Theme.spaceTiny
+            anchors.topMargin: choices.searching ? menuSearch.height + Theme.spaceTiny * 2 : Theme.spaceTiny
             contentHeight: menu.implicitHeight
             clip: true
             boundsBehavior: Flickable.StopAtBounds
@@ -850,21 +893,29 @@ Item {
                 width: parent.width
 
                 Repeater {
-                    model: root.popupKind === "choice" && root.popupOwner ? root.popupOwner.choices() : []
+                    // What's typed first, when it's offered as itself.
+                    model: (choices.typed ? [
+                            {
+                                "value": choices.query.trim(),
+                                "label": `Use “${choices.query.trim()}”`,
+                                "icon": "add"
+                            }
+                        ] : []).concat(choices.shown)
 
                     Rectangle {
                         id: item
 
                         required property var modelData
-                        readonly property bool picked: (root.popupOwner?.value ?? "") === modelData.value
+                        readonly property bool picked: choices.owner?.isPicked(modelData.value) ?? false
 
                         width: menu.width
-                        height: Theme.controlHeight
+                        height: (modelData.detail ?? "") !== "" ? 44 : Theme.controlHeight
                         radius: Theme.radiusControl
                         color: itemArea.containsMouse ? Theme.highlight : "transparent"
 
                         Row {
                             x: Theme.spaceMedium
+                            width: parent.width - x - Theme.spaceHuge
                             anchors.verticalCenter: parent.verticalCenter
                             spacing: Theme.spaceSmall
 
@@ -890,13 +941,37 @@ Item {
                                 }
                             }
 
-                            Text {
+                            Symbol {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: item.modelData.label
-                                color: Theme.foreground
-                                font.pixelSize: Theme.textBody
-                                font.family: Theme.fontFamily
-                                font.weight: item.picked ? Theme.weightTitle : Theme.weightBody
+                                visible: (item.modelData.icon ?? "") !== ""
+                                name: item.modelData.icon ?? ""
+                                size: 18
+                                color: Theme.muted
+                            }
+
+                            Column {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: parent.width - x
+
+                                Text {
+                                    width: parent.width
+                                    text: item.modelData.label
+                                    elide: Text.ElideRight
+                                    color: Theme.foreground
+                                    font.pixelSize: Theme.textBody
+                                    font.family: Theme.fontFamily
+                                    font.weight: item.picked ? Theme.weightTitle : Theme.weightBody
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    visible: text !== ""
+                                    text: item.modelData.detail ?? ""
+                                    elide: Text.ElideRight
+                                    color: Theme.muted
+                                    font.pixelSize: Theme.textCaption
+                                    font.family: Theme.fontFamily
+                                }
                             }
                         }
 
@@ -917,11 +992,26 @@ Item {
                             hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: {
-                                root.popupOwner.sendNow(item.modelData.value === "" ? null : item.modelData.value);
-                                root.closePopup();
+                                choices.owner.pick(item.modelData.value);
+                                // A list picks several, maybe from the same
+                                // search: the menu and the search stay.
+                                if (!choices.owner.multiple)
+                                    root.closePopup();
                             }
                         }
                     }
+                }
+
+                Text {
+                    visible: choices.shown.length === 0 && !choices.typed
+                    width: menu.width
+                    height: Theme.controlHeight
+                    verticalAlignment: Text.AlignVCenter
+                    horizontalAlignment: Text.AlignHCenter
+                    text: choices.all.length === 0 ? "Nothing to pick from right now" : "No match"
+                    color: Theme.muted
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
                 }
             }
         }

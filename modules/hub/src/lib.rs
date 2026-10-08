@@ -44,8 +44,10 @@ struct Settings {
     height: u32,
     /// The home's cards in this order, as module/id like
     /// "network/status"; the ones not listed follow in their own order.
+    #[schemars(extend("x-source" = "hub-card"))]
     order: Vec<String>,
     /// Cards to leave off the home, as module/id.
+    #[schemars(extend("x-source" = "hub-card"))]
     hidden: Vec<String>,
 }
 

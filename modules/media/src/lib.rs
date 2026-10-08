@@ -58,6 +58,7 @@ struct Settings {
     expand_ms: u64,
     island_ms: u64,
     paused_ms: u64,
+    #[schemars(extend("x-source" = "player"))]
     ignore: Vec<String>,
 }
 

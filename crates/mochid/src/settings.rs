@@ -58,6 +58,8 @@ pub struct Store {
     defaults: Tables,
     sections: Vec<Section>,
     available: Vec<Available>,
+    /// Each module's actions, by module, for options that run one.
+    actions: Json,
 }
 
 /// What the daemon runs with.
@@ -90,6 +92,7 @@ impl Store {
             defaults: complete(defaults(&catalog), &sections),
             sections,
             available: available(&catalog),
+            actions: actions(&catalog),
         };
         store.base = Tables {
             config: mochi_core::config::read_table(&store.config_file)?,
@@ -376,6 +379,9 @@ impl Store {
                         {
                             field["default"] = options::to_json(color);
                         }
+                        if field.get("suggestions").is_some() {
+                            field["suggestions"] = installed(&field["suggestions"]);
+                        }
                         field["value"] = value;
                         field["saved"] = saved;
                         field["changed"] = Json::Bool(changed || previewed);
@@ -412,6 +418,7 @@ impl Store {
             "changes": !self.changes.is_empty(),
             "previewing": !self.preview.is_empty(),
             "fixed_modules": self.modules.is_some(),
+            "actions": self.actions,
         })
     }
 
@@ -566,6 +573,39 @@ fn example(catalog: &Catalog, module: &dyn Module) -> String {
     }
 }
 
+/// Each module's actions, for options that run one, like the idle clock's
+/// click.
+fn actions(catalog: &Catalog) -> Json {
+    let map: serde_json::Map<String, Json> = catalog
+        .modules
+        .iter()
+        .map(|module| {
+            (
+                module.id().to_owned(),
+                serde_json::to_value(module.actions()).unwrap_or_default(),
+            )
+        })
+        .collect();
+    Json::Object(map)
+}
+
+/// A field's ready-made commands, the ones whose program is installed.
+fn installed(suggestions: &Json) -> Json {
+    let kept: Vec<Json> = suggestions
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|command| {
+            command
+                .get(0)
+                .and_then(Json::as_str)
+                .is_some_and(mochi_core::process::installed)
+        })
+        .cloned()
+        .collect();
+    Json::Array(kept)
+}
+
 /// The panel's pages, in sidebar order.
 fn sections(catalog: &Catalog) -> Vec<Section> {
     let theme_defaults = Table::try_from(Theme::default()).expect("the theme serializes");
@@ -696,8 +736,10 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
             min: None,
             max: None,
             items: Some(Kind::Text),
+            source: Some("module".to_owned()),
+            suggestions: Vec::new(),
             optional: false,
-            default: json!(["idle"]),
+            default: json!(mochi_core::config::DEFAULT_MODULES),
         }],
     });
 
@@ -805,6 +847,31 @@ mod tests {
             path: path.to_owned(),
             value,
         }
+    }
+
+    #[test]
+    fn every_source_is_one_the_panel_knows() {
+        const KNOWN: [&str; 7] = [
+            "command",
+            "module",
+            "app",
+            "audio-device",
+            "tray-app",
+            "player",
+            "hub-card",
+        ];
+        let catalog = modules::catalog(Path::new("/nonexistent/config.toml")).unwrap();
+        let mut found = 0;
+        for section in sections(&catalog) {
+            for field in &section.fields {
+                if let Some(source) = &field.source {
+                    assert!(KNOWN.contains(&source.as_str()), "{}: {source}", field.path);
+                    found += 1;
+                }
+            }
+        }
+        // Idle's two commands, capture's devices, and the rest.
+        assert!(found >= 12, "{found}");
     }
 
     #[test]

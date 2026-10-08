@@ -48,6 +48,7 @@ pub struct DropModule;
 struct Settings {
     /// The actions to offer, when they fit: zip, extract, merge, convert,
     /// copy and open.
+    #[schemars(extend("items" = { "type": "string", "enum": ["zip", "extract", "merge", "convert", "copy", "open"] }))]
     actions: Vec<String>,
 }
 

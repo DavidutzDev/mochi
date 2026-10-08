@@ -99,6 +99,16 @@ pub struct Field {
     /// What a list holds.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub items: Option<Kind>,
+    /// Where its values come from, for a text or a list the panel offers
+    /// as a menu: `x-source` in the schema. `command` is a module's action
+    /// and its arguments; `app`, `audio-device`, `tray-app`, `player` and
+    /// `hub-card` come from what runs now. Typing anything else still works.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Ready-made values for a command, like `["hyprlock"]`: `x-suggest` in
+    /// the schema. The daemon keeps the ones whose program is installed.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub suggestions: Vec<Json>,
     /// It may be left unset, which lets the module decide.
     pub optional: bool,
     /// `null` when unset by default.
@@ -250,6 +260,8 @@ fn collect(
             min: shape.min,
             max: shape.max,
             items: shape.items,
+            source: shape.source,
+            suggestions: shape.suggestions,
             optional: shape.optional,
             default,
         };
@@ -268,6 +280,8 @@ struct Shape<'a> {
     min: Option<f64>,
     max: Option<f64>,
     items: Option<Kind>,
+    source: Option<String>,
+    suggestions: Vec<Json>,
     description: Option<String>,
     /// The schema without its `null`, for a group's own fields.
     schema: &'a Json,
@@ -287,6 +301,16 @@ impl<'a> Shape<'a> {
             min: None,
             max: None,
             items: None,
+            source: schema
+                .get("x-source")
+                .or_else(|| schema.get("items").and_then(|items| items.get("x-source")))
+                .and_then(Json::as_str)
+                .map(str::to_owned),
+            suggestions: schema
+                .get("x-suggest")
+                .and_then(Json::as_array)
+                .cloned()
+                .unwrap_or_default(),
             description,
             schema,
         };
@@ -312,10 +336,14 @@ impl<'a> Shape<'a> {
             Some("string") => shape.kind = Kind::Text,
             Some("array") => {
                 let items = schema.get("items").map(Shape::of);
-                match items.map(|items| items.kind) {
+                match items.as_ref().map(|items| items.kind) {
                     Some(kind @ (Kind::Text | Kind::Int | Kind::Float | Kind::Choice)) => {
                         shape.kind = Kind::List;
                         shape.items = Some(kind);
+                        // A list of fixed values picks several of them.
+                        if kind == Kind::Choice {
+                            shape.choices = items.map(|items| items.choices).unwrap_or_default();
+                        }
                     }
                     _ => shape.kind = Kind::Table,
                 }

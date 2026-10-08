@@ -36,8 +36,10 @@ struct Settings {
     /// Qt time format, as used by `Qt.formatTime`.
     format: String,
     /// What a click runs: a module, its action, then the arguments.
+    #[schemars(extend("x-source" = "command"))]
     click: Vec<String>,
     /// What resting the pointer on it runs, the same way.
+    #[schemars(extend("x-source" = "command"))]
     hover: Vec<String>,
     /// How long the pointer rests before `hover` runs, so passing over it
     /// or clicking it doesn't.

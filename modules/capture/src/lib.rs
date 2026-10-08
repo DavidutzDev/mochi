@@ -65,17 +65,22 @@ struct Settings {
     recordings: String,
     screenshot_name: String,
     recording_name: String,
+    #[schemars(extend("x-suggest" = [["satty", "--filename"], ["swappy", "-f"], ["gimp"], ["krita"]]))]
     editor: Vec<String>,
+    #[schemars(extend("x-suggest" = [["gpu-screen-recorder"]]))]
     recorder: Vec<String>,
     framerate: u32,
     resolution: Resolution,
+    #[schemars(extend("x-source" = "audio-device"))]
     audio: String,
+    #[schemars(extend("x-source" = "audio-device"))]
     microphone: String,
     record_audio: bool,
     record_microphone: bool,
     copy: bool,
     preview_ms: u64,
     mode: Mode,
+    #[schemars(extend("enum" = ["", "h264", "hevc", "av1", "vp8", "vp9", "hevc_hdr", "av1_hdr", "hevc_10bit", "av1_10bit", "h264_vulkan", "hevc_vulkan", "av1_vulkan", "h264_software"]))]
     codec: String,
 }
 

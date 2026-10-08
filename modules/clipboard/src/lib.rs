@@ -70,8 +70,10 @@ struct Settings {
     max_item_mb: usize,
     max_results: usize,
     paste: bool,
+    #[schemars(extend("x-source" = "app"))]
     terminals: Vec<String>,
     skip_secrets: bool,
+    #[schemars(extend("x-source" = "app"))]
     ignore: Vec<String>,
 }
 

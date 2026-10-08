@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.island
 
 // One option: its title and description, and the control its kind calls
@@ -7,6 +8,13 @@ import qs.island
 // other waits until it stops changing for 400 ms, since it restarts its
 // module. `popup` asks the panel for a menu or the color picker, which it
 // draws over everything.
+//
+// A text or a list whose values come from somewhere, its `source`, picks
+// them from a menu, with a search and room to type another: apps, audio
+// devices, tray apps, players, hub cards, modules. A command, like the idle
+// clock's click, picks a module, then one of its actions, then its
+// arguments. A command line with ready-made ones, like the lock, offers
+// those that are installed.
 Item {
     id: root
 
@@ -26,6 +34,27 @@ Item {
     property var pending: undefined
     readonly property var value: pending !== undefined ? pending : field.value
     readonly property bool ranged: field.min !== undefined && field.max !== undefined
+    readonly property string source: field.source ?? ""
+    // Picked from a menu rather than typed.
+    readonly property bool picks: source !== "" || (field.kind === "list" && (field.choices ?? []).length > 0)
+
+    // Which menu the panel shows for it: its own values, or for a command
+    // the module or the action, or the ready-made commands.
+    property string menu: "value"
+    readonly property bool multiple: menu === "value" && field.kind === "list"
+    readonly property bool searchable: menu === "value" && (source !== "" || choices().length > 8)
+    // Something not in the menu may be typed too.
+    readonly property bool custom: menu === "value" && ["app", "audio-device", "tray-app", "player"].includes(source)
+
+    function openMenu(kind: string, anchor: Item): void {
+        menu = kind;
+        popup("choice", anchor);
+    }
+
+    // A command's module and action, and the arguments after them.
+    readonly property string commandModule: source === "command" ? ((value ?? [])[0] ?? "") : ""
+    readonly property string commandAction: source === "command" ? ((value ?? [])[1] ?? "") : ""
+    readonly property var commandSpec: (Daemon.state("settings")?.actions?.[commandModule] ?? []).find(action => action.name === commandAction) ?? null
 
     // The daemon's answer replaces what was on the way.
     onFieldChanged: {
@@ -206,9 +235,9 @@ Item {
                 case "font":
                     return fontControl;
                 case "list":
-                    return listControl;
+                    return root.source === "command" ? commandControl : listControl;
                 case "text":
-                    return textControl;
+                    return root.source !== "" ? pickControl : textControl;
                 default:
                     return tableControl;
                 }
@@ -224,7 +253,97 @@ Item {
         return words.charAt(0).toUpperCase() + words.slice(1);
     }
 
+    // The values a source offers now, as {value, label, detail, icon}.
+    function sourceChoices(): var {
+        switch (source) {
+        case "module":
+            return (Daemon.state("settings")?.modules ?? []).map(module => ({
+                        "value": module.id,
+                        "label": module.title,
+                        "icon": module.icon
+                    }));
+        case "app":
+            return DesktopEntries.applications.values.filter(entry => !entry.noDisplay).map(entry => ({
+                        "value": entry.id.replace(/\.desktop$/, ""),
+                        "label": entry.name,
+                        "detail": entry.id.replace(/\.desktop$/, ""),
+                        "icon": entry.icon
+                    })).sort((a, b) => a.label.localeCompare(b.label));
+        case "audio-device":
+            {
+                const audio = Daemon.state("audio");
+                return [
+                    {
+                        "value": "default_output",
+                        "label": "Default output",
+                        "detail": "What the speakers play"
+                    },
+                    {
+                        "value": "default_input",
+                        "label": "Default input",
+                        "detail": "The microphone in use"
+                    }
+                ].concat((audio?.outputs ?? []).map(output => ({
+                            "value": `${output.name}.monitor`,
+                            "label": output.description,
+                            "detail": "What it plays"
+                        }))).concat((audio?.inputs ?? []).map(input => ({
+                            "value": input.name,
+                            "label": input.description,
+                            "detail": "Microphone"
+                        })));
+            }
+        case "tray-app":
+            return (Daemon.state("tray")?.apps ?? []).map(app => ({
+                        "value": app.id,
+                        "label": app.title,
+                        "detail": app.id,
+                        "icon": app.icon
+                    }));
+        case "player":
+            return (Daemon.state("media")?.players ?? []).map(player => ({
+                        "value": player.name,
+                        "label": player.name
+                    }));
+        case "hub-card":
+            return Daemon.offered("hub", "card").map(card => ({
+                        "value": `${card.module}/${card.id}`,
+                        "label": card.title,
+                        "detail": card.module,
+                        "icon": card.icon
+                    }));
+        }
+        return [];
+    }
+
+    // What a value reads as: its label in the menu, or itself.
+    function labelFor(value: var): string {
+        const text = String(value);
+        const found = (source !== "" ? sourceChoices() : choices()).find(choice => choice.value === text);
+        return found?.label ?? text;
+    }
+
     function choices(): var {
+        switch (menu) {
+        case "module":
+            return Object.keys(Daemon.state("settings")?.actions ?? {}).filter(module => (Daemon.state("settings").actions[module] ?? []).length > 0).sort().map(module => ({
+                        "value": module,
+                        "label": label(module)
+                    }));
+        case "action":
+            return (Daemon.state("settings")?.actions?.[commandModule] ?? []).map(action => ({
+                        "value": action.name,
+                        "label": action.name,
+                        "detail": action.help ?? action.description ?? ""
+                    }));
+        case "suggest":
+            return (field.suggestions ?? []).map(command => ({
+                        "value": JSON.stringify(command),
+                        "label": command.join(" ")
+                    }));
+        }
+        if (source !== "")
+            return sourceChoices();
         const options = (root.field.choices ?? []).map(choice => ({
                     "value": choice.value,
                     "label": label(choice.value),
@@ -236,6 +355,47 @@ Item {
                 "label": "Auto"
             }
         ].concat(options) : options;
+    }
+
+    function isPicked(choice: string): bool {
+        switch (menu) {
+        case "module":
+            return commandModule === choice;
+        case "action":
+            return commandAction === choice;
+        case "suggest":
+            return JSON.stringify(value ?? []) === choice;
+        }
+        if (multiple)
+            return (value ?? []).map(String).includes(choice);
+        return (value ?? "") === choice;
+    }
+
+    // A menu's choice: a list gains or loses it and the menu stays; the
+    // rest set it.
+    function pick(choice: string): void {
+        switch (menu) {
+        case "module":
+            sendNow(choice === commandModule ? value : [choice]);
+            return;
+        case "action":
+            sendNow([commandModule, choice]);
+            return;
+        case "suggest":
+            sendNow(JSON.parse(choice));
+            return;
+        }
+        if (multiple) {
+            const items = (value ?? []).slice();
+            const at = items.map(String).indexOf(choice);
+            if (at >= 0)
+                items.splice(at, 1);
+            else
+                items.push(field.items === "int" || field.items === "float" ? Number(choice) : choice);
+            sendNow(items);
+            return;
+        }
+        sendNow(choice === "" ? null : choice);
     }
 
     Component {
@@ -295,7 +455,7 @@ Item {
                 anchors.fill: parent
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
-                onClicked: root.popup("choice", button)
+                onClicked: root.openMenu("value", button)
             }
         }
     }
@@ -512,7 +672,7 @@ Item {
 
                             x: Theme.spaceSmall
                             anchors.verticalCenter: parent.verticalCenter
-                            text: String(chip.modelData)
+                            text: root.labelFor(chip.modelData)
                             color: Theme.foreground
                             font.pixelSize: Theme.textCaption
                             font.family: Theme.fontFamily
@@ -535,9 +695,30 @@ Item {
                 }
             }
 
-            Entry {
+            // Values from the menu, several at a time.
+            DropButton {
+                id: menuButton1
+
+                visible: root.picks
                 width: parent.width
-                placeholder: "Add…"
+                text: "Add…"
+                onClicked: root.openMenu("value", menuButton1)
+            }
+
+            // Ready-made commands, the installed ones.
+            DropButton {
+                id: menuButton2
+
+                visible: (root.field.suggestions ?? []).length > 0
+                width: parent.width
+                text: "Pick a ready-made one…"
+                onClicked: root.openMenu("suggest", menuButton2)
+            }
+
+            Entry {
+                visible: !root.picks
+                width: parent.width
+                placeholder: (root.field.suggestions ?? []).length > 0 ? "Or type a word…" : "Add…"
                 onAccepted: added => {
                     const item = added.trim();
                     clear();
@@ -548,6 +729,118 @@ Item {
                     if (numeric && Number.isNaN(number))
                         return;
                     root.sendNow((root.value ?? []).concat([numeric ? number : item]));
+                }
+            }
+        }
+    }
+
+    // A button that opens a menu: its text, and a chevron.
+    component DropButton: Rectangle {
+        id: drop
+
+        property string text: ""
+        property bool muted: false
+        signal clicked
+
+        width: 180
+        height: Theme.controlHeight
+        radius: height / 2
+        color: dropArea.containsMouse ? Theme.highlight : Theme.raised
+        opacity: enabled ? 1 : 0.4
+
+        Text {
+            x: Theme.spaceMedium
+            width: parent.width - x - Theme.spaceHuge
+            anchors.verticalCenter: parent.verticalCenter
+            text: drop.text
+            elide: Text.ElideRight
+            color: drop.muted ? Theme.muted : Theme.foreground
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
+        }
+
+        Symbol {
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.spaceMedium
+            anchors.verticalCenter: parent.verticalCenter
+            name: "chevron"
+            rotation: 90
+            size: 12
+            color: Theme.muted
+        }
+
+        MouseArea {
+            id: dropArea
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: drop.clicked()
+        }
+    }
+
+    // One value from a source, or typed in the menu's search.
+    Component {
+        id: pickControl
+
+        DropButton {
+            id: menuButton3
+
+            width: 240
+            text: root.value ? root.labelFor(root.value) : root.field.optional || root.field["default"] === "" ? "Default" : "Choose…"
+            muted: !root.value
+            onClicked: root.openMenu("value", menuButton3)
+        }
+    }
+
+    // A command: a module, one of its actions, then the action's arguments.
+    Component {
+        id: commandControl
+
+        Column {
+            width: 280
+            spacing: Theme.spaceTiny
+
+            Row {
+                spacing: Theme.spaceTiny
+
+                DropButton {
+                    id: menuButton4
+
+                    width: 120
+                    text: root.commandModule !== "" ? root.label(root.commandModule) : "Nothing"
+                    muted: root.commandModule === ""
+                    onClicked: root.openMenu("module", menuButton4)
+                }
+
+                DropButton {
+                    id: menuButton5
+
+                    width: 128
+                    enabled: root.commandModule !== ""
+                    text: root.commandAction !== "" ? root.commandAction : "Action…"
+                    muted: root.commandAction === ""
+                    onClicked: root.openMenu("action", menuButton5)
+                }
+
+                IconButton {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: (root.value ?? []).length > 0
+                    icon: "close"
+                    size: 14
+                    onClicked: root.sendNow([])
+                }
+            }
+
+            // What the action takes, named in the field.
+            Entry {
+                visible: (root.commandSpec?.args ?? []).length > 0
+                width: parent.width
+                text: (root.value ?? []).slice(2).join(" ")
+                placeholder: (root.commandSpec?.args ?? []).map(arg => arg.optional ? `[${arg.name}]` : arg.name).join(" ")
+                onAccepted: text => {
+                    const args = text.trim() === "" ? [] : text.trim().split(/\s+/);
+                    root.sendNow([root.commandModule, root.commandAction].concat(args));
                 }
             }
         }

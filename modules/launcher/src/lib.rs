@@ -71,6 +71,7 @@ pub struct Launcher;
 #[derive(Debug, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
+    #[schemars(extend("x-suggest" = [["kitty"], ["foot"], ["alacritty"], ["ghostty"], ["wezterm", "start"], ["konsole"], ["gnome-terminal", "--"], ["xterm"]]))]
     terminal: Vec<String>,
     max_results: usize,
     providers: BTreeMap<String, ProviderSettings>,
