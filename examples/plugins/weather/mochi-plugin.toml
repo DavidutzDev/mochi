@@ -43,3 +43,16 @@ id = "now"
 view = "Card"
 title = "Weather"
 options = { size = [18, 9], min = [14, 7], max = [36, 16] }
+
+# How the settings panel shows the options in settings.toml: kinds and
+# defaults come from there, choices and ranges from here.
+[settings.units]
+choices = ["metric", "imperial"]
+
+[settings.refresh_minutes]
+min = 5
+max = 120
+
+[settings.bubble]
+choices = ["left", "center-left", "center-right", "right"]
+optional = true

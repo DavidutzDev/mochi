@@ -34,6 +34,7 @@
 - [Notes](modules/notes.md)
 - [Emoji](modules/emoji.md)
 - [Colors](modules/colors.md)
+- [Settings](modules/settings.md)
 
 # Building on Mochi
 

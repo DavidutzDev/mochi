@@ -299,6 +299,16 @@ Item {
         width: parent.width
         height: 52
 
+        // The settings, at the page's module when a page is open.
+        IconButton {
+            anchors.right: parent.right
+            anchors.rightMargin: root.margin
+            anchors.verticalCenter: parent.verticalCenter
+            visible: Daemon.modules.includes("settings")
+            icon: "settings"
+            onClicked: Daemon.command("settings", "open", root.current ? [root.current.module] : [])
+        }
+
         Row {
             anchors.centerIn: parent
             spacing: Theme.spaceSmall

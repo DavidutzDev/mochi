@@ -1031,6 +1031,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-settings"
+version = "0.0.6"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-share"
 version = "0.0.6"
 dependencies = [
@@ -1174,6 +1185,7 @@ dependencies = [
  "mochi-module-osd",
  "mochi-module-performance",
  "mochi-module-power",
+ "mochi-module-settings",
  "mochi-module-share",
  "mochi-module-tray",
  "mochi-module-widgets",

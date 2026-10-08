@@ -6,6 +6,12 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- A settings panel, the `settings` module: every option of the theme, the island, the bubbles, each module and each plugin, applied as you change it. It has a sidebar of sections, a search through every option (`@modified` lists the changed ones), a dot and a reset button on each option that isn't at its default, a color picker, and a TOML editor per section. Copy gives everything that isn't a default as the `settings` and `theme` of home-manager's `programs.mochi`, or as TOML. `mochi ipc settings open [section]` opens it, the hub has a gear, and the launcher finds sections and options by name. It's on in newly generated configs; add `settings` to `modules` in yours.
+- The panel's changes live in `changes.toml` next to `config.toml`, laid over it and `theme.toml` whenever mochid reads them; it never writes those two. A change goes away once your files say the same, and changes that no longer fit are set aside with a warning so mochid still starts.
+- Modules describe their settings with a JSON schema (`Module::settings_schema`, from `schemars`), and plugins with a `[settings.<key>]` table in their manifest: choices, a range, a color. Modules can read and change the settings through `ModuleCtx::settings_op`.
+- `CopyButton`, the Copy button with Nix and TOML in its menu, shared by the widgets drawer and the settings panel, and `ModuleCtx::close_other_panels`, which the panels use to close each other.
+- The colors module's hub page is a color chooser (#1): a saturation and brightness square and a hue bar, the color in five formats with a click to copy each, and the history beside it. `mochi ipc colors add <color>` adds a color to the history.
+
 - Notifications show markup in the body (`body-markup`, `body-hyperlinks`): bold, italic, underline, line breaks and links to http, https, mailto and file URLs. Other tags show as text, and an image shows its `alt` text. A click on a link opens it with `xdg-open` and closes the notification, in the popup, the history and the hub. `mochi ipc notifications open <id> <url>` does the same.
 - Inline replies (`inline-reply`): a notification from an app that takes a reply has a Reply button that opens a text field. Enter sends the text back as `NotificationReplied`, and Escape goes back. `mochi ipc notifications reply <id> <text>` does the same.
 - `ListRow` has `subtitleFormat` and `linkActivated`, for a subtitle with markup.

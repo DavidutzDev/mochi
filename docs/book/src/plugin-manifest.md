@@ -109,6 +109,29 @@ What the plugin offers other modules, like a card or a page for the hub. The vie
 | `order` | `0` | Lower comes first. |
 | `options` | | Anything else the target reads, like `{ span = 2, rows = 1 }` for a hub card two columns wide and one row tall. A card with `rows` gets a view sized to fill them, about 45 pixels tall for one row and 153 for two; without it, the hub measures the view. A hub card opens its plugin's page when clicked; `{ page = "<id>" }` picks which, when there are several. A launcher provider takes `prefix`, `search` and `pick`: see [Launcher providers](launcher-providers.md). |
 
+## `[settings]`
+
+How the [settings panel](modules/settings.md) shows the options in `settings.toml`. Each option's kind and default come from its `# key = value` line there, and its description from the comment above the line. A `[settings.<key>]` table adds what the line can't say. An option in a table is named with dots: `[settings."cpu.notice"]`.
+
+| Key | | |
+|---|---|---|
+| `choices` | | The values it takes: the panel shows them to pick from. |
+| `min`, `max` | | A number's range. With both, the panel shows a slider. |
+| `color` | `false` | A `#rrggbb` or `#aarrggbb` color, with a picker. |
+| `optional` | `false` | It may be left unset. |
+| `description` | | In place of the comment in `settings.toml`. |
+
+```toml
+[settings.units]
+choices = ["metric", "imperial"]
+
+[settings.refresh_minutes]
+min = 5
+max = 120
+```
+
+An option without a table shows as its default's kind: a switch, a number, a text field or a list. A table by default, like a map of names, is edited as TOML.
+
 ## `settings.toml`
 
-Not part of the manifest, but next to it by convention: the plugin's `[module.<id>]` section with every setting commented out at its default, for users to copy into `config.toml`. The backend gets the section in `hello`.
+Not part of the manifest, but next to it by convention: the plugin's `[module.<id>]` section with every setting commented out at its default, for users to copy into `config.toml`. The backend gets the section in `hello`, and the settings panel shows each setting from it.

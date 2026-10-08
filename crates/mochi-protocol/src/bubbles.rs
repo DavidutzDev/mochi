@@ -28,6 +28,7 @@ pub enum Area {
     Left,
     /// Just left of whatever is in the center.
     CenterLeft,
+    /// The middle of the edge.
     #[default]
     Center,
     /// Just right of whatever is in the center.

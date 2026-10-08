@@ -117,8 +117,11 @@ impl Kind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 enum Mode {
+    /// A rectangle you drag out.
     Region,
+    /// The window you click.
     Window,
+    /// The screen you click.
     Screen,
     /// Every screen as one image. Screenshots only.
     All,

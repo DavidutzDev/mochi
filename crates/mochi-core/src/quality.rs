@@ -25,12 +25,16 @@ pub enum Resolution {
     #[default]
     #[serde(rename = "native")]
     Native,
+    /// At most 480 pixels tall.
     #[serde(rename = "480p")]
     P480,
+    /// At most 720 pixels tall.
     #[serde(rename = "720p")]
     P720,
+    /// At most 1080 pixels tall.
     #[serde(rename = "1080p")]
     P1080,
+    /// At most 1440 pixels tall.
     #[serde(rename = "1440p")]
     P1440,
 }

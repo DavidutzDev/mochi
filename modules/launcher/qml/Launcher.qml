@@ -230,12 +230,22 @@ Item {
                         asynchronous: true
                     }
 
+                    // No such icon in the theme: a symbol by that name, like
+                    // the settings' "palette", on a plain tile.
                     Rectangle {
                         anchors.fill: parent
                         anchors.margins: Theme.spaceTiny
                         visible: row.modelData.glyph == null && row.modelData.color == null && icon.status !== Image.Ready
                         radius: Theme.radiusControl
                         color: Theme.raised
+
+                        Symbol {
+                            anchors.centerIn: parent
+                            visible: (row.modelData.icon ?? "") !== "" && !row.modelData.icon.startsWith("/")
+                            name: row.modelData.icon ?? ""
+                            size: Theme.textTitle + Theme.spaceTiny
+                            color: Theme.foreground
+                        }
                     }
                 }
             }

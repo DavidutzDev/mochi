@@ -1,0 +1,846 @@
+import QtQuick
+import QtQuick.Window
+import qs.island
+
+// The settings panel: the sections in a sidebar, grouped as Appearance,
+// Shell, Modules and Plugins, and the options of the open one beside it.
+// Every change applies at once. Typing searches every option, and
+// "@modified" lists the ones that aren't at their default. Copy gives
+// everything that isn't a default as the `settings` and `theme` of
+// home-manager's programs.mochi, or as TOML.
+//
+// The lists are built from the paths of what they show, not from the
+// options themselves: each change brings new values, and rebuilding the
+// rows would drop a slider being dragged or a field being typed in.
+Item {
+    id: root
+
+    property var payload: ({})
+    readonly property var settings: Daemon.state("settings") ?? ({})
+    readonly property var sections: settings.sections ?? []
+    readonly property var enabled: settings.enabled ?? []
+
+    // The open section's id, and an option to point at, by path.
+    property string section: ""
+    property string option: ""
+    property string query: ""
+    property bool editing: false
+
+    readonly property var current: sections.find(entry => entry.id === section) ?? sections[0] ?? null
+    readonly property var error: settings.error ?? null
+
+    implicitWidth: 960
+    implicitHeight: Math.max(420, Math.min(640, Theme.surfaceHeight - Theme.margin, (Screen.height > 0 ? Screen.height : 1080) - 220))
+
+    focus: true
+    Keys.onEscapePressed: root.back()
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_F && event.modifiers & Qt.ControlModifier) {
+            search.forceActiveFocus();
+            event.accepted = true;
+        }
+    }
+
+    onPayloadChanged: go(payload.section ?? "", payload.option ?? "")
+    Component.onCompleted: {
+        go(payload.section ?? "", payload.option ?? "");
+        Qt.callLater(() => search.forceActiveFocus());
+    }
+
+    function go(id: string, path: string): void {
+        if (id !== "")
+            section = id;
+        option = path;
+        query = "";
+        editing = false;
+        closePopup();
+        body.contentY = 0;
+    }
+
+    // Escape closes what's on top: a menu, the editor, the search, then
+    // the panel.
+    function back(): void {
+        if (popupKind !== "")
+            closePopup();
+        else if (editing)
+            editing = false;
+        else if (query !== "")
+            query = "";
+        else
+            Daemon.event("dismiss");
+    }
+
+    // Every option by path, for the rows to read their values from.
+    readonly property var fields: {
+        const map = {};
+        for (const entry of sections)
+            for (const field of entry.fields)
+                map[field.path] = field;
+        return map;
+    }
+
+    function modified(field: var): bool {
+        return field.kind !== "group" && JSON.stringify(field.value) !== JSON.stringify(field["default"]);
+    }
+
+    function sectionModified(entry: var): bool {
+        return entry.id !== "modules" && entry.fields.some(modified);
+    }
+
+    function sectionOf(id: string): var {
+        return sections.find(entry => entry.id === id) ?? null;
+    }
+
+    // The heading a nested option sits under, like "CPU" for cpu.notice.
+    function prefix(path: string): string {
+        const parent = fields[path.slice(0, path.lastIndexOf("."))];
+        return parent?.kind === "group" ? parent.title : "";
+    }
+
+    // Search.
+    readonly property string needle: query.trim().toLowerCase()
+    readonly property bool modifiedOnly: needle === "@modified"
+
+    function hit(field: var, entry: var): bool {
+        if (field.kind === "group")
+            return false;
+        if (modifiedOnly)
+            return modified(field);
+        const text = `${field.title} ${field.description} ${field.path} ${prefix(field.path)} ${entry.title}`.toLowerCase();
+        return needle.split(/\s+/).every(word => text.includes(word));
+    }
+
+    // What the content shows: [{section, paths}], one block for the open
+    // section, or one per section with a match while searching.
+    readonly property string layoutKey: {
+        if (needle === "") {
+            const entry = current;
+            if (!entry)
+                return "[]";
+            const paths = entry.id === "modules" ? [] : entry.fields.map(field => field.path);
+            return JSON.stringify([
+                {
+                    "section": entry.id,
+                    "paths": paths
+                }
+            ]);
+        }
+        const blocks = [];
+        for (const entry of sections) {
+            if (entry.id === "modules")
+                continue;
+            const titled = !modifiedOnly && entry.title.toLowerCase().includes(needle);
+            const paths = entry.fields.filter(field => titled || hit(field, entry)).map(field => field.path);
+            if (paths.length > 0)
+                blocks.push({
+                    "section": entry.id,
+                    "paths": paths
+                });
+        }
+        return JSON.stringify(blocks);
+    }
+    readonly property var layout: JSON.parse(layoutKey)
+
+    // The sidebar: a heading per group, then its sections' ids. While
+    // searching, only the sections with a match.
+    readonly property string sidebarKey: {
+        const groups = [["appearance", "Appearance"], ["shell", "Shell"], ["modules", "Modules"], ["plugins", "Plugins"]];
+        const found = needle === "" ? null : layout.map(block => block.section);
+        const rows = [];
+        for (const [group, title] of groups) {
+            const ids = sections.filter(entry => entry.group === group && (found === null || found.includes(entry.id))).map(entry => entry.id);
+            if (ids.length === 0)
+                continue;
+            rows.push({
+                "heading": title
+            });
+            for (const id of ids)
+                rows.push({
+                    "id": id
+                });
+        }
+        return JSON.stringify(rows);
+    }
+    readonly property var sidebar: JSON.parse(sidebarKey)
+
+    // Up and Down in the search box move through the sidebar.
+    function step(by: int): void {
+        const ids = sidebar.filter(row => row.id).map(row => row.id);
+        if (ids.length === 0)
+            return;
+        const at = ids.indexOf(current?.id ?? "");
+        const next = ids[(at + by + ids.length) % ids.length];
+        if (needle === "")
+            go(next, "");
+        else
+            section = next;
+    }
+
+    // Turning a module on or off.
+    function toggleModule(id: string, on: bool): void {
+        const list = enabled.filter(module => module !== id);
+        if (on)
+            list.push(id);
+        Daemon.command("settings", "set", ["config.modules", JSON.stringify(list)]);
+    }
+
+    // The editor closes once the daemon took what it saved.
+    property bool editorSeen: false
+    readonly property var editorState: settings.editor ?? null
+    onEditorStateChanged: {
+        if (editorState !== null)
+            editorSeen = true;
+        else if (editing && editorSeen && error === null)
+            editing = false;
+    }
+
+    function edit(): void {
+        editorSeen = false;
+        editing = true;
+        Daemon.command("settings", "text", [current.path]);
+    }
+
+    // The menu of a choice, or the color picker, over everything.
+    property string popupKind: ""
+    property Item popupOwner: null
+    property point popupAt: Qt.point(0, 0)
+
+    function openPopup(kind: string, owner: Item, anchor: Item): void {
+        popupOwner = owner;
+        popupKind = kind;
+        const below = anchor.mapToItem(root, 0, anchor.height + Theme.spaceTiny);
+        popupAt = below;
+    }
+
+    function closePopup(): void {
+        popupKind = "";
+        popupOwner = null;
+    }
+
+    EdgeLight {
+        radius: Theme.radiusSurface
+    }
+
+    // The sidebar.
+    Item {
+        id: side
+
+        width: 232
+        height: parent.height
+
+        Rectangle {
+            id: searchBox
+
+            x: Theme.spaceMedium
+            y: Theme.spaceMedium
+            width: parent.width - Theme.spaceMedium * 2
+            height: Theme.controlHeight + Theme.spaceTiny
+            radius: height / 2
+            color: Theme.surface
+            border.width: search.activeFocus ? 1 : 0
+            border.color: Theme.raised
+
+            Symbol {
+                id: magnifier
+
+                x: Theme.spaceMedium
+                anchors.verticalCenter: parent.verticalCenter
+                name: "search"
+                size: Theme.textTitle
+                color: Theme.muted
+            }
+
+            TextInput {
+                id: search
+
+                anchors.left: magnifier.right
+                anchors.leftMargin: Theme.spaceSmall
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.spaceMedium
+                anchors.verticalCenter: parent.verticalCenter
+                clip: true
+                text: root.query
+                color: Theme.foreground
+                selectionColor: Theme.accent
+                selectedTextColor: Theme.onAccent
+                font.pixelSize: Theme.textBody
+                font.family: Theme.fontFamily
+                onTextChanged: root.query = text
+
+                Keys.onUpPressed: root.step(-1)
+                Keys.onDownPressed: root.step(1)
+                Keys.onEscapePressed: root.back()
+                Keys.onReturnPressed: {
+                    if (root.layout.length > 0)
+                        root.go(root.layout[0].section, root.layout[0].paths[0] ?? "");
+                }
+
+                Text {
+                    visible: search.text === ""
+                    text: "Search settings"
+                    color: Theme.muted
+                    font: search.font
+                }
+            }
+        }
+
+        ListView {
+            id: list
+
+            anchors.top: searchBox.bottom
+            anchors.topMargin: Theme.spaceSmall
+            anchors.bottom: undo.top
+            anchors.bottomMargin: Theme.spaceSmall
+            x: Theme.spaceSmall
+            width: parent.width - Theme.spaceSmall * 2
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            model: root.sidebar
+
+            ScrollFade {
+                view: list
+            }
+
+            delegate: Item {
+                id: row
+
+                required property var modelData
+                readonly property var entry: modelData.id ? root.sectionOf(modelData.id) : null
+                readonly property bool selected: entry !== null && root.current?.id === entry.id
+                // A module that isn't running.
+                readonly property bool off: entry?.module !== undefined && entry?.enabled === false
+
+                width: ListView.view.width
+                height: modelData.heading ? Theme.textCaption + Theme.spaceMedium * 2 : Theme.controlHeight + Theme.spaceTiny
+
+                Text {
+                    visible: row.modelData.heading !== undefined
+                    x: Theme.spaceSmall
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: Theme.spaceTiny
+                    text: row.modelData.heading ?? ""
+                    color: Theme.muted
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
+                    font.weight: Theme.weightLabel
+                }
+
+                Rectangle {
+                    visible: row.entry !== null
+                    anchors.fill: parent
+                    radius: Theme.radiusField
+                    color: row.selected ? Theme.raised : area.containsMouse ? Theme.surface : "transparent"
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: Theme.fast
+                        }
+                    }
+
+                    Symbol {
+                        id: icon
+
+                        x: Theme.spaceSmall
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: row.entry?.icon ?? ""
+                        size: Theme.textTitle + 2
+                        color: row.selected ? Theme.foreground : Theme.muted
+                        opacity: row.off ? 0.5 : 1
+                    }
+
+                    Text {
+                        anchors.left: icon.right
+                        anchors.leftMargin: Theme.spaceSmall
+                        anchors.right: dot.left
+                        anchors.rightMargin: Theme.spaceSmall
+                        anchors.verticalCenter: parent.verticalCenter
+                        elide: Text.ElideRight
+                        text: row.entry?.title ?? ""
+                        color: row.off ? Theme.muted : Theme.foreground
+                        font.pixelSize: Theme.textBody
+                        font.family: Theme.fontFamily
+                        font.weight: row.selected ? Theme.weightLabel : Theme.weightBody
+                    }
+
+                    // Something in it isn't at its default.
+                    Rectangle {
+                        id: dot
+
+                        anchors.right: parent.right
+                        anchors.rightMargin: Theme.spaceMedium
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: row.entry !== null && root.sectionModified(row.entry)
+                        width: 6
+                        height: 6
+                        radius: width / 2
+                        color: Theme.accent
+                    }
+
+                    MouseArea {
+                        id: area
+
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.go(row.entry.id, "")
+                    }
+                }
+            }
+        }
+
+        // Back to what the files say, with a second click to be sure.
+        Button {
+            id: undo
+
+            property bool armed: false
+
+            x: Theme.spaceMedium
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Theme.spaceMedium
+            width: parent.width - Theme.spaceMedium * 2
+            visible: root.settings.changes === true
+            height: visible ? implicitHeight : 0
+            text: armed ? "Click again to undo them all" : "Undo all changes"
+            icon: "undo"
+            tone: armed ? "danger" : "ghost"
+            onClicked: {
+                if (armed) {
+                    armed = false;
+                    Daemon.command("settings", "discard", []);
+                } else {
+                    armed = true;
+                    disarm.restart();
+                }
+            }
+
+            Timer {
+                id: disarm
+
+                interval: 3000
+                onTriggered: undo.armed = false
+            }
+        }
+    }
+
+    Rectangle {
+        id: rule
+
+        anchors.left: side.right
+        y: Theme.spaceMedium
+        width: 1
+        height: parent.height - Theme.spaceMedium * 2
+        color: Theme.raised
+    }
+
+    // The open section, or what a search found.
+    Item {
+        id: content
+
+        anchors.left: rule.right
+        anchors.right: parent.right
+        height: parent.height
+
+        readonly property bool searching: root.needle !== ""
+
+        // Over the options, for the copy menu.
+        Item {
+            id: header
+
+            z: 2
+            x: Theme.spaceLarge
+            y: Theme.spaceMedium
+            width: parent.width - Theme.spaceLarge * 2
+            height: Theme.controlHeight + Theme.spaceTiny
+
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.spaceSmall
+
+                Symbol {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: content.searching ? "search" : root.current?.icon ?? ""
+                    size: Theme.textHeadline
+                    color: Theme.foreground
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: content.searching ? (root.modifiedOnly ? "Changed from the defaults" : `Results for “${root.query.trim()}”`) : root.current?.title ?? ""
+                    color: Theme.foreground
+                    font.pixelSize: Theme.textHeadline
+                    font.family: Theme.fontFamily
+                    font.weight: Theme.weightTitle
+                }
+
+                // A module's own switch.
+                Switch {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: !content.searching && root.current?.module !== undefined
+                    enabled: root.settings.fixed_modules !== true
+                    checked: root.current?.enabled === true
+                    onToggled: checked => root.toggleModule(root.current.module, checked)
+                }
+            }
+
+            Row {
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.spaceSmall
+
+                Button {
+                    visible: !content.searching && root.current !== null && root.sectionModified(root.current)
+                    text: "Reset"
+                    icon: "restart_alt"
+                    tone: "ghost"
+                    onClicked: Daemon.command("settings", "reset", [root.current.path])
+                }
+
+                Button {
+                    visible: !content.searching && root.current !== null && root.current.id !== "modules"
+                    text: root.editing ? "Options" : "TOML"
+                    icon: root.editing ? "tune" : "code"
+                    tone: root.editing ? "neutral" : "ghost"
+                    onClicked: root.editing ? root.editing = false : root.edit()
+                }
+
+                CopyButton {
+                    width: 120
+                    module: "settings"
+                    down: true
+                    formats: [
+                        {
+                            "label": "Copy as Nix",
+                            "format": "nix"
+                        },
+                        {
+                            "label": "Copy as TOML",
+                            "format": "toml"
+                        }
+                    ]
+                }
+            }
+        }
+
+        Text {
+            id: about
+
+            anchors.top: header.bottom
+            anchors.topMargin: Theme.spaceSmall
+            x: Theme.spaceLarge
+            width: parent.width - Theme.spaceLarge * 2
+            visible: text !== ""
+            wrapMode: Text.Wrap
+            text: {
+                if (content.searching)
+                    return root.layout.length === 0 ? "Nothing matches." : "";
+                if (root.current?.module !== undefined && root.current?.enabled === false)
+                    return `${root.current.description} It's off: its options apply once it's on.`.trim();
+                return root.current?.description ?? "";
+            }
+            color: Theme.muted
+            font.pixelSize: Theme.textCaption
+            font.family: Theme.fontFamily
+        }
+
+        Item {
+            id: main
+
+            anchors.top: about.visible ? about.bottom : header.bottom
+            anchors.topMargin: Theme.spaceMedium
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Theme.spaceMedium
+            x: Theme.spaceSmall
+            width: parent.width - Theme.spaceSmall * 2
+
+            Loader {
+                anchors.fill: parent
+                anchors.leftMargin: Theme.spaceSmall
+                anchors.rightMargin: Theme.spaceSmall
+                active: root.editing && !content.searching && root.current !== null
+                sourceComponent: Editor {
+                    path: root.current.path
+                    sent: root.editorState
+                    error: root.error?.path === root.current.path ? root.error.message : ""
+                    onClosed: root.editing = false
+                }
+            }
+
+            Flickable {
+                id: body
+
+                anchors.fill: parent
+                visible: !root.editing || content.searching
+                contentWidth: width
+                contentHeight: blocks.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+
+                // Scrolls an option into view.
+                function reveal(item: Item): void {
+                    const top = item.mapToItem(blocks, 0, 0).y;
+                    const bottom = top + item.height;
+                    if (top < contentY || bottom > contentY + height)
+                        contentY = Math.max(0, Math.min(top - Theme.spaceHuge, contentHeight - height));
+                }
+
+                ScrollFade {
+                    view: body
+                }
+
+                Column {
+                    id: blocks
+
+                    width: body.width
+                    spacing: Theme.spaceLarge
+
+                    // The Modules page: a switch per module.
+                    Column {
+                        visible: !content.searching && root.current?.id === "modules"
+                        width: parent.width
+                        spacing: 2
+
+                        Text {
+                            visible: root.settings.fixed_modules === true
+                            width: parent.width
+                            leftPadding: Theme.spaceMedium
+                            wrapMode: Text.Wrap
+                            text: "mochid runs with --modules, which decides what runs."
+                            color: Theme.muted
+                            font.pixelSize: Theme.textCaption
+                            font.family: Theme.fontFamily
+                        }
+
+                        Text {
+                            visible: root.error?.path === "config.modules"
+                            width: parent.width
+                            leftPadding: Theme.spaceMedium
+                            wrapMode: Text.Wrap
+                            text: root.error?.message ?? ""
+                            color: Theme.danger
+                            font.pixelSize: Theme.textCaption
+                            font.family: Theme.fontFamily
+                        }
+
+                        Repeater {
+                            model: root.current?.id === "modules" ? (root.settings.modules ?? []).map(module => module.id) : []
+
+                            ListRow {
+                                id: moduleRow
+
+                                required property string modelData
+                                readonly property var module: (root.settings.modules ?? []).find(entry => entry.id === modelData) ?? {}
+
+                                width: blocks.width
+                                height: Theme.rowHeight
+                                flat: true
+                                leadingSize: 26
+                                icon: module.icon ?? ""
+                                title: module.title ?? modelData
+                                subtitle: module.plugin ? "Plugin" : ""
+                                onClicked: root.go(modelData, "")
+
+                                trailing: Switch {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    enabled: root.settings.fixed_modules !== true
+                                    checked: moduleRow.module.enabled === true
+                                    onToggled: checked => root.toggleModule(moduleRow.modelData, checked)
+                                }
+                            }
+                        }
+                    }
+
+                    Text {
+                        visible: !content.searching && root.current !== null && root.current.id !== "modules" && root.current.fields.length === 0
+                        width: parent.width
+                        leftPadding: Theme.spaceMedium
+                        text: "Nothing to set here."
+                        color: Theme.muted
+                        font.pixelSize: Theme.textBody
+                        font.family: Theme.fontFamily
+                    }
+
+                    Repeater {
+                        model: root.layout
+
+                        Column {
+                            id: block
+
+                            required property var modelData
+                            readonly property var entry: root.sectionOf(modelData.section)
+
+                            width: blocks.width
+                            spacing: 2
+
+                            // While searching, which section the options are in.
+                            Item {
+                                visible: content.searching
+                                width: parent.width
+                                height: visible ? Theme.controlHeight : 0
+
+                                Row {
+                                    x: Theme.spaceMedium
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: Theme.spaceSmall
+
+                                    Symbol {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        name: block.entry?.icon ?? ""
+                                        size: Theme.textBody
+                                        color: Theme.muted
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: block.entry?.title ?? ""
+                                        color: Theme.muted
+                                        font.pixelSize: Theme.textCaption
+                                        font.family: Theme.fontFamily
+                                        font.weight: Theme.weightLabel
+                                    }
+                                }
+
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.go(block.modelData.section, "")
+                                }
+                            }
+
+                            Repeater {
+                                model: block.modelData.paths
+
+                                Option {
+                                    id: row
+
+                                    required property string modelData
+
+                                    width: block.width
+                                    field: root.fields[modelData] ?? ({
+                                            "path": modelData,
+                                            "kind": "group",
+                                            "title": ""
+                                        })
+                                    prefix: content.searching ? root.prefix(modelData) : ""
+                                    error: root.error?.path === modelData ? root.error.message : ""
+                                    highlighted: root.option === modelData
+                                    onPopup: (kind, anchor) => root.openPopup(kind, row, anchor)
+                                    onEditToml: root.edit()
+                                    onHighlightedChanged: {
+                                        if (highlighted)
+                                            Qt.callLater(() => body.reveal(row));
+                                    }
+                                    Component.onCompleted: {
+                                        if (highlighted)
+                                            Qt.callLater(() => body.reveal(row));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // The pointed-at option stays lit for a moment.
+    Timer {
+        running: root.option !== ""
+        interval: 1800
+        onTriggered: root.option = ""
+    }
+
+    // A click beside a menu closes it.
+    MouseArea {
+        anchors.fill: parent
+        visible: root.popupKind !== ""
+        z: 9
+        onClicked: root.closePopup()
+    }
+
+    Rectangle {
+        id: choices
+
+        visible: root.popupKind === "choice"
+        z: 10
+        x: Math.min(root.popupAt.x, root.width - width - Theme.spaceMedium)
+        y: Math.min(root.popupAt.y, root.height - height - Theme.spaceMedium)
+        width: 200
+        height: Math.min(menu.implicitHeight + Theme.spaceTiny * 2, 300)
+        radius: Theme.radiusField
+        color: Theme.raised
+
+        Flickable {
+            anchors.fill: parent
+            anchors.margins: Theme.spaceTiny
+            contentHeight: menu.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+
+            Column {
+                id: menu
+
+                width: parent.width
+
+                Repeater {
+                    model: root.popupKind === "choice" && root.popupOwner ? root.popupOwner.choices() : []
+
+                    Rectangle {
+                        id: item
+
+                        required property var modelData
+                        readonly property bool picked: (root.popupOwner?.value ?? "") === modelData.value
+
+                        width: menu.width
+                        height: Theme.controlHeight
+                        radius: Theme.radiusControl
+                        color: itemArea.containsMouse ? Theme.highlight : "transparent"
+
+                        Text {
+                            x: Theme.spaceMedium
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: item.modelData.label
+                            color: Theme.foreground
+                            font.pixelSize: Theme.textBody
+                            font.family: Theme.fontFamily
+                            font.weight: item.picked ? Theme.weightTitle : Theme.weightBody
+                        }
+
+                        Symbol {
+                            anchors.right: parent.right
+                            anchors.rightMargin: Theme.spaceSmall
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: item.picked
+                            name: "check"
+                            size: Theme.textBody
+                            color: Theme.accent
+                        }
+
+                        MouseArea {
+                            id: itemArea
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                root.popupOwner.sendNow(item.modelData.value === "" ? null : item.modelData.value);
+                                root.closePopup();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Loader {
+        active: root.popupKind === "color"
+        z: 10
+        x: Math.min(root.popupAt.x, root.width - (item?.width ?? 0) - Theme.spaceMedium)
+        y: root.popupAt.y + (item?.height ?? 0) > root.height - Theme.spaceMedium ? Math.max(Theme.spaceMedium, root.popupAt.y - (item?.height ?? 0) - Theme.controlHeight - Theme.spaceSmall) : root.popupAt.y
+
+        sourceComponent: ColorPopover {
+            value: root.popupOwner?.value ?? "#000000" // design: a value to edit, not a color to draw
+            onPicked: value => root.popupOwner?.sendSoon(value)
+        }
+    }
+}

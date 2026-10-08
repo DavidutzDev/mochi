@@ -70,13 +70,16 @@ pub struct PluginModule {
     /// Its settings at their defaults, from the `# key = value` lines of its
     /// `settings.toml`. `None` without one, which leaves them unchecked.
     defaults: Option<mochi_core::toml::Table>,
+    /// Its `settings.toml`, for the settings panel's descriptions.
+    example: String,
 }
 
 impl PluginModule {
     pub fn new(dir: PathBuf, manifest: Manifest) -> Self {
         let id = intern(&manifest.plugin.id);
-        let defaults = std::fs::read_to_string(dir.join("settings.toml"))
-            .ok()
+        let example = std::fs::read_to_string(dir.join("settings.toml")).unwrap_or_default();
+        let defaults = Some(example.clone())
+            .filter(|example| !example.is_empty())
             .and_then(|example| {
                 let parsed: Result<mochi_core::toml::Table, _> =
                     mochi_core::toml::from_str(&mochi_core::examples::uncommented(&example));
@@ -99,12 +102,30 @@ impl PluginModule {
                     .cloned()
                     .unwrap_or_default()
             });
+        if let Some(defaults) = &defaults {
+            for key in manifest.settings.keys() {
+                let path: Vec<&str> = key.split('.').collect();
+                if mochi_core::changes::get(defaults, &path).is_none() {
+                    tracing::warn!(
+                        plugin = id,
+                        key,
+                        "its manifest has [settings] for a setting settings.toml doesn't show"
+                    );
+                }
+            }
+        }
         Self {
             id,
             dir,
             manifest,
             defaults,
+            example,
         }
+    }
+
+    /// Its `settings.toml`, empty without one.
+    pub fn example(&self) -> &str {
+        &self.example
     }
 
     pub fn views_dir(&self) -> PathBuf {
@@ -177,6 +198,13 @@ impl Module for PluginModule {
             Some(defaults) => check_against(defaults, table, ""),
             None => Ok(()),
         }
+    }
+
+    /// The kinds its defaults have, with what the manifest's `[settings]`
+    /// adds: choices, a range, a color.
+    fn settings_schema(&self) -> Option<Value> {
+        let defaults = self.defaults.as_ref()?;
+        Some(schema(defaults, &self.manifest.settings, ""))
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
@@ -839,6 +867,66 @@ async fn notify_failure(name: String, message: String) {
 /// Checks `table` against `defaults`, the way serde would for a struct with
 /// these fields: no unknown keys, and each value of its default's type. An
 /// integer passes for a float. `prefix` names the enclosing tables.
+/// A JSON schema for a plugin's settings: each default's kind, and the
+/// manifest's hints for the keys it names, `prefix` included.
+fn schema(
+    defaults: &mochi_core::toml::Table,
+    hints: &BTreeMap<String, mochi_plugins::manifest::SettingHint>,
+    prefix: &str,
+) -> Value {
+    use mochi_core::toml::Value as Toml;
+    fn kind(value: &Toml) -> &'static str {
+        match value {
+            Toml::String(_) | Toml::Datetime(_) => "string",
+            Toml::Integer(_) => "integer",
+            Toml::Float(_) => "number",
+            Toml::Boolean(_) => "boolean",
+            Toml::Array(_) => "array",
+            Toml::Table(_) => "object",
+        }
+    }
+    let mut properties = serde_json::Map::new();
+    for (key, value) in defaults {
+        let path = format!("{prefix}{key}");
+        let mut property = match value {
+            Toml::Table(inner) if !inner.is_empty() => schema(inner, hints, &format!("{path}.")),
+            // An empty table by default is a map of anything.
+            Toml::Table(_) => serde_json::json!({ "type": "object", "additionalProperties": true }),
+            Toml::Array(items) => serde_json::json!({
+                "type": "array",
+                "items": { "type": items.first().map(kind).unwrap_or("string") },
+            }),
+            other => serde_json::json!({ "type": kind(other) }),
+        };
+        if let Some(hint) = hints.get(&path) {
+            if !hint.choices.is_empty() {
+                property = serde_json::json!({ "type": "string", "enum": hint.choices });
+            }
+            if hint.color {
+                property["format"] = "color".into();
+            }
+            if let Some(min) = hint.min {
+                property["minimum"] = min.into();
+            }
+            if let Some(max) = hint.max {
+                property["maximum"] = max.into();
+            }
+            if let Some(description) = &hint.description {
+                property["description"] = description.clone().into();
+            }
+            if hint.optional {
+                property = serde_json::json!({ "anyOf": [property, { "type": "null" }] });
+            }
+        }
+        properties.insert(key.clone(), property);
+    }
+    serde_json::json!({
+        "type": "object",
+        "properties": properties,
+        "additionalProperties": false,
+    })
+}
+
 fn check_against(
     defaults: &mochi_core::toml::Table,
     table: &mochi_core::toml::Table,
@@ -881,6 +969,44 @@ fn check_against(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The weather example's settings become rows of the right kinds.
+    #[test]
+    fn plugin_settings_take_the_manifests_hints() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/plugins/weather");
+        let manifest = Manifest::load(&dir).unwrap();
+        let plugin = PluginModule::new(dir, manifest);
+        let schema = plugin.settings_schema().unwrap();
+        let comments = mochi_core::options::Comments::parse(plugin.example());
+        let defaults: mochi_core::toml::Table =
+            mochi_core::toml::from_str(&mochi_core::examples::uncommented(plugin.example()))
+                .unwrap();
+        let fields =
+            mochi_core::options::fields(&schema, "config", "module.weather", &comments, &defaults);
+        let field = |key: &str| {
+            fields
+                .iter()
+                .find(|field| field.path == format!("config.module.weather.{key}"))
+                .unwrap_or_else(|| panic!("no {key}"))
+        };
+        use mochi_core::options::Kind;
+        assert_eq!(field("units").kind, Kind::Choice);
+        assert_eq!(field("latitude").kind, Kind::Float);
+        assert_eq!(field("city").kind, Kind::Text);
+        let refresh = field("refresh_minutes");
+        assert_eq!(
+            (refresh.kind, refresh.min, refresh.max),
+            (Kind::Int, Some(5.0), Some(120.0))
+        );
+        assert_eq!(refresh.title, "Refresh (min)");
+        assert!(
+            refresh.description.starts_with("How often"),
+            "{}",
+            refresh.description
+        );
+        let bubble = field("bubble");
+        assert_eq!((bubble.kind, bubble.optional), (Kind::Choice, true));
+    }
 
     fn example(name: &str) -> PluginModule {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR"))

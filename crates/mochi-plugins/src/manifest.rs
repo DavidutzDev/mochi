@@ -1,5 +1,6 @@
 //! `mochi-plugin.toml`: what a plugin is, what it runs and what it offers.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use mochi_protocol::{API, ActionSpec, ArgKind, ArgSpec, Contribution};
@@ -26,6 +27,35 @@ pub struct Manifest {
     pub actions: Vec<Action>,
     #[serde(default)]
     pub contributions: Vec<ManifestContribution>,
+    /// What the settings panel can't tell from `settings.toml` alone, by
+    /// key: `[settings.units]`, or `[settings."cpu.notice"]` in a table.
+    #[serde(default)]
+    pub settings: BTreeMap<String, SettingHint>,
+}
+
+/// How the settings panel shows one option. Its kind and default come
+/// from its `# key = value` line in `settings.toml`, its description from
+/// the comment above that line.
+#[derive(Debug, Clone, Default, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SettingHint {
+    /// The values it takes, shown as a choice.
+    #[serde(default)]
+    pub choices: Vec<String>,
+    /// A number's range: both give a slider.
+    #[serde(default)]
+    pub min: Option<f64>,
+    #[serde(default)]
+    pub max: Option<f64>,
+    /// A `#rrggbb` or `#aarrggbb` color, with a picker.
+    #[serde(default)]
+    pub color: bool,
+    /// It may be left unset.
+    #[serde(default)]
+    pub optional: bool,
+    /// In place of the comment in `settings.toml`.
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

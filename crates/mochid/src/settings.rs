@@ -388,7 +388,7 @@ fn defaults(catalog: &Catalog) -> Tables {
             catalog
                 .modules
                 .iter()
-                .map(|module| example(module.as_ref())),
+                .map(|module| example(catalog, module.as_ref())),
         );
     for example in examples {
         match toml::from_str::<Table>(&examples::uncommented(&example)) {
@@ -422,8 +422,11 @@ fn complete(mut defaults: Tables, sections: &[Section]) -> Tables {
 }
 
 /// A module's example: a builtin's own, or a plugin's `settings.toml`.
-fn example(module: &dyn Module) -> String {
-    module.settings_example().to_owned()
+fn example(catalog: &Catalog, module: &dyn Module) -> String {
+    match catalog.plugins.get(module.id()) {
+        Some(plugin) => plugin.example().to_owned(),
+        None => module.settings_example().to_owned(),
+    }
 }
 
 /// The panel's pages, in sidebar order.
@@ -504,10 +507,34 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
         });
     }
 
+    // The list of modules, which the panel shows as a switch per module.
+    out.push(Section {
+        id: "modules".to_owned(),
+        path: "config.modules".to_owned(),
+        title: "Modules".to_owned(),
+        description: "What runs. A module turned off stops at once, and one turned on starts."
+            .to_owned(),
+        group: Group::Shell,
+        icon: "extension".to_owned(),
+        module: None,
+        fields: vec![Field {
+            path: "config.modules".to_owned(),
+            title: "Modules".to_owned(),
+            description: String::new(),
+            kind: Kind::List,
+            choices: Vec::new(),
+            min: None,
+            max: None,
+            items: Some(Kind::Text),
+            optional: false,
+            default: json!(["idle"]),
+        }],
+    });
+
     for module in &catalog.modules {
         let id = module.id();
         let plugin = catalog.plugins.contains_key(id);
-        let example = example(module.as_ref());
+        let example = example(catalog, module.as_ref());
         let comments = Comments::parse(&example);
         let table = format!("module.{id}");
         let (title, description) = comments.heading(&table).unwrap_or_default();
@@ -541,7 +568,7 @@ fn available(catalog: &Catalog) -> Vec<Available> {
         .iter()
         .map(|module| {
             let id = module.id();
-            let comments = Comments::parse(module.settings_example());
+            let comments = Comments::parse(&example(catalog, module.as_ref()));
             let title = comments
                 .heading(&format!("module.{id}"))
                 .map(|(title, _)| title)
@@ -657,6 +684,54 @@ mod tests {
             });
             assert!(missing.is_empty(), "no field for {missing:?}");
         }
+    }
+
+    /// schemars puts an enum's undocumented variants ahead of its documented
+    /// ones, so the panel would list them out of order: document all of an
+    /// enum's variants, or none.
+    #[test]
+    fn enums_document_all_their_variants_or_none() {
+        fn mixed(schema: &Json, path: &str, found: &mut Vec<String>) {
+            match schema {
+                Json::Object(map) => {
+                    if let Some(Json::Array(branches)) = map.get("oneOf") {
+                        let grouped = branches.iter().any(|branch| branch.get("enum").is_some());
+                        let single = branches.iter().any(|branch| branch.get("const").is_some());
+                        if grouped && single {
+                            found.push(path.to_owned());
+                        }
+                    }
+                    for (key, value) in map {
+                        mixed(value, &format!("{path}.{key}"), found);
+                    }
+                }
+                Json::Array(items) => {
+                    for item in items {
+                        mixed(item, path, found);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let catalog = modules::catalog(Path::new("/nonexistent/config.toml")).unwrap();
+        let mut schemas = vec![
+            ("theme".to_owned(), options::schema_of::<Theme>()),
+            ("island".to_owned(), options::schema_of::<IslandConfig>()),
+            ("bubbles".to_owned(), options::schema_of::<BubblesConfig>()),
+        ];
+        for module in &catalog.modules {
+            if let Some(schema) = module.settings_schema() {
+                schemas.push((module.id().to_owned(), schema));
+            }
+        }
+        let mut found = Vec::new();
+        for (name, schema) in &schemas {
+            mixed(schema, name, &mut found);
+        }
+        assert!(
+            found.is_empty(),
+            "enums with only some variants documented: {found:?}"
+        );
     }
 
     fn walk(table: &Table, prefix: &str, visit: &mut impl FnMut(&str)) {

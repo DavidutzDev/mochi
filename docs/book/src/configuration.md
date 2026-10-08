@@ -17,6 +17,8 @@ config.toml: [module.osd]: unknown field `timeot_ms`, expected one of `timeout_m
 
 `mochi reload` applies both files to the running daemon. Modules you added start, modules you removed stop, and modules whose settings changed restart; the others keep running. A file with an error changes nothing, and `mochi reload` prints the error.
 
+The [settings panel](modules/settings.md) changes the same options live. It keeps its changes in `changes.toml` next to the two files, laid over them, and gives them back as Nix or TOML to paste into your files.
+
 `mochi config init` writes the example files where they're missing, and `mochi config init --print` shows them without writing.
 
 ## Modules
