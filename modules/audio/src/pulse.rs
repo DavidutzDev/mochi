@@ -1,6 +1,6 @@
 //! The audio server over the PulseAudio protocol (served by pipewire-pulse on
-//! PipeWire systems): every output, input and app playing sound, and the
-//! commands that change them.
+//! PipeWire systems): every output, input and app playing sound, the apps
+//! recording from a microphone, and the commands that change them.
 //!
 //! libpulse is callback-based and single-threaded, so it runs its own
 //! mainloop on a dedicated thread. It sends a [`Snapshot`] of everything
@@ -23,7 +23,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use libpulse_binding::callbacks::ListResult;
-use libpulse_binding::context::introspect::{SinkInfo, SinkInputInfo, SourceInfo};
+use libpulse_binding::context::introspect::{
+    SinkInfo, SinkInputInfo, SourceInfo, SourceOutputInfo,
+};
 use libpulse_binding::context::subscribe::{Facility, InterestMaskSet};
 use libpulse_binding::context::{Context, FlagSet, State};
 use libpulse_binding::def::{SinkState, SourceState};
@@ -51,6 +53,19 @@ pub struct Snapshot {
     pub sources: Vec<Device>,
     /// Apps playing sound, one entry per stream.
     pub streams: Vec<Stream>,
+    /// Apps recording from one of `sources`, one entry per stream; Mochi's
+    /// own meters and recordings of outputs are left out.
+    pub recording: Vec<Recorder>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Recorder {
+    /// The index of the input it records from.
+    pub source: u32,
+    pub app: String,
+    pub icon: Option<String>,
+    /// Paused: connected, but taking nothing.
+    pub corked: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -265,7 +280,13 @@ fn session(
         .set_subscribe_callback(Some(Box::new(move |facility, _, _| {
             if matches!(
                 facility,
-                Some(Facility::Sink | Facility::Source | Facility::SinkInput | Facility::Server)
+                Some(
+                    Facility::Sink
+                        | Facility::Source
+                        | Facility::SinkInput
+                        | Facility::SourceOutput
+                        | Facility::Server
+                )
             ) {
                 refresh(&subscribed);
             }
@@ -274,6 +295,7 @@ fn session(
         InterestMaskSet::SINK
             | InterestMaskSet::SOURCE
             | InterestMaskSet::SINK_INPUT
+            | InterestMaskSet::SOURCE_OUTPUT
             | InterestMaskSet::SERVER,
         |_| {},
     );
@@ -327,7 +349,7 @@ fn refresh(link: &Rc<Link>) {
             return;
         }
         *building = Building {
-            remaining: 4,
+            remaining: 5,
             ..Building::default()
         };
     }
@@ -389,9 +411,24 @@ fn refresh(link: &Rc<Link>) {
         }
         ListResult::End | ListResult::Error => answered(&streams),
     });
+
+    let recorders = Rc::clone(link);
+    introspect.get_source_output_info_list(move |result| match result {
+        ListResult::Item(output) => {
+            if let Some(recorder) = recorder(output) {
+                recorders
+                    .building
+                    .borrow_mut()
+                    .snapshot
+                    .recording
+                    .push(recorder);
+            }
+        }
+        ListResult::End | ListResult::Error => answered(&recorders),
+    });
 }
 
-/// One of the four answers came.
+/// One of the five answers came.
 fn answered(link: &Rc<Link>) {
     let (snapshot, volumes, again) = {
         let mut building = link.building.borrow_mut();
@@ -399,7 +436,13 @@ fn answered(link: &Rc<Link>) {
         if building.remaining > 0 {
             return;
         }
-        let building = std::mem::take(&mut *building);
+        let mut building = std::mem::take(&mut *building);
+        // Only microphones count: sources lists no output monitors.
+        let snapshot = &mut building.snapshot;
+        let sources: Vec<u32> = snapshot.sources.iter().map(|source| source.index).collect();
+        snapshot
+            .recording
+            .retain(|recorder| sources.contains(&recorder.source));
         (building.snapshot, building.volumes, building.again)
     };
     *link.volumes.borrow_mut() = volumes;
@@ -548,6 +591,30 @@ fn stream(input: &SinkInputInfo) -> Option<Stream> {
         volume: percent(input.volume.max()),
         muted: input.mute,
         corked: input.corked,
+    })
+}
+
+/// An app recording, unless it's one of Mochi's meters.
+fn recorder(output: &SourceOutputInfo) -> Option<Recorder> {
+    let property = |key: &str| {
+        output
+            .proplist
+            .get_str(key)
+            .filter(|value| !value.trim().is_empty())
+    };
+    if property(properties::APPLICATION_ID).as_deref() == Some(crate::meter::APP_ID) {
+        return None;
+    }
+    let binary = property(properties::APPLICATION_PROCESS_BINARY);
+    Some(Recorder {
+        source: output.source,
+        app: property(properties::APPLICATION_NAME)
+            .or_else(|| binary.clone())
+            .or_else(|| output.name.as_deref().map(str::to_owned))
+            .unwrap_or_else(|| "Unknown app".to_owned()),
+        icon: property(properties::APPLICATION_ICON_NAME)
+            .or_else(|| binary.map(|binary| binary.to_lowercase())),
+        corked: output.corked,
     })
 }
 

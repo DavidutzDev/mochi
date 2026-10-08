@@ -21,7 +21,7 @@ use crate::daemon::{ModuleExit, ModuleSlot};
 use crate::plugins::PluginModule;
 
 /// What a generated `config.toml` turns on: the whole shell.
-pub const DEFAULT_MODULES: [&str; 24] = [
+pub const DEFAULT_MODULES: [&str; 25] = [
     "idle",
     "osd",
     "workspaces",
@@ -39,6 +39,7 @@ pub const DEFAULT_MODULES: [&str; 24] = [
     "bluetooth",
     "battery",
     "brightness",
+    "privacy",
     "performance",
     "widgets",
     "notes",
@@ -70,6 +71,7 @@ pub fn builtin() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_bluetooth::Bluetooth),
         Box::new(mochi_module_battery::BatteryModule),
         Box::new(mochi_module_brightness::Brightness),
+        Box::new(mochi_module_privacy::Privacy),
         Box::new(mochi_module_performance::Performance),
         Box::new(mochi_module_widgets::Widgets),
         Box::new(mochi_module_notes::Notes),

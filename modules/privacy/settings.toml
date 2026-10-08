@@ -1,0 +1,9 @@
+# Privacy: a dot next to the island while an app uses the microphone or the
+# camera. A click mutes the microphone, or unmutes it.
+[module.privacy]
+# Apps recording from a microphone, which the audio module reports; without
+# it, nothing shows for the microphone.
+# microphone = true
+# Apps with a camera open, from /dev/video* in /proc, checked every 2
+# seconds.
+# camera = true

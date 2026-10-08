@@ -775,6 +775,7 @@ fn icon(module: &str) -> &'static str {
         "osd" => "tune",
         "performance" => "monitor_heart",
         "power" => "power_settings_new",
+        "privacy" => "privacy_tip",
         "settings" => "settings",
         "tour" => "tour",
         "share" => "screen_share",

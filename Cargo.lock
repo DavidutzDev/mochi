@@ -1084,6 +1084,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-privacy"
+version = "0.0.7"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-settings"
 version = "0.0.7"
 dependencies = [
@@ -1254,6 +1267,7 @@ dependencies = [
  "mochi-module-osd",
  "mochi-module-performance",
  "mochi-module-power",
+ "mochi-module-privacy",
  "mochi-module-settings",
  "mochi-module-share",
  "mochi-module-tour",

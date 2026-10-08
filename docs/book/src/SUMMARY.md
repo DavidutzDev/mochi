@@ -27,6 +27,7 @@
 - [Launcher](modules/launcher.md)
 - [Hub](modules/hub.md)
 - [Power](modules/power.md)
+- [Privacy](modules/privacy.md)
 - [Capture](modules/capture.md)
 - [Share](modules/share.md)
 - [Clipboard](modules/clipboard.md)

@@ -243,9 +243,25 @@ pub fn payload(snapshot: Option<&Snapshot>, max_volume: u32) -> Value {
         })
         .collect();
 
+    // Each app recording from a microphone once, for the privacy dot.
+    let mut recording: Vec<Value> = Vec::new();
+    for recorder in snapshot
+        .recording
+        .iter()
+        .filter(|recorder| !recorder.corked)
+    {
+        if !recording
+            .iter()
+            .any(|app| app["name"] == recorder.app.as_str())
+        {
+            recording.push(json!({ "name": recorder.app, "icon": recorder.icon }));
+        }
+    }
+
     json!({
         "connected": true,
         "max_volume": max_volume,
+        "recording": recording,
         "output": chosen(&outputs),
         "input": chosen(&inputs),
         "outputs": outputs,
@@ -307,6 +323,7 @@ pub fn fall(last: f32, peak: Option<f32>) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pulse::Recorder;
 
     fn device(index: u32, name: &str, volume: u32) -> Device {
         Device {
@@ -355,6 +372,20 @@ mod tests {
                     ..stream(5, "Firefox", false)
                 },
             ],
+            recording: vec![
+                recorder("discord", false),
+                recorder("discord", false),
+                recorder("OBS", true),
+            ],
+        }
+    }
+
+    fn recorder(app: &str, corked: bool) -> Recorder {
+        Recorder {
+            source: 3,
+            app: app.into(),
+            icon: None,
+            corked,
         }
     }
 
@@ -473,6 +504,12 @@ mod tests {
         // One of its streams plays through the headset.
         assert_eq!(firefox["output"], Value::Null);
         assert_eq!(firefox["streams"][2]["output"], "headset");
+
+        // Each app recording once, and none paused.
+        assert_eq!(
+            payload["recording"],
+            json!([{ "name": "discord", "icon": null }])
+        );
 
         assert_eq!(super::payload(None, 100)["connected"], false);
     }

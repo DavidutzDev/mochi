@@ -15,6 +15,10 @@ use libpulse_binding::stream::{FlagSet, PeekResult, State, Stream};
 
 use crate::pulse::Snapshot;
 
+/// The application id on the meters' streams, so the list of apps
+/// recording leaves them out.
+pub const APP_ID: &str = "mochi.meter";
+
 /// The loudest peak per meter since the module last took them, from 0 to 1,
 /// keyed as [`wanted`] names them.
 pub type Peaks = Arc<Mutex<HashMap<String, f32>>>;
@@ -183,7 +187,7 @@ fn open(context: &mut Context, peaks: &Peaks, key: &str, tap: &Tap) -> Option<Rc
         channels: 1,
     };
     let mut proplist = Proplist::new()?;
-    let _ = proplist.set_str(properties::APPLICATION_ID, "mochi.meter");
+    let _ = proplist.set_str(properties::APPLICATION_ID, APP_ID);
     let mut stream = Stream::new_with_proplist(context, "Peak meter", &spec, None, &mut proplist)?;
     if let Some(index) = tap.stream {
         stream.set_monitor_stream(index).ok()?;
@@ -288,6 +292,7 @@ mod tests {
                 muted: false,
                 corked: false,
             }],
+            recording: Vec::new(),
         };
         let mut taps = wanted(&snapshot);
         assert_eq!(taps.len(), 3);

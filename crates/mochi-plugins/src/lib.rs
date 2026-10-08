@@ -25,7 +25,7 @@ pub use manifest::{Manifest, ManifestError};
 pub use source::{Source, SourceError};
 
 /// The modules compiled into mochid. A plugin can't take one of their ids.
-pub const BUILTIN: [&str; 25] = [
+pub const BUILTIN: [&str; 26] = [
     "idle",
     "osd",
     "workspaces",
@@ -43,6 +43,7 @@ pub const BUILTIN: [&str; 25] = [
     "bluetooth",
     "battery",
     "brightness",
+    "privacy",
     "performance",
     "widgets",
     "notes",
