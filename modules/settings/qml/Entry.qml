@@ -12,7 +12,10 @@ Rectangle {
     property alias horizontalAlignment: input.horizontalAlignment
     property alias validator: input.validator
     readonly property alias editing: input.activeFocus
+    // Says `edited` on every keystroke too, like a search box.
+    property bool live: false
     signal accepted(string text)
+    signal edited(string text)
 
     implicitWidth: 180
     implicitHeight: Theme.controlHeight
@@ -35,6 +38,12 @@ Rectangle {
             root.accepted(input.text);
     }
 
+    // Focusing the field focuses its text.
+    onActiveFocusChanged: {
+        if (activeFocus)
+            input.forceActiveFocus();
+    }
+
     TextInput {
         id: input
 
@@ -51,9 +60,14 @@ Rectangle {
         font.family: root.mono ? "monospace" : Theme.fontFamily
         Component.onCompleted: text = root.text
 
-        onAccepted: root.commit()
+        onTextChanged: {
+            if (root.live)
+                root.edited(text);
+        }
+        // A live field only takes Enter: leaving it isn't a choice.
+        onAccepted: root.live ? root.accepted(text) : root.commit()
         onActiveFocusChanged: {
-            if (!activeFocus)
+            if (!activeFocus && !root.live)
                 root.commit();
         }
         Keys.onEscapePressed: event => {

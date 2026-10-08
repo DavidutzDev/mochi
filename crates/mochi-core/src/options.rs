@@ -62,6 +62,8 @@ pub enum Kind {
     Text,
     /// `#rrggbb` or `#aarrggbb`.
     Color,
+    /// A font family installed on the system; empty for the default.
+    Font,
     /// One of `choices`.
     Choice,
     /// A list of `items`.
@@ -303,6 +305,7 @@ impl<'a> Shape<'a> {
                 (shape.min, shape.max) = range(schema, format);
             }
             Some("string") if format == "color" => shape.kind = Kind::Color,
+            Some("string") if format == "font" => shape.kind = Kind::Font,
             Some("string") => shape.kind = Kind::Text,
             Some("array") => {
                 let items = schema.get("items").map(Shape::of);
@@ -494,7 +497,7 @@ pub fn from_json(
         (Kind::Float, Json::Number(number)) => {
             toml::Value::Float(number.as_f64().ok_or_else(wrong)?)
         }
-        (Kind::Text | Kind::Color | Kind::Choice, Json::String(text)) => {
+        (Kind::Text | Kind::Color | Kind::Font | Kind::Choice, Json::String(text)) => {
             toml::Value::String(text.clone())
         }
         (Kind::List, Json::Array(values)) => {
@@ -520,6 +523,7 @@ fn kind_name(kind: Kind) -> &'static str {
         Kind::Float => "number",
         Kind::Text => "text",
         Kind::Color => "color",
+        Kind::Font => "font family",
         Kind::Choice => "choice",
         Kind::List => "list",
     }

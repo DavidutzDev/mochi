@@ -205,8 +205,10 @@ impl Default for Motion {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Text {
+    #[schemars(extend("format" = "font"))]
     pub family: String,
     /// For the clocks, on the idle island and in the hub.
+    #[schemars(extend("format" = "font"))]
     pub display_family: String,
     /// Labels, metadata and fine print.
     #[schemars(range(min = 8, max = 20))]

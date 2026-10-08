@@ -8,6 +8,7 @@ A panel with every option: the theme, the island, the bubbles, which modules run
 
 - A dot marks an option that isn't at its default, and the section in the sidebar. Hovering the option shows a button back to the default, and Reset in the header does it for the whole section.
 - Typing in the search box looks through every option's name and description. `@modified` lists the ones that aren't at their default. Up and Down move through the sidebar, Ctrl+F goes back to the search box, and Escape closes the menu, the editor, the search, then the panel.
+- The font options list the fonts installed, each drawn in itself, with a search; a font that isn't installed shows in red.
 - TOML shows the section as TOML, every option at its value, to edit by hand. Save checks it first and shows what's wrong instead of changing anything. Options for which the panel has no control, like the launcher's providers, are edited there.
 - Copy gives everything that isn't a default as Nix, the `settings` and `theme` attributes of home-manager's `programs.mochi`, ready to paste. Copy as TOML gives `config.toml` and `theme.toml` instead.
 

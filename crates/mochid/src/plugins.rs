@@ -905,6 +905,9 @@ fn schema(
             if hint.color {
                 property["format"] = "color".into();
             }
+            if hint.font {
+                property["format"] = "font".into();
+            }
             if let Some(min) = hint.min {
                 property["minimum"] = min.into();
             }

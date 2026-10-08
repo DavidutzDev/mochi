@@ -661,6 +661,12 @@ mod tests {
             .find(|field| field.path == "theme.colors.accent")
             .unwrap();
         assert_eq!(accent.kind, Kind::Color);
+        let family = sections
+            .iter()
+            .flat_map(|section| &section.fields)
+            .find(|field| field.path == "theme.text.family")
+            .unwrap();
+        assert_eq!(family.kind, Kind::Font);
     }
 
     /// Every value of every example is a field, so nothing

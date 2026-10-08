@@ -832,6 +832,127 @@ Item {
         }
     }
 
+    // The fonts installed, each drawn in itself, with a search.
+    Rectangle {
+        id: fonts
+
+        property string query: ""
+        readonly property var found: root.popupKind === "font" ? Fonts.search(query) : []
+
+        visible: root.popupKind === "font"
+        z: 10
+        x: Math.min(root.popupAt.x, root.width - width - Theme.spaceMedium)
+        y: Math.min(root.popupAt.y, root.height - height - Theme.spaceMedium)
+        width: 300
+        height: 340
+        radius: Theme.radiusField
+        color: Theme.raised
+
+        onVisibleChanged: {
+            query = "";
+            if (visible)
+                Qt.callLater(() => fontSearch.forceActiveFocus());
+        }
+
+        // Clicks inside don't reach the panel, which closes it.
+        MouseArea {
+            anchors.fill: parent
+        }
+
+        Entry {
+            id: fontSearch
+
+            x: Theme.spaceTiny
+            y: Theme.spaceTiny
+            width: parent.width - Theme.spaceTiny * 2
+            placeholder: `Search ${Fonts.families.length} fonts`
+            color: Theme.highlight
+            live: true
+            onEdited: text => fonts.query = text
+            onAccepted: text => {
+                if (fonts.found.length > 0)
+                    fonts.pick(fonts.found[0]);
+            }
+        }
+
+        function pick(family: string): void {
+            root.popupOwner?.sendNow(family);
+            root.closePopup();
+        }
+
+        ListView {
+            id: fontList
+
+            anchors.top: fontSearch.bottom
+            anchors.topMargin: Theme.spaceTiny
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Theme.spaceTiny
+            x: Theme.spaceTiny
+            width: parent.width - Theme.spaceTiny * 2
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            // The default first, while nothing is typed.
+            model: fonts.query === "" ? [""].concat(fonts.found) : fonts.found
+            reuseItems: true
+
+            ScrollFade {
+                view: fontList
+                color: Theme.raised
+            }
+
+            delegate: Rectangle {
+                id: fontRow
+
+                required property string modelData
+                readonly property bool picked: (root.popupOwner?.value ?? "") === modelData
+
+                width: ListView.view.width
+                height: Theme.controlHeight
+                radius: Theme.radiusControl
+                color: fontRowArea.containsMouse ? Theme.highlight : "transparent"
+
+                Text {
+                    x: Theme.spaceMedium
+                    width: parent.width - x - Theme.spaceHuge
+                    anchors.verticalCenter: parent.verticalCenter
+                    elide: Text.ElideRight
+                    text: fontRow.modelData !== "" ? fontRow.modelData : "Default"
+                    color: Theme.foreground
+                    font.pixelSize: Theme.textBody
+                    font.family: fontRow.modelData !== "" ? fontRow.modelData : Theme.fontFamily
+                }
+
+                Symbol {
+                    anchors.right: parent.right
+                    anchors.rightMargin: Theme.spaceSmall
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: fontRow.picked
+                    name: "check"
+                    size: Theme.textBody
+                    color: Theme.accent
+                }
+
+                MouseArea {
+                    id: fontRowArea
+
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: fonts.pick(fontRow.modelData)
+                }
+            }
+        }
+
+        Text {
+            anchors.centerIn: fontList
+            visible: fonts.found.length === 0
+            text: "No font by that name"
+            color: Theme.muted
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
+        }
+    }
+
     Loader {
         active: root.popupKind === "color"
         z: 10

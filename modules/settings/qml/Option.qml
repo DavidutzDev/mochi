@@ -202,6 +202,8 @@ Item {
                     return root.ranged ? sliderControl : numberControl;
                 case "color":
                     return colorControl;
+                case "font":
+                    return fontControl;
                 case "list":
                     return listControl;
                 case "text":
@@ -292,6 +294,52 @@ Item {
                 hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.popup("choice", button)
+            }
+        }
+    }
+
+    // The font's name, in that font.
+    Component {
+        id: fontControl
+
+        Rectangle {
+            id: button
+
+            readonly property string family: root.value ?? ""
+
+            width: 240
+            height: Theme.controlHeight
+            radius: height / 2
+            color: fontArea.containsMouse ? Theme.highlight : Theme.raised
+
+            Text {
+                x: Theme.spaceMedium
+                width: parent.width - x - Theme.spaceHuge
+                anchors.verticalCenter: parent.verticalCenter
+                elide: Text.ElideRight
+                text: button.family !== "" ? button.family : "Default"
+                color: button.family !== "" && !Fonts.has(button.family) ? Theme.danger : Theme.foreground
+                font.pixelSize: Theme.textBody
+                font.family: button.family !== "" ? button.family : Theme.fontFamily
+            }
+
+            Symbol {
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.spaceMedium
+                anchors.verticalCenter: parent.verticalCenter
+                name: "chevron"
+                rotation: 90
+                size: 12
+                color: Theme.muted
+            }
+
+            MouseArea {
+                id: fontArea
+
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.popup("font", button)
             }
         }
     }

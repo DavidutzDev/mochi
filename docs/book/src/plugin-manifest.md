@@ -118,6 +118,7 @@ How the [settings panel](modules/settings.md) shows the options in `settings.tom
 | `choices` | | The values it takes: the panel shows them to pick from. |
 | `min`, `max` | | A number's range. With both, the panel shows a slider. |
 | `color` | `false` | A `#rrggbb` or `#aarrggbb` color, with a picker. |
+| `font` | `false` | A font family, picked from the fonts installed. |
 | `optional` | `false` | It may be left unset. |
 | `description` | | In place of the comment in `settings.toml`. |
 

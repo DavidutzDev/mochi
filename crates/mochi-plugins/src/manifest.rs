@@ -50,6 +50,9 @@ pub struct SettingHint {
     /// A `#rrggbb` or `#aarrggbb` color, with a picker.
     #[serde(default)]
     pub color: bool,
+    /// A font family, picked from the fonts installed.
+    #[serde(default)]
+    pub font: bool,
     /// It may be left unset.
     #[serde(default)]
     pub optional: bool,
