@@ -310,24 +310,67 @@ pub fn load_theme(path: &Path) -> Result<Theme, ConfigError> {
 
 /// `path` only labels errors.
 pub fn parse_theme(text: &str, path: &Path) -> Result<Theme, ConfigError> {
-    let mut theme: Theme =
+    let table: toml::Table =
         toml::from_str(text).map_err(|error| ConfigError::invalid(path, error.to_string()))?;
-    for note in theme.text.migrate() {
-        tracing::warn!(file = %path.display(), "{note}; the old name still works for now");
+    let theme = theme_from_table(table, path, false)?;
+    if let Ok(raw) = toml::from_str::<Theme>(text) {
+        for note in raw.text.clone().migrate() {
+            tracing::warn!(file = %path.display(), "{note}; the old name still works for now");
+        }
     }
-    check_theme(&theme).map_err(|message| ConfigError::invalid(path, message))?;
     Ok(theme)
 }
 
-/// `theme.toml` already read as a table, with changes laid over it. `path`
-/// only labels errors.
-pub fn theme_from_table(table: toml::Table, path: &Path) -> Result<Theme, ConfigError> {
+/// `theme.toml` already read as a table, with changes laid over it: the
+/// preset's palette under what `[colors]` sets. `system_light` is what the
+/// system prefers, for `appearance = "auto"`. `path` only labels errors.
+pub fn theme_from_table(
+    mut table: toml::Table,
+    path: &Path,
+    system_light: bool,
+) -> Result<Theme, ConfigError> {
+    let colors =
+        palette_of(&table, system_light).map_err(|message| ConfigError::invalid(path, message))?;
+    let user = match table.remove("colors") {
+        Some(toml::Value::Table(user)) => user,
+        _ => toml::Table::new(),
+    };
+    let mut merged = colors;
+    crate::changes::merge(&mut merged, &user);
+    table.insert("colors".to_owned(), toml::Value::Table(merged));
     let mut theme: Theme = toml::Value::Table(table)
         .try_into()
         .map_err(|error: toml::de::Error| ConfigError::invalid(path, error.to_string()))?;
     theme.text.migrate();
     check_theme(&theme).map_err(|message| ConfigError::invalid(path, message))?;
     Ok(theme)
+}
+
+/// The palette a theme table's `preset` and `appearance` give. A
+/// wallpaper that can't be read gives the default palette and a warning,
+/// so a missing image doesn't stop Mochi.
+pub fn palette_of(table: &toml::Table, system_light: bool) -> Result<toml::Table, String> {
+    let text = |key: &str, default: &'static str| {
+        table
+            .get(key)
+            .and_then(toml::Value::as_str)
+            .unwrap_or(default)
+            .to_owned()
+    };
+    let preset = text("preset", "obsidian");
+    let light = match text("appearance", "dark").as_str() {
+        "light" => true,
+        "auto" => system_light,
+        _ => false,
+    };
+    match crate::palette::colors(&preset, light, &text("wallpaper", "auto")) {
+        Ok(colors) => Ok(colors),
+        Err(error) if preset == "wallpaper" => {
+            tracing::warn!(%error, "no colors from the wallpaper, using obsidian's");
+            crate::palette::colors("obsidian", light, "")
+        }
+        Err(error) => Err(error),
+    }
 }
 
 /// A TOML file as a table, empty when it doesn't exist.

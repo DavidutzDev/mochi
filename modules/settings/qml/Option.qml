@@ -230,7 +230,8 @@ Item {
     function choices(): var {
         const options = (root.field.choices ?? []).map(choice => ({
                     "value": choice.value,
-                    "label": label(choice.value)
+                    "label": label(choice.value),
+                    "colors": choice.colors ?? []
                 }));
         return root.field.optional ? [
             {

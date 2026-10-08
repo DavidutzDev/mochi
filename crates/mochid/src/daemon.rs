@@ -74,6 +74,8 @@ pub struct Inputs {
     pub requests: UnboundedReceiver<ModuleRequest>,
     pub exits: UnboundedReceiver<ModuleExit>,
     pub ui: UnboundedReceiver<UiEvent>,
+    /// The system prefers light colors, for `appearance = "auto"`.
+    pub appearance: UnboundedReceiver<bool>,
 }
 
 #[derive(Debug)]
@@ -347,6 +349,13 @@ impl Daemon {
                     self.on_exit(module, generation, result);
                 }
                 Some(event) = inputs.ui.recv() => self.on_ui_process(event),
+                Some(light) = inputs.appearance.recv() => {
+                    if let Some(loaded) = self.store.set_system_light(light)
+                        && let Err(error) = self.run_with(loaded)
+                    {
+                        tracing::warn!("{error:#}");
+                    }
+                }
                 () = sleep => {}
                 _ = tokio::signal::ctrl_c() => break,
                 _ = terminate.recv() => break,

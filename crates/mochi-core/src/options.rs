@@ -77,6 +77,9 @@ pub struct Choice {
     pub value: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub description: String,
+    /// Swatches to show beside it, like a theme preset's colors.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub colors: Vec<String>,
 }
 
 /// One option.
@@ -366,6 +369,7 @@ fn choices(schema: &Json) -> Option<Vec<Choice>> {
                 Some(Choice {
                     value: value.as_str()?.to_owned(),
                     description: description.to_owned(),
+                    colors: Vec::new(),
                 })
             })
             .collect()
@@ -384,6 +388,7 @@ fn choices(schema: &Json) -> Option<Vec<Choice>> {
             (Some(Json::String(value)), _) => out.push(Choice {
                 value: value.clone(),
                 description: description.to_owned(),
+                colors: Vec::new(),
             }),
             (_, Some(values)) => out.extend(plain(values, description)?),
             _ => return None,

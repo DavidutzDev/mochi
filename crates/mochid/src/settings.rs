@@ -50,6 +50,8 @@ pub struct Store {
     modules: Option<Vec<String>>,
     base: Tables,
     changes: Changes,
+    /// The system prefers light colors, for `appearance = "auto"`.
+    system_light: bool,
     /// Changes being tried, over `changes`: the settings panel's preview,
     /// or the tour showing a look. Never saved, and gone on reload.
     preview: Changes,
@@ -83,6 +85,7 @@ impl Store {
             modules,
             base: Tables::default(),
             changes: Changes::default(),
+            system_light: false,
             preview: Changes::default(),
             defaults: complete(defaults(&catalog), &sections),
             sections,
@@ -138,6 +141,7 @@ impl Store {
         let theme = mochi_core::config::theme_from_table(
             changes::merged(&self.base.theme, &changes.theme),
             &self.theme_file,
+            self.system_light,
         )?;
         Ok(Loaded { config, theme })
     }
@@ -286,10 +290,33 @@ impl Store {
     /// over that, and what's being tried on top.
     fn effective(&self, file: File) -> Table {
         let mut table = self.defaults.get(file).clone();
-        changes::merge(&mut table, self.base.get(file));
-        changes::merge(&mut table, self.changes.table(file));
-        changes::merge(&mut table, self.preview.table(file));
+        let mut layers = self.base.get(file).clone();
+        changes::merge(&mut layers, self.changes.table(file));
+        changes::merge(&mut layers, self.preview.table(file));
+        if file == File::Theme {
+            changes::merge(&mut table, &self.palette(&layers));
+        }
+        changes::merge(&mut table, &layers);
         table
+    }
+
+    /// The colors the preset in `theme` gives, as `[colors]`: what the
+    /// color options show where nothing sets them.
+    fn palette(&self, theme: &Table) -> Table {
+        let colors = mochi_core::config::palette_of(theme, self.system_light).unwrap_or_default();
+        Table::from_iter([("colors".to_owned(), Value::Table(colors))])
+    }
+
+    /// The system's light or dark preference changed, for
+    /// `appearance = "auto"`: what the daemon now runs with.
+    pub fn set_system_light(&mut self, light: bool) -> Option<Loaded> {
+        if self.system_light == light {
+            return None;
+        }
+        self.system_light = light;
+        let catalog = modules::catalog(&self.config_file).ok()?;
+        self.resolve(&layered(&self.changes, &self.preview), &catalog)
+            .ok()
     }
 
     /// What the panel shows: every section with each field's value.
@@ -299,9 +326,14 @@ impl Store {
         // What the files say, without the changes.
         let saved = |file: File| {
             let mut table = self.defaults.get(file).clone();
+            if file == File::Theme {
+                changes::merge(&mut table, &self.palette(self.base.get(file)));
+            }
             changes::merge(&mut table, self.base.get(file));
             table
         };
+        // A color's default is the preset's.
+        let palette = self.palette(&theme);
         let (saved_config, saved_theme) = (saved(File::Config), saved(File::Theme));
         let enabled: Vec<String> = match changes::get(&config, &["modules"]) {
             Some(Value::Array(ids)) => ids
@@ -339,6 +371,11 @@ impl Store {
                             .map(options::to_json)
                             .unwrap_or(Json::Null);
                         let mut field = serde_json::to_value(field).expect("serializes");
+                        if file == File::Theme
+                            && let Some(color) = changes::get(&palette, &parts)
+                        {
+                            field["default"] = options::to_json(color);
+                        }
                         field["value"] = value;
                         field["saved"] = saved;
                         field["changed"] = Json::Bool(changed || previewed);
@@ -555,6 +592,27 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
             options::schema_of::<Motion>(),
         ),
     ];
+    // The preset, its light or dark version, and the wallpaper go first on
+    // the Colors page.
+    let mut look: Vec<Field> = options::fields(
+        &options::schema_of::<Theme>(),
+        "theme",
+        "",
+        &theme_comments,
+        &theme_defaults,
+    )
+    .into_iter()
+    .filter(|field| {
+        ["theme.preset", "theme.appearance", "theme.wallpaper"].contains(&field.path.as_str())
+    })
+    .collect();
+    for field in &mut look {
+        if field.path == "theme.preset" {
+            for choice in &mut field.choices {
+                choice.colors = mochi_core::palette::swatches(&choice.value, false);
+            }
+        }
+    }
     for (id, title, icon, schema) in appearance {
         let description = theme_comments
             .heading(id)
@@ -568,7 +626,19 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
             group: Group::Appearance,
             icon: icon.to_owned(),
             module: None,
-            fields: options::fields(&schema, "theme", id, &theme_comments, &theme_defaults),
+            fields: if id == "colors" {
+                look.drain(..)
+                    .chain(options::fields(
+                        &schema,
+                        "theme",
+                        id,
+                        &theme_comments,
+                        &theme_defaults,
+                    ))
+                    .collect()
+            } else {
+                options::fields(&schema, "theme", id, &theme_comments, &theme_defaults)
+            },
         });
     }
 

@@ -15,6 +15,7 @@ pub mod examples;
 pub mod module;
 pub mod nix;
 pub mod options;
+pub mod palette;
 pub mod process;
 pub mod quality;
 pub mod supervisor;

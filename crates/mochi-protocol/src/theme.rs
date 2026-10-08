@@ -8,13 +8,49 @@ use serde::{Deserialize, Serialize};
 
 use crate::Area;
 
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Theme {
+    /// A named palette for every color role, in a dark and a light
+    /// version; `wallpaper` makes one from the wallpaper. What `[colors]`
+    /// sets goes over it.
+    #[schemars(extend("enum" = ["obsidian", "catppuccin", "nord", "gruvbox", "rose-pine", "tokyo-night", "wallpaper"]))]
+    pub preset: String,
+    pub appearance: Appearance,
+    /// The image the `wallpaper` preset reads, or `auto` for the one awww,
+    /// swww or hyprpaper shows.
+    pub wallpaper: String,
     pub colors: Colors,
     pub layout: Layout,
     pub motion: Motion,
     pub text: Text,
+}
+
+impl Default for Theme {
+    fn default() -> Self {
+        Self {
+            preset: "obsidian".to_owned(),
+            appearance: Appearance::default(),
+            wallpaper: "auto".to_owned(),
+            colors: Colors::default(),
+            layout: Layout::default(),
+            motion: Motion::default(),
+            text: Text::default(),
+        }
+    }
+}
+
+/// Which of a preset's palettes to use.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Appearance {
+    /// The dark palette.
+    #[default]
+    Dark,
+    /// The light palette.
+    Light,
+    /// Light or dark as the system prefers, through the desktop portal.
+    Auto,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

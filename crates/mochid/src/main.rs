@@ -1,6 +1,7 @@
 //! The Mochi daemon. It owns all state, runs the modules, decides what the
 //! island shows, and keeps the Quickshell UI running.
 
+mod appearance;
 mod daemon;
 mod doctor;
 mod ipc;
@@ -238,6 +239,8 @@ async fn run(args: Args) -> anyhow::Result<()> {
     let (request_sender, requests) = mpsc::unbounded_channel();
     let (exit_sender, exits) = mpsc::unbounded_channel();
     let (ui_sender, ui) = mpsc::unbounded_channel();
+    let (appearance_sender, appearance) = mpsc::unbounded_channel();
+    tokio::spawn(appearance::watch(appearance_sender));
 
     // Without a supported compositor this logs why and returns a handle whose
     // state says so; modules that need it stay idle.
@@ -274,6 +277,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
             requests,
             exits,
             ui,
+            appearance,
         })
         .await;
 

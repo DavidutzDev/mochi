@@ -17,6 +17,7 @@ demo = ["dep:mochi-module-demo"]
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+futures-util.workspace = true
 libc.workspace = true
 mochi-core.workspace = true
 mochi-plugins.workspace = true

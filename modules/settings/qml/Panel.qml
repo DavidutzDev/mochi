@@ -875,14 +875,41 @@ Item {
                         radius: Theme.radiusControl
                         color: itemArea.containsMouse ? Theme.highlight : "transparent"
 
-                        Text {
+                        Row {
                             x: Theme.spaceMedium
                             anchors.verticalCenter: parent.verticalCenter
-                            text: item.modelData.label
-                            color: Theme.foreground
-                            font.pixelSize: Theme.textBody
-                            font.family: Theme.fontFamily
-                            font.weight: item.picked ? Theme.weightTitle : Theme.weightBody
+                            spacing: Theme.spaceSmall
+
+                            // A preset's colors, overlapping a little.
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: (item.modelData.colors ?? []).length > 0
+                                spacing: -4
+
+                                Repeater {
+                                    model: item.modelData.colors ?? []
+
+                                    Rectangle {
+                                        required property string modelData
+
+                                        width: 14
+                                        height: 14
+                                        radius: width / 2
+                                        color: modelData
+                                        border.width: 1
+                                        border.color: Theme.highlight
+                                    }
+                                }
+                            }
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: item.modelData.label
+                                color: Theme.foreground
+                                font.pixelSize: Theme.textBody
+                                font.family: Theme.fontFamily
+                                font.weight: item.picked ? Theme.weightTitle : Theme.weightBody
+                            }
                         }
 
                         Symbol {
