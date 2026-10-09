@@ -158,7 +158,7 @@ A command can wait for its answer, held in a variable or moved into a task, whil
 
 ## State
 
-`publish_state(json!({..}))` replaces the plugin's state. Views read it with `Daemon.state("<id>")`, hub cards and pages get it as their `payload`, and other modules can watch it. Publish the whole state each time, not a change.
+`publish_state(json!({..}))` replaces the plugin's state. Views read it with `Daemon.state("<id>")`, control center cards and pages get it as their `payload`, and other modules can watch it. Publish the whole state each time, not a change.
 
 To read another module's state, name it in the manifest's `[uses] state`, then match `ModuleEvent::State`:
 

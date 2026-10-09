@@ -4,7 +4,7 @@
 # format = "HH:mm"
 # What a click runs: a module, its action, then the action's arguments.
 # [] does nothing.
-# click = ["hub", "toggle"]
+# click = ["control-center", "toggle"]
 # What resting the pointer on it runs, the same way, like
 # ["workspaces", "show"] for the workspace dots. [] does nothing.
 # hover = []

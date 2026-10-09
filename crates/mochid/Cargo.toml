@@ -28,7 +28,7 @@ mochi-module-bluetooth.workspace = true
 mochi-module-capture.workspace = true
 mochi-module-clipboard.workspace = true
 mochi-module-demo = { workspace = true, optional = true }
-mochi-module-hub.workspace = true
+mochi-module-control-center.workspace = true
 mochi-module-colors.workspace = true
 mochi-module-drop.workspace = true
 mochi-module-emoji.workspace = true

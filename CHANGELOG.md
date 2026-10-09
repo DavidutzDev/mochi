@@ -12,6 +12,8 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Changed
 
+- The hub is now the control center, with the module id `control-center`: `mochi ipc control-center toggle`, `[module.control-center]`, `target = "control-center"` in plugin manifests. `hub` still works everywhere, with a warning in the log.
+- Bento comes before Plugins in the settings.
 - One Mochi per Wayland session: a second `mochid` refuses to start, also with another `--runtime-dir`, instead of drawing a second island over the first.
 - A preset picked in the settings panel replaces the colors `theme.toml`'s `[colors]` sets, and the ones picked in the panel before it. Picking one used to change nothing when the file set every color. Copy then gives the preset without those colors.
 

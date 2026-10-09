@@ -68,8 +68,8 @@ Rectangle {
         visible: !root.vertical
         spacing: Theme.spaceMedium
 
-        // Smaller in a tile shorter than its usual 64 pixels, like a hub
-        // card's one row.
+        // Smaller in a tile shorter than its usual 64 pixels, like a control
+        // center card's one row.
         Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: Math.min(40, root.height - Theme.spaceSmall)

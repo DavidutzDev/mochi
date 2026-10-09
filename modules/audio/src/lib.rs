@@ -2,8 +2,8 @@
 //! of device, and a volume and mute for each app playing sound, from the
 //! audio server over the PulseAudio protocol.
 //!
-//! It shows as a hub page, and `mochi ipc audio toggle`, bound to a key,
-//! opens the same mixer on the island. The `volume`, `mute`, `output`,
+//! It shows as a control center page, and `mochi ipc audio toggle`, bound to a
+//! key, opens the same mixer on the island. The `volume`, `mute`, `output`,
 //! `input` and `move` actions change things from keybinds and scripts.
 //!
 //! The streams of one app share a row. Each slider shows a peak meter while
@@ -100,10 +100,10 @@ impl Module for Audio {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "page", "mixer", "Page", "Sound")
+            ContributionSpec::new("control-center", "page", "mixer", "Page", "Sound")
                 .icon("volume")
                 .order(20),
-            ContributionSpec::new("hub", "card", "volume", "Card", "Sound")
+            ContributionSpec::new("control-center", "card", "volume", "Card", "Sound")
                 .icon("volume")
                 .order(11)
                 .options(json!({ "span": 2, "rows": 1, "page": "mixer" })),
@@ -389,7 +389,7 @@ impl State {
         mixer::payload(self.snapshot.as_ref(), self.max_volume)
     }
 
-    /// Tells the hub page and the island what changed.
+    /// Tells the control center page and the island what changed.
     fn publish(&self, ctx: &ModuleCtx) {
         let payload = self.payload();
         if let Some(id) = self.shown {

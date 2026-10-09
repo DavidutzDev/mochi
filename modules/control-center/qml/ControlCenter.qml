@@ -2,29 +2,29 @@ import QtQuick
 import QtQuick.Window
 import qs.island
 
-// The panel, laid out like a control center: the home screen's cards on a
-// grid of equal rows, or one page, then a divider and the navbar. The hub
-// takes the height its content needs, up to its `height` setting and the
-// screen, and the island's outline follows it from page to page; what's
-// taller scrolls. Each card sits in a frame the hub draws, with its icon,
-// title and a chevron inside when it opens a page. A card spans
-// `options.span` columns and `options.rows` rows, and its view is sized to
-// fill them; without `rows`, it gets as many rows (one or two) as its view
-// needs. A card whose view sets `hidden` to true, like Bluetooth without an
-// adapter, leaves no gap. Every card and page comes from a module's
-// contribution; this view only lays them out.
+// The panel: the home screen's cards on a grid of equal rows, or one page, then
+// a divider and the navbar. The control center takes the height its content
+// needs, up to its `height` setting and the screen, and the island's outline
+// follows it from page to page; what's taller scrolls. Each card sits in a
+// frame the control center draws, with its icon, title and a chevron inside
+// when it opens a page. A card spans `options.span` columns and `options.rows`
+// rows, and its view is sized to fill them; without `rows`, it gets as many
+// rows (one or two) as its view needs. A card whose view sets `hidden` to true,
+// like Bluetooth without an adapter, leaves no gap. Every card and page comes
+// from a module's contribution; this view only lays them out.
 //
-// The pencil in the navbar edits the home: drag a card onto another to
-// move it there, take it off with its minus, and put it back from the
-// list under the cards. Done keeps the result in the hub's `order` and
-// `hidden` settings; Escape leaves it as it was.
+// The pencil in the navbar edits the home: drag a card onto another to move it
+// there, take it off with its minus, and put it back from the list under the
+// cards. Done keeps the result in the control center's `order` and `hidden`
+// settings; Escape leaves it as it was.
 Item {
     id: root
 
     property var payload: ({})
-    readonly property var offered: Daemon.offered("hub", "card")
-    // The arrangement the hub keeps, and the one being made while editing.
-    readonly property var layout: Daemon.state("hub")
+    readonly property var offered: Daemon.offered("control-center", "card")
+    // The arrangement the control center keeps, and the one being made while
+    // editing.
+    readonly property var layout: Daemon.state("control-center")
     property bool editing: false
     property var draftOrder: []
     property var draftHidden: []
@@ -44,11 +44,11 @@ Item {
     }
     readonly property var cards: arranged.filter(entry => !hiddenCards.includes(keyOf(entry)))
     readonly property var offCards: arranged.filter(entry => hiddenCards.includes(keyOf(entry)))
-    readonly property var pages: Daemon.offered("hub", "page")
+    readonly property var pages: Daemon.offered("control-center", "page")
     // "home", or module/id for a page.
     property string page: payload.page ?? "home"
-    // `mochi ipc hub open <page>` while it's open switches pages, after a
-    // click on a tab replaced the binding above.
+    // `mochi ipc control-center open <page>` while it's open switches pages,
+    // after a click on a tab replaced the binding above.
     onPayloadChanged: page = payload.page ?? "home"
     readonly property var current: pages.find(entry => `${entry.module}/${entry.id}` === page) ?? null
     // A module whose state says it isn't `available`, like Bluetooth without
@@ -89,7 +89,7 @@ Item {
     }
 
     function finishEditing(): void {
-        Daemon.command("hub", "arrange", [draftOrder.join(","), draftHidden.join(",")]);
+        Daemon.command("control-center", "arrange", [draftOrder.join(","), draftHidden.join(",")]);
         editing = false;
     }
 

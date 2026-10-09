@@ -3,10 +3,10 @@
 //! is copied in the default format, kept in the history, and shown on the
 //! island with a row for each format, which copies it.
 //!
-//! The history is kept in `$XDG_STATE_HOME/mochi/colors.json`, newest
-//! first. The hub gets a card with the latest colors and a page with all
-//! of them, and the launcher a `#` provider: `#` alone offers to pick and
-//! lists the history, `#` with a color lists it in every format.
+//! The history is kept in `$XDG_STATE_HOME/mochi/colors.json`, newest first.
+//! The control center gets a card with the latest colors and a page with all of
+//! them, and the launcher a `#` provider: `#` alone offers to pick and lists
+//! the history, `#` with a color lists it in every format.
 //!
 //! The overlay shows the frozen screens, but the pixels come from copies
 //! the module makes as the picker opens, through screencopy: see
@@ -40,8 +40,8 @@ use crate::screen::Frame;
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
-/// How long the hub, the launcher or the last color's card takes to go
-/// before the screen freezes, when the picker opens over one of them.
+/// How long the control center, the launcher or the last color's card takes to
+/// go before the screen freezes, when the picker opens over one of them.
 const CLEARS: Duration = Duration::from_millis(350);
 /// How long the island shows a picked color.
 const CARD: Duration = Duration::from_secs(8);
@@ -104,11 +104,11 @@ impl Module for Colors {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "card", "recent", "Card", "Colors")
+            ContributionSpec::new("control-center", "card", "recent", "Card", "Colors")
                 .icon("palette")
                 .order(45)
                 .options(json!({ "span": 1, "rows": 1 })),
-            ContributionSpec::new("hub", "page", "history", "Page", "Colors")
+            ContributionSpec::new("control-center", "page", "history", "Page", "Colors")
                 .icon("palette")
                 .order(45),
             ContributionSpec::new("launcher", "provider", "colors", "", "Colors").options(json!({
@@ -138,7 +138,7 @@ impl Module for Colors {
             ActionSpec::new("pick", "Pick a color from the screen"),
             ActionSpec::new(
                 "start",
-                "Close the hub, then pick a color; the hub sends this",
+                "Close the control center, then pick a color; the control center sends this",
             ),
             ActionSpec::new("cancel", "Close the picker"),
             point(ActionSpec::new(
@@ -232,7 +232,7 @@ struct State {
     path: Option<PathBuf>,
     picker: Option<Picker>,
     card: Option<ActivityId>,
-    /// When the picker opens, once the hub or the launcher has gone.
+    /// When the picker opens, once the control center or the launcher has gone.
     open_at: Option<Instant>,
 }
 
@@ -260,7 +260,7 @@ impl State {
             }
             "pick" => self.open(ctx).await,
             "start" => {
-                close_hub(ctx);
+                close_control_center(ctx);
                 self.open_later(ctx);
                 Ok(())
             }
@@ -296,8 +296,9 @@ impl State {
             }
             "pick-result" => match args.str("id").unwrap_or_default() {
                 "pick" => {
-                    // The launcher closes itself; the hub may be open too.
-                    close_hub(ctx);
+                    // The launcher closes itself; the control center may be
+                    // open too.
+                    close_control_center(ctx);
                     self.open_later(ctx);
                     Ok(())
                 }
@@ -492,7 +493,7 @@ fn lens(frame: &Frame, x: i64, y: i64, uppercase: bool) -> Value {
     })
 }
 
-/// The module's state, for the hub.
+/// The module's state, for the control center.
 fn state(history: &History, settings: &Settings, picking: bool) -> Value {
     let colors: Vec<Value> = history
         .colors()
@@ -613,13 +614,13 @@ fn copy(ctx: &ModuleCtx, text: String) {
     });
 }
 
-/// Closes the hub, so the screen is clear when it freezes.
-fn close_hub(ctx: &ModuleCtx) {
-    let close = ctx.call("hub", "close", &[]);
+/// Closes the control center, so the screen is clear when it freezes.
+fn close_control_center(ctx: &ModuleCtx) {
+    let close = ctx.call("control-center", "close", &[]);
     tokio::spawn(async move {
         match close.await {
             Ok(()) | Err(CallError::NotEnabled(_)) => {}
-            Err(error) => tracing::warn!(%error, "could not close the hub"),
+            Err(error) => tracing::warn!(%error, "could not close the control center"),
         }
     });
 }

@@ -54,7 +54,8 @@ static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
 const MODES: [&str; 4] = ["region", "window", "screen", "all"];
 const RESOLUTIONS: [&str; 5] = ["native", "480p", "720p", "1080p", "1440p"];
-/// How long the hub takes to close, before a capture started from its page.
+/// How long the control center takes to close, before a capture started from
+/// its page.
 const HUB_CLOSES: Duration = Duration::from_millis(350);
 /// The highest frame rate a recording may ask for.
 const MAX_FRAMERATE: i64 = 240;
@@ -185,7 +186,7 @@ impl Module for Capture {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "page", "history", "Page", "Captures")
+            ContributionSpec::new("control-center", "page", "history", "Page", "Captures")
                 .icon("camera")
                 .order(35),
         ];
@@ -352,10 +353,10 @@ impl Module for Capture {
                 "Show a capture from the history in the preview card",
             )
             .arg(ArgSpec::string("path", "The file, as the history lists it").rest()),
-            ActionSpec::new("history", "Look for new captures; the hub page sends this"),
+            ActionSpec::new("history", "Look for new captures; the control center page sends this"),
             ActionSpec::new(
                 "start",
-                "Close the hub, then open the picker; the hub page sends this",
+                "Close the control center, then open the picker; the control center page sends this",
             )
             .arg(ArgSpec::choice(
                 "kind",
@@ -617,7 +618,7 @@ struct State {
     /// The recording's controls, open from a click on its bubble.
     controls: Option<ActivityId>,
     last: Option<Saved>,
-    /// The newest captures in the folders, for the hub page.
+    /// The newest captures in the folders, for the control center page.
     history: Vec<history::Entry>,
     preview: Option<ActivityId>,
     /// The video codec the probe picked, when it picked one.
@@ -814,9 +815,9 @@ impl State {
                 Ok(())
             }
             "start" => {
-                let _ = ctx.call("hub", "close", &[]).await;
-                // Long enough for the hub to shrink away before the screen
-                // freezes.
+                let _ = ctx.call("control-center", "close", &[]).await;
+                // Long enough for the control center to shrink away before the
+                // screen freezes.
                 tokio::time::sleep(HUB_CLOSES).await;
                 let kind = match args.str("kind") {
                     Some("record") => Kind::Recording,
@@ -910,8 +911,8 @@ impl State {
     fn spec(&self, session: &Session) -> ActivitySpec {
         ActivitySpec::new("Picker")
             .key("picker")
-            // Over anything, even the launcher or the hub, which the frozen
-            // screen still shows, so they can be captured too.
+            // Over anything, even the launcher or the control center, which the
+            // frozen screen still shows, so they can be captured too.
             .priority(Priority::TOP)
             .uninterruptible()
             .overlay("Overlay")
@@ -1405,7 +1406,7 @@ impl State {
         self.publish_history(ctx);
     }
 
-    /// Looks at the folders again and tells the hub page.
+    /// Looks at the folders again and tells the control center page.
     fn publish_history(&mut self, ctx: &ModuleCtx) {
         self.history = history::scan(&[&self.screenshots, &self.recordings], history::SHOWN);
         let entries: Vec<Value> = self
@@ -1477,12 +1478,13 @@ impl State {
             "editable": saved.kind == Kind::Screenshot && !self.settings.editor.is_empty(),
             "thumbnail": self.thumbnail_of(&saved.path).filter(|_| saved.kind == Kind::Recording),
         });
-        // Opened from the hub's page: the hub holds the keyboard.
-        let close = ctx.call("hub", "close", &[]);
+        // Opened from the control center's page: the control center holds the
+        // keyboard.
+        let close = ctx.call("control-center", "close", &[]);
         tokio::spawn(async move {
             match close.await {
                 Ok(()) | Err(mochi_core::CallError::NotEnabled(_)) => {}
-                Err(error) => tracing::warn!(%error, "could not close the hub"),
+                Err(error) => tracing::warn!(%error, "could not close the control center"),
             }
         });
         self.present_preview(ctx, payload);

@@ -1,6 +1,6 @@
 [package]
 name = "mochi-module-brightness"
-description = "Brightness: the laptop's backlight and external monitors over DDC/CI, with an OSD and a hub card"
+description = "Brightness: the laptop's backlight and external monitors over DDC/CI, with an OSD and a control center card"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

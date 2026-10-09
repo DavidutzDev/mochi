@@ -1,4 +1,4 @@
-//! The captures history for the hub page: the newest screenshots and
+//! The captures history for the control center page: the newest screenshots and
 //! recordings in their folders, whatever made them.
 
 use std::path::{Path, PathBuf};

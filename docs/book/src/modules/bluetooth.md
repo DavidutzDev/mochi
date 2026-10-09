@@ -2,7 +2,7 @@
 
 Power, paired devices with their battery, scanning and pairing, from BlueZ over D-Bus.
 
-While a device is connected, a bubble shows the Bluetooth symbol and the device's battery when it reports one, red at 15% or less. Click it to open the hub's Bluetooth page. When a paired device connects or disconnects, the island shows a short notice, like "Buds connected · 70%".
+While a device is connected, a bubble shows the Bluetooth symbol and the device's battery when it reports one, red at 15% or less. Click it to open the control center's Bluetooth page. When a paired device connects or disconnects, the island shows a short notice, like "Buds connected · 70%".
 
 The **Bluetooth page** has the power switch, the paired devices, connected first, to connect, disconnect or forget, and the devices in range to pair. **Scan** looks for 30 seconds. Pairing trusts the device, so it can connect by itself later, and connects it. The **home card** is a tile that turns Bluetooth on and off.
 

@@ -17,7 +17,7 @@ pub fn steps() -> Vec<ContributionSpec> {
                     640,
                     260
                 ],
-                "caption": "Lock, log out, suspend, reboot and shut down, and your power profile, on the hub's Power page.",
+                "caption": "Lock, log out, suspend, reboot and shut down, and your power profile, on the control center's Power page.",
                 "payload": {
                     "buttons": [
                         {

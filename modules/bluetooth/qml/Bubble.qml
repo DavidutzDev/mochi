@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// While a device is connected: the Bluetooth symbol, with the device's
-// battery when it reports one. A click opens the hub's Bluetooth page.
+// While a device is connected: the Bluetooth symbol, with the device's battery
+// when it reports one. A click opens the control center's Bluetooth page.
 Item {
     id: root
 

@@ -133,11 +133,11 @@ impl Module for Clipboard {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "card", "history", "Card", "Clipboard")
+            ContributionSpec::new("control-center", "card", "history", "Card", "Clipboard")
                 .icon("clipboard")
                 .order(30)
                 .options(json!({ "span": 1, "rows": 1 })),
-            ContributionSpec::new("hub", "page", "history", "Page", "Clipboard")
+            ContributionSpec::new("control-center", "page", "history", "Page", "Clipboard")
                 .icon("clipboard")
                 .order(30),
         ];
@@ -269,7 +269,7 @@ struct State {
     listening: Arc<AtomicBool>,
     /// Shown while paused.
     bubble: Option<BubbleId>,
-    /// Why something doesn't work, for the hub card.
+    /// Why something doesn't work, for the control center card.
     warning: Option<String>,
     /// Where images are written for the picker to show.
     pictures: PathBuf,
@@ -599,13 +599,14 @@ impl State {
         self.close(ctx);
         self.publish(ctx);
         if paste {
-            // Pasted from the hub's page: the hub holds the keyboard, and
-            // the window to paste into needs it back. Copying leaves it open.
-            let close = ctx.call("hub", "close", &[]);
+            // Pasted from the control center's page: the control center holds
+            // the keyboard, and the window to paste into needs it back. Copying
+            // leaves it open.
+            let close = ctx.call("control-center", "close", &[]);
             tokio::spawn(async move {
                 match close.await {
                     Ok(()) | Err(CallError::NotEnabled(_)) => {}
-                    Err(error) => tracing::warn!(%error, "could not close the hub"),
+                    Err(error) => tracing::warn!(%error, "could not close the control center"),
                 }
             });
 
@@ -627,7 +628,8 @@ impl State {
     }
 
     /// Opens an image entry in the capture module's preview card, with its
-    /// copy, edit and delete buttons, and closes the picker and the hub.
+    /// copy, edit and delete buttons, and closes the picker and the control
+    /// center.
     async fn show(&mut self, ctx: &ModuleCtx, id: u64) -> Result<(), String> {
         let entry = self.history.get(id).ok_or("no such entry")?;
         if entry.kind != Kind::Image {
@@ -642,7 +644,7 @@ impl State {
             .show_picture(id)
             .ok_or("cannot write the image to show it")?;
         self.close(ctx);
-        let close = ctx.call("hub", "close", &[]);
+        let close = ctx.call("control-center", "close", &[]);
         tokio::spawn(async move {
             let _ = close.await;
         });
@@ -750,7 +752,7 @@ impl State {
         }
     }
 
-    /// The hub's state: the card's numbers and the page's entries.
+    /// The control center's state: the card's numbers and the page's entries.
     fn publish(&mut self, ctx: &ModuleCtx) {
         let entries = self.results("");
         ctx.publish_state(json!({

@@ -2,7 +2,7 @@
 
 Wi-Fi, Ethernet, VPNs and airplane mode, from NetworkManager over D-Bus.
 
-A bubble shows the connection: the Wi-Fi's strength, Ethernet, or offline, with a small lock while a VPN runs. Click it to open the hub's Network page. When you connect, disconnect, or a VPN starts or stops, the island shows a short notice.
+A bubble shows the connection: the Wi-Fi's strength, Ethernet, or offline, with a small lock while a VPN runs. Click it to open the control center's Network page. When you connect, disconnect, or a VPN starts or stops, the island shows a short notice.
 
 The **Network page** has the Wi-Fi and airplane switches, the Wi-Fi networks in range with the one in use first, the wired devices and the VPNs. Click a network to join it. A saved one connects at once; a new secured one asks for its password on the island, and Enter joins. If the network doesn't come up within 30 seconds, Mochi forgets it, so a wrong password isn't kept, and says so. The trash button forgets a saved network. A network that asks for a user name, WPA Enterprise like eduroam, asks for it with the password and joins with PEAP and MSCHAPv2, what most of them use; one that needs another method or a certificate still needs setting up once with `nmcli` or `nm-connection-editor`. **Hidden…** next to Scan joins a network that doesn't say its name: type it, pick Open, Password or Enterprise, and what that asks.
 

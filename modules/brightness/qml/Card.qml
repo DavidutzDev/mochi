@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// The hub's home card: a slider for the laptop's screen and one for each
-// monitor that answers DDC/CI. Without any, it steps aside.
+// The control center's home card: a slider for the laptop's screen and one for
+// each monitor that answers DDC/CI. Without any, it steps aside.
 Item {
     id: root
 

@@ -318,7 +318,7 @@ impl Manifest {
             .iter()
             .map(|offer| Contribution {
                 module: self.plugin.id.clone(),
-                target: offer.target.clone(),
+                target: mochi_protocol::module_id(&offer.target).to_owned(),
                 kind: offer.kind.clone(),
                 id: offer.id.clone(),
                 view: offer.view.clone(),
@@ -352,6 +352,11 @@ pub const CORE_ID: &str = "mochi";
 pub fn check_id(id: &str) -> Result<(), String> {
     if id == CORE_ID {
         return Err(format!("plugin id {id:?} is taken by mochi itself"));
+    }
+    if mochi_protocol::module_id(id) != id {
+        return Err(format!(
+            "plugin id {id:?} is the old id of a builtin module, which still answers to it"
+        ));
     }
     let fine = !id.is_empty()
         && id
@@ -435,7 +440,7 @@ description = "Pick a mode"
 args = [{ name = "mode", kind = "choice", choices = ["focus", "break"] }]
 
 [[contributions]]
-target = "hub"
+target = "control-center"
 kind = "card"
 id = "timer"
 view = "Card"

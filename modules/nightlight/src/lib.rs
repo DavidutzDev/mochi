@@ -5,7 +5,7 @@
 //! It turns on and off by hand, between two times of day, or between
 //! sunset and sunrise where you are, with a fade at each end. Turning it on
 //! or off by hand while a schedule runs lasts until the schedule changes
-//! next. The hub has a tile for it.
+//! next. The control center has a tile for it.
 //!
 //! Settings in `config.toml`, all optional:
 //!
@@ -172,7 +172,7 @@ impl Module for Nightlight {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "card", "toggle", "Card", "Night light")
+            ContributionSpec::new("control-center", "card", "toggle", "Card", "Night light")
                 .icon("nightlight")
                 .order(13)
                 .options(json!({ "span": 1, "rows": 1 })),

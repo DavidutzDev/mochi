@@ -1,9 +1,9 @@
 import QtQuick
 import qs.island
 
-// The hub page: the pins, then the history, newest first, with a search
-// box, pause and clear above them. Clicking a row pastes it into the window
-// you were in, the pin button pins or unpins it, the copy button only
+// The control center page: the pins, then the history, newest first, with a
+// search box, pause and clear above them. Clicking a row pastes it into the
+// window you were in, the pin button pins or unpins it, the copy button only
 // copies it, the trash removes it. Clearing leaves the pins.
 Item {
     id: root

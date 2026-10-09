@@ -6,7 +6,7 @@ The backlight comes from `/sys/class/backlight`. Mochi changes it through logind
 
 Monitors come from [ddcutil](https://www.ddcutil.com). It needs the `i2c-dev` kernel module and access to `/dev/i2c-*`, which the `i2c` group or ddcutil's udev rule gives. On NixOS, `hardware.i2c.enable = true` does both and adds your user to the group once you list it in `users.users.<name>.extraGroups`. Finding the monitors takes a few seconds, so Mochi does it once at the start; `mochi ipc brightness refresh` looks again after you plug one in. While a slider moves, each monitor gets only the latest level, as DDC/CI is slow.
 
-The hub has a card with a slider for each display. The OSD shows the level when it changes, and scrolling on it changes it.
+The control center has a card with a slider for each display. The OSD shows the level when it changes, and scrolling on it changes it.
 
 ```toml
 {{#include ../../../../modules/brightness/settings.toml}}

@@ -91,24 +91,24 @@ An argument:
 | `choices` | `[]` | The words a `choice` takes. |
 | `optional` | `false` | May be left out; only trailing arguments can be optional. |
 | `rest` | `false` | Takes every remaining word, joined with spaces; only the last argument. |
-| `source` | none | Where its values come from, so the settings panel offers them in a menu when an option runs this action: `output`, `app`, `desktop-id`, `player`, `hub-page`, `audio-output` and the others the builtin modules use. |
+| `source` | none | Where its values come from, so the settings panel offers them in a menu when an option runs this action: `output`, `app`, `desktop-id`, `player`, `control-center-page`, `audio-output` and the others the builtin modules use. |
 
 The backend gets the arguments as an object: `{"minutes": 25, "label": "Write"}`. A left-out optional argument isn't there.
 
 ## `[[contributions]]`
 
-What the plugin offers other modules, like a card or a page for the hub. The view gets the plugin's published state as its `payload`.
+What the plugin offers other modules, like a card or a page for the control center. The view gets the plugin's published state as its `payload`.
 
 | Key | | |
 |---|---|---|
-| `target` | required | The module it's for, like `hub`. |
-| `kind` | required | What it is to the target: the hub takes `card` and `page`, the launcher `provider`. |
+| `target` | required | The module it's for, like `control-center`. |
+| `kind` | required | What it is to the target: the control center takes `card` and `page`, the launcher `provider`. |
 | `id` | required | Unique among the plugin's contributions. |
 | `view` | | The view's file name, without `.qml`. Kinds without a view, like a launcher `provider`, leave it out. |
 | `title` | required | Its heading. |
 | `icon` | | A Mochi symbol, like `clock`, or an icon theme name. |
 | `order` | `0` | Lower comes first. |
-| `options` | | Anything else the target reads, like `{ span = 2, rows = 1 }` for a hub card two columns wide and one row tall. A card with `rows` gets a view sized to fill them, about 45 pixels tall for one row and 153 for two; without it, the hub measures the view. A hub card opens its plugin's page when clicked; `{ page = "<id>" }` picks which, when there are several. A launcher provider takes `prefix`, `search` and `pick`: see [Launcher providers](launcher-providers.md). |
+| `options` | | Anything else the target reads, like `{ span = 2, rows = 1 }` for a control center card two columns wide and one row tall. A card with `rows` gets a view sized to fill them, about 45 pixels tall for one row and 153 for two; without it, the control center measures the view. A control center card opens its plugin's page when clicked; `{ page = "<id>" }` picks which, when there are several. A launcher provider takes `prefix`, `search` and `pick`: see [Launcher providers](launcher-providers.md). |
 
 ## `[settings]`
 

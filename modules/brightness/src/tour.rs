@@ -12,7 +12,7 @@ pub fn steps() -> Vec<ContributionSpec> {
             .options(json!({
                 "chapter": "notices",
                 "since": "0.0.8",
-                "caption": "Brightness, for the laptop's screen and for monitors over DDC/CI. The hub has a slider for each, and scrolling here changes it.",
+                "caption": "Brightness, for the laptop's screen and for monitors over DDC/CI. The control center has a slider for each, and scrolling here changes it.",
                 "payload": {
                     "display": "backlight",
                     "name": "Built-in",

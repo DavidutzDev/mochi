@@ -7,7 +7,7 @@ The first time `mochid` starts, it writes two files to `~/.config/mochi/`:
 - `config.toml`: which modules run, and their settings.
 - `theme.toml`: colors, sizes and motion.
 
-Every option is in them, commented, with its default. They turn on the whole shell: the clock, the on-screen display, workspaces, media, notifications, the launcher, the hub, the power page and screenshots. Mochi never overwrites these files.
+Every option is in them, commented, with its default. They turn on the whole shell: the clock, the on-screen display, workspaces, media, notifications, the launcher, the control center, the power page and screenshots. Mochi never overwrites these files.
 
 ```sh
 mochi config path     # where the files are
@@ -25,7 +25,7 @@ Mochi doesn't grab keys itself. Bind these in your compositor:
 | Action | Command |
 |---|---|
 | Open or close the launcher | `mochi ipc launcher toggle` |
-| Open or close the hub | `mochi ipc hub toggle` |
+| Open or close the control center | `mochi ipc control-center toggle` |
 | Play or pause the music | `mochi ipc media play-pause` |
 | Do not disturb | `mochi ipc notifications dnd toggle` |
 | Lock the screen | `mochi ipc power lock` |
@@ -35,13 +35,13 @@ Mochi doesn't grab keys itself. Bind these in your compositor:
 
 `mochi ipc` lists every action of every module, and `mochi ipc <module>` one module's.
 
-Escape closes views that take the keyboard: the launcher, the hub, the mixer, the clipboard and the other panels. Notices that let you keep typing, like the volume or a notification, don't take it, so Escape goes to your app; `mochi dismiss` on a key like SUPER + Escape closes those, and a right click on the island does too.
+Escape closes views that take the keyboard: the launcher, the control center, the mixer, the clipboard and the other panels. Notices that let you keep typing, like the volume or a notification, don't take it, so Escape goes to your app; `mochi dismiss` on a key like SUPER + Escape closes those, and a right click on the island does too.
 
 In Hyprland's Lua config:
 
 ```lua
 hl.bind("SUPER + space", hl.dsp.exec_cmd("mochi ipc launcher toggle"))
-hl.bind("SUPER + C", hl.dsp.exec_cmd("mochi ipc hub toggle"))
+hl.bind("SUPER + C", hl.dsp.exec_cmd("mochi ipc control-center toggle"))
 hl.bind("SUPER + SHIFT + N", hl.dsp.exec_cmd("mochi ipc notifications dnd toggle"))
 hl.bind("Print", hl.dsp.exec_cmd("mochi ipc capture screenshot"))
 hl.bind("ALT + Print", hl.dsp.exec_cmd("mochi ipc capture record"))
@@ -55,7 +55,7 @@ In `hyprland.conf`:
 
 ```ini
 bind = SUPER, space, exec, mochi ipc launcher toggle
-bind = SUPER, C, exec, mochi ipc hub toggle
+bind = SUPER, C, exec, mochi ipc control-center toggle
 bind = , Print, exec, mochi ipc capture screenshot
 bindl = , XF86AudioPlay, exec, mochi ipc media play-pause
 ```
@@ -64,7 +64,7 @@ In Sway:
 
 ```
 bindsym $mod+space exec mochi ipc launcher toggle
-bindsym $mod+c exec mochi ipc hub toggle
+bindsym $mod+c exec mochi ipc control-center toggle
 bindsym Print exec mochi ipc capture screenshot
 bindsym --locked XF86AudioPlay exec mochi ipc media play-pause
 ```
@@ -74,7 +74,7 @@ In niri:
 ```kdl
 binds {
     Mod+Space { spawn "mochi" "ipc" "launcher" "toggle"; }
-    Mod+C { spawn "mochi" "ipc" "hub" "toggle"; }
+    Mod+C { spawn "mochi" "ipc" "control-center" "toggle"; }
     Print { spawn "mochi" "ipc" "capture" "screenshot"; }
     XF86AudioPlay allow-when-locked=true { spawn "mochi" "ipc" "media" "play-pause"; }
 }
@@ -90,7 +90,7 @@ mochi status --json | jq -r '.modules[]'
 
 ## Using the island
 
-- A left click expands what the island shows, or collapses it; clicking the clock opens the hub.
+- A left click expands what the island shows, or collapses it; clicking the clock opens the control center.
 - A right click closes it.
 - Hovering keeps it from timing out.
 - Clicking a bubble opens what it stands for: the music bubble shows the player, the bell shows missed notifications.

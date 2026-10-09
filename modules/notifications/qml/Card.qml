@@ -1,7 +1,8 @@
 import QtQuick
 import qs.island
 
-// The hub card: the latest missed notification, and how many there are.
+// The control center card: the latest missed notification, and how many there
+// are.
 Item {
     id: root
 

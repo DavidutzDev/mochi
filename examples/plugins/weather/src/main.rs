@@ -1,9 +1,9 @@
 //! An example Mochi plugin: the weather from Open-Meteo.
 //!
-//! It looks the city up once, then fetches the current weather and three
-//! days of forecast every `refresh_minutes`, and publishes them for its hub
-//! card. `show` puts the forecast on the island. It fetches with `curl`, to
-//! stay small; a plugin of your own can use any HTTP client.
+//! It looks the city up once, then fetches the current weather and three days
+//! of forecast every `refresh_minutes`, and publishes them for its control
+//! center card. `show` puts the forecast on the island. It fetches with `curl`,
+//! to stay small; a plugin of your own can use any HTTP client.
 
 use std::time::Duration;
 

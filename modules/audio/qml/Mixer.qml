@@ -1,9 +1,9 @@
 import QtQuick
 import qs.island
 
-// The mixer, for the hub page and the island: the output and the input,
-// each with a list of devices to switch to, then every app playing sound,
-// one row per app with its streams inside. Every slider has a peak meter
+// The mixer, for the control center page and the island: the output and the
+// input, each with a list of devices to switch to, then every app playing
+// sound, one row per app with its streams inside. Every slider has a peak meter
 // while the mixer shows. The width comes from the parent.
 Column {
     id: root

@@ -1,5 +1,5 @@
 [package]
-name = "mochi-module-hub"
+name = "mochi-module-control-center"
 description = "A panel of cards and pages that other modules contribute"
 version.workspace = true
 edition.workspace = true

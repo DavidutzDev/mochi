@@ -2,7 +2,7 @@
 
 A desktop shell for Wayland, built around one island at the top of your screen.
 
-Instead of a bar full of icons, Mochi has an island, like the Dynamic Island on a phone. It shows what matters right now, a notification, the volume you just changed, the song that started, then gets out of the way. Small bubbles beside it keep an eye on what's ongoing, like the music playing or a recording. Open it for a launcher, a hub with your quick settings, and a settings panel for everything else.
+Instead of a bar full of icons, Mochi has an island, like the Dynamic Island on a phone. It shows what matters right now, a notification, the volume you just changed, the song that started, then gets out of the way. Small bubbles beside it keep an eye on what's ongoing, like the music playing or a recording. Open it for a launcher, a control center with your quick settings, and a settings panel for everything else.
 
 Mochi works on Hyprland, niri and Sway. It's young, at version 0.0.8, and already the whole shell its author uses every day.
 
@@ -35,7 +35,7 @@ Most shells you see on [r/unixporn](https://www.reddit.com/r/unixporn/) are some
 - 🎵 What's playing in any player, with the cover and controls
 - 🔊 Volume and brightness as you change them, and a mixer with a slider per app
 - 🚀 A launcher for apps, open windows, files, calculations, web searches and emoji
-- 🧭 A hub with your quick toggles, cards and pages, like a control center
+- 🧭 A control center with your quick toggles, cards and pages
 - 📸 Screenshots and screen recordings, even switching screens while recording
 - 🖥️ A screen-share picker that changes what you share without the app asking again
 - 📋 A clipboard history, with text and images

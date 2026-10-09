@@ -1,6 +1,6 @@
 # Plugins
 
-Plugins add modules to Mochi. A plugin can do anything a builtin module does: show activities on the island and bubbles next to it, offer cards and pages to the hub, answer `mochi ipc` actions, publish state for its views, read other modules' state, and replace builtin views. A plugin is views in QML, usually with a backend: a program `mochid` starts and talks to. [Writing plugins](writing-plugins.md) shows how to make one: Mochi's [SDK](sdk.md) writes backends in Rust, and [any language](custom-sdks.md) works.
+Plugins add modules to Mochi. A plugin can do anything a builtin module does: show activities on the island and bubbles next to it, offer cards and pages to the control center, answer `mochi ipc` actions, publish state for its views, read other modules' state, and replace builtin views. A plugin is views in QML, usually with a backend: a program `mochid` starts and talks to. [Writing plugins](writing-plugins.md) shows how to make one: Mochi's [SDK](sdk.md) writes backends in Rust, and [any language](custom-sdks.md) works.
 
 Plugins are trusted code, like the apps you install. Their views can run commands and their backends run as you, so install plugins you trust.
 
@@ -87,7 +87,7 @@ Install pomodoro? [y/N]
 Then enable the plugin like a builtin module, in `config.toml`:
 
 ```toml
-modules = ["idle", "osd", "media", "hub", "pomodoro"]
+modules = ["idle", "osd", "media", "control-center", "pomodoro"]
 
 [module.pomodoro]
 focus_minutes = 50
@@ -146,7 +146,7 @@ A plugin's id can't be a builtin module's, and two plugins can't share an id. A 
 programs.mochi = {
   enable = true;
   plugins.pomodoro = "git:github.com/User/mochi-pomodoro:main";
-  settings.modules = [ "idle" "osd" "media" "hub" "pomodoro" ];
+  settings.modules = [ "idle" "osd" "media" "control-center" "pomodoro" ];
 };
 ```
 

@@ -6,13 +6,13 @@ use serde_json::json;
 
 pub fn steps() -> Vec<ContributionSpec> {
     vec![
-        ContributionSpec::new("tour", "step", "home", "Hub", "The hub")
+        ContributionSpec::new("tour", "step", "home", "ControlCenter", "The control center")
             .icon("space_dashboard")
             .order(10)
             .options(json!({
                 "chapter": "panels",
                 "since": "0.0.1",
-                "caption": "The hub: a card for each thing worth a glance, and a page per module below. Bind mochi ipc hub toggle to a key.",
+                "caption": "The control center: a card for each thing worth a glance, and a page per module below. Bind mochi ipc control-center toggle to a key.",
                 "payload": {
                     "page": "home",
                     "width": 860,

@@ -243,7 +243,7 @@ wallpaper = "wallpaper.jpg"
 pomodoro = "git:github.com/someone/mochi-pomodoro"
 
 [config]
-modules = ["idle", "osd", "hub", "widgets", "notes", "pomodoro"]
+modules = ["idle", "osd", "control-center", "widgets", "notes", "pomodoro"]
 
 [config.module.osd]
 timeout_ms = 2500

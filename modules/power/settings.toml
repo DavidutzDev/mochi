@@ -1,4 +1,5 @@
-# Power: lock, log out, suspend, reboot and shut down, as a page in the hub.
+# Power: lock, log out, suspend, reboot and shut down, as a page in the
+# control center.
 [module.power]
 # Commands that replace the defaults. Lock asks logind to lock the session,
 # which your locker answers; log out is `uwsm stop` under uwsm, otherwise
@@ -6,4 +7,5 @@
 # lock = []
 # logout = []
 # Keep awake has no settings: `mochi ipc power awake` or the switch on the
-# hub's Power page turns it on, and a click on its bubble turns it off.
+# control center's Power page turns it on, and a click on its bubble turns
+# it off.

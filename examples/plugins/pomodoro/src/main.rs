@@ -1,9 +1,8 @@
 //! An example Mochi plugin: a focus timer.
 //!
-//! While it runs, a bubble counts down. When focus ends, the island says
-//! so and a break starts; when the break ends, it says that too. The hub
-//! gets a card with the time left and buttons, from the state this
-//! publishes.
+//! While it runs, a bubble counts down. When focus ends, the island says so and
+//! a break starts; when the break ends, it says that too. The control center
+//! gets a card with the time left and buttons, from the state this publishes.
 
 use std::time::Duration;
 
@@ -243,7 +242,7 @@ impl Pomodoro {
         })
     }
 
-    /// The state the hub card shows.
+    /// The state the control center card shows.
     fn publish(&self, ctx: &ModuleCtx) {
         let state = match &self.timer {
             Some(timer) => json!({

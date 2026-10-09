@@ -1,24 +1,24 @@
-//! The hub: a wide panel that grows out of the island. Its home shows cards
-//! and a navbar at the bottom switches to pages. Other modules provide both
-//! through [`ContributionSpec`]s with `target = "hub"`:
+//! The control center: a wide panel that grows out of the island. Its home
+//! shows cards and a navbar at the bottom switches to pages. Other modules
+//! provide both through [`ContributionSpec`]s with `target = "control-center"`:
 //!
 //! - `card`: a tile on the home screen. `options.span` sets its width in
 //!   columns, 1 to 3. Its heading, and a click beside its controls, open
 //!   its module's page: `options.page` names one when it has several.
 //! - `page`: a tab in the navbar, filling the panel when picked.
 //!
-//! Contributed views get their module's published state as `payload`, and
-//! fill the space the hub gives them. The hub knows nothing about them: a
-//! module that isn't enabled simply contributes nothing.
+//! Contributed views get their module's published state as `payload`, and fill
+//! the space the control center gives them. The control center knows nothing
+//! about them: a module that isn't enabled simply contributes nothing.
 //!
-//! `mochi ipc hub toggle`, bound to a key, opens and closes it. The hub
-//! takes the height its content needs, up to `height`; what's taller
-//! scrolls.
+//! `mochi ipc control-center toggle`, bound to a key, opens and closes it. The
+//! control center takes the height its content needs, up to `height`; what's
+//! taller scrolls.
 //!
 //! The home is editable: the pencil in the navbar lets you drag cards into
 //! another order, take them off and put them back. Done sends `arrange`,
 //! which keeps the result as the `order` and `hidden` settings. Those two
-//! are live settings, so the hub stays open while they change.
+//! are live settings, so the control center stays open while they change.
 
 mod tour;
 
@@ -33,7 +33,7 @@ use serde_json::json;
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
 #[derive(Debug, Default)]
-pub struct Hub;
+pub struct ControlCenter;
 
 #[derive(Debug, Clone, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
@@ -44,10 +44,10 @@ struct Settings {
     height: u32,
     /// The home's cards in this order, as module/id like
     /// "network/status"; the ones not listed follow in their own order.
-    #[schemars(extend("x-source" = "hub-card"))]
+    #[schemars(extend("x-source" = "control-center-card"))]
     order: Vec<String>,
     /// Cards to leave off the home, as module/id.
-    #[schemars(extend("x-source" = "hub-card"))]
+    #[schemars(extend("x-source" = "control-center-card"))]
     hidden: Vec<String>,
 }
 
@@ -62,7 +62,7 @@ impl Default for Settings {
     }
 }
 
-/// Applied while the hub runs, so arranging the home keeps it open.
+/// Applied while the control center runs, so arranging the home keeps it open.
 const LIVE: [&str; 2] = ["order", "hidden"];
 
 impl Settings {
@@ -84,9 +84,9 @@ impl Settings {
     }
 }
 
-impl Module for Hub {
+impl Module for ControlCenter {
     fn id(&self) -> &'static str {
-        "hub"
+        "control-center"
     }
 
     fn assets(&self) -> Assets {
@@ -111,29 +111,30 @@ impl Module for Hub {
 
     fn actions(&self) -> Vec<ActionSpec> {
         vec![
-            ActionSpec::new("toggle", "Open the hub, or close it when open"),
-            ActionSpec::new("open", "Open the hub").arg(
+            ActionSpec::new("toggle", "Open the control center, or close it when open"),
+            ActionSpec::new("open", "Open the control center").arg(
                 ArgSpec::string("page", "A page as module/id, like notifications/history")
                     .optional()
-                    .source("hub-page"),
+                    .source("control-center-page"),
             ),
-            ActionSpec::new("close", "Close the hub"),
+            ActionSpec::new("close", "Close the control center"),
             ActionSpec::new(
                 "arrange",
                 "Keep the home's cards in an order, and hide some",
             )
             .arg(ArgSpec::string(
                 "order",
-                "Cards as module/id, separated by commas, like network/status,hub/clock",
+                "Cards as module/id, separated by commas, like network/status,control-center/clock",
             ))
             .arg(ArgSpec::string("hidden", "Cards to hide, the same way").optional()),
         ]
     }
 
-    // The hub's own card goes through the same door as everyone else's.
+    // The control center's own card goes through the same door as everyone
+    // else's.
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "card", "clock", "Clock", "Today")
+            ContributionSpec::new("control-center", "card", "clock", "Clock", "Today")
                 .icon("clock")
                 .order(3)
                 .options(json!({ "span": 1, "rows": 1 })),
@@ -161,7 +162,7 @@ impl Module for Hub {
                             settings = new;
                             publish(&ctx, &settings);
                         }
-                        Err(error) => tracing::warn!(%error, "the hub's new settings"),
+                        Err(error) => tracing::warn!(%error, "the control center's new settings"),
                     },
                     _ => {}
                 }
@@ -196,12 +197,12 @@ fn arrange(ctx: &ModuleCtx, settings: &mut Settings, order: Vec<String>, hidden:
     publish(ctx, settings);
     for (key, value) in [("order", &settings.order), ("hidden", &settings.hidden)] {
         let set = ctx.settings_op(SettingsOp::Set {
-            path: format!("config.module.hub.{key}"),
+            path: format!("config.module.control-center.{key}"),
             value: json!(value),
         });
         tokio::spawn(async move {
             if let Err(error) = set.await {
-                tracing::warn!(%error, "can't keep the hub's arrangement");
+                tracing::warn!(%error, "can't keep the control center's arrangement");
             }
         });
     }
@@ -237,7 +238,7 @@ fn command(
             arrange(ctx, settings, order, hidden);
             Ok(())
         }
-        other => Err(format!("hub has no action {other}")),
+        other => Err(format!("control-center has no action {other}")),
     };
     command.reply(result);
 }
@@ -245,8 +246,8 @@ fn command(
 fn open(ctx: &ModuleCtx, settings: &Settings, shown: &mut Option<ActivityId>, page: &str) {
     ctx.close_other_panels();
 
-    let spec = ActivitySpec::new("Hub")
-        .key("hub")
+    let spec = ActivitySpec::new("ControlCenter")
+        .key("control-center")
         .priority(Priority::URGENT)
         .uninterruptible()
         .modal()
@@ -271,7 +272,7 @@ mod settings_example {
     #[test]
     fn shows_the_defaults() {
         mochi_core::examples::check_module::<super::Settings>(
-            "hub",
+            "control-center",
             include_str!("../settings.toml"),
         );
     }
@@ -287,8 +288,8 @@ mod settings_example {
     #[test]
     fn arrangements_are_lists_of_cards() {
         assert_eq!(
-            super::cards(" network/status, hub/clock,,"),
-            ["network/status", "hub/clock"]
+            super::cards(" network/status, control-center/clock,,"),
+            ["network/status", "control-center/clock"]
         );
         assert!(super::cards("").is_empty());
     }

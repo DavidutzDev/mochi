@@ -14,8 +14,8 @@ The repository has example plugins to copy:
 
 | Example | Shows |
 |---|---|
-| `examples/plugins/pomodoro` | A Rust backend: a countdown bubble updated every second, island notices, actions with arguments, a hub card with buttons, watching the media module's state |
-| `examples/plugins/weather` | A Rust backend fetching from the web on a timer, settings with a place and units, a hub card and a forecast view |
+| `examples/plugins/pomodoro` | A Rust backend: a countdown bubble updated every second, island notices, actions with arguments, a control center card with buttons, watching the media module's state |
+| `examples/plugins/weather` | A Rust backend fetching from the web on a timer, settings with a place and units, a control center card and a forecast view |
 | `examples/plugins/emoji` | A Rust backend that is a [launcher provider](launcher-providers.md): an emoji picker with no views |
 | `examples/python/hello` | A Python backend with a small SDK of its own: see [Making an SDK](custom-sdks.md) |
 
@@ -54,7 +54,7 @@ A plugin with a backend adds `[backend]` with the program and the command that b
 
 Views are QML files in the views directory, loaded the same way as a builtin module's: see [Writing views](views.md). An activity or bubble names a view by its file name without `.qml`, and a view gets the `payload` property. `import qs.island` gives the theme, `Daemon` and the controls. A view reads its plugin's state with `Daemon.state("<id>")` and runs its actions with `Daemon.command("<id>", "<action>", [args])`.
 
-A hub card or page gets the plugin's published state as its `payload`, and a card can set `hidden: true` to step aside. The hub draws the card's frame and title, so the view only draws what goes inside, filling the width it's given.
+A control center card or page gets the plugin's published state as its `payload`, and a card can set `hidden: true` to step aside. The control center draws the card's frame and title, so the view only draws what goes inside, filling the width it's given.
 
 ### Replacing builtin views
 

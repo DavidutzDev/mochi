@@ -264,7 +264,7 @@ pub const DEFAULT_MODULES: [&str; 27] = [
     "audio",
     "notifications",
     "launcher",
-    "hub",
+    "control-center",
     "power",
     "capture",
     "share",
@@ -313,7 +313,13 @@ impl Config {
 
     /// `path` only labels errors.
     pub fn parse(text: &str, path: &Path) -> Result<Self, ConfigError> {
-        toml::from_str(text).map_err(|error| ConfigError::invalid(path, error.to_string()))
+        let invalid = |error: toml::de::Error| ConfigError::invalid(path, error.to_string());
+        let mut table: toml::Table = toml::from_str(text).map_err(invalid)?;
+        if migrate_module_ids(&mut table).is_empty() {
+            // Straight from the text, for errors that name the line.
+            return toml::from_str(text).map_err(invalid);
+        }
+        Self::from_table(table, path)
     }
 
     /// From the file already read as a table, with changes laid over it.
@@ -479,6 +485,69 @@ pub fn read_table(path: &Path) -> Result<toml::Table, ConfigError> {
     }
 }
 
+/// Moves the old ids of renamed modules in a `config.toml` table to their
+/// new ones: in `modules`, `[module.<id>]`, `[bubbles.<id>]` and the
+/// `<id>/<card>` names the control center's `order` and `hidden` list.
+/// Returns a note for each old id it found, for a warning.
+pub fn migrate_module_ids(table: &mut toml::Table) -> Vec<String> {
+    let mut found = std::collections::BTreeSet::new();
+    let mut rename = |id: &str| {
+        let new = mochi_protocol::module_id(id);
+        if new != id {
+            found.insert((id.to_owned(), new.to_owned()));
+        }
+        new.to_owned()
+    };
+    if let Some(toml::Value::Array(ids)) = table.get_mut("modules") {
+        for id in ids.iter_mut() {
+            if let toml::Value::String(text) = id {
+                *text = rename(text);
+            }
+        }
+    }
+    for section in ["module", "bubbles"] {
+        if let Some(toml::Value::Table(inner)) = table.get_mut(section) {
+            for (old, new) in mochi_protocol::RENAMED_MODULES {
+                if let Some(value) = inner.remove(old) {
+                    rename(old);
+                    // What the new name says wins over the old one.
+                    match (inner.get_mut(new), value) {
+                        (Some(toml::Value::Table(current)), toml::Value::Table(old)) => {
+                            for (key, value) in old {
+                                current.entry(key).or_insert(value);
+                            }
+                        }
+                        (Some(_), _) => {}
+                        (None, value) => {
+                            inner.insert(new.to_owned(), value);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if let Some(toml::Value::Table(center)) = table
+        .get_mut("module")
+        .and_then(|module| module.get_mut("control-center"))
+    {
+        for key in ["order", "hidden"] {
+            if let Some(toml::Value::Array(names)) = center.get_mut(key) {
+                for name in names.iter_mut() {
+                    if let toml::Value::String(text) = name
+                        && let Some((module, rest)) = text.split_once('/')
+                    {
+                        *text = format!("{}/{rest}", rename(module));
+                    }
+                }
+            }
+        }
+    }
+    found
+        .into_iter()
+        .map(|(old, new)| format!("`{old}` is now `{new}`"))
+        .collect()
+}
+
 /// The renamed keys `theme.toml` still uses, for `mochi config check`.
 pub fn theme_notes(path: &Path) -> Result<Vec<String>, ConfigError> {
     Ok(match read_optional(path)? {
@@ -642,6 +711,40 @@ mod tests {
 
         let config = Config::parse("[module.spotify]\nvolume = 3", path()).unwrap();
         assert!(config.check(AVAILABLE, path()).is_err());
+    }
+
+    #[test]
+    fn the_hub_still_answers_to_its_old_id() {
+        let mut table: toml::Table = toml::from_str(
+            r#"
+            modules = ["idle", "hub"]
+            [module.hub]
+            order = ["hub/clock", "network/card"]
+            hidden = ["hub/clock"]
+            [module.control-center]
+            hidden = []
+            [bubbles.hub]
+            area = "left"
+            "#,
+        )
+        .unwrap();
+        let notes = migrate_module_ids(&mut table);
+        assert_eq!(notes, ["`hub` is now `control-center`"]);
+        let expected: toml::Table = toml::from_str(
+            r#"
+            modules = ["idle", "control-center"]
+            [module.control-center]
+            order = ["control-center/clock", "network/card"]
+            hidden = []
+            [bubbles.control-center]
+            area = "left"
+            "#,
+        )
+        .unwrap();
+        assert_eq!(table, expected);
+
+        let config = Config::parse(r#"modules = ["hub"]"#, path()).unwrap();
+        assert_eq!(config.modules, ["control-center"]);
     }
 
     #[test]

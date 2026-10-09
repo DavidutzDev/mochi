@@ -18,7 +18,8 @@ Item {
     implicitWidth: loaded ? (framed ? frame.width + Theme.padding * 2 : view.item.implicitWidth) : card.implicitWidth
     implicitHeight: loaded ? (framed ? frame.height + Theme.padding * 2 : view.item.implicitHeight) : card.implicitHeight
 
-    // A card's or a widget's frame, as the hub and the desktop draw them.
+    // A card's or a widget's frame, as the control center and the desktop draw
+    // them.
     Rectangle {
         id: frame
 

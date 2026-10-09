@@ -2,9 +2,9 @@
 //!
 //! Dropping past a level on battery, 80, 50, 20 and 10 by default, shows a
 //! short notice on the island, once per discharge. At or under the warning
-//! level a bubble stays next to the island with the level, red at the
-//! critical one, where the notice also stays longer. Plugging the charger
-//! in or out shows a notice too. The hub has a card with the level and the
+//! level a bubble stays next to the island with the level, red at the critical
+//! one, where the notice also stays longer. Plugging the charger in or out
+//! shows a notice too. The control center has a card with the level and the
 //! time left. Without a battery, as on a desktop, the module shows nothing.
 //!
 //! Settings in `config.toml`, all optional:
@@ -114,7 +114,7 @@ impl Module for BatteryModule {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "card", "level", "Card", "Battery")
+            ContributionSpec::new("control-center", "card", "level", "Card", "Battery")
                 .icon("bolt")
                 .order(17)
                 .options(json!({ "span": 1, "rows": 1 })),
@@ -151,10 +151,10 @@ impl Module for BatteryModule {
                             command.reply(Err("battery has no actions".into()));
                         }
                         Some(ModuleEvent::BubbleClicked(_)) => {
-                            let open = ctx.call("hub", "open", &[]);
+                            let open = ctx.call("control-center", "open", &[]);
                             tokio::spawn(async move {
                                 if let Err(error) = open.await {
-                                    tracing::debug!(%error, "can't open the hub");
+                                    tracing::debug!(%error, "can't open the control center");
                                 }
                             });
                         }

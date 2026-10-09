@@ -1,6 +1,6 @@
 # Idle
 
-The clock the island shows when nothing else is happening. Clicking it opens the [hub](hub.md).
+The clock the island shows when nothing else is happening. Clicking it opens the [control center](control-center.md).
 
 Resting the pointer on it can run another action, `hover`. For the workspace dots, to click or scroll through:
 

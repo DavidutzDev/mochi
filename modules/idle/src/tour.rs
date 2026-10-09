@@ -12,7 +12,7 @@ pub fn steps() -> Vec<ContributionSpec> {
             .options(json!({
                 "chapter": "island",
                 "since": "0.0.1",
-                "caption": "When nothing else is on, the island is a clock. A click opens the hub.",
+                "caption": "When nothing else is on, the island is a clock. A click opens the control center.",
                 "payload": {
                     "format": "HH:mm"
                 }

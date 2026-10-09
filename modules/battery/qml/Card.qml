@@ -1,9 +1,9 @@
 import QtQuick
 import qs.island
 
-// The hub's home card and a desktop widget, in one row: the battery's
-// level, how long until empty or full, and the power module's profiles at
-// the end when it has some. Without a battery, it steps aside.
+// The control center's home card and a desktop widget, in one row: the
+// battery's level, how long until empty or full, and the power module's
+// profiles at the end when it has some. Without a battery, it steps aside.
 Item {
     id: root
 

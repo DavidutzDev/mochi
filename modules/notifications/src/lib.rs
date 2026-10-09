@@ -133,11 +133,11 @@ impl Module for Notifications {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "card", "missed", "Card", "Notifications")
+            ContributionSpec::new("control-center", "card", "missed", "Card", "Notifications")
                 .icon("bell")
                 .order(5)
                 .options(json!({ "span": 1, "rows": 1 })),
-            ContributionSpec::new("hub", "page", "history", "Page", "Notifications")
+            ContributionSpec::new("control-center", "page", "history", "Page", "Notifications")
                 .icon("bell")
                 .order(20),
         ];
@@ -492,8 +492,8 @@ impl Daemon {
 
     /// Brings the bubbles and the history view in line with the center.
     fn sync(&mut self, ctx: &ModuleCtx) {
-        // The history and do not disturb, for views outside the island like
-        // the hub's card and page: the same shape the history view gets.
+        // The history and do not disturb, for views outside the island like the
+        // control center's card and page: the same shape the history view gets.
         let state = self.history_payload();
         if state != self.published {
             ctx.publish_state(state.clone());

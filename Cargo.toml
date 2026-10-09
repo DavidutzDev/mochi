@@ -26,7 +26,7 @@ mochi-module-bluetooth = { path = "modules/bluetooth" }
 mochi-module-capture = { path = "modules/capture" }
 mochi-module-clipboard = { path = "modules/clipboard" }
 mochi-module-demo = { path = "examples/demo" }
-mochi-module-hub = { path = "modules/hub" }
+mochi-module-control-center = { path = "modules/control-center" }
 mochi-module-idle = { path = "modules/idle" }
 mochi-module-launcher = { path = "modules/launcher" }
 mochi-module-media = { path = "modules/media" }

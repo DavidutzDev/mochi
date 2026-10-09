@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// The hub's tile: night light on or off, and how warm or what turns it
-// on. A click turns it on or off until the schedule changes next.
+// The control center's tile: night light on or off, and how warm or what turns
+// it on. A click turns it on or off until the schedule changes next.
 Item {
     id: root
 

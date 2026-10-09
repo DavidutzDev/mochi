@@ -1,6 +1,6 @@
 # Mochi
 
-Mochi is a desktop shell for Wayland built around a central island, like the Dynamic Island on a phone. The island shows what matters right now: a notification, the volume you just changed, the song that started. Small round bubbles next to it keep things in view, like the music playing or missed notifications. A hub panel grows out of the island with cards and pages, and a launcher finds your apps.
+Mochi is a desktop shell for Wayland built around a central island, like the Dynamic Island on a phone. The island shows what matters right now: a notification, the volume you just changed, the song that started. Small round bubbles next to it keep things in view, like the music playing or missed notifications. A control center panel grows out of the island with cards and pages, and a launcher finds your apps.
 
 It has two parts:
 

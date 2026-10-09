@@ -26,7 +26,7 @@ The [settings panel](modules/settings.md) changes the same options live. It keep
 ## Modules
 
 ```toml
-modules = ["idle", "osd", "workspaces", "media", "notifications", "launcher", "hub", "power"]
+modules = ["idle", "osd", "workspaces", "media", "notifications", "launcher", "control-center", "power"]
 ```
 
 The modules to run, in this order. Without `modules`, every builtin module runs, so a new install has the whole shell; list them to pick fewer. Each module's settings live in a `[module.<id>]` section; the [module pages](modules/idle.md) list them. A module left out of the list doesn't run, and its section is ignored.

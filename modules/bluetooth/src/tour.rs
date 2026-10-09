@@ -17,7 +17,7 @@ pub fn steps() -> Vec<ContributionSpec> {
                     280,
                     96
                 ],
-                "caption": "Bluetooth devices with their battery, and pairing, from the hub.",
+                "caption": "Bluetooth devices with their battery, and pairing, from the control center.",
                 "payload": {
                     "available": true,
                     "powered": true,

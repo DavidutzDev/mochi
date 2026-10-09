@@ -2,8 +2,8 @@ import QtQuick
 import qs.island
 import "Clock.js" as Clock
 
-// The hub's card: the time left and buttons for the timer, or a button to
-// start one.
+// The control center's card: the time left and buttons for the timer, or a
+// button to start one.
 Item {
     id: root
 

@@ -1,6 +1,6 @@
 [package]
 name = "mochi-module-power"
-description = "Lock, log out, suspend, reboot, shut down and power profiles, as a hub page"
+description = "Lock, log out, suspend, reboot, shut down and power profiles, as a control center page"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

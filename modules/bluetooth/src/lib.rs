@@ -1,11 +1,11 @@
 //! Bluetooth: power, paired devices with their battery, scanning and
 //! pairing, from BlueZ.
 //!
-//! The hub has a Bluetooth page, with the paired devices to connect or
-//! forget and the devices in range to pair, and a tile on its home. A
-//! bubble shows while a device is connected. Pairing asks its questions on
-//! the island, like whether the code on a phone matches. Devices that come
-//! or go show a short notice.
+//! The control center has a Bluetooth page, with the paired devices to connect
+//! or forget and the devices in range to pair, and a tile on its home. A bubble
+//! shows while a device is connected. Pairing asks its questions on the island,
+//! like whether the code on a phone matches. Devices that come or go show a
+//! short notice.
 //!
 //! Settings in `config.toml`, all optional:
 //!
@@ -87,11 +87,11 @@ impl Module for Bluetooth {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "card", "status", "Card", "Bluetooth")
+            ContributionSpec::new("control-center", "card", "status", "Card", "Bluetooth")
                 .icon("bluetooth")
                 .order(2)
                 .options(json!({ "span": 1, "rows": 1 })),
-            ContributionSpec::new("hub", "page", "page", "Page", "Bluetooth")
+            ContributionSpec::new("control-center", "page", "page", "Page", "Bluetooth")
                 .icon("bluetooth")
                 .order(16),
         ];
@@ -158,10 +158,10 @@ impl Module for Bluetooth {
                         Some(ModuleEvent::Command(command)) => state.command(&ctx, command).await,
                         Some(ModuleEvent::Ended { activity, .. }) => state.ended(activity),
                         Some(ModuleEvent::BubbleClicked(_)) => {
-                            let open = ctx.call("hub", "open", &["bluetooth/page"]);
+                            let open = ctx.call("control-center", "open", &["bluetooth/page"]);
                             tokio::spawn(async move {
                                 if let Err(error) = open.await {
-                                    tracing::debug!(%error, "can't open the hub");
+                                    tracing::debug!(%error, "can't open the control center");
                                 }
                             });
                         }
@@ -446,12 +446,12 @@ impl State {
                 return;
             }
         };
-        // Pairing takes the keyboard, as the hub does; only one can.
-        let close = ctx.call("hub", "close", &[]);
+        // Pairing takes the keyboard, as the control center does; only one can.
+        let close = ctx.call("control-center", "close", &[]);
         tokio::spawn(async move {
             match close.await {
                 Ok(()) | Err(CallError::NotEnabled(_)) => {}
-                Err(error) => tracing::warn!(%error, "could not close the hub"),
+                Err(error) => tracing::warn!(%error, "could not close the control center"),
             }
         });
         let spec = ActivitySpec::new("Prompt")

@@ -51,7 +51,7 @@ options = { chapter = "desktop", since = "0.1.0", place = "card", size = [280, 9
 | `since` | The release that brought it: the tour of what's new shows it to anyone whose last tour was before. |
 | `caption` | One or two plain sentences. |
 | `payload` | The made-up data the view gets. |
-| `place` | `island` (the default), `bubble`, or a hub `card` or desktop `widget` framed at `size`. A bubble's payload can name its `area`. |
+| `place` | `island` (the default), `bubble`, or a control center `card` or desktop `widget` framed at `size`. A bubble's payload can name its `area`. |
 | `properties` | More properties the view takes, like a widget's `settings` and `instance`. |
 
 The view is loaded with interaction turned off, and only when the module runs.

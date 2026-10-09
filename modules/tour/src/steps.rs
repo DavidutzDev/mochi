@@ -13,12 +13,11 @@
 //!     }))
 //! ```
 //!
-//! `place` says where it shows: on the island (the default), as a
-//! `bubble`, or framed like a hub `card` or a desktop `widget`, `size`
-//! pixels wide and tall. `properties` are more the view takes, like a
-//! widget's `settings`. The tour
-//! adds its own: a welcome, the island's looks, a card for each module
-//! that's off, and the end.
+//! `place` says where it shows: on the island (the default), as a `bubble`, or
+//! framed like a control center `card` or a desktop `widget`, `size` pixels
+//! wide and tall. `properties` are more the view takes, like a widget's
+//! `settings`. The tour adds its own: a welcome, the island's looks, a card for
+//! each module that's off, and the end.
 
 use std::cmp::Ordering;
 use std::fmt;

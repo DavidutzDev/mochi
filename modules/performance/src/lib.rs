@@ -1,12 +1,11 @@
 //! Performance: CPU, memory and GPU use, their temperatures, and disk and
 //! network speeds.
 //!
-//! The hub has a Performance page with each reading, a graph of the last
-//! two minutes and the busiest processes, which it can end. A reading that
-//! stays over its
-//! notice level shows a short notice on the island, naming the busiest
-//! process; one that stays over its critical level puts a red bubble next
-//! to the island until it comes down. A spike says nothing: a reading must
+//! The control center has a Performance page with each reading, a graph of the
+//! last two minutes and the busiest processes, which it can end. A reading that
+//! stays over its notice level shows a short notice on the island, naming the
+//! busiest process; one that stays over its critical level puts a red bubble
+//! next to the island until it comes down. A spike says nothing: a reading must
 //! stay up for `sustain_seconds`.
 //!
 //! Settings in `config.toml`, all optional; 0 turns a level off:
@@ -237,7 +236,7 @@ impl Module for Performance {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "page", "page", "Page", "Performance")
+            ContributionSpec::new("control-center", "page", "page", "Page", "Performance")
                 .icon("chip")
                 .order(18),
             ContributionSpec::new("widgets", "widget", "graphs", "Widget", "Performance")
@@ -290,10 +289,10 @@ impl Module for Performance {
                         None => return Ok(()),
                         Some(ModuleEvent::Command(command)) => state.command(&ctx, command),
                         Some(ModuleEvent::BubbleClicked(_)) => {
-                            let open = ctx.call("hub", "open", &["performance/page"]);
+                            let open = ctx.call("control-center", "open", &["performance/page"]);
                             tokio::spawn(async move {
                                 if let Err(error) = open.await {
-                                    tracing::debug!(%error, "can't open the hub");
+                                    tracing::debug!(%error, "can't open the control center");
                                 }
                             });
                         }

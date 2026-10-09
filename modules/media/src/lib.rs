@@ -98,10 +98,16 @@ impl Module for Media {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "card", "now-playing", "Card", "Now playing")
-                .icon("music")
-                .order(10)
-                .options(json!({ "span": 2, "rows": 2 })),
+            ContributionSpec::new(
+                "control-center",
+                "card",
+                "now-playing",
+                "Card",
+                "Now playing",
+            )
+            .icon("music")
+            .order(10)
+            .options(json!({ "span": 2, "rows": 2 })),
             // The same card on the desktop; it steps aside when nothing plays.
             ContributionSpec::new("widgets", "widget", "now-playing", "Card", "Now playing")
                 .icon("music")
@@ -179,7 +185,8 @@ impl Module for Media {
                     },
                     Some(update) = updates.recv() => {
                         let notice = tracker.apply(update);
-                        // For views outside the island, like the hub's card.
+                        // For views outside the island, like the control
+                        // center's card.
                         ctx.publish_state(tracker.payload());
                         let Some(notice) = notice else { continue };
                         tracing::debug!(?notice, "media");

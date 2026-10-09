@@ -1,5 +1,5 @@
-# Audio: the volume mixer, as the hub's Sound page. `mochi ipc audio toggle`
-# opens it on the island.
+# Audio: the volume mixer, as the control center's Sound page.
+# `mochi ipc audio toggle` opens it on the island.
 [module.audio]
 # The loudest the sliders, `volume` and the OSD's bar go, in percent, up to
 # 300: 200 lets you boost a quiet video to twice the device's normal level.

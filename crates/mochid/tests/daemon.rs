@@ -172,7 +172,7 @@ fn bubbles_reach_the_ui_and_clicks_reach_the_module() {
 
 #[test]
 fn modules_offer_contributions_and_call_each_other() {
-    let daemon = Daemon::start("calls", "idle,demo,hub");
+    let daemon = Daemon::start("calls", "idle,demo,control-center");
     let mut ui = daemon.client(Role::Ui);
     let mut ctl = daemon.client(Role::Ctl);
 
@@ -191,18 +191,21 @@ fn modules_offer_contributions_and_call_each_other() {
             )
         })
         .collect();
-    assert_eq!(offered, [("hub", "hub", "card", "Clock")]);
+    assert_eq!(
+        offered,
+        [("control-center", "control-center", "card", "Clock")]
+    );
     ui.wait_for_view("idle", "Pill");
 
-    // The demo module calls the hub, which takes the keyboard.
+    // The demo module calls the control center, which takes the keyboard.
     assert_eq!(
-        ctl.command("demo", "call", &["hub", "open"]),
+        ctl.command("demo", "call", &["control-center", "open"]),
         DaemonMessage::Ok
     );
     let hub = ui.next_present().unwrap();
     assert_eq!(
         (hub.module.as_str(), hub.view.as_str(), hub.modal),
-        ("hub", "Hub", true)
+        ("control-center", "ControlCenter", true)
     );
 
     let failure = |message: DaemonMessage| match message {
@@ -210,19 +213,27 @@ fn modules_offer_contributions_and_call_each_other() {
         other => panic!("expected an error, got {other:?}"),
     };
     assert!(failure(ctl.command("demo", "call", &["launcher", "open"])).contains("not enabled"));
-    assert!(failure(ctl.command("demo", "call", &["hub", "fly"])).contains("no action"));
+    assert!(failure(ctl.command("demo", "call", &["control-center", "fly"])).contains("no action"));
     assert!(failure(ctl.command("demo", "call", &["demo", "clear"])).contains("itself"));
 
     assert_eq!(
-        ctl.command("demo", "call", &["hub", "close"]),
+        ctl.command("demo", "call", &["control-center", "close"]),
         DaemonMessage::Ok
     );
     assert_eq!(shown(&ui.next_present()), Some(("idle", "Pill")));
+
+    // The old id still works, for keybinds that name it.
+    assert_eq!(ctl.command("hub", "toggle", &[]), DaemonMessage::Ok);
+    assert_eq!(
+        shown(&ui.next_present()),
+        Some(("control-center", "ControlCenter"))
+    );
+    assert_eq!(ctl.command("hub", "close", &[]), DaemonMessage::Ok);
 }
 
 #[test]
-fn clicking_the_idle_pill_toggles_the_hub() {
-    let daemon = Daemon::start("idle-click", "idle,hub");
+fn clicking_the_idle_pill_toggles_the_control_center() {
+    let daemon = Daemon::start("idle-click", "idle,control-center");
     let mut ui = daemon.client(Role::Ui);
     let pill = ui.wait_for_view("idle", "Pill");
 
@@ -233,7 +244,10 @@ fn clicking_the_idle_pill_toggles_the_hub() {
         click: None,
     });
     let hub = ui.next_present().unwrap();
-    assert_eq!((hub.module.as_str(), hub.view.as_str()), ("hub", "Hub"));
+    assert_eq!(
+        (hub.module.as_str(), hub.view.as_str()),
+        ("control-center", "ControlCenter")
+    );
 
     // A click outside closes it, and the pill is back.
     ui.send(&ClientMessage::Event {

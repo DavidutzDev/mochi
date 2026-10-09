@@ -1,12 +1,12 @@
 # An example plugin: the weather where you are, from Open-Meteo, which
-# needs no account or key. A card on the hub, and `mochi ipc weather show`
-# for a forecast on the island.
+# needs no account or key. A card on the control center, and
+# `mochi ipc weather show` for a forecast on the island.
 
 [plugin]
 id = "weather"
 name = "Weather"
 version = "0.1.0"
-description = "The weather from Open-Meteo: a hub card and a forecast on the island"
+description = "The weather from Open-Meteo: a control center card and a forecast on the island"
 authors = ["Mochi"]
 api = 1
 homepage = "https://open-meteo.com"
@@ -27,7 +27,7 @@ name = "refresh"
 description = "Fetch the weather now"
 
 [[contributions]]
-target = "hub"
+target = "control-center"
 kind = "card"
 id = "now"
 view = "Card"

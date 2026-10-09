@@ -1,5 +1,5 @@
 # Bluetooth: power, paired devices with their battery, scanning and pairing,
-# from BlueZ. The hub has a Bluetooth page and a tile.
+# from BlueZ. The control center has a Bluetooth page and a tile.
 [module.bluetooth]
 # A bubble while a device is connected, with its battery when it reports it.
 # A click opens the Bluetooth page.

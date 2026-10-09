@@ -35,7 +35,7 @@ pub const BUILTIN: [&str; 28] = [
     "audio",
     "notifications",
     "launcher",
-    "hub",
+    "control-center",
     "power",
     "capture",
     "share",

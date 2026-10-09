@@ -82,8 +82,8 @@ It's written as a file Mochi can change, not a link into the store, so arranging
 | Calendar | `widgets`, `calendar` | `first_day` (`monday` or `sunday`). Arrows go to the months around this one |
 | To-do | `notes`, `todo` | `title`, `done` (`show` or `hide` the done items). Click an item to tick it; type into the bottom field and press Enter to add one |
 | Note | `notes`, `note` | `title`. Click it and type; it saves a moment after you stop |
-| Now playing | `media`, `now-playing` | The hub's card: the cover, the track and the controls. It steps aside while no player has a track |
-| Battery | `battery`, `level` | The hub's card, with the power profiles. It steps aside without a battery |
+| Now playing | `media`, `now-playing` | The control center's card: the cover, the track and the controls. It steps aside while no player has a track |
+| Battery | `battery`, `level` | The control center's card, with the power profiles. It steps aside without a battery |
 | Performance | `performance`, `graphs` | `cpu`, `memory`, `gpu` (on unless set off), `disk`, `network` (off unless set on): which readings show, each with its last two minutes as a graph. An older widget with `reading` set to one reading in `widgets.toml` shows only that one until you remove the line |
 | Weather | `weather`, `now` | From the example weather plugin |
 

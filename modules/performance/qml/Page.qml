@@ -1,11 +1,11 @@
 import QtQuick
 import qs.island
 
-// The hub's Performance page: CPU, memory and GPU, then disk and network,
-// each with its graph of the last two minutes, then the busiest processes,
-// in the order the switch picks. Hovering one of the user's own processes
-// shows End: a click asks to confirm, the next sends SIGTERM, and after
-// 3 seconds one still running offers Force, for SIGKILL.
+// The control center's Performance page: CPU, memory and GPU, then disk and
+// network, each with its graph of the last two minutes, then the busiest
+// processes, in the order the switch picks. Hovering one of the user's own
+// processes shows End: a click asks to confirm, the next sends SIGTERM, and
+// after 3 seconds one still running offers Force, for SIGKILL.
 Item {
     id: root
 

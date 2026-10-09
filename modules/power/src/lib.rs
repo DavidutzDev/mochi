@@ -1,6 +1,6 @@
 //! Power: lock, log out, suspend, hibernate, reboot, reboot to firmware and
-//! shut down, plus power profiles and keep awake. It has no island view of
-//! its own: it offers the hub a page, and the CLI runs the same actions.
+//! shut down, plus power profiles and keep awake. It has no island view of its
+//! own: it offers the control center a page, and the CLI runs the same actions.
 //! Buttons only show for what logind allows; profiles only when
 //! power-profiles-daemon runs.
 //!
@@ -178,7 +178,7 @@ impl Module for Power {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "page", "power", "Page", "Power")
+            ContributionSpec::new("control-center", "page", "power", "Page", "Power")
                 .icon("power")
                 .order(90),
         ];

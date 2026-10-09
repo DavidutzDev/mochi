@@ -1,5 +1,5 @@
 # Performance: CPU, memory and GPU use and temperatures, and disk and
-# network speeds. The hub has a Performance page with graphs and the
+# network speeds. The control center has a Performance page with graphs and the
 # busiest processes, which it can end; readings that stay high show a
 # notice, and critical ones a bubble. The GPU comes from AMD's sysfs or
 # NVIDIA's nvidia-smi. Disk and network speeds have no levels.

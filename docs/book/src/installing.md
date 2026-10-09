@@ -25,7 +25,7 @@ programs.mochi = {
   # example on the first start instead.
   settings = {
     # Every builtin module runs without this; list them to pick fewer.
-    # modules = [ "idle" "osd" "workspaces" "media" "launcher" "hub" ];
+    # modules = [ "idle" "osd" "workspaces" "media" "launcher" "control-center" ];
     module.idle.format = "HH:mm:ss";
     module.power.lock = [ "hyprlock" ];
     bubbles.media.area = "center-left";

@@ -1,5 +1,5 @@
 # Network: Wi-Fi, Ethernet, VPNs and airplane mode, from NetworkManager. The
-# hub has a Network page and a card; a bubble shows the connection.
+# control center has a Network page and a card; a bubble shows the connection.
 [module.network]
 # The bubble with the connection: the Wi-Fi's strength, Ethernet or
 # offline, and a lock while a VPN runs. A click opens the Network page.

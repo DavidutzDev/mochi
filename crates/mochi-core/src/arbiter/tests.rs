@@ -709,7 +709,7 @@ fn clicks_outside_can_close_only_what_the_user_opened() {
 fn fleeting_activities_never_wait() {
     let mut bench = Bench::new();
     let panel = bench.submit(
-        "hub",
+        "control-center",
         ActivitySpec::new("Panel")
             .priority(Priority::URGENT)
             .uninterruptible()
@@ -732,7 +732,10 @@ fn fleeting_activities_never_wait() {
 fn fleeting_activities_end_when_interrupted() {
     let mut bench = Bench::new();
     let volume = bench.submit("osd", timed(2).priority(Priority::HIGH).fleeting());
-    let panel = bench.submit("hub", ActivitySpec::new("Panel").priority(Priority::URGENT));
+    let panel = bench.submit(
+        "control-center",
+        ActivitySpec::new("Panel").priority(Priority::URGENT),
+    );
     assert_eq!(bench.shown(), Some(panel));
     assert_eq!(bench.ended(), vec![(volume, EndReason::Expired)]);
 

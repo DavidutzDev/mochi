@@ -2,7 +2,7 @@ import QtQuick
 import qs.island
 
 // While a reading stays critical: its icon and value in red, breathing. A
-// click opens the hub's Performance page.
+// click opens the control center's Performance page.
 Item {
     id: root
 

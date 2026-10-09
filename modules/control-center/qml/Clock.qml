@@ -2,8 +2,8 @@ import QtQuick
 import Quickshell
 import qs.island
 
-// The hub's own card: the time, large, with the weekday and the date beside
-// it. Its digits roll as the minutes change.
+// The control center's own card: the time, large, with the weekday and the date
+// beside it. Its digits roll as the minutes change.
 Item {
     id: root
 

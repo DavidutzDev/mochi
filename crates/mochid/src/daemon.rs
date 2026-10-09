@@ -822,6 +822,12 @@ impl Daemon {
         action: &str,
         args: &[String],
     ) -> Result<oneshot::Receiver<Reply>, Undelivered> {
+        // A renamed module still answers to its old id.
+        let renamed = mochi_protocol::module_id(module);
+        if renamed != module {
+            tracing::warn!("`{module}` is now `{renamed}`; the old name still works for now");
+        }
+        let module = renamed;
         let slot = self.modules.get(module).ok_or(Undelivered::UnknownModule)?;
         let spec = slot
             .actions
@@ -845,7 +851,11 @@ impl Daemon {
     fn on_list_actions(&mut self, id: ConnectionId, module: Option<String>) {
         let wanted: Vec<&'static str> = match module {
             None => self.order.clone(),
-            Some(module) => match self.order.iter().find(|id| **id == module) {
+            Some(module) => match self
+                .order
+                .iter()
+                .find(|id| **id == mochi_protocol::module_id(&module))
+            {
                 Some(found) => vec![*found],
                 None => {
                     let message = format!("no module {module:?} is enabled");

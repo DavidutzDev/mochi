@@ -52,7 +52,7 @@ pub fn steps() -> Vec<ContributionSpec> {
                     760,
                     360
                 ],
-                "caption": "The hub's Colors page is a color chooser, with the colors you picked beside it.",
+                "caption": "The control center's Colors page is a color chooser, with the colors you picked beside it.",
                 "payload": {
                     "format": "hex",
                     "picking": false,

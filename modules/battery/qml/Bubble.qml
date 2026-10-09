@@ -2,7 +2,7 @@ import QtQuick
 import qs.island
 
 // The warning while the battery is low: its level, red when critical. A
-// click opens the hub.
+// click opens the control center.
 Item {
     id: root
 

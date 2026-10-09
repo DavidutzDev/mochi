@@ -60,8 +60,8 @@ pub struct ArgSpec {
     #[serde(default)]
     pub rest: bool,
     /// Where its values come from, so the settings panel offers them in a
-    /// menu: `output`, `hub-page`, `audio-target`, `app`, `player`, … The
-    /// command line takes any word as before.
+    /// menu: `output`, `control-center-page`, `audio-target`, `app`,
+    /// `player`, … The command line takes any word as before.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
 }

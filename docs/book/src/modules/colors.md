@@ -23,7 +23,7 @@ The color is the exact pixel on the screen, also with fractional scaling. When t
 
 The colors you pick are kept in `$XDG_STATE_HOME/mochi/colors.json`, newest first. Picking a color again moves it to the top, and only the newest `history` stay.
 
-The hub has a Colors card with the last 8 colors as dots: hover one to see it in the default format, click it to copy it. Its Pick button closes the hub and opens the picker. The Colors page lists the whole history, each color with its four formats as buttons that copy them and a trash button that removes it, with "Pick a color" and "Clear" above. `mochi ipc hub open colors/history` opens the page.
+The control center has a Colors card with the last 8 colors as dots: hover one to see it in the default format, click it to copy it. Its Pick button closes the control center and opens the picker. The Colors page lists the whole history, each color with its four formats as buttons that copy them and a trash button that removes it, with "Pick a color" and "Clear" above. `mochi ipc control-center open colors/history` opens the page.
 
 ## In the launcher
 
@@ -52,4 +52,4 @@ Anything else lists the colors in the history and the CSS names that start with 
 | `remove <color>` | Removes a color from the history |
 | `clear` | Removes every color from the history |
 
-The hub sends `start`, the launcher `search` and `pick-result`, and the picker `hover` and `select` themselves.
+The control center sends `start`, the launcher `search` and `pick-result`, and the picker `hover` and `select` themselves.

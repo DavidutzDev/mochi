@@ -1,9 +1,9 @@
 import QtQuick
 import qs.island
 
-// Now playing, as a hub card and a desktop widget: the cover as tall as the
-// card, the track at the top, and progress and controls at the bottom. It
-// fills the size it's given. It reads the media module's state, so it shows
+// Now playing, as a control center card and a desktop widget: the cover as tall
+// as the card, the track at the top, and progress and controls at the bottom.
+// It fills the size it's given. It reads the media module's state, so it shows
 // whatever the island would.
 Item {
     id: root

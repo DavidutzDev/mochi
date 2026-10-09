@@ -26,4 +26,4 @@ If another notification daemon runs, Mochi waits and takes over when it stops.
 | `reply <id> <text>` | Answers a notification that takes a reply |
 | `open <id> <url>` | Opens a link from a notification's body, and closes the notification |
 
-It offers the hub a card with the latest missed notifications, and a page with all of them.
+It offers the control center a card with the latest missed notifications, and a page with all of them.

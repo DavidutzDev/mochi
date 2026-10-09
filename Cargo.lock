@@ -959,6 +959,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-control-center"
+version = "0.0.8"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-demo"
 version = "0.0.8"
 dependencies = [
@@ -985,19 +998,6 @@ dependencies = [
 
 [[package]]
 name = "mochi-module-emoji"
-version = "0.0.8"
-dependencies = [
- "include_dir",
- "mochi-core",
- "schemars",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "mochi-module-hub"
 version = "0.0.8"
 dependencies = [
  "include_dir",
@@ -1328,10 +1328,10 @@ dependencies = [
  "mochi-module-capture",
  "mochi-module-clipboard",
  "mochi-module-colors",
+ "mochi-module-control-center",
  "mochi-module-demo",
  "mochi-module-drop",
  "mochi-module-emoji",
- "mochi-module-hub",
  "mochi-module-idle",
  "mochi-module-launcher",
  "mochi-module-media",

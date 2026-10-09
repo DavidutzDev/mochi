@@ -17,7 +17,7 @@ pub fn steps() -> Vec<ContributionSpec> {
                     280,
                     96
                 ],
-                "caption": "Wi-Fi, Ethernet, VPNs and airplane mode from NetworkManager, with a page in the hub to connect.",
+                "caption": "Wi-Fi, Ethernet, VPNs and airplane mode from NetworkManager, with a page in the control center to connect.",
                 "payload": {
                     "available": true,
                     "status": {

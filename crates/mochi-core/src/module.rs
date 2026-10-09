@@ -81,8 +81,8 @@ pub trait Module: Send + 'static {
         None
     }
 
-    /// What it offers other modules, like a page for the hub. Unused when
-    /// the module it's for isn't enabled.
+    /// What it offers other modules, like a page for the control center. Unused
+    /// when the module it's for isn't enabled.
     fn contributions(&self) -> Vec<ContributionSpec> {
         Vec::new()
     }
@@ -96,7 +96,7 @@ pub trait Module: Send + 'static {
 /// The modules whose panels take the keyboard, each with a `close` action:
 /// see [`ModuleCtx::close_other_panels`].
 pub const PANELS: [&str; 7] = [
-    "hub",
+    "control-center",
     "launcher",
     "clipboard",
     "audio",

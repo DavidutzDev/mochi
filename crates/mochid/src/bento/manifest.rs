@@ -14,7 +14,7 @@
 //! pomodoro = "git:github.com/User/mochi-pomodoro"
 //!
 //! [config]
-//! modules = ["idle", "osd", "hub", "widgets", "pomodoro"]
+//! modules = ["idle", "osd", "control-center", "widgets", "pomodoro"]
 //!
 //! [theme]
 //! preset = "cozy"

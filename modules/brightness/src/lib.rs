@@ -1,10 +1,10 @@
 //! Brightness: the laptop's backlight and external monitors over DDC/CI.
 //!
-//! The backlight comes from `/sys/class/backlight` and changes through
-//! logind; a change from elsewhere, like a key the firmware handles, shows
-//! the OSD too. Monitors come from `ddcutil`, found once at the start and
-//! again on `mochi ipc brightness refresh`. The hub has a card with a slider
-//! for each, and `up`, `down` and `set` change them from keybinds.
+//! The backlight comes from `/sys/class/backlight` and changes through logind;
+//! a change from elsewhere, like a key the firmware handles, shows the OSD too.
+//! Monitors come from `ddcutil`, found once at the start and again on `mochi
+//! ipc brightness refresh`. The control center has a card with a slider for
+//! each, and `up`, `down` and `set` change them from keybinds.
 //!
 //! Settings in `config.toml`, all optional:
 //!
@@ -112,7 +112,7 @@ impl Module for Brightness {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "card", "levels", "Card", "Brightness")
+            ContributionSpec::new("control-center", "card", "levels", "Card", "Brightness")
                 .icon("light_mode")
                 .order(12)
                 .options(json!({ "span": 2 })),

@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// The hub's home tile: Bluetooth on or off, with what's connected. A click
-// switches it.
+// The control center's home tile: Bluetooth on or off, with what's connected. A
+// click switches it.
 Item {
     id: root
 

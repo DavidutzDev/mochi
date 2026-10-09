@@ -445,7 +445,7 @@ mod tests {
         round_trip_daemon(DaemonMessage::Contributions {
             contributions: vec![Contribution {
                 module: "media".into(),
-                target: "hub".into(),
+                target: "control-center".into(),
                 kind: "card".into(),
                 id: "now-playing".into(),
                 view: "Card".into(),

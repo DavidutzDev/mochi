@@ -76,7 +76,7 @@ Singleton {
     readonly property int spaceHuge: 24
 
     // Heights: a button, chip or field; a row in a list; one row of the
-    // hub's grid of cards.
+    // control center's grid of cards.
     readonly property int controlHeight: 32
     readonly property int rowHeight: 44
     readonly property int tileHeight: 96

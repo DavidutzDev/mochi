@@ -1,14 +1,14 @@
 //! Network: Wi-Fi, Ethernet, VPNs and airplane mode, from NetworkManager.
 //!
-//! A bubble shows the connection: the Wi-Fi's strength, Ethernet, or
-//! offline, with a lock while a VPN runs. The hub has a Network page, with
-//! the Wi-Fi networks in range, the wired devices and the VPNs, and a card
-//! on its home with Wi-Fi, VPN and airplane mode tiles. Joining a new
-//! secured network asks for its password on the island, and for a user
-//! name too on WPA Enterprise; the page joins hidden networks by name.
-//! Mochi is also NetworkManager's secret agent, so a password it needs
-//! later, like a saved network's that changed, is asked there too.
-//! Connecting and disconnecting show a short notice.
+//! A bubble shows the connection: the Wi-Fi's strength, Ethernet, or offline,
+//! with a lock while a VPN runs. The control center has a Network page, with
+//! the Wi-Fi networks in range, the wired devices and the VPNs, and a card on
+//! its home with Wi-Fi, VPN and airplane mode tiles. Joining a new secured
+//! network asks for its password on the island, and for a user name too on WPA
+//! Enterprise; the page joins hidden networks by name. Mochi is also
+//! NetworkManager's secret agent, so a password it needs later, like a saved
+//! network's that changed, is asked there too. Connecting and disconnecting
+//! show a short notice.
 //!
 //! Settings in `config.toml`, all optional:
 //!
@@ -89,11 +89,11 @@ impl Module for Network {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("hub", "card", "status", "Card", "Network")
+            ContributionSpec::new("control-center", "card", "status", "Card", "Network")
                 .icon("wifi")
                 .order(1)
                 .options(json!({ "span": 2, "rows": 1 })),
-            ContributionSpec::new("hub", "page", "page", "Page", "Network")
+            ContributionSpec::new("control-center", "page", "page", "Page", "Network")
                 .icon("wifi")
                 .order(15),
         ];
@@ -175,10 +175,10 @@ impl Module for Network {
                             state.prompt = None;
                         }
                         Some(ModuleEvent::BubbleClicked(_)) => {
-                            let open = ctx.call("hub", "open", &["network/page"]);
+                            let open = ctx.call("control-center", "open", &["network/page"]);
                             tokio::spawn(async move {
                                 if let Err(error) = open.await {
-                                    tracing::debug!(%error, "can't open the hub");
+                                    tracing::debug!(%error, "can't open the control center");
                                 }
                             });
                         }
@@ -511,12 +511,13 @@ impl State {
     /// Puts a prompt on the island, in place of any other.
     fn prompt(&mut self, ctx: &ModuleCtx, asking: Asking, payload: serde_json::Value) {
         self.close_prompt(ctx);
-        // The prompt takes the keyboard, as the hub does; only one can.
-        let close = ctx.call("hub", "close", &[]);
+        // The prompt takes the keyboard, as the control center does; only one
+        // can.
+        let close = ctx.call("control-center", "close", &[]);
         tokio::spawn(async move {
             match close.await {
                 Ok(()) | Err(CallError::NotEnabled(_)) => {}
-                Err(error) => tracing::warn!(%error, "could not close the hub"),
+                Err(error) => tracing::warn!(%error, "could not close the control center"),
             }
         });
         let spec = ActivitySpec::new("Password")

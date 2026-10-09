@@ -28,7 +28,7 @@ This split is the reason Mochi exists instead of a shell written in Quickshell a
 
 Every feature is a module: the clock, notifications, the launcher, Bluetooth. A module has a Rust part that runs inside `mochid` and QML views that the interface draws. `modules` in `config.toml` lists which run, and a module that's off costs nothing.
 
-Modules offer things to each other through contributions: a card or a page for the hub, results for the launcher, a widget for the desktop, a step for the tour. The hub, for instance, has little of its own besides the date and time. The modules that run fill it.
+Modules offer things to each other through contributions: a card or a page for the control center, results for the launcher, a widget for the desktop, a step for the tour. The control center, for instance, has little of its own besides the date and time. The modules that run fill it.
 
 At start, `mochid` writes the views of the modules that run into `$XDG_RUNTIME_DIR/mochi/shell/` and points Quickshell at it, so what the interface loads always matches what runs.
 

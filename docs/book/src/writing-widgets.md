@@ -37,7 +37,7 @@ The view fills the widget, inside the card's padding when it has a card. It gets
 
 | Property | |
 |---|---|
-| `payload` | The offering module's published state, as hub cards get it |
+| `payload` | The offering module's published state, as control center cards get it |
 | `settings` | This instance's settings, with the defaults filled in |
 | `instance` | This instance's id, like `w3` |
 
@@ -61,7 +61,7 @@ Item {
 
 Size text from the widget's size, since users resize it. Set `property bool hidden: true` to step aside while there's nothing to show; the widget comes back in edit mode. A view with a text field sets `property bool typing: true`: the desktop then takes the keyboard when the user clicks into it, and gives it back on a click elsewhere. Let Escape take the focus off the field.
 
-A hub card's view often works as a widget as is: media and battery offer their cards both ways.
+A control center card's view often works as a widget as is: media and battery offer their cards both ways.
 
 ## Instance content
 

@@ -18,7 +18,8 @@ pub struct ContributionSpec {
 }
 
 impl ContributionSpec {
-    /// Offers `view` to the `target` module as a `kind`, like a hub `page`.
+    /// Offers `view` to the `target` module as a `kind`, like a control center
+    /// `page`.
     pub fn new(
         target: impl Into<String>,
         kind: impl Into<String>,
@@ -48,7 +49,8 @@ impl ContributionSpec {
         self
     }
 
-    /// Anything else the target reads, like `{"span": 2}` for a hub card.
+    /// Anything else the target reads, like `{"span": 2}` for a control center
+    /// card.
     pub fn options(mut self, options: Value) -> Self {
         self.options = options;
         self

@@ -1,9 +1,9 @@
 import QtQuick
 import qs.island
 
-// The hub's Captures page: the newest screenshots and recordings in their
-// folders, whatever made them. A click opens one in the preview card; each
-// row can also copy it, edit a screenshot, open its folder or delete it.
+// The control center's Captures page: the newest screenshots and recordings in
+// their folders, whatever made them. A click opens one in the preview card;
+// each row can also copy it, edit a screenshot, open its folder or delete it.
 Item {
     id: root
 
@@ -30,7 +30,7 @@ Item {
         return `${Math.floor(seconds / 86400)} d ago`;
     }
 
-    // The module closes the hub first, so it isn't in the capture.
+    // The module closes the control center first, so it isn't in the capture.
     function capture(kind: string): void {
         Daemon.command("capture", "start", [kind]);
     }

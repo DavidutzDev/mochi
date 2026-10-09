@@ -58,7 +58,7 @@ pub enum Appearance {
 /// Color roles. The defaults are "Obsidian": a black island that blends into
 /// the bezel, graphite layers on it, and one accent used sparingly.
 pub struct Colors {
-    /// The island and the hub panel.
+    /// The island and the control center panel.
     pub background: Color,
     /// Cards and tiles on the background.
     pub surface: Color,
@@ -251,7 +251,7 @@ impl Default for Motion {
 pub struct Text {
     #[schemars(extend("format" = "font"))]
     pub family: String,
-    /// For the clocks, on the idle island and in the hub.
+    /// For the clocks, on the idle island and in the control center.
     #[schemars(extend("format" = "font"))]
     pub display_family: String,
     /// Labels, metadata and fine print.

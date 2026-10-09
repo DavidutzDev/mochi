@@ -2,10 +2,11 @@ import QtQuick
 import qs.island
 import "ColorMath.js" as ColorMath
 
-// The hub page: an interactive color chooser matching the reference design,
-// side-by-side with color history. Supports picking from screen, choosing via
-// 2D Sat/Val gradient and hue slider, setting custom hex/rgb/hsl/named colors,
-// copying in multiple formats (HEX, RGB, CMYK, HSV, HSL), and managing saved colors.
+// The control center page: an interactive color chooser matching the reference
+// design, side-by-side with color history. Supports picking from screen,
+// choosing via 2D Sat/Val gradient and hue slider, setting custom
+// hex/rgb/hsl/named colors, copying in multiple formats (HEX, RGB, CMYK, HSV,
+// HSL), and managing saved colors.
 Item {
     id: root
 

@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// The hub's card, and a desktop widget: the temperature and sky now, and
-// the day's low and high, in one row.
+// The control center's card, and a desktop widget: the temperature and sky now,
+// and the day's low and high, in one row.
 Item {
     id: root
 

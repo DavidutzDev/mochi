@@ -1,5 +1,5 @@
-//! What modules offer each other: a page for the hub, a card on its home
-//! screen. A module declares them up front; the module they're meant for
+//! What modules offer each other: a page for the control center, a card on its
+//! home screen. A module declares them up front; the module they're meant for
 //! finds them, and they're simply unused when it isn't enabled.
 
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use serde_json::Value;
 pub struct Contribution {
     /// The module offering it, whose view it is.
     pub module: String,
-    /// The module it's for, like `hub`.
+    /// The module it's for, like `control-center`.
     pub target: String,
     /// What it is to the target, like `page` or `card`. The target decides
     /// which kinds it takes.

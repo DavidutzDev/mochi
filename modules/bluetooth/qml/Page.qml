@@ -1,7 +1,7 @@
 import QtQuick
 import qs.island
 
-// The hub's Bluetooth page: the power switch, the paired devices to
+// The control center's Bluetooth page: the power switch, the paired devices to
 // connect, disconnect or forget, and a scan for devices in range to pair.
 Item {
     id: root

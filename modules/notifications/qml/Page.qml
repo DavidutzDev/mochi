@@ -1,9 +1,9 @@
 import QtQuick
 import qs.island
 
-// The hub page: the missed notifications as rows, newest first, with do not
-// disturb and clear above them. Clicking a row runs its default action; the
-// cross closes it.
+// The control center page: the missed notifications as rows, newest first, with
+// do not disturb and clear above them. Clicking a row runs its default action;
+// the cross closes it.
 Item {
     id: root
 

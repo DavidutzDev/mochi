@@ -1,9 +1,9 @@
 # The island.
 [island]
-# Which monitor panels open on: the launcher, the hub, the clipboard and the
-# other views you type into. "focus" is the monitor with keyboard focus,
-# "pointer" the one under the mouse (on Hyprland; elsewhere it's "focus"),
-# and "all" every monitor at once.
+# Which monitor panels open on: the launcher, the control center, the
+# clipboard and the other views you type into. "focus" is the monitor with
+# keyboard focus, "pointer" the one under the mouse (on Hyprland; elsewhere
+# it's "focus"), and "all" every monitor at once.
 # panels = "focus"
 # Which monitor everything else shows on: notifications, the volume, the
 # media card and every other notice. "all" is every monitor's island at

@@ -2,7 +2,7 @@
 """An example plugin backend in Python, with the SDK in mochi_plugin.py.
 
 `mochi ipc hello say [text...]` shows the text on the island and counts it
-in a bubble. A click on the bubble opens the hub, when it's enabled.
+in a bubble. A click on the bubble opens the control center, when it's enabled.
 """
 
 from mochi_plugin import CallError, Plugin
@@ -32,8 +32,8 @@ for event in plugin.events():
         plugin.reply(event, error=f"no action {event['action']}")
     elif kind == "bubble_clicked":
         try:
-            plugin.call("hub", "open")
+            plugin.call("control-center", "open")
         except CallError as error:
-            # Without the hub there's nothing to open: fine.
+            # Without the control center there's nothing to open: fine.
             if error.kind != "not_enabled":
-                print(f"opening the hub failed: {error}", flush=True)
+                print(f"opening the control center failed: {error}", flush=True)

@@ -136,7 +136,7 @@ in
       default = { };
       example = lib.literalExpression ''
         {
-          modules = [ "idle" "osd" "workspaces" "media" "launcher" "hub" "power" ];
+          modules = [ "idle" "osd" "workspaces" "media" "launcher" "control-center" "power" ];
           module.idle.format = "HH:mm:ss";
           module.power.lock = [ "hyprlock" ];
           bubbles.media.area = "center-left";

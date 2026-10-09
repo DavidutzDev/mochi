@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// The hub card: the latest colors as dots, as many as fit, with a line
-// under them and a button to pick one. Clicking a dot copies it in the
+// The control center card: the latest colors as dots, as many as fit, with a
+// line under them and a button to pick one. Clicking a dot copies it in the
 // default format; hovering shows its text.
 Item {
     id: root

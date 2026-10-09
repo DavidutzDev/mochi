@@ -61,6 +61,18 @@ pub fn decode<'a, T: serde::Deserialize<'a>>(line: &'a str) -> Result<T, serde_j
     serde_json::from_str(line.trim_end_matches(['\n', '\r']))
 }
 
+/// Module ids that changed, old first. The old id still works in
+/// `config.toml`, in commands and in plugin manifests, with a warning.
+pub const RENAMED_MODULES: [(&str, &str); 1] = [("hub", "control-center")];
+
+/// The current id of a module, for one named by its old id.
+pub fn module_id(id: &str) -> &str {
+    RENAMED_MODULES
+        .iter()
+        .find(|(old, _)| *old == id)
+        .map_or(id, |(_, new)| new)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

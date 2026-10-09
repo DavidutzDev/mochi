@@ -4,8 +4,8 @@ A module's views are QML files in its `qml/` directory. They import the core lib
 
 ## Conventions
 
-- Every view declares `property var payload`. Island views get their activity's payload; hub cards and pages get their module's published state.
-- Island views size themselves with `implicitWidth` and `implicitHeight`, and the island follows. Hub cards and pages fill the space the hub gives them.
+- Every view declares `property var payload`. Island views get their activity's payload; control center cards and pages get their module's published state.
+- Island views size themselves with `implicitWidth` and `implicitHeight`, and the island follows. Control center cards and pages fill the space the control center gives them.
 - Colors, sizes and timings come from `Theme`, never from literals: `Theme.surface` for a card, `Theme.textBody` for text, `Theme.move` for movement. A change to `theme.toml` then restyles every module.
 - Actions go through `Daemon.command(module, action, args)`; arguments are strings.
 - Values that change many times a second, like the audio meters' levels, come through `Daemon`'s `live(module, value)` signal rather than the published state, from `ModuleCtx::publish_live`. Listen with `Connections { target: Daemon }`. Nothing keeps them: a view sees only those sent while it's open.
@@ -26,7 +26,7 @@ A module can make a monitor of its own through the compositor, named `MOCHI-<MOD
 
 | Role | For |
 |---|---|
-| `background` | the island and the hub panel |
+| `background` | the island and the control center panel |
 | `surface` | cards and tiles |
 | `raised` | controls, tracks and dividers on those |
 | `highlight` | hovered controls |
@@ -45,7 +45,7 @@ Views take every size from `Theme`'s scales, so modules and plugins look like on
 | Weight | `weightBody`, `weightLabel`, `weightTitle` | running text; labels; titles |
 | Spacing | `spaceTiny` (4), `spaceSmall` (8), `spaceMedium` (12), `spaceLarge` (16), `spaceHuge` (24) | inside a group of small things; between an icon and its text or items in a row; between groups; around a card's content; between sections |
 | Corners | `radiusSurface`, `radiusField`, `radiusControl`, or `height / 2` for round ends | cards, tiles and panels; rows, fields and buttons; chips, badges and icon buttons |
-| Height | `controlHeight` (32), `rowHeight` (44), `tileHeight` (96) | a button, chip or field; a row in a list; a row of the hub's grid |
+| Height | `controlHeight` (32), `rowHeight` (44), `tileHeight` (96) | a button, chip or field; a row in a list; a row of the control center's grid |
 
 Fonts are `fontFamily` and `displayFamily`, for clocks: Inter, which Mochi's packages bring, unless `theme.toml` names another. Motion: `fast` for colors and hovers, `move` with the `overshoot` curve for things that move. The text sizes and corners follow `theme.toml`; the rest are fixed. `textLabel` and `textSubtitle`, from before the scale, still give `textCaption` and `textBody` for now.
 

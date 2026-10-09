@@ -98,7 +98,7 @@ pub fn bubble(battery: &Battery, levels: &Levels) -> Option<Value> {
     })
 }
 
-/// What the hub's card gets.
+/// What the control center's card gets.
 pub fn payload(battery: Option<&Battery>, levels: &Levels) -> Value {
     let Some(battery) = battery else {
         return json!({ "present": false });

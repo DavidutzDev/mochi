@@ -16,7 +16,7 @@
 # wallpaper = "auto"
 
 [colors]
-# The island and the hub panel.
+# The island and the control center panel.
 # background = "#f5000000"
 # Cards and tiles on the background.
 # surface = "#1c1c1e"
@@ -91,8 +91,8 @@
 # A font family name; empty uses Inter, which Mochi's packages bring, or
 # the system font without it.
 # family = ""
-# The font of the clocks, on the idle island and in the hub; empty keeps
-# `family`.
+# The font of the clocks, on the idle island and in the control center;
+# empty keeps `family`.
 # display_family = ""
 # The type scale, in pixels: labels and fine print, everything else, titles,
 # page titles, and big numbers like a clock.

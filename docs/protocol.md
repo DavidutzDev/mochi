@@ -164,13 +164,13 @@ Consecutive bubbles in the same area with the same `group` share one pill. A bub
 
 ### Contributions
 
-`contributions` lists what every enabled module offers other modules, like the hub's cards and pages. Modules declare them up front, so the list doesn't change while the daemon runs.
+`contributions` lists what every enabled module offers other modules, like the control center's cards and pages. Modules declare them up front, so the list doesn't change while the daemon runs.
 
 ```json
 {
   "type": "contributions",
   "contributions": [
-    {"module": "media", "target": "hub", "kind": "card", "id": "now-playing", "view": "Card", "title": "Now playing", "order": 10, "options": {"span": 2}}
+    {"module": "media", "target": "control-center", "kind": "card", "id": "now-playing", "view": "Card", "title": "Now playing", "order": 10, "options": {"span": 2}}
   ]
 }
 ```

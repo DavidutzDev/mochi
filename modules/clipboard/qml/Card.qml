@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// The hub card: how much the history holds and where, with buttons to
-// pause it and to clear it.
+// The control center card: how much the history holds and where, with buttons
+// to pause it and to clear it.
 Item {
     id: root
 

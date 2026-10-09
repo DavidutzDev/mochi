@@ -9,12 +9,12 @@ import qs.island
 // module. `popup` asks the panel for a menu or the color picker, which it
 // draws over everything.
 //
-// A text or a list whose values come from somewhere, its `source`, picks
-// them from a menu, with a search and room to type another: apps, audio
-// devices, tray apps, players, hub cards, modules. A command, like the idle
-// clock's click, picks a module, then one of its actions, then its
-// arguments. A command line with ready-made ones, like the lock, offers
-// those that are installed.
+// A text or a list whose values come from somewhere, its `source`, picks them
+// from a menu, with a search and room to type another: apps, audio devices,
+// tray apps, players, control center cards, modules. A command, like the idle
+// clock's click, picks a module, then one of its actions, then its arguments. A
+// command line with ready-made ones, like the lock, offers those that are
+// installed.
 Item {
     id: root
 
@@ -47,7 +47,7 @@ Item {
     readonly property string menuSource: menu === "value" ? source : menu.startsWith("arg:") ? (argAt(Number(menu.slice(4)))?.source ?? "") : ""
     readonly property bool searchable: menuSource !== "" || choices().length > 8
     // Something not in the menu may be typed too: names that change.
-    readonly property bool custom: menuSource !== "" && !["module", "hub-card", "hub-page", "settings-section", "power-profile"].includes(menuSource)
+    readonly property bool custom: menuSource !== "" && !["module", "control-center-card", "control-center-page", "settings-section", "power-profile"].includes(menuSource)
 
     function openMenu(kind: string, anchor: Item): void {
         menu = kind;
@@ -296,8 +296,8 @@ Item {
                         "label": name,
                         "detail": Quickshell.screens.find(screen => screen.name === name)?.model ?? ""
                     }));
-        case "hub-page":
-            return Daemon.offered("hub", "page").map(page => ({
+        case "control-center-page":
+            return Daemon.offered("control-center", "page").map(page => ({
                         "value": `${page.module}/${page.id}`,
                         "label": page.title,
                         "detail": `${page.module}/${page.id}`,
@@ -441,8 +441,8 @@ Item {
                         "value": player.name,
                         "label": player.name
                     }));
-        case "hub-card":
-            return Daemon.offered("hub", "card").map(card => ({
+        case "control-center-card":
+            return Daemon.offered("control-center", "card").map(card => ({
                         "value": `${card.module}/${card.id}`,
                         "label": card.title,
                         "detail": card.module,

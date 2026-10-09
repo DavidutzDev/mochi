@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// The hub's home card: the output's volume as a slider, the icon muting
-// it. The heading opens the mixer. Without the audio server, it steps
+// The control center's home card: the output's volume as a slider, the icon
+// muting it. The heading opens the mixer. Without the audio server, it steps
 // aside.
 Item {
     id: root

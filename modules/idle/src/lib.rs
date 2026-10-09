@@ -1,5 +1,5 @@
 //! The idle island: a small clock that shows whenever nothing else does.
-//! Clicking it runs another module's action, the hub by default, and
+//! Clicking it runs another module's action, the control center by default, and
 //! resting the pointer on it can run another; nothing happens when that
 //! module isn't enabled.
 //!
@@ -8,7 +8,7 @@
 //! ```toml
 //! [module.idle]
 //! format = "HH:mm"                 # Qt time format
-//! click = ["hub", "toggle"]        # module, action, then its arguments; [] for nothing
+//! click = ["control-center", "toggle"]        # module, action, then its arguments; [] for nothing
 //! hover = ["workspaces", "show"]   # the same, after the pointer rests on it; [] by default
 //! hover_delay_ms = 350
 //! ```
@@ -50,7 +50,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             format: "HH:mm".into(),
-            click: vec!["hub".into(), "toggle".into()],
+            click: vec!["control-center".into(), "toggle".into()],
             hover: Vec::new(),
             hover_delay_ms: 350,
         }

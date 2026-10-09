@@ -46,7 +46,7 @@ name = "status"
 description = "Print what the timer is doing"
 
 [[contributions]]
-target = "hub"
+target = "control-center"
 kind = "card"
 id = "timer"
 view = "Card"

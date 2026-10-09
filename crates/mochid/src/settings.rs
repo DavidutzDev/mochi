@@ -98,10 +98,16 @@ impl Store {
             config: mochi_core::config::read_table(&store.config_file)?,
             theme: mochi_core::config::read_table(&store.theme_file)?,
         };
+        for note in mochi_core::config::migrate_module_ids(&mut store.base.config) {
+            tracing::warn!(file = %store.config_file.display(), "{note}; the old name still works for now");
+        }
         // Without changes first: their errors are only warnings.
         let plain = store.resolve(&Changes::default(), &catalog)?;
         let changes = match Changes::load(&store.changes_file) {
-            Ok(changes) => changes,
+            Ok(mut changes) => {
+                mochi_core::config::migrate_module_ids(&mut changes.config);
+                changes
+            }
             Err(error) => {
                 tracing::warn!(%error, "ignoring the settings panel's changes");
                 return Ok((store, plain));
@@ -936,7 +942,7 @@ fn icon(module: &str) -> &'static str {
         "colors" => "colorize",
         "drop" => "place_item",
         "emoji" => "mood",
-        "hub" => "space_dashboard",
+        "control-center" => "space_dashboard",
         "idle" => "bedtime",
         "launcher" => "search",
         "media" => "music_note",
@@ -986,7 +992,7 @@ mod tests {
             "audio-device",
             "tray-app",
             "player",
-            "hub-card",
+            "control-center-card",
         ];
         let catalog = modules::catalog(Path::new("/nonexistent/config.toml")).unwrap();
         let mut found = 0;
@@ -1011,9 +1017,9 @@ mod tests {
             "audio-device",
             "tray-app",
             "player",
-            "hub-card",
+            "control-center-card",
             "output",
-            "hub-page",
+            "control-center-page",
             "audio-output",
             "audio-input",
             "audio-app",

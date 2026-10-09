@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// The hub's home card: Wi-Fi (or Ethernet without it), the VPN and airplane
-// mode, as tiles as tall as the card, each saying its state. Wi-Fi and
+// The control center's home card: Wi-Fi (or Ethernet without it), the VPN and
+// airplane mode, as tiles as tall as the card, each saying its state. Wi-Fi and
 // airplane mode switch on a click; the others open the Network page.
 Item {
     id: root
@@ -18,7 +18,7 @@ Item {
     implicitHeight: Theme.rowHeight
 
     function page(): void {
-        Daemon.command("hub", "open", ["network/page"]);
+        Daemon.command("control-center", "open", ["network/page"]);
     }
 
     Text {

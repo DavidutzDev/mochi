@@ -456,21 +456,21 @@ mod tests {
             ])
         );
 
-        let mut panel = ActivitySpec::new("Hub")
+        let mut panel = ActivitySpec::new("ControlCenter")
             .priority(Priority::URGENT)
             .uninterruptible()
             .modal();
         panel.output = Some("DP-1".into());
-        islands.submit(ActivityId(2), "hub", panel, now);
+        islands.submit(ActivityId(2), "control-center", panel, now);
         let mut notice = ActivitySpec::new("Volume").priority(Priority::HIGH);
         notice.output = Some("HDMI-A-1".into());
         islands.submit(ActivityId(3), "osd", notice, now);
         let changes = islands.take_effects(now);
-        // The notice didn't wait behind the hub.
+        // The notice didn't wait behind the control center.
         assert_eq!(
             presented(&changes),
             BTreeMap::from([
-                ("DP-1".into(), Some("Hub".into())),
+                ("DP-1".into(), Some("ControlCenter".into())),
                 ("HDMI-A-1".into(), Some("Volume".into()))
             ])
         );

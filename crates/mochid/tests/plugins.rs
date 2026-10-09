@@ -63,7 +63,7 @@ name = "crash"
 description = "Exit with an error"
 
 [[contributions]]
-target = "hub"
+target = "control-center"
 kind = "card"
 id = "{id}"
 view = "Shout"
@@ -84,16 +84,20 @@ title = "Echo"
 }
 
 fn start(name: &str) -> Daemon {
-    Daemon::start_prepared(name, "idle,hub,echo,beta,gone", None, |dir, command| {
-        plugin(
-            dir,
-            "echo",
-            "\n[uses]\nstate = [\"beta\"]\n\n[views]\noverrides = [\"idle/Pill\"]\n",
-        );
-        plugin(dir, "beta", "");
-        let config = dir.join("config/mochi");
-        fs::create_dir_all(&config).unwrap();
-        fs::write(
+    Daemon::start_prepared(
+        name,
+        "idle,control-center,echo,beta,gone",
+        None,
+        |dir, command| {
+            plugin(
+                dir,
+                "echo",
+                "\n[uses]\nstate = [\"beta\"]\n\n[views]\noverrides = [\"idle/Pill\"]\n",
+            );
+            plugin(dir, "beta", "");
+            let config = dir.join("config/mochi");
+            fs::create_dir_all(&config).unwrap();
+            fs::write(
             config.join("plugins.toml"),
             format!(
                 "[plugins.echo]\nsource = \"path:{0}/plugins/echo\"\n\n[plugins.beta]\nsource = \"path:{0}/plugins/beta\"\n\n[plugins.gone]\nsource = \"git:github.com/example/gone\"\n",
@@ -101,10 +105,11 @@ fn start(name: &str) -> Daemon {
             ),
         )
         .unwrap();
-        // A plugin that gives up sends a desktop notification; not to the
-        // session running the tests.
-        command.env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent");
-    })
+            // A plugin that gives up sends a desktop notification; not to the
+            // session running the tests.
+            command.env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent");
+        },
+    )
 }
 
 fn plugins(ctl: &mut Client) -> Vec<PluginStatus> {
@@ -138,7 +143,7 @@ fn plugins_run_like_modules() {
         DaemonMessage::Modules { modules } => Some(modules),
         _ => None,
     });
-    assert_eq!(modules, ["idle", "hub", "echo", "beta"]);
+    assert_eq!(modules, ["idle", "control-center", "echo", "beta"]);
     let contributions = wait(&mut ui, |message| match message {
         DaemonMessage::Contributions { contributions } => Some(contributions),
         _ => None,
@@ -275,25 +280,30 @@ fn the_python_example_runs() {
         .expect("python3 is in PATH, for the Python example plugin");
     let example = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/python/hello");
 
-    let daemon = Daemon::start_prepared("python", "idle,hub,hello", None, |dir, command| {
-        let plugin = dir.join("hello");
-        copy_dir(&example, &plugin);
-        // `#!/usr/bin/env` isn't there in every build sandbox.
-        let script = plugin.join("hello.py");
-        let text = fs::read_to_string(&script).unwrap();
-        let (_, rest) = text.split_once('\n').unwrap();
-        fs::write(&script, format!("#!{}\n{rest}", python.display())).unwrap();
-        fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    let daemon = Daemon::start_prepared(
+        "python",
+        "idle,control-center,hello",
+        None,
+        |dir, command| {
+            let plugin = dir.join("hello");
+            copy_dir(&example, &plugin);
+            // `#!/usr/bin/env` isn't there in every build sandbox.
+            let script = plugin.join("hello.py");
+            let text = fs::read_to_string(&script).unwrap();
+            let (_, rest) = text.split_once('\n').unwrap();
+            fs::write(&script, format!("#!{}\n{rest}", python.display())).unwrap();
+            fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
 
-        let config = dir.join("config/mochi");
-        fs::create_dir_all(&config).unwrap();
-        fs::write(
-            config.join("plugins.toml"),
-            format!("[plugins.hello]\nsource = \"path:{}\"\n", plugin.display()),
-        )
-        .unwrap();
-        command.env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent");
-    });
+            let config = dir.join("config/mochi");
+            fs::create_dir_all(&config).unwrap();
+            fs::write(
+                config.join("plugins.toml"),
+                format!("[plugins.hello]\nsource = \"path:{}\"\n", plugin.display()),
+            )
+            .unwrap();
+            command.env("DBUS_SESSION_BUS_ADDRESS", "unix:path=/nonexistent");
+        },
+    );
     let mut ui = daemon.client(Role::Ui);
     let mut ctl = daemon.client(Role::Ctl);
     daemon.wait_for(
@@ -332,9 +342,9 @@ fn the_python_example_runs() {
         DaemonMessage::Output { output: "1".into() }
     );
 
-    // The bubble calls the hub, which opens.
+    // The bubble calls the control center, which opens.
     ui.send(&ClientMessage::BubbleClick { bubble: bubble.id });
-    ui.wait_for_view("hub", "Hub");
+    ui.wait_for_view("control-center", "ControlCenter");
 }
 
 fn copy_dir(from: &Path, to: &Path) {

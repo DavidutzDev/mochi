@@ -1,7 +1,8 @@
 import QtQuick
 import qs.island
 
-// The hub's Sound page: the mixer, from the module's published state.
+// The control center's Sound page: the mixer, from the module's published
+// state.
 Item {
     id: root
 

@@ -26,7 +26,7 @@ In your package's repository, with the release tagged and pushed, `mochi bento p
    maintainers = ["you"]     # GitHub names
    license = "MIT"
    tags = ["dark", "purple"]
-   screenshots = ["screens/hub.png"]   # paths in your repository
+   screenshots = ["screens/control-center.png"]   # paths in your repository
 
    [[release]]
    version = "1.0.0"         # what its manifest says

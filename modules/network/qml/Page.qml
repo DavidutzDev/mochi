@@ -1,9 +1,10 @@
 import QtQuick
 import qs.island
 
-// The hub's Network page: the connection, Wi-Fi and airplane switches, the
-// Wi-Fi networks in range, the wired devices and the VPNs. A click on a
-// network joins it; a new secured one asks for its password on the island.
+// The control center's Network page: the connection, Wi-Fi and airplane
+// switches, the Wi-Fi networks in range, the wired devices and the VPNs. A
+// click on a network joins it; a new secured one asks for its password on the
+// island.
 Item {
     id: root
 

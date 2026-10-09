@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// The connection at a glance: the Wi-Fi's strength, Ethernet, or offline,
-// with a lock while a VPN runs. A click opens the hub's Network page.
+// The connection at a glance: the Wi-Fi's strength, Ethernet, or offline, with
+// a lock while a VPN runs. A click opens the control center's Network page.
 Item {
     id: root
 
