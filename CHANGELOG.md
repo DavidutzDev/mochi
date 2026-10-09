@@ -7,6 +7,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 ### Added
 
 - Themes are packages: a `mochi-theme.toml` gives a color for every role in a dark and a light version, and `preset = "<id>"` picks one installed in `~/.local/share/mochi/themes/<id>/` as well as the ones Mochi brings, which are now themes too. The settings panel lists them all with their colors. A theme names the oldest Mochi it works with, and a newer one is refused with a message saying so. This is the first part of Bento, for sharing themes, plugins and whole configs.
+- Bento, `mochi bento`: share a whole setup as a bento, a directory with a `mochi-bento.toml` holding the settings, the theme, the widgets and the plugins they need. `share` makes one from the setup running now, leaving out this machine's devices, where you are, secrets and paths in the home directory, and listing them; widgets go on screens named by size, `screen-1` being the largest. `add` installs a bento, a theme or a plugin from a directory, a git repository or a gist: a bento's plugins each ask first, its settings go into `changes.toml`, its widgets replace `widgets.toml`, and its wallpaper is set with awww or swww. `try` applies a theme or a bento's look until Keep or Drop, `remove` puts back what a bento replaced, `list` shows what Bento installed and `check` reads a bento as `add` would. What Bento installed is in `bento.toml`, whose plugins count as if `plugins.toml` listed them, and Copy as Nix includes them. The settings module gains a `try` action for whole tables.
 - Change screens during a recording of a whole screen: clicking the recording's dot now opens its controls, with the time, a button for each screen and **Stop**, instead of stopping it. `mochi ipc capture switch [screen]` does the same. Each screen records into a part, and ffmpeg joins the parts once it stops, encoding them again into the first screen's size when the screens differ.
 - Pick a screen recording's codec and file format in the picker: the codec steps through Auto and every one gpu-screen-recorder lists on the machine, named like "HEVC (Vulkan)", and the file through MP4, MKV and WebM, skipping WebM when no codec fits it. `codec` and the new `container` set how they start; `mochi ipc capture codec` and `container` do the same.
 - Pick the video encoder for conversions of dropped videos: Auto, then the encoders ffmpeg has, H.264, HEVC, AV1, VP9, VP8 and NVIDIA's or AMD's when that GPU is there. It applies where it fits the file. `[module.drop] video_encoder` and `mochi ipc drop encoder` set it.
@@ -51,6 +52,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- The settings panel no longer goes blank while something is being tried: the page was anchored to the Keep and Drop bar, which Qt refused, so it lost its height.
 - Scrolling in a panel, like the settings, closed it when the list under the pointer was already at its end: the scroll fell through to the catch for scrolls outside. Scrolls over the island and the bubbles never count as outside now.
 
 ### Changed

@@ -13,7 +13,7 @@
 //! The module offers a clock itself.
 
 mod catalog;
-mod layout;
+pub mod layout;
 mod tour;
 
 use std::collections::{BTreeMap, BTreeSet};

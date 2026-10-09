@@ -1351,6 +1351,7 @@ dependencies = [
  "mochi-module-workspaces",
  "mochi-plugins",
  "mochi-protocol",
+ "serde",
  "serde_json",
  "tokio",
  "tracing",

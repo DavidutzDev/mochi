@@ -270,6 +270,9 @@ pub enum SettingsOp {
     Keep,
     /// Stops trying, back to the changes.
     Drop,
+    /// Tries whole `config` and `theme` tables, like a bento's, in place of
+    /// what was being tried.
+    Try(crate::changes::Changes),
 }
 
 /// What the daemon tells a module.

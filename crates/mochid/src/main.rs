@@ -2,6 +2,7 @@
 //! island shows, and keeps the Quickshell UI running.
 
 mod appearance;
+mod bento;
 mod daemon;
 mod doctor;
 mod ipc;
@@ -67,6 +68,11 @@ enum Command {
     },
     /// Check what Mochi needs around it and say what to install or change.
     Doctor,
+    /// Share setups, themes and plugins, and install them.
+    Bento {
+        #[command(subcommand)]
+        action: bento::Action,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -93,6 +99,9 @@ fn main() -> ExitCode {
     }
     if let Some(Command::Doctor) = &args.command {
         return doctor_main(args.config.clone());
+    }
+    if let Some(Command::Bento { action }) = &args.command {
+        return bento_main(action, args.config.clone());
     }
     let runtime = match tokio::runtime::Runtime::new() {
         Ok(runtime) => runtime,
@@ -159,6 +168,20 @@ fn config_main(action: &ConfigAction, config: Option<PathBuf>) -> ExitCode {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("mochid: {error:#}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[allow(clippy::print_stderr)]
+fn bento_main(action: &bento::Action, config: Option<PathBuf>) -> ExitCode {
+    let result = config_file(config)
+        .map_err(|error| format!("{error:#}"))
+        .and_then(|config_file| bento::run(action, &config_file));
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("mochi: {error}");
             ExitCode::FAILURE
         }
     }

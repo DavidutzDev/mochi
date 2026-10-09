@@ -555,11 +555,11 @@ Sharing plugins, themes and whole configs, and a reviewed registry of them. Desi
 Phase 1, without a registry:
 
 - [x] `mochi-theme.toml`: dark and light palettes; the builtin presets become bundled themes, and `preset = "<id>"` also finds themes installed in `~/.local/share/mochi/themes/<id>/`
-- [ ] `mochi-bento.toml`: modules and their settings, island and bubbles, the hub's arrangement, widgets with screen roles (`primary`, `secondary`) instead of output names, a theme, a wallpaper, the plugins it needs
-- [ ] `bento.toml` next to `config.toml`, written by Bento and laid over `plugins.toml`, so installing works when home-manager owns the config; Copy as Nix includes it
-- [ ] `mochi bento share`: turns the running config into a bento, leaving out device names, paths under `$HOME` and values that look like secrets, and listing them
-- [ ] `mochi bento add` and `mochi bento remove` from a path, a git URL or a gist
-- [ ] `mochi bento try`: a theme or bento as a preview, with Keep and Drop on the island
+- [x] `mochi-bento.toml`: modules and their settings, island and bubbles, the hub's arrangement, widgets on screens named by size (`screen-1` is the largest) instead of output names, a theme, a wallpaper, the plugins it needs
+- [x] `bento.toml` next to `config.toml`, written by Bento and laid over `plugins.toml`, so installing works when home-manager owns the config; Copy as Nix includes it
+- [x] `mochi bento share`: turns the running config into a bento, leaving out device names, paths under `$HOME` and values that look like secrets, and listing them
+- [x] `mochi bento add` and `mochi bento remove` from a path, a git URL or a gist
+- [x] `mochi bento try`: a theme or bento as a preview, with Keep and Drop in the settings panel, which it opens
 
 Phase 2, the registry:
 

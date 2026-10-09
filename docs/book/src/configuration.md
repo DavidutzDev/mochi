@@ -7,6 +7,8 @@ Mochi reads two files in `~/.config/mochi/` (or `$XDG_CONFIG_HOME/mochi/`):
 
 Both are written on the first start, with every option commented. A line like `# timeout_ms = 1500` shows a default: remove the `# ` to change it. Anything left out keeps its default, so a file can be as short as the one line you change.
 
+Mochi writes a few files next to them itself: `changes.toml` with the [settings panel](modules/settings.md)'s changes, `widgets.toml` with the [widgets](modules/widgets.md)' layout, and `bento.toml` with what [Bento](bento.md) installed.
+
 ## Checking and applying
 
 `mochi config check` checks both files with the same rules `mochid` uses, without a running daemon. Every error names the file, the section and the key:

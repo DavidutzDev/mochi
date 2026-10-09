@@ -221,6 +221,20 @@ impl Store {
                 preview = Changes::default();
             }
             Op::Drop => preview = Changes::default(),
+            Op::Merge(over) => {
+                for file in File::ALL {
+                    let table = over.table(file);
+                    changes::merge(changes.table_mut(file), table);
+                    // What's kept wins over what's tried.
+                    let mut paths = Vec::new();
+                    leaf_paths(table, &mut Vec::new(), &mut paths);
+                    for path in paths {
+                        let parts: Vec<&str> = path.iter().map(String::as_str).collect();
+                        changes::remove(preview.table_mut(file), &parts);
+                    }
+                }
+            }
+            Op::Try(tried) => preview = tried.clone(),
         }
         let changes = self.pruned(changes);
         let preview = self.pruned_over(preview, &changes);
@@ -435,7 +449,9 @@ impl Store {
 
     /// Every option that isn't at its default, as Nix for `programs.mochi`
     /// or as the two TOML files.
-    pub fn export(&self, format: &str) -> Result<String, String> {
+    /// What the files and the changes set that isn't the default, for
+    /// `config.toml` and `theme.toml`, without what's being tried.
+    pub fn exported(&self) -> (Table, Table) {
         let mut config = changes::merged(&self.base.config, &self.changes.config);
         let theme = changes::merged(&self.base.theme, &self.changes.theme);
         // The list is always worth writing down: it says what runs.
@@ -444,11 +460,32 @@ impl Store {
         if let Some(modules) = modules {
             config.insert("modules".to_owned(), modules);
         }
-        let theme = changes::diff(&theme, &self.defaults.theme);
+        (config, changes::diff(&theme, &self.defaults.theme))
+    }
+
+    /// Where an option's values come from, like `audio-output`, when the
+    /// panel offers them from a menu.
+    pub fn source_of(&self, path: &str) -> Option<&str> {
+        self.field(path).ok()?.source.as_deref()
+    }
+
+    pub fn export(&self, format: &str) -> Result<String, String> {
+        let (config, theme) = self.exported();
         match format {
             "nix" => {
                 let mut out = String::new();
-                for (name, table) in [("settings", config), ("theme", theme)] {
+                // What `mochi bento` installed, for `programs.mochi.plugins`.
+                let installed = mochi_plugins::bento::Installed::load(
+                    &mochi_plugins::bento::Installed::path(&self.config_file),
+                )
+                .unwrap_or_default();
+                let plugins: Table = installed
+                    .plugins
+                    .into_iter()
+                    .map(|(id, entry)| (id, Value::String(entry.source)))
+                    .collect();
+                for (name, table) in [("settings", config), ("theme", theme), ("plugins", plugins)]
+                {
                     if !table.is_empty() {
                         out.push_str(&binding(name, table));
                     }
@@ -467,6 +504,18 @@ impl Store {
             }
             other => Err(format!("unknown format {other:?}: nix or toml")),
         }
+    }
+}
+
+/// The path of every value in `table` that isn't a table, lists included.
+fn leaf_paths(table: &Table, prefix: &mut Vec<String>, out: &mut Vec<Vec<String>>) {
+    for (key, value) in table {
+        prefix.push(key.clone());
+        match value {
+            Value::Table(inner) => leaf_paths(inner, prefix, out),
+            _ => out.push(prefix.clone()),
+        }
+        prefix.pop();
     }
 }
 
@@ -515,6 +564,11 @@ pub enum Op {
     Keep,
     /// Stops trying, back to the changes.
     Drop,
+    /// Lays whole tables over the changes and keeps them, like a bento's
+    /// settings.
+    Merge(Changes),
+    /// Tries whole tables in place of what was being tried.
+    Try(Changes),
 }
 
 /// Every option at its default: the theme's, and for `config.toml` each
@@ -1098,6 +1152,45 @@ mod tests {
             "the changes should be gone"
         );
         assert_eq!(store.snapshot()["changes"], json!(false));
+        std::fs::remove_dir_all(config.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_bento_is_tried_then_merged_and_its_plugins_export() {
+        let config = temp("bento");
+        std::fs::write(
+            config.with_file_name("bento.toml"),
+            "[plugins.hello]\nsource = \"git:github.com/User/hello\"\n",
+        )
+        .unwrap();
+        let (mut store, _) = Store::load(&config, None).unwrap();
+        let bento = Changes {
+            config: toml::from_str(
+                "modules = [\"idle\", \"hello\"]\n[module.osd]\ntimeout_ms = 2500\n",
+            )
+            .unwrap(),
+            theme: toml::from_str("preset = \"nord\"").unwrap(),
+        };
+
+        // Tried, it applies without being saved.
+        let loaded = store.change(&Op::Try(bento.clone())).unwrap();
+        assert_eq!(loaded.config.modules, ["idle", "hello"]);
+        assert!(!Changes::path(&config).exists());
+
+        // Merged, it's kept, and what was tried of it goes.
+        store.change(&Op::Merge(bento)).unwrap();
+        let saved = Changes::load(&Changes::path(&config)).unwrap();
+        assert_eq!(
+            changes::get(&saved.theme, &["preset"]),
+            Some(&Value::String("nord".into()))
+        );
+        assert_eq!(store.snapshot()["previewing"], json!(false));
+
+        let nix = store.export("nix").unwrap();
+        assert!(
+            nix.contains("plugins = {\n  hello = \"git:github.com/User/hello\";"),
+            "{nix}"
+        );
         std::fs::remove_dir_all(config.parent().unwrap()).unwrap();
     }
 

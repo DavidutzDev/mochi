@@ -874,6 +874,7 @@ impl Daemon {
             SettingsOp::Preview { values, replace } => settings::Op::Preview { values, replace },
             SettingsOp::Keep => settings::Op::Keep,
             SettingsOp::Drop => settings::Op::Drop,
+            SettingsOp::Try(changes) => settings::Op::Try(changes),
         };
         let loaded = self.store.change(&op)?;
         self.run_with(loaded)

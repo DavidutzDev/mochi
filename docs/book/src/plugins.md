@@ -19,6 +19,8 @@ source = "git-release:github.com/User/mochi-weather:v0.2.0"
 source = "path:~/code/my-plugin"
 ```
 
+`mochi bento add` installs plugins too, and lists them in `bento.toml` next to plugins.toml, which counts as if plugins.toml listed them: see [Bento](bento.md).
+
 The source says where the plugin comes from and how it's installed:
 
 | Source | Installs |

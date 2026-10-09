@@ -556,8 +556,10 @@ Item {
 
             anchors.top: about.visible ? about.bottom : header.bottom
             anchors.topMargin: Theme.spaceMedium
-            anchors.bottom: tried.visible ? tried.top : parent.bottom
-            anchors.bottomMargin: Theme.spaceMedium
+            // Above the bar of what's being tried, which isn't a sibling to
+            // anchor to.
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: tried.visible ? tried.height + Theme.spaceMedium * 2 : Theme.spaceMedium
             x: Theme.spaceSmall
             width: parent.width - Theme.spaceSmall * 2
 

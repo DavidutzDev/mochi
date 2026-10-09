@@ -24,6 +24,8 @@ A theme is a directory with a `mochi-theme.toml`. Installed ones live in `~/.loc
 
 `[dark]` and `[light]` give each role a color, the roles of `[colors]` below. A theme with only one of them uses it for both appearances, and a role it leaves out takes Obsidian's, so a theme can be as short as an accent. A theme holds colors only, no fonts or views, so it can't run anything. A typo, like an unknown role or a color that isn't `#rrggbb` or `#aarrggbb`, is an error naming the key.
 
+`mochi bento add <directory or repository>` installs a theme, and `mochi bento try` tries it until you keep it or drop it: see [Bento](bento.md).
+
 ## Motion
 
 `[motion]` sets how things move. `reduced = true` turns animations off: views appear and change at once, and the island takes its shape without a spring. `speed` makes every animation faster or slower, 2 being twice as fast.

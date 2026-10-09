@@ -12,6 +12,7 @@
 //! `$XDG_DATA_HOME/mochi/plugins/<id>/` and records the exact commit or
 //! release in plugins.lock. mochid only reads: it never fetches or builds.
 
+pub mod bento;
 pub mod install;
 pub mod manifest;
 pub mod source;
@@ -63,6 +64,8 @@ pub struct Locations {
     pub list: PathBuf,
     /// plugins.lock, next to it.
     pub lock: PathBuf,
+    /// bento.toml, next to it: the plugins `mochi bento` installed.
+    pub bento: PathBuf,
     /// Installed plugins, one directory each.
     pub installs: PathBuf,
 }
@@ -79,6 +82,7 @@ impl Locations {
         Self {
             list: config_file.with_file_name("plugins.toml"),
             lock: config_file.with_file_name("plugins.lock"),
+            bento: config_file.with_file_name(bento::FILE),
             installs: data_home.join("mochi").join("plugins"),
         }
     }
@@ -143,6 +147,32 @@ struct ListEntry {
 }
 
 impl PluginList {
+    /// Every plugin: plugins.toml's, and the ones bento.toml says
+    /// `mochi bento` installed. plugins.toml wins when both list an id.
+    pub fn of(locations: &Locations) -> Result<Self, ListError> {
+        let mut list = Self::load(&locations.list)?;
+        let installed = bento::Installed::load(&locations.bento)?;
+        for (id, entry) in installed.plugins {
+            if list.plugins.contains_key(&id) {
+                continue;
+            }
+            let invalid = |message: String| ListError::Invalid {
+                path: locations.bento.clone(),
+                message: format!("[plugins.{id}]: {message}"),
+            };
+            manifest::check_id(&id).map_err(invalid)?;
+            if BUILTIN.contains(&id.as_str()) {
+                return Err(invalid("a builtin module's id".into()));
+            }
+            let source = entry
+                .source
+                .parse()
+                .map_err(|error: SourceError| invalid(error.to_string()))?;
+            list.plugins.insert(id, source);
+        }
+        Ok(list)
+    }
+
     /// Reads plugins.toml; a missing file lists nothing.
     pub fn load(path: &Path) -> Result<Self, ListError> {
         let Some(text) = read_optional(path)? else {
@@ -254,9 +284,10 @@ pub struct Found {
     pub manifest: Result<Manifest, String>,
 }
 
-/// Every plugin plugins.toml lists, with its manifest when it's there.
+/// Every plugin plugins.toml and bento.toml list, with its manifest when
+/// it's there.
 pub fn discover(locations: &Locations) -> Result<Vec<Found>, ListError> {
-    let list = PluginList::load(&locations.list)?;
+    let list = PluginList::of(locations)?;
     Ok(list
         .plugins
         .into_iter()
@@ -361,9 +392,26 @@ mod tests {
         let locations = Locations {
             list: dir.join("plugins.toml"),
             lock: dir.join("plugins.lock"),
+            bento: dir.join("bento.toml"),
             installs: dir.join("installs"),
         };
+        std::fs::write(
+            dir.join("bento.toml"),
+            "[plugins.mine]\nsource = \"git:github.com/User/mine\"\n[plugins.brought]\nsource = \"path:mine\"\nby = \"cozy\"\n",
+        )
+        .unwrap();
         let found = discover(&locations).unwrap();
+        // bento.toml adds plugins, and plugins.toml wins over it.
+        assert_eq!(found.len(), 4);
+        assert!(matches!(
+            found
+                .iter()
+                .find(|found| found.id == "mine")
+                .unwrap()
+                .source,
+            Source::Path(_)
+        ));
+        assert!(found.iter().any(|found| found.id == "brought"));
         let by_id = |id: &str| found.iter().find(|found| found.id == id).unwrap();
         assert!(
             by_id("gone")

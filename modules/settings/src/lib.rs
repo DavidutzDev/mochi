@@ -66,6 +66,14 @@ impl Module for Settings {
             )
             .arg(path())
             .arg(ArgSpec::string("value", "Its value as JSON").rest()),
+            ActionSpec::new(
+                "try",
+                "Try whole tables of settings without keeping them, like a bento's",
+            )
+            .arg(
+                ArgSpec::string("changes", "JSON like {\"config\": {...}, \"theme\": {...}}")
+                    .rest(),
+            ),
             ActionSpec::new("keep", "Keep what's being tried, as changes"),
             ActionSpec::new("drop", "Stop trying, back to the changes"),
             ActionSpec::new("text", "Print a section as TOML").arg(path()),
@@ -210,6 +218,10 @@ impl Panel {
                     Err(error) => Err(format!("the value isn't JSON: {error}")),
                 }
             }
+            "try" => match tried(&arg("changes")) {
+                Ok(changes) => self.change(ctx, "", SettingsOp::Try(changes)).await,
+                Err(error) => Err(error),
+            },
             "keep" => self.change(ctx, "", SettingsOp::Keep).await,
             "drop" => self.change(ctx, "", SettingsOp::Drop).await,
             "edit" => {
@@ -325,6 +337,31 @@ impl Panel {
         state["editor"] = self.editor.clone().unwrap_or(Value::Null);
         ctx.publish_state(state);
     }
+}
+
+/// `try`'s JSON: a `config` and a `theme` table, either left out.
+fn tried(text: &str) -> Result<mochi_core::changes::Changes, String> {
+    let json: Value =
+        serde_json::from_str(text).map_err(|error| format!("the changes aren't JSON: {error}"))?;
+    let table = |name: &str| -> Result<mochi_core::toml::Table, String> {
+        match json.get(name) {
+            None | Some(Value::Null) => Ok(mochi_core::toml::Table::new()),
+            Some(value) => mochi_core::toml::Table::try_from(value.clone())
+                .map_err(|error| format!("`{name}` isn't a table: {error}")),
+        }
+    };
+    if let Some(other) = json
+        .as_object()
+        .ok_or("the changes must be an object")?
+        .keys()
+        .find(|key| !["config", "theme"].contains(&key.as_str()))
+    {
+        return Err(format!("unknown part `{other}`: only `config` and `theme`"));
+    }
+    Ok(mochi_core::changes::Changes {
+        config: table("config")?,
+        theme: table("theme")?,
+    })
 }
 
 fn payload(ctx: &ModuleCtx, section: &str, option: &str) -> Value {

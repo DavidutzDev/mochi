@@ -29,6 +29,7 @@ When `changes.toml` has an option that no longer fits, after an update renamed i
 | `reset <path>` | Undoes the change to an option, or to each option of a section, back to what the files say. |
 | `discard` | Drops every change. |
 | `preview <path> <json>`, `keep`, `drop` | Tries an option without keeping it, then keeps or drops what's being tried. |
+| `try <json>` | Tries whole tables of settings, like `{"config": {...}, "theme": {...}}`, in place of what was being tried; `mochi bento try` sends it. |
 | `text <path>`, `edit <path> <toml>` | A section as TOML, and replacing it. |
 | `export [nix\|toml]`, `copy [nix\|toml]` | Prints, or copies, every option that isn't at its default. |
 

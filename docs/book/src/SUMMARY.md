@@ -10,6 +10,7 @@
   - [Bubbles](bubbles.md)
   - [Theme](theme.md)
 - [Plugins](plugins.md)
+- [Bento](bento.md)
 
 # Modules
 

@@ -707,6 +707,31 @@ fn check_exec(manifest: &Manifest, dir: &Path) -> Result<(), InstallError> {
 
 /// The commit `reference` names in a fresh clone: a branch, a tag or a
 /// commit. Without one, the default branch.
+/// Clones `url` into `into`, which mustn't exist, at `reference`, a
+/// branch, tag or commit, or the default branch without one. Runs none of
+/// the repository's code. Returns the commit.
+pub fn clone(url: &str, reference: Option<&str>, into: &Path) -> Result<String, InstallError> {
+    run(
+        "git",
+        ["clone", "--quiet", "--filter=blob:none", "--", url]
+            .iter()
+            .map(OsStr::new)
+            .chain([into.as_os_str()]),
+        None,
+    )?;
+    let commit = resolve(into, reference)?;
+    run(
+        "git",
+        ["-C"]
+            .iter()
+            .map(OsStr::new)
+            .chain([into.as_os_str()])
+            .chain(["checkout", "--quiet", "--detach", &commit].map(OsStr::new)),
+        None,
+    )?;
+    Ok(commit)
+}
+
 fn resolve(repo: &Path, reference: Option<&str>) -> Result<String, InstallError> {
     let candidates = match reference {
         Some(reference) => vec![format!("origin/{reference}"), reference.to_owned()],
@@ -889,6 +914,7 @@ mod tests {
         let locations = Locations {
             list: root.join("plugins.toml"),
             lock: root.join("plugins.lock"),
+            bento: root.join("bento.toml"),
             installs: root.join("installs"),
         };
         let mut asked = Vec::new();
@@ -953,6 +979,7 @@ mod tests {
         let locations = Locations {
             list: root.join("plugins.toml"),
             lock: root.join("plugins.lock"),
+            bento: root.join("bento.toml"),
             installs: root.join("installs"),
         };
         let mut confirm = |_: &Plan| false;
@@ -1027,6 +1054,7 @@ mod tests {
         let locations = Locations {
             list: root.join("plugins.toml"),
             lock: root.join("plugins.lock"),
+            bento: root.join("bento.toml"),
             installs: root.join("installs"),
         };
         let installer = Installer {
@@ -1118,6 +1146,7 @@ mod tests {
         let locations = Locations {
             list: root.join("plugins.toml"),
             lock: root.join("plugins.lock"),
+            bento: root.join("bento.toml"),
             installs: root.join("installs"),
         };
         let mut confirm = |_: &Plan| true;

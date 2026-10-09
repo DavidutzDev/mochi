@@ -84,6 +84,19 @@ enum Command {
         )]
         args: Vec<String>,
     },
+    /// Share setups, themes and plugins, and install them: `share`, `add`,
+    /// `try`, `remove`, `list`, `check`.
+    ///
+    /// Runs `mochid bento`, which knows every module's settings, so it
+    /// can tell what belongs to this machine.
+    Bento {
+        #[arg(
+            trailing_var_arg = true,
+            allow_hyphen_values = true,
+            value_name = "ARGS"
+        )]
+        args: Vec<String>,
+    },
     /// Check what Mochi needs around it: the daemon, the config,
     /// Quickshell, the fonts, the compositor's protocols, the portals and
     /// the programs modules and plugins run. Says what to install or
@@ -207,6 +220,7 @@ fn run(command: Command, json: bool) -> Result<(), String> {
             Ok(())
         }
         Command::Config { args } => mochid(&["config".into()], &args),
+        Command::Bento { args } => mochid(&["bento".into()], &args),
         Command::Doctor { config } => {
             let mut before: Vec<String> = Vec::new();
             if let Some(config) = config {
@@ -247,7 +261,7 @@ fn plugins(config: Option<PathBuf>, action: PluginsAction, json: bool) -> Result
         None => default_config()?,
     };
     let locations = Locations::beside(&config);
-    let list = PluginList::load(&locations.list).map_err(|error| error.to_string())?;
+    let list = PluginList::of(&locations).map_err(|error| error.to_string())?;
     match action {
         PluginsAction::List => plugins_list(&locations, &list, json),
         PluginsAction::Install { ids, yes } => {
