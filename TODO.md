@@ -358,6 +358,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] More built-in providers: open windows (settings pages come from the settings module)
 - [x] The file index follows changes as they happen (inotify) instead of rebuilding after 15 seconds
 - [ ] Watch the application directories instead of reading them on every open, if opening ever feels slow
+- [ ] A wallpaper carousel: pick a wallpaper from the launcher, with large previews, and the theme follows when `preset = "wallpaper"`
 
 ### Control center (was the hub)
 
@@ -376,6 +377,9 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] More cards and pages: power
 - [x] Renamed to the control center, module id `control-center`; `hub` still works in config.toml, commands and plugin manifests, with a warning
 - [x] Clicking a card opens its page: the heading or the card beside its controls, `options.page` to pick
+- [ ] A tile grid of labelled quick toggles (do not disturb, keep awake, dark, airplane, night light, mic, capture, record, picker, timer, session)
+- [ ] Wide pill sliders for volume and brightness
+- [ ] CPU, memory, disk and battery rings at the bottom of the home
 
 ### Power
 
@@ -389,6 +393,7 @@ Lives only in the hub: no island view, a page and the CLI.
 - [x] Tested on this machine: hibernate hidden (logind says `na`), switching to performance and back from the CLI moves the selector, and two real clicks on Log out with a harmless replacement command (the first only asks)
 - [x] The older `net.hadess.PowerProfiles` name, for power-profiles-daemon before 0.20
 - [ ] A lock screen of its own, if hyprlock and the others ever fall short (see open question 3)
+  - Reference (Lucid): a big two-line clock in the wallpaper's colour on the left with the date and weather, the password, media and notifications on the right, battery, network and Bluetooth at the top, power actions at the bottom; a polkit prompt in the same style
 - [ ] Reboot into another OS, only once it can work with any bootloader and distro. Today no single way does: logind's one-shot boot loader entry only covers loaders that follow the Boot Loader Interface (systemd-boot), GRUB needs root to run `grub-reboot`, and the firmware's `BootNext` needs root too. Decided on 2026-10-03 to wait
 
 ### Capture
@@ -417,6 +422,7 @@ Screenshots and recordings from the island. Decided on 2026-10-04: our own froze
 - [x] A hub page for captures: the latest screenshots and recordings as a history, with thumbnails, and the preview card's copy, edit, open folder and delete on each
 - [x] Thumbnails for recordings: a frame from each video, made once and kept
 - [x] Pick the quality of a recording and of a screen share: frame rate presets (15, 30, 60, 90, 120 fps) and resolution presets (480p, 720p, 1080p, 1440p), in the picker and as settings. Recordings pass gpu-screen-recorder `-f` and `-s`; a switchable share sets `MOCHI-SHARE`'s refresh rate and size. A share that isn't switchable stays the app's to choose
+- [ ] Text copier: drag a box over anything on screen and the text inside lands on the clipboard, through OCR (tesseract)
 
 ### Share
 
@@ -551,6 +557,11 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [x] Widgets from existing modules: now playing, performance graphs, battery, weather
 - [x] Alignment guides while dragging
 - [x] Moving a widget to another monitor from its settings
+- [ ] Variants: a widget offers several looks (a clock: digital, stacked, analog, in a shape, minimal, world), each with a name, a one-line description and a default size
+- [ ] The drawer as a side panel while arranging: live previews of every variant in a grid, a one-line description each, category chips, tabs for Add, On desktop and Layouts (saved arrangements), "1 on the desktop" counts, drag or click to add
+- [ ] Shared expressive pieces in the core: a few shapes (scallop, pentagon, wavy ring), a wavy progress line for media while it plays, stacked numerals; one shape per widget, as an accent
+- [ ] New looks: clock (stacked, analog, shape, minimal, world), calendar (week strip, coming up), system and battery rings, media (wavy progress card, cover only), timer, fetch
+- [ ] Later looks: visualiser bars along the screen edge, photo frame, at a glance, thermals, network graph
 
 ## Bento
 
@@ -639,6 +650,8 @@ Later:
 - [x] Brightness: the laptop's backlight and external monitors over DDC/CI with ddcutil, with the OSD and a slider tile (replaces "Laptop screen brightness" under OSD)
 - [x] Updates: the updater module looks for a release on GitHub, says so once on the island, and its page in the settings has the changelog and the update the way Mochi was installed
 - [x] An About page in the settings: version, system, session, modules, plugins and processes, to copy into a bug report
+- [ ] Weather: a built-in module with Open-Meteo (no key), off until a place is set; widgets (current, forecast, 12-hour curve), and one forecast shared with the clock panel and a lock screen
+- [ ] A clock panel on the island: Today (time, weather, hourly), Calendar with reminders, Timer and pomodoro (the timer module), Stopwatch with laps, World clocks
 - [x] Bento before Plugins in the settings, and a `section` contribution for a module's own view on its settings page
 
 ### Checks and tools
@@ -673,12 +686,19 @@ Later:
 - [x] Release 0.0.9: an updater with the changelog and an update for each way of installing, the universal installer, an About page, the hub renamed to the control center, one shell per session with mochid --dev taking over, presets that replace the file's colors
 - [x] Documentation site with mdBook in `docs/book`: installing, getting started, configuration, bubbles, theme, a page per module that includes its `settings.toml`, writing views and the protocol. `nix build .#docs`, part of `nix flake check`; `.github/workflows/docs.yml` publishes it to GitHub Pages
 - [x] Publish the site: https://davidutzdev.github.io/mochi/
+- [ ] A website for Mochi, not only the docs: a landing page (pitch, screenshot, install command, a theme switcher with Mochi's palettes), news from releases, features with screenshots, a gallery, keybinds, support with a bug report builder that pairs with the About page's Copy details, and the docs under `/docs`. Screenshots made by CI in a headless session, so no media lives in the repository. Last on the list
 - [x] `docs/architecture.md`: the crates, the daemon loop, the UI, contributions, settings, plugins, sessions, tests and releases, for contributors
 
 ## Later
 
 - [ ] Lua or WASM plugin backends
 - [ ] SDKs for other languages
+- [ ] A polkit agent, in Mochi's style
+- [ ] A window switcher and an overview of the workspaces with live previews
+- [ ] An on-screen keyboard that doesn't take focus, with latching modifiers
+- [ ] System sounds: short tones for devices plugged in, the charger, battery warnings, quiet while notifications are silenced
+- [ ] A storage analyzer: what fills each drive, with a usage map
+- [ ] A "Glass" slider: how much of the desktop shows through the shell
 - [x] Settings UI: the settings module
 - [x] A guided tour, and a tour of what's new after each release: the tour module
 
@@ -686,11 +706,13 @@ Later:
 
 1. ~~Multiple monitors: one island per output, or only on the focused output?~~ One per output, and `[island] notices` and `panels` pick where things show.
 2. ~~Can a plugin read state from other modules?~~ Yes: `[uses] state` in the manifest, and `ModuleCtx::watch_state` for builtins.
-3. Is the lock screen a module, or a separate minimal program? A crash in the lock screen is a security problem.
+3. Is the lock screen a module, or a separate minimal program? A crash in the lock screen is a security problem. Lucid's lock screen is a design reference (see Power).
 4. ~~Does the theme control the animation springs, or are they fixed per view?~~ The theme's `[motion]` does.
 
 ## Suggested order
 
 Done: the spike, phase 1, the compositor adapter, the layout system, bubbles, and every module so far: capture, share, the control center's pages, plugins, widgets, the settings, Bento, the tour and the updater.
+
+Next, from the Lucid ideas: the widget drawer with variants and previews, the shared expressive pieces, the new widget looks, the weather module and the clock panel. The website comes last.
 
 Next, open items that need a decision first: the lock screen (open question 3), per-output layout, the notch beside a bar and fused with its bubbles, and how views reveal during a morph.
