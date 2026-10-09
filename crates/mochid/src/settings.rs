@@ -826,6 +826,7 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
             max: None,
             items: Some(Kind::Text),
             source: Some("module".to_owned()),
+            filter: None,
             suggestions: Vec::new(),
             optional: false,
             default: json!(mochi_core::config::DEFAULT_MODULES),
@@ -1003,7 +1004,7 @@ mod tests {
 
     #[test]
     fn every_source_is_one_the_panel_knows() {
-        const KNOWN: [&str; 9] = [
+        const KNOWN: [&str; 10] = [
             "command",
             "module",
             "app",
@@ -1013,19 +1014,35 @@ mod tests {
             "control-center-card",
             "control-center-page",
             "timezone",
+            "file",
         ];
         let catalog = modules::catalog(Path::new("/nonexistent/config.toml")).unwrap();
         let mut found = 0;
+        let mut files = Vec::new();
         for section in sections(&catalog) {
             for field in &section.fields {
                 if let Some(source) = &field.source {
                     assert!(KNOWN.contains(&source.as_str()), "{}: {source}", field.path);
                     found += 1;
                 }
+                // The settings module's chooser knows each filter.
+                if let Some(filter) = &field.filter {
+                    assert_eq!(field.source.as_deref(), Some("file"), "{}", field.path);
+                    assert!(
+                        mochi_module_settings::files::filter(filter).is_some(),
+                        "{}: {filter}",
+                        field.path
+                    );
+                }
+                if field.source.as_deref() == Some("file") {
+                    files.push(field.path.as_str().to_owned());
+                }
             }
         }
         // Idle's two commands, capture's devices, and the rest.
         assert!(found >= 12, "{found}");
+        assert!(files.contains(&"config.module.timer.sound_file".to_owned()));
+        assert!(files.contains(&"theme.wallpaper".to_owned()));
     }
 
     #[test]

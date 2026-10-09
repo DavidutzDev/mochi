@@ -109,9 +109,14 @@ pub struct Field {
     /// and its arguments; `app`, `audio-device`, `tray-app`, `player`,
     /// `control-center-card` and `control-center-page` come from what runs
     /// now, and `timezone` from the system's zone database. Typing anything
-    /// else still works.
+    /// else still works. `file` is a path, which the panel's Choose button
+    /// picks with the desktop's file chooser.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
+    /// The files a `file` source's chooser shows, like `audio` or `image`:
+    /// `x-filter` in the schema. Every file without one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filter: Option<String>,
     /// Ready-made values for a command, like `["hyprlock"]`: `x-suggest` in
     /// the schema. The daemon keeps the ones whose program is installed.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -268,6 +273,7 @@ fn collect(
             max: shape.max,
             items: shape.items,
             source: shape.source,
+            filter: shape.filter,
             suggestions: shape.suggestions,
             optional: shape.optional,
             default,
@@ -288,6 +294,7 @@ struct Shape<'a> {
     max: Option<f64>,
     items: Option<Kind>,
     source: Option<String>,
+    filter: Option<String>,
     suggestions: Vec<Json>,
     description: Option<String>,
     /// The schema without its `null`, for a group's own fields.
@@ -311,6 +318,10 @@ impl<'a> Shape<'a> {
             source: schema
                 .get("x-source")
                 .or_else(|| schema.get("items").and_then(|items| items.get("x-source")))
+                .and_then(Json::as_str)
+                .map(str::to_owned),
+            filter: schema
+                .get("x-filter")
                 .and_then(Json::as_str)
                 .map(str::to_owned),
             suggestions: schema

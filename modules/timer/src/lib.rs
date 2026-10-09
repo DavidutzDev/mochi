@@ -120,6 +120,7 @@ struct Settings {
     sound: bool,
     /// A sound file for the alarm, like ~/sounds/bell.oga. Empty plays
     /// alarm-clock-elapsed from the sound theme.
+    #[schemars(extend("x-source" = "file", "x-filter" = "audio"))]
     sound_file: String,
     /// How loud the alarm plays, from 0 to 100.
     #[schemars(range(min = 0, max = 100))]
@@ -851,11 +852,15 @@ impl State {
             "+{}",
             duration::words(self.settings.extend_seconds * 1000)
         ));
-        // For the test button on the settings page.
+        // For the test button on the settings page, and the alarm's row on
+        // the clock panel's Timer tab. A command of the user's own plays
+        // at its own volume.
         state["alarm"] = json!({
             "sound": self.settings.sound,
             "focus_sound": self.settings.focus_sound,
             "volume": self.settings.volume,
+            "sound_file": self.settings.sound_file,
+            "own_command": !self.settings.sound_command.is_empty(),
         });
         ctx.publish_state(state);
     }

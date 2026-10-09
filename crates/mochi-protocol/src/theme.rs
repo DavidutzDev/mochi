@@ -19,6 +19,7 @@ pub struct Theme {
     pub appearance: Appearance,
     /// The image the `wallpaper` preset reads, or `auto` for the one awww,
     /// swww or hyprpaper shows.
+    #[schemars(extend("x-source" = "file", "x-filter" = "image"))]
     pub wallpaper: String,
     pub colors: Colors,
     pub layout: Layout,

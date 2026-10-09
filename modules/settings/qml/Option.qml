@@ -14,7 +14,9 @@ import qs.island
 // tray apps, players, control center cards, modules, time zones. A command,
 // like the idle clock's click, picks a module, then one of its actions, then
 // its arguments. A command line with ready-made ones, like the lock, offers
-// those that are installed.
+// those that are installed. A file, like the timer's sound, is typed or
+// picked with the desktop's file chooser. Time zones pick from the
+// island's ZonePicker, with a search the keyboard moves through.
 Item {
     id: root
 
@@ -60,7 +62,8 @@ Item {
 
     function openMenu(kind: string, anchor: Item): void {
         menu = kind;
-        popup("choice", anchor);
+        // Time zones have a picker of their own, with a search.
+        popup(kind === "value" && source === "timezone" ? "zones" : "choice", anchor);
     }
 
     // A command's module and action, and the arguments after them.
@@ -271,7 +274,7 @@ Item {
                 case "list":
                     return root.source === "command" ? commandControl : listControl;
                 case "text":
-                    return root.source !== "" ? pickControl : textControl;
+                    return root.source === "file" ? fileControl : root.source !== "" ? pickControl : textControl;
                 default:
                     return tableControl;
                 }
@@ -786,6 +789,35 @@ Item {
             text: root.value ?? ""
             placeholder: root.field["default"] === "" ? "Default" : ""
             onAccepted: text => root.sendNow(text)
+        }
+    }
+
+    // A file's path, typed, or picked with the desktop's file chooser,
+    // which the settings module opens and sets the option from. The
+    // button says so while the chooser is open; pressing it again opens
+    // another, in case the first went behind a window.
+    Component {
+        id: fileControl
+
+        Row {
+            readonly property bool choosing: Daemon.state("settings")?.choosing === root.field.path
+
+            spacing: Theme.spaceSmall
+
+            Entry {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 200
+                text: root.value ?? ""
+                placeholder: root.field["default"] === "" ? "Default" : ""
+                onAccepted: text => root.sendNow(text.trim())
+            }
+
+            ActionButton {
+                anchors.verticalCenter: parent.verticalCenter
+                text: parent.choosing ? "Choosing…" : "Choose…"
+                icon: "folder_open"
+                onClicked: Daemon.command("settings", "choose-file", [root.field.path])
+            }
         }
     }
 

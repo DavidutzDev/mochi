@@ -1220,6 +1220,7 @@ dependencies = [
 name = "mochi-module-settings"
 version = "0.0.9"
 dependencies = [
+ "futures-util",
  "include_dir",
  "libc",
  "mochi-core",
@@ -1227,6 +1228,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tracing",
+ "zbus",
 ]
 
 [[package]]

@@ -6,13 +6,16 @@
 //!
 //! `mochi ipc settings open` opens it, at a section with
 //! `mochi ipc settings open colors`. The launcher finds sections and
-//! options by name.
+//! options by name. An option whose source is `file` has a Choose button,
+//! whose `choose-file` opens the desktop's file chooser, see [`files`], and
+//! sets the option to the file picked.
 
 mod about;
 mod bento;
+pub mod files;
 mod tour;
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
@@ -143,6 +146,11 @@ impl Module for Settings {
             ActionSpec::new("open-link", "Open one of Mochi's pages in the browser").arg(
                 ArgSpec::string("page", "repository, documentation or issue"),
             ),
+            ActionSpec::new(
+                "choose-file",
+                "Pick an option's file with the desktop's file chooser, and set the option to it",
+            )
+            .arg(path()),
         ]
     }
 
@@ -153,6 +161,10 @@ impl Module for Settings {
                 "Copy as Nix or TOML, while the clipboard module is off",
             ),
             mochi_core::Need::new("xdg-open", "The links on the About page"),
+            mochi_core::Need::new(
+                "zenity",
+                "Choose buttons for files where there's no desktop portal; or kdialog",
+            ),
         ]
     }
 
@@ -180,6 +192,8 @@ impl Module for Settings {
             panel.done = Some(done.clone());
             let (read, mut abouts) = tokio::sync::mpsc::unbounded_channel();
             panel.read = Some(read);
+            let (chosen, mut choices) = tokio::sync::mpsc::unbounded_channel();
+            panel.chosen = Some(chosen);
             panel.publish(&ctx);
             loop {
                 let event = tokio::select! {
@@ -196,6 +210,10 @@ impl Module for Settings {
                         panel.about = Some(about);
                         panel.reading = false;
                         panel.publish(&ctx);
+                        continue;
+                    }
+                    Some(choice) = choices.recv() => {
+                        panel.chose(&ctx, choice).await;
                         continue;
                     }
                 };
@@ -250,7 +268,25 @@ struct Panel {
     zones: Value,
     /// When the zones were read, for their offsets.
     zones_read: Option<std::time::Instant>,
+    /// The file chooser open now.
+    chooser: Option<Chooser>,
+    /// Where a file chooser sends what it got.
+    chosen: Option<tokio::sync::mpsc::UnboundedSender<Chosen>>,
 }
+
+/// A file chooser open for an option, and the command waiting on it.
+#[derive(Debug)]
+struct Chooser {
+    /// The option's path, like `config.module.timer.sound_file`.
+    path: String,
+    /// Which chooser this is, so a dropped one's answer is ignored.
+    id: u64,
+    task: tokio::task::JoinHandle<()>,
+    command: Option<ModuleCommand>,
+}
+
+/// What a file chooser got: its id, and the file or `None` when closed.
+type Chosen = (u64, Result<Option<PathBuf>, String>);
 
 impl Panel {
     async fn command(&mut self, ctx: &ModuleCtx, command: ModuleCommand) {
@@ -415,9 +451,102 @@ impl Panel {
                     arg("page")
                 )),
             },
+            "choose-file" => {
+                let path = arg("path");
+                match self.choose_file(&path) {
+                    // Answers with the file once the chooser closes.
+                    Ok(()) => {
+                        if let Some(chooser) = &mut self.chooser {
+                            chooser.command = Some(command);
+                        }
+                        self.publish(ctx);
+                        return;
+                    }
+                    Err(error) => {
+                        self.error = Some(json!({ "path": path, "message": error }));
+                        self.publish(ctx);
+                        Err(error)
+                    }
+                }
+            }
             other => Err(format!("settings has no action {other}")),
         };
         command.reply(result);
+    }
+
+    /// Opens a file chooser for the option at `path`, whose source is
+    /// `file`, off the module's loop: someone may take their time.
+    fn choose_file(&mut self, path: &str) -> Result<(), String> {
+        let field = sections(&self.snapshot)
+            .iter()
+            .flat_map(|section| section["fields"].as_array().into_iter().flatten())
+            .find(|field| field["path"] == path)
+            .ok_or_else(|| format!("there's no option {path}"))?;
+        if field["source"] != "file" {
+            return Err(format!("{path} isn't a file"));
+        }
+        let title = field["title"].as_str().unwrap_or("File").to_lowercase();
+        let request = files::Request {
+            title: format!("Choose the {title}"),
+            filter: field["filter"].as_str().and_then(files::filter),
+            folder: field["value"].as_str().and_then(files::folder_of),
+        };
+        let done = self.chosen.clone().ok_or("the settings aren't ready")?;
+        // A second Choose drops the first, whose answer goes nowhere.
+        if let Some(before) = self.chooser.take() {
+            before.task.abort();
+            if let Some(command) = before.command {
+                command.reply(Err("another file chooser took its place".to_owned()));
+            }
+        }
+        static IDS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let id = IDS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let task = tokio::spawn(async move {
+            let bus = zbus::Connection::session().await.ok();
+            let path = std::env::var_os("PATH");
+            let answer = files::choose(&request, bus.as_ref(), path.as_deref()).await;
+            let _ = done.send((id, answer));
+        });
+        self.chooser = Some(Chooser {
+            path: path.to_owned(),
+            id,
+            task,
+            command: None,
+        });
+        self.error = None;
+        Ok(())
+    }
+
+    /// A file chooser closed: the option takes the file it got.
+    async fn chose(&mut self, ctx: &ModuleCtx, (id, answer): Chosen) {
+        let Some(chooser) = self.chooser.take_if(|chooser| chooser.id == id) else {
+            return;
+        };
+        let path = chooser.path;
+        let result = match answer {
+            Ok(Some(file)) => {
+                let value = json!(file.to_string_lossy());
+                let op = SettingsOp::Set {
+                    path: path.clone(),
+                    value,
+                };
+                self.change(ctx, &path, op)
+                    .await
+                    .map(|()| file.display().to_string())
+            }
+            Ok(None) => Ok(String::new()),
+            Err(error) => {
+                tracing::warn!(%error, path, "no file chosen");
+                self.error = Some(json!({ "path": path, "message": error }));
+                Err(error)
+            }
+        };
+        self.publish(ctx);
+        match (chooser.command, result) {
+            (Some(command), Ok(file)) if file.is_empty() => command.reply(Ok(())),
+            (Some(command), result) => command.answer(result),
+            (None, _) => {}
+        }
     }
 
     /// Runs a change. A refused one shows its message under the option
@@ -494,6 +623,12 @@ impl Panel {
         state["about"] = self.about.clone().unwrap_or(Value::Null);
         state["about_reading"] = Value::Bool(self.reading);
         state["timezones"] = self.zones.clone();
+        // The option a file chooser is open for, so its Choose button
+        // waits.
+        state["choosing"] = self
+            .chooser
+            .as_ref()
+            .map_or(Value::Null, |chooser| json!(chooser.path));
         ctx.publish_state(state);
     }
 
