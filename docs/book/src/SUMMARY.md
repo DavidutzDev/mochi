@@ -42,6 +42,7 @@
 - [Drop](modules/drop.md)
 - [Settings](modules/settings.md)
 - [Tour](modules/tour.md)
+- [Updates](modules/updater.md)
 
 # Building on Mochi
 

@@ -1226,6 +1226,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-updater"
+version = "0.0.8"
+dependencies = [
+ "include_dir",
+ "libc",
+ "mochi-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-widgets"
 version = "0.0.8"
 dependencies = [
@@ -1349,6 +1363,7 @@ dependencies = [
  "mochi-module-share",
  "mochi-module-tour",
  "mochi-module-tray",
+ "mochi-module-updater",
  "mochi-module-widgets",
  "mochi-module-workspaces",
  "mochi-plugins",

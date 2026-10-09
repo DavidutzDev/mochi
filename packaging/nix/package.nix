@@ -98,6 +98,7 @@ rustPlatform.buildRustPackage {
       }
     wrapProgram $out/bin/mochid \
       --prefix PATH : ${lib.makeBinPath [ quickshell ]} \
+      --suffix PATH : ${lib.makeBinPath [ curl ]} \
       --set-default MOCHI_FONTS ${fonts} \
       ${lib.optionalString withGpuScreenRecorder "--suffix PATH : ${
         lib.makeBinPath [ gpu-screen-recorder ]

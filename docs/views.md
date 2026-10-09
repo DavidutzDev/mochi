@@ -58,6 +58,7 @@ A test in `mochi-core` (`tests/design.rs`) reads every view and rejects new raw 
 | `Symbol` | an icon: Mochi's name or any Material Symbols name, else the icon theme | `name`, `size`, `color`, `filled` |
 | `Button` | a pill button; round with only an icon | `text`, `icon`, `tone` (`neutral`, `accent`, `danger`, `ghost`), `clicked()` |
 | `IconButton` | a round icon button sized from its icon | `icon`, `size`, `tone`, `clicked()` |
+| `ActionButton` | a `Button` the keyboard reaches with Tab and presses with Enter or Space, with a focus ring | `text`, `icon`, `tone`, `clicked()` |
 | `Slider` | a value from 0 to 1; thick with an icon, or thin as a seek bar | `value`, `icon`, `thickness`, `reset` (where a double click puts it), `level` (a sound's level, drawn in the fill like a meter; off below 0), `moved(value)`, `released(value)` |
 | `ProgressBar` | how far along, not interactive | `value`, `fill` |
 | `Switch` | on or off | `checked`, `toggled(checked)` |

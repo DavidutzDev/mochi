@@ -102,7 +102,7 @@ What the plugin offers other modules, like a card or a page for the control cent
 | Key | | |
 |---|---|---|
 | `target` | required | The module it's for, like `control-center`. |
-| `kind` | required | What it is to the target: the control center takes `card` and `page`, the launcher `provider`. |
+| `kind` | required | What it is to the target: the control center takes `card` and `page`, the launcher `provider`, and the settings `section`, a view drawn on the module's own page above its options. |
 | `id` | required | Unique among the plugin's contributions. |
 | `view` | | The view's file name, without `.qml`. Kinds without a view, like a launcher `provider`, leave it out. |
 | `title` | required | Its heading. |

@@ -68,6 +68,7 @@ stdenv.mkDerivation {
       }
     wrapProgram $out/bin/mochid \
       --prefix PATH : ${lib.makeBinPath [ quickshell ]} \
+      --suffix PATH : ${lib.makeBinPath [ curl ]} \
       --set-default MOCHI_FONTS $out/share/mochi/fonts \
       ${lib.optionalString withGpuScreenRecorder "--suffix PATH : ${
         lib.makeBinPath [ gpu-screen-recorder ]

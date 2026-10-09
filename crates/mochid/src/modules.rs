@@ -54,6 +54,7 @@ pub fn builtin() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_colors::Colors),
         Box::new(mochi_module_settings::Settings),
         Box::new(mochi_module_tour::Tour),
+        Box::new(mochi_module_updater::Updater),
     ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));

@@ -256,7 +256,7 @@ impl BubblesConfig {
 
 /// The builtin modules a config turns on when it doesn't list `modules`,
 /// and a generated `config.toml` lists: the whole shell.
-pub const DEFAULT_MODULES: [&str; 27] = [
+pub const DEFAULT_MODULES: [&str; 28] = [
     "idle",
     "osd",
     "workspaces",
@@ -284,6 +284,7 @@ pub const DEFAULT_MODULES: [&str; 27] = [
     "colors",
     "settings",
     "tour",
+    "updater",
 ];
 
 fn default_modules() -> Vec<String> {

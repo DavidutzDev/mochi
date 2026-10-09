@@ -6,6 +6,8 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- An updater: Mochi looks for a new release on GitHub at start and every 12 hours and says so once on the island. Its page in the settings has the changelog of each newer release and the update: the install script runs again and Mochi restarts, and a package manager or Nix gets its command, to copy or run in a terminal. `[module.updater] check = false` turns it off, and `command` sets your own.
+- A module can draw on its own settings page, above its options, with a `section` contribution to `settings`.
 - An About page at the bottom of the settings: the version and build, Quickshell, the system, the session, the modules and plugins, and the memory and uptime of mochid and what it started. "Copy details" copies it for a bug report, and buttons open the GitHub page, the documentation and a new issue.
 - A universal installer: `curl -fsSL https://raw.githubusercontent.com/DavidutzDev/mochi/main/install.sh | sh` installs the latest release into `~/.local`, checked against its sum, and updates it when run again, restarting a running mochid. `--prefix`, `--version`, `--enable` and `--uninstall` change what it does, and `MOCHI_FROM_SOURCE=1` builds the release with cargo instead, or `main` with `MOCHI_FROM_SOURCE=main`. Mochi installed by Nix, pacman, apt or rpm is left to them.
 

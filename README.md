@@ -52,6 +52,7 @@ Most shells you see on [r/unixporn](https://www.reddit.com/r/unixporn/) are some
 - 🔒 Lock, log out, suspend, reboot and shut down
 - ⚙️ A settings panel for every option, applied as you change it
 - 🍱 Bento, to install and share themes, plugins and whole setups
+- 🔄 Updates: a notice when a release is out, its changelog, and the update the way you installed Mochi
 - 🔌 Plugins, in any language
 
 ## Install

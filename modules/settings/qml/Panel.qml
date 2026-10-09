@@ -631,6 +631,31 @@ Item {
                         width: parent.width
                     }
 
+                    // What a module shows on its own page above its
+                    // options, offered as a "section" to the settings,
+                    // like the Updates page's status and changelog.
+                    Repeater {
+                        model: !content.searching && root.current?.module ? Daemon.offered("settings", "section").filter(entry => entry.module === root.current.module) : []
+
+                        Loader {
+                            id: offered
+
+                            required property var modelData
+
+                            width: blocks.width
+                            Component.onCompleted: setSource(`root:/modules/${modelData.module}/${modelData.view}.qml`, {
+                                payload: Daemon.state(modelData.module) ?? {}
+                            })
+
+                            Binding {
+                                target: offered.item
+                                property: "payload"
+                                value: Daemon.state(offered.modelData.module) ?? {}
+                                when: offered.item !== null
+                            }
+                        }
+                    }
+
                     // The Modules page: a switch per module.
                     Column {
                         visible: !content.searching && root.current?.id === "modules"

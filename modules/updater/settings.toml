@@ -1,0 +1,14 @@
+# Updates: Mochi looks for a new release on GitHub, says so once on the
+# island, and its page in the settings has the changelog and the update.
+[module.updater]
+# Look for a new release at start and every interval_hours. Nothing is sent
+# but the request for the list of releases.
+# check = true
+# Hours between two checks while Mochi runs.
+# interval_hours = 12
+# Your own update command, which "Run in a terminal" runs instead of the one
+# for how Mochi was installed, like ["nh", "os", "switch", "--update"].
+# command = []
+# The terminal that runs it, like ["kitty"]. Empty uses xdg-terminal-exec,
+# or $TERMINAL.
+# terminal = []

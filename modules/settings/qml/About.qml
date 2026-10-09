@@ -82,41 +82,6 @@ Column {
                 }));
     }
 
-    // A button the keyboard reaches with Tab and presses with Enter or Space.
-    component Action: Item {
-        id: action
-
-        property alias text: button.text
-        property alias icon: button.icon
-        property alias tone: button.tone
-        signal activated
-
-        implicitWidth: button.implicitWidth
-        implicitHeight: button.implicitHeight
-        activeFocusOnTab: enabled
-        Keys.onReturnPressed: action.activated()
-        Keys.onEnterPressed: action.activated()
-        Keys.onSpacePressed: action.activated()
-
-        Button {
-            id: button
-
-            anchors.fill: parent
-            onClicked: action.activated()
-        }
-
-        // The focus ring, around the pill.
-        Rectangle {
-            visible: action.activeFocus
-            anchors.fill: parent
-            anchors.margins: -3
-            radius: height / 2
-            color: "transparent"
-            border.width: 2
-            border.color: Theme.accent
-        }
-    }
-
     // Which Mochi this is, and what to do with it.
     Item {
         width: root.width
@@ -157,28 +122,28 @@ Column {
             anchors.verticalCenter: parent.verticalCenter
             spacing: Theme.spaceSmall
 
-            Action {
+            ActionButton {
                 text: "GitHub"
                 icon: "code"
                 tone: "ghost"
-                onActivated: Daemon.command("settings", "open-link", ["repository"])
+                onClicked: Daemon.command("settings", "open-link", ["repository"])
             }
 
-            Action {
+            ActionButton {
                 text: "Documentation"
                 icon: "menu_book"
                 tone: "ghost"
-                onActivated: Daemon.command("settings", "open-link", ["documentation"])
+                onClicked: Daemon.command("settings", "open-link", ["documentation"])
             }
 
-            Action {
+            ActionButton {
                 text: "Report a bug"
                 icon: "bug_report"
                 tone: "ghost"
-                onActivated: Daemon.command("settings", "open-link", ["issue"])
+                onClicked: Daemon.command("settings", "open-link", ["issue"])
             }
 
-            Action {
+            ActionButton {
                 id: copy
 
                 property bool copied: false
@@ -187,7 +152,7 @@ Column {
                 text: copied ? "Copied" : "Copy details"
                 icon: copied ? "check" : "content_copy"
                 tone: "accent"
-                onActivated: {
+                onClicked: {
                     Daemon.command("settings", "about-copy", []);
                     copied = true;
                     copiedTimer.restart();
@@ -232,12 +197,12 @@ Column {
             font.family: Theme.fontFamily
         }
 
-        Action {
+        ActionButton {
             visible: !root.reading
             anchors.verticalCenter: parent.verticalCenter
             text: "Read again"
             icon: "refresh"
-            onActivated: Daemon.command("settings", "about", [])
+            onClicked: Daemon.command("settings", "about", [])
         }
     }
 
