@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// The cover, title, artist and player, a progress bar that seeks on click or
-// drag, the controls, and the player's own volume when it has one.
+// The cover, title, artist and player, a progress line that waves while the
+// track plays and seeks on click or drag, the controls, and the player's own volume when it has one.
 Item {
     id: root
 
@@ -116,12 +116,12 @@ Item {
                 }
             }
 
-            Slider {
+            WavyProgress {
                 id: bar
 
                 anchors.verticalCenter: parent.verticalCenter
                 width: parent.width - elapsed.width - total.width - parent.spacing * 2
-                thickness: 4
+                playing: root.playing
                 enabled: root.payload.can_seek ?? false
                 value: root.length > 0 ? root.shownPosition / root.length : 0
                 onMoved: value => root.seeking = value * root.length

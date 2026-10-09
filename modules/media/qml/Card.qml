@@ -107,9 +107,12 @@ Item {
                     }
                 }
 
-                ProgressBar {
+                // It waves while the track plays.
+                WavyProgress {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - elapsed.width - total.width - parent.spacing * 2
+                    interactive: false
+                    playing: root.playing
                     value: clock.progress
                 }
 
