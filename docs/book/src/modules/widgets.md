@@ -94,15 +94,21 @@ It's written as a file Mochi can change, not a link into the store, so arranging
 
 | Widget | `module`, `widget` | Settings |
 |---|---|---|
-| Clock | `widgets`, `clock` | Looks: `digital`, the time over the date. `timezone` (like `Europe/Paris`; empty for this computer's), `hours` (`"24"` or `"12"`), `seconds`, `date` |
-| Calendar | `widgets`, `calendar` | Looks: `month`, this month as a grid. `first_day` (`monday` or `sunday`). Arrows go to the months around this one |
+| Clock | `widgets`, `clock` | Looks: `digital`, the time over the date; `stacked`, the hour over the minutes; `analog`, hands and ticks; `shape`, the time inside a cookie in the accent color; `minimal`, the time and the date on one line, without a card; `world`, the time in a few cities. `timezone` (like `Europe/Paris`; empty for this computer's), `hours` (`"24"` or `"12"`), `seconds` (digital and analog), `date` (digital, stacked and minimal), `zones` (world) |
+| Calendar | `widgets`, `calendar` | Looks: `month`, this month as a grid, with arrows to the months around it; `week`, this week on a strip. Today is a pentagon in the accent color. `first_day` (`monday` or `sunday`) |
+| Focus timer | `timer`, `focus` | The [timer](timer.md)'s time left in a ring, with pause and stop, or Start focus when nothing runs |
 | To-do | `notes`, `todo` | `title`, `done` (`show` or `hide` the done items). Click an item to tick it; type into the bottom field and press Enter to add one |
 | Note | `notes`, `note` | `title`. Click it and type; it saves a moment after you stop |
-| Now playing | `media`, `now-playing` | The control center's card: the cover, the track and the controls. It steps aside while no player has a track |
-| Battery | `battery`, `level` | The control center's card, with the power profiles and the peripherals' batteries. It steps aside without a battery or a peripheral with one |
-| Performance | `performance`, `graphs` | `cpu`, `memory`, `gpu` (on unless set off), `disk`, `network` (off unless set on): which readings show, each with its last two minutes as a graph. An older widget with `reading` set to one reading in `widgets.toml` shows only that one until you remove the line |
+| Now playing | `media`, `now-playing` | Looks: `card`, the control center's card, the cover beside the track and the controls; `artwork`, a tall card with the cover big, the track, the progress and the controls under it; `cover`, only the cover, without a card, with a button to play or pause. It steps aside while no player has a track |
+| Battery | `battery`, `level` | Looks: `card`, the control center's card, with the power profiles and the peripherals' batteries; `ring`, the level as a ring, and whether it's charging and how long until full or empty. The card steps aside without a battery or a peripheral with one, the ring without a battery |
+| Performance | `performance`, `graphs` | Looks: `graphs`, each reading with its last two minutes; `rings`, CPU, memory and disk as rings; `meters`, a bar for CPU, memory, GPU and disk, with what each uses. The disk is the one your home directory is on. For the graphs, `cpu`, `memory`, `gpu` (on unless set off), `disk`, `network` (off unless set on): which readings show. An older widget with `reading` set to one reading in `widgets.toml` shows only that one until you remove the line |
+| System info | `performance`, `system` | The distribution, the kernel, the uptime, Mochi's version, the compositor, the CPU and the memory in use, as many lines as fit |
 | Palette | `colors`, `palette` | The latest [colors](colors.md) you picked, as many as fit. Click one to copy it, hover it to see it |
 | Weather | `weather`, `current` | The [weather](weather.md) now: the sky, the temperature and the place. It says how to set a place until one is set |
+
+The world clock's `zones` are names like `Europe/London`, with commas between them, up to four; in `widgets.toml` they can be a list too. Quickshell has no time zone database, so the module asks the system for each zone's offset from UTC, with `date`, and again every ten minutes, so a change to daylight saving shows within ten minutes. A zone the system doesn't have says so on its line. Each line says how far ahead of this computer the city is, and "Tomorrow" or "Yesterday" when its date isn't today's here.
+
+The minimal clock has no card: a soft halo in the island's background color sets it apart from the wallpaper. With software rendering, which has no effects, it shows without the halo.
 
 Each to-do list and note keeps its own content, in the [notes](notes.md) module. Typing into one gives the desktop the keyboard until you click a window; Escape lets go of the field.
 
