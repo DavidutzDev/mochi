@@ -20,8 +20,9 @@ Results come from providers. These are built in:
 | web searches | `!w`, `!g`, `!gh`, `!yt`, `!nix`, `!wiki` | `!w rust` opens a DuckDuckGo search for "rust"; the others search Google, GitHub, YouTube, NixOS packages and Wikipedia. `engines` adds more |
 | [emoji](emoji.md) | `:` | Emoji by name. Enter types it into the window you were in, Shift+Enter copies it |
 | [colors](colors.md) | `#` | A color you type, in every format, or a pick from the screen |
+| [timer](timer.md) | `:t ` | A timer of the length you type, like `:t 10m Pizza`, the running timers to pause, and the stopwatch with `:t sw` |
 
-The emoji and colors providers come from their modules, so they're there when those modules run.
+The emoji, colors and timer providers come from their modules, so they're there when those modules run.
 
 A query that starts with a provider's prefix asks only that provider, with the rest of the query. Providers without a prefix answer every query, and their results show together under headings, in the providers' `order`. The built-ins and modules answer at once; scripts a moment after you stop typing, and their results come in as they're ready.
 

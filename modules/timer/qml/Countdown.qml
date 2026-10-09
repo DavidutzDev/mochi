@@ -1,9 +1,9 @@
 import QtQuick
 
-// What's left of the phase right now. The daemon sends when the phase ends,
-// `ends_ms`; this counts down from there while it runs, and holds
-// `left_ms` while paused. Seconds round up, as in the daemon's status, so
-// the last one reads 0:01.
+// What's left of the phase or of a custom timer right now. The daemon sends
+// when it runs out, `ends_ms`; this counts down from there while it runs,
+// and holds `left_ms` while paused. Seconds round up, as in the daemon's
+// status, so the last one reads 0:01.
 Item {
     id: root
 
@@ -12,6 +12,8 @@ Item {
     readonly property bool running: phase !== "idle"
     readonly property bool paused: payload?.paused ?? false
     readonly property bool resting: phase === "break"
+    // One of the custom timers, rather than the focus session.
+    readonly property bool custom: phase === "timer"
     readonly property real total: payload?.total_ms ?? 0
     readonly property real remaining: {
         if (!running)
@@ -32,7 +34,7 @@ Item {
         const minutes = Math.floor(seconds / 60) % 60;
         return hours > 0 ? `${hours}:${String(minutes).padStart(2, "0")}:${rest}` : `${minutes}:${rest}`;
     }
-    readonly property string what: resting ? "Break" : "Focus"
+    readonly property string what: custom ? (payload.name ?? "Timer") : resting ? "Break" : "Focus"
 
     property real now: Date.now()
     onPayloadChanged: now = Date.now()

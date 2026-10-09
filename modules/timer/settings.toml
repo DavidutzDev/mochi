@@ -1,5 +1,5 @@
-# Focus timer: a bubble counts down a focus session or a break, and the
-# island says when it ends.
+# Focus timer and custom timers: a bubble counts down a focus session, a
+# break or a timer of your own, and the island says when it ends.
 [module.timer]
 # Minutes of focus that `start` counts down without an argument.
 # focus_minutes = 25
@@ -11,3 +11,27 @@
 # sessions_before_long_break = 4
 # Starts the break by itself when focus ends, instead of asking.
 # auto_break = false
+# Plays the alarm when a custom timer ends.
+# sound = true
+# A sound file for the alarm, like ~/sounds/bell.oga. Empty plays
+# alarm-clock-elapsed from the sound theme.
+# sound_file = ""
+# How loud the alarm plays, from 0 to 100.
+# volume = 80
+# What plays the alarm instead of pw-play or paplay, with any options of
+# your own; the file goes last, and volume doesn't apply. Like
+# ["mpv", "--really-quiet"].
+# sound_command = []
+# Plays the alarm when a focus session or a break ends too.
+# focus_sound = false
+# Pauses the music or video playing when a custom timer ends, through the
+# media module.
+# pause_media = true
+# The bubbles of custom timers: "each" for one each, side by side,
+# "soonest" for one, for the timer that ends first, or "off".
+# timer_bubbles = "each"
+# The seconds "+1 min" adds to a custom timer.
+# extend_seconds = 60
+# The lengths the clock panel's Timer tab and the launcher offer, like
+# "5m" or "1h 30m".
+# presets = ["3m", "5m", "10m", "15m", "30m"]

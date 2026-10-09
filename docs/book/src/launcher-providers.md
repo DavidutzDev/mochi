@@ -29,7 +29,7 @@ args = [{ name = "id" }]
 
 | Option | | |
 |---|---|---|
-| `prefix` | | A query starting with it asks only this provider, with the rest. Without one, the provider is asked on every query that isn't empty, next to the apps. |
+| `prefix` | | A query starting with it asks only this provider, with the rest. Without one, the provider is asked on every query that isn't empty, next to the apps. When prefixes overlap, the longest wins; one can end with a space, like the timer's `:t `, so `:tea` still goes to the emoji's `:` |
 | `search` | `"search"` | The action that answers a query. It takes the query as one optional `rest` argument. |
 | `pick` | | An action taking a result's `id`, called after the user picks a result that has one. |
 

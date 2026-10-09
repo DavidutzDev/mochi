@@ -22,5 +22,21 @@ pub fn steps() -> Vec<ContributionSpec> {
                     "sessions": 2
                 }
             })),
+        ContributionSpec::new("tour", "step", "done", "Done", "Custom timers")
+            .icon("hourglass_top")
+            .order(48)
+            .options(json!({
+                "chapter": "notices",
+                "since": "0.0.10",
+                "caption": "Custom timers run beside the focus timer, several at once, each with a label. Type :t 15m Tea in the launcher, or add one in the clock panel's Timer tab; the alarm plays when it runs out.",
+                "payload": {
+                    "label": "Tea",
+                    "name": "Tea",
+                    "length": "15 min",
+                    "again": "15m Tea",
+                    "more": "1m Tea",
+                    "more_label": "+1 min"
+                }
+            })),
     ]
 }
