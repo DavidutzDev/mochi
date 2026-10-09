@@ -1,7 +1,8 @@
 import QtQuick
 import qs.island
 
-// A short line about the battery, like "Battery at 50% · 2 h left".
+// A short line about the battery, like "Battery at 50% · 2 h left", or
+// about a peripheral's, with its symbol, like "MX Master 3 battery low · 12%".
 Item {
     id: root
 
@@ -16,6 +17,14 @@ Item {
 
         anchors.centerIn: parent
         spacing: Theme.spaceSmall
+
+        Symbol {
+            anchors.verticalCenter: parent.verticalCenter
+            visible: (root.payload.icon ?? "") !== ""
+            name: root.payload.icon ?? ""
+            size: 18
+            color: root.tint
+        }
 
         Gauge {
             anchors.verticalCenter: parent.verticalCenter

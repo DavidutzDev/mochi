@@ -1,6 +1,6 @@
 [package]
 name = "mochi-module-battery"
-description = "Battery: notices as it drops, and a warning bubble when low, from UPower"
+description = "Battery: the laptop's and the peripherals' batteries, notices as they drop, and a warning bubble when low, from UPower"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

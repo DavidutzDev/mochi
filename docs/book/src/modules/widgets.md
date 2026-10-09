@@ -84,7 +84,7 @@ It's written as a file Mochi can change, not a link into the store, so arranging
 | To-do | `notes`, `todo` | `title`, `done` (`show` or `hide` the done items). Click an item to tick it; type into the bottom field and press Enter to add one |
 | Note | `notes`, `note` | `title`. Click it and type; it saves a moment after you stop |
 | Now playing | `media`, `now-playing` | The control center's card: the cover, the track and the controls. It steps aside while no player has a track |
-| Battery | `battery`, `level` | The control center's card, with the power profiles. It steps aside without a battery |
+| Battery | `battery`, `level` | The control center's card, with the power profiles and the peripherals' batteries. It steps aside without a battery or a peripheral with one |
 | Performance | `performance`, `graphs` | `cpu`, `memory`, `gpu` (on unless set off), `disk`, `network` (off unless set on): which readings show, each with its last two minutes as a graph. An older widget with `reading` set to one reading in `widgets.toml` shows only that one until you remove the line |
 | Palette | `colors`, `palette` | The latest [colors](colors.md) you picked, as many as fit. Click one to copy it, hover it to see it |
 | Weather | `weather`, `now` | From the example weather plugin |

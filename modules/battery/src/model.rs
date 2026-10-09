@@ -1,11 +1,17 @@
 //! What a change of the battery deserves: a notice when it drops past a
 //! level or gets plugged in or out, and the warning bubble while it's low.
+//! A peripheral getting low gets a notice too.
 
+use std::collections::HashSet;
 use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use crate::upower::{Battery, State};
+use crate::upower::{Battery, Device, Snapshot, State};
+
+/// How far over its low level a peripheral climbs before it can be low
+/// again, for levels that wobble.
+const RECOVERED: u32 = 5;
 
 /// When to say what, from the settings.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +26,9 @@ pub struct Levels {
     pub critical: u32,
     /// A notice when the charger is plugged in or out.
     pub plugged: bool,
+    /// A peripheral dropping to this on battery shows a notice, once until
+    /// it charges; 0 never.
+    pub peripherals: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +37,8 @@ pub struct Notice {
     pub level: u32,
     pub charging: bool,
     pub critical: bool,
+    /// A peripheral's symbol; `None` for the laptop's battery.
+    pub icon: Option<&'static str>,
 }
 
 /// Remembers the last battery, to tell what changed.
@@ -45,6 +56,7 @@ impl Tracker {
             level,
             charging: battery.state == State::Charging,
             critical: battery.state == State::Discharging && level <= levels.critical,
+            icon: None,
         };
         let on_battery = battery.state == State::Discharging;
         let was_on_battery = last.state == State::Discharging;
@@ -98,13 +110,93 @@ pub fn bubble(battery: &Battery, levels: &Levels) -> Option<Value> {
     })
 }
 
-/// What the control center's card gets.
-pub fn payload(battery: Option<&Battery>, levels: &Levels) -> Value {
-    let Some(battery) = battery else {
-        return json!({ "present": false });
-    };
-    let level = battery.level();
-    let state = match battery.state {
+/// Remembers which peripherals were said to be low, by a name that stays
+/// when they disconnect, so a mouse waking up isn't news each time.
+#[derive(Debug, Default)]
+pub struct Peripherals {
+    started: bool,
+    warned: HashSet<String>,
+}
+
+impl Peripherals {
+    /// A notice for each peripheral that got low. The first snapshot is only
+    /// a baseline; a device that comes later already low gets one.
+    pub fn apply(&mut self, devices: &[Device], levels: &Levels) -> Vec<Notice> {
+        let first = !self.started;
+        self.started = true;
+        let mut notices = Vec::new();
+        if levels.peripherals == 0 {
+            return notices;
+        }
+        for device in devices {
+            let key = key(device);
+            let level = device.battery.level();
+            if device.battery.state != State::Discharging || level > levels.peripherals + RECOVERED
+            {
+                self.warned.remove(&key);
+                continue;
+            }
+            if level > levels.peripherals || !self.warned.insert(key) || first {
+                continue;
+            }
+            let (label, icon) = kind(device.kind);
+            notices.push(Notice {
+                text: format!("{} battery low · {level}%", name(device, label)),
+                level,
+                charging: false,
+                critical: false,
+                icon: Some(icon),
+            });
+        }
+        notices
+    }
+}
+
+/// What stays the same for a device from one connection to the next.
+fn key(device: &Device) -> String {
+    [&device.serial, &device.native_path, &device.path]
+        .into_iter()
+        .find(|text| !text.is_empty())
+        .cloned()
+        .unwrap_or_default()
+}
+
+/// What a peripheral is called and drawn as, from UPower's `Type`.
+pub fn kind(kind: u32) -> (&'static str, &'static str) {
+    match kind {
+        5 => ("Mouse", "mouse"),
+        6 => ("Keyboard", "keyboard"),
+        7 | 8 => ("Phone", "smartphone"),
+        9 => ("Media player", "music_note"),
+        10 => ("Tablet", "tablet"),
+        11 => ("Computer", "computer"),
+        12 => ("Controller", "sports_esports"),
+        13 => ("Pen", "stylus"),
+        14 => ("Touchpad", "touchpad_mouse"),
+        17 => ("Headset", "headset_mic"),
+        18 | 21 => ("Speaker", "speaker"),
+        19 => ("Headphones", "headphones"),
+        20 | 25 => ("Camera", "photo_camera"),
+        22 => ("Remote", "settings_remote"),
+        23 => ("Printer", "print"),
+        26 => ("Watch", "watch"),
+        27 => ("Toy", "toys"),
+        _ => ("Device", "battery_full"),
+    }
+}
+
+/// Its model, or else what it is.
+fn name(device: &Device, label: &str) -> String {
+    if device.model.is_empty() {
+        label.to_owned()
+    } else {
+        device.model.clone()
+    }
+}
+
+/// How a battery is doing, like `Charging · full in 40 min` or `2 h left`.
+fn state(battery: &Battery) -> String {
+    match battery.state {
         State::Charging => match battery.time_to_full {
             Some(left) => format!("Charging · full in {}", duration(left)),
             None => "Charging".to_owned(),
@@ -114,16 +206,101 @@ pub fn payload(battery: Option<&Battery>, levels: &Levels) -> Value {
             Some(left) => format!("{} left", duration(left)),
             None => "On battery".to_owned(),
         },
+    }
+}
+
+/// What the control center's card gets: the combined level, each of the
+/// laptop's batteries, and the peripherals.
+pub fn payload(snapshot: &Snapshot, levels: &Levels) -> Value {
+    let mut payload = match &snapshot.display {
+        Some(battery) => {
+            let level = battery.level();
+            json!({
+                "present": true,
+                "level": level,
+                "charging": battery.state == State::Charging,
+                "plugged": battery.state != State::Discharging,
+                "low": battery.state == State::Discharging && level <= levels.warning,
+                "critical": battery.state == State::Discharging && level <= levels.critical,
+                "state": state(battery),
+            })
+        }
+        None => json!({ "present": false }),
     };
-    json!({
-        "present": true,
-        "level": level,
-        "charging": battery.state == State::Charging,
-        "plugged": battery.state != State::Discharging,
-        "low": battery.state == State::Discharging && level <= levels.warning,
-        "critical": battery.state == State::Discharging && level <= levels.critical,
-        "state": state,
-    })
+    payload["batteries"] = snapshot
+        .batteries
+        .iter()
+        .enumerate()
+        .map(|(index, device)| {
+            json!({
+                "name": format!("Battery {}", index + 1),
+                "model": device.model,
+                "level": device.battery.level(),
+                "charging": device.battery.state == State::Charging,
+                "state": state(&device.battery),
+            })
+        })
+        .collect();
+    payload["devices"] = snapshot
+        .peripherals
+        .iter()
+        .map(|device| {
+            let (label, icon) = kind(device.kind);
+            let level = device.battery.level();
+            json!({
+                "id": device.path,
+                "name": name(device, label),
+                "kind": label,
+                "icon": icon,
+                "level": level,
+                "charging": device.battery.state == State::Charging,
+                "low": device.battery.state == State::Discharging && level <= levels.peripherals,
+            })
+        })
+        .collect();
+    payload
+}
+
+/// What `mochi ipc battery status` prints.
+pub fn status(snapshot: &Snapshot) -> String {
+    let mut lines = Vec::new();
+    if let Some(battery) = &snapshot.display {
+        lines.push(format!(
+            "battery: {}% ({})",
+            battery.level(),
+            state(battery)
+        ));
+    }
+    // One battery is the combined level already.
+    if snapshot.batteries.len() > 1 {
+        for (index, device) in snapshot.batteries.iter().enumerate() {
+            lines.push(format!(
+                "battery {} ({}): {}% ({})",
+                index + 1,
+                device.native_path,
+                device.battery.level(),
+                state(&device.battery)
+            ));
+        }
+    }
+    for device in &snapshot.peripherals {
+        let (label, _) = kind(device.kind);
+        let charging = if device.battery.state == State::Charging {
+            ", charging"
+        } else {
+            ""
+        };
+        lines.push(format!(
+            "{} ({}): {}%{charging}",
+            name(device, label),
+            label.to_lowercase(),
+            device.battery.level()
+        ));
+    }
+    if lines.is_empty() {
+        lines.push("no battery, and no device reports one".to_owned());
+    }
+    lines.join("\n")
 }
 
 /// `3 h 20 min`, `45 min`.
@@ -146,6 +323,22 @@ mod tests {
             warning: 50,
             critical: 10,
             plugged: true,
+            peripherals: 15,
+        }
+    }
+
+    fn mouse(percent: f64, state: State) -> Device {
+        Device {
+            path: "/org/freedesktop/UPower/devices/mouse_dev_AA".into(),
+            kind: 5,
+            model: "MX Master 3".into(),
+            serial: "AA".into(),
+            reported: true,
+            battery: Battery {
+                state,
+                ..on_battery(percent)
+            },
+            ..Device::default()
         }
     }
 
@@ -237,8 +430,103 @@ mod tests {
             ..on_battery(8.0)
         };
         assert!(bubble(&charging, &levels).is_none());
-        assert_eq!(payload(Some(&charging), &levels)["state"], "Charging");
-        assert_eq!(payload(None, &levels)["present"], false);
+        let snapshot = Snapshot {
+            display: Some(charging),
+            ..Snapshot::default()
+        };
+        assert_eq!(payload(&snapshot, &levels)["state"], "Charging");
+        assert_eq!(payload(&Snapshot::default(), &levels)["present"], false);
+    }
+
+    #[test]
+    fn says_once_when_a_peripheral_gets_low() {
+        let levels = levels();
+        let mut peripherals = Peripherals::default();
+        // Low already at the start: only a baseline.
+        assert!(
+            peripherals
+                .apply(&[mouse(10.0, State::Discharging)], &levels)
+                .is_empty()
+        );
+        // Charged, it can be low again.
+        assert!(
+            peripherals
+                .apply(&[mouse(12.0, State::Charging)], &levels)
+                .is_empty()
+        );
+        assert!(
+            peripherals
+                .apply(&[mouse(16.0, State::Discharging)], &levels)
+                .is_empty()
+        );
+        let notices = peripherals.apply(&[mouse(15.0, State::Discharging)], &levels);
+        assert_eq!(notices[0].text, "MX Master 3 battery low · 15%");
+        assert_eq!(notices[0].icon, Some("mouse"));
+        // Wobbling around the level, or going away and coming back, says
+        // nothing more.
+        for percent in [16.0, 14.0, 18.0] {
+            assert!(
+                peripherals
+                    .apply(&[mouse(percent, State::Discharging)], &levels)
+                    .is_empty()
+            );
+        }
+        assert!(peripherals.apply(&[], &levels).is_empty());
+        assert!(
+            peripherals
+                .apply(&[mouse(13.0, State::Discharging)], &levels)
+                .is_empty()
+        );
+        // A device that comes already low says so.
+        let pad = Device {
+            path: "/pad".into(),
+            kind: 12,
+            model: String::new(),
+            serial: String::new(),
+            ..mouse(5.0, State::Discharging)
+        };
+        let notices = peripherals.apply(std::slice::from_ref(&pad), &levels);
+        assert_eq!(notices[0].text, "Controller battery low · 5%");
+        // Off in the settings.
+        let quiet = Levels {
+            peripherals: 0,
+            ..levels
+        };
+        let mut peripherals = Peripherals::default();
+        peripherals.apply(&[], &quiet);
+        assert!(peripherals.apply(&[pad], &quiet).is_empty());
+    }
+
+    #[test]
+    fn lists_batteries_and_peripherals() {
+        let levels = levels();
+        let laptop = |native: &str, percent: f64| Device {
+            native_path: native.into(),
+            kind: crate::upower::BATTERY,
+            power_supply: true,
+            reported: true,
+            battery: on_battery(percent),
+            ..Device::default()
+        };
+        let snapshot = Snapshot {
+            display: Some(on_battery(60.0)),
+            batteries: vec![laptop("BAT0", 70.0), laptop("BAT1", 50.0)],
+            peripherals: vec![mouse(12.0, State::Discharging)],
+        };
+        let payload = payload(&snapshot, &levels);
+        assert_eq!(payload["batteries"][1]["name"], "Battery 2");
+        assert_eq!(payload["batteries"][1]["level"], 50);
+        assert_eq!(payload["devices"][0]["name"], "MX Master 3");
+        assert_eq!(payload["devices"][0]["icon"], "mouse");
+        assert_eq!(payload["devices"][0]["low"], true);
+        assert_eq!(
+            status(&snapshot),
+            "battery: 60% (On battery)\nbattery 1 (BAT0): 70% (On battery)\nbattery 2 (BAT1): 50% (On battery)\nMX Master 3 (mouse): 12%"
+        );
+        assert_eq!(
+            status(&Snapshot::default()),
+            "no battery, and no device reports one"
+        );
     }
 
     #[test]

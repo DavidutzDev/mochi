@@ -1,11 +1,13 @@
-//! Battery: the laptop's battery from UPower.
+//! Battery: the laptop's batteries and the peripherals' from UPower.
 //!
 //! Dropping past a level on battery, 80, 50, 20 and 10 by default, shows a
 //! short notice on the island, once per discharge. At or under the warning
 //! level a bubble stays next to the island with the level, red at the critical
 //! one, where the notice also stays longer. Plugging the charger in or out
 //! shows a notice too. The control center has a card with the level and the
-//! time left. Without a battery, as on a desktop, the module shows nothing.
+//! time left, each battery of a laptop with two, and each mouse, keyboard,
+//! controller or other device that reports its battery to UPower; one getting
+//! low shows a notice. Without any, as on a desktop, the module shows nothing.
 //!
 //! Settings in `config.toml`, all optional:
 //!
@@ -15,6 +17,7 @@
 //! warning = 50                 # the warning bubble at or under this
 //! critical = 10                # red, and a longer notice
 //! plugged = true               # a notice on plugging in or out
+//! peripherals = 15             # a notice when a peripheral drops to this
 //! ```
 
 mod model;
@@ -33,8 +36,8 @@ use serde_json::json;
 use tokio::sync::mpsc;
 use zbus::Connection;
 
-use crate::model::{Levels, Notice, Tracker};
-use crate::upower::Battery;
+use crate::model::{Levels, Notice, Peripherals, Tracker};
+use crate::upower::{Battery, Snapshot};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
@@ -51,6 +54,7 @@ struct Settings {
     warning: u32,
     critical: u32,
     plugged: bool,
+    peripherals: u32,
 }
 
 impl Default for Settings {
@@ -60,6 +64,7 @@ impl Default for Settings {
             warning: 50,
             critical: 10,
             plugged: true,
+            peripherals: 15,
         }
     }
 }
@@ -70,6 +75,7 @@ impl Settings {
         for (name, level) in [
             ("warning", settings.warning),
             ("critical", settings.critical),
+            ("peripherals", settings.peripherals),
         ]
         .into_iter()
         .chain(settings.notices.iter().map(|level| ("notices", *level)))
@@ -87,6 +93,7 @@ impl Settings {
             warning: self.warning,
             critical: self.critical,
             plugged: self.plugged,
+            peripherals: self.peripherals,
         }
     }
 }
@@ -117,18 +124,23 @@ impl Module for BatteryModule {
             ContributionSpec::new("control-center", "card", "level", "Card", "Battery")
                 .icon("bolt")
                 .order(17)
-                .options(json!({ "span": 1, "rows": 1 })),
-            // The same card on the desktop; it steps aside without a battery.
+                // One row, or two with peripherals to list.
+                .options(json!({ "span": 1 })),
+            // The same card on the desktop; it steps aside without a battery
+            // or a peripheral with one.
             ContributionSpec::new("widgets", "widget", "level", "Card", "Battery")
                 .icon("bolt")
-                .options(json!({ "size": [18, 6], "min": [12, 5], "max": [30, 10] })),
+                .options(json!({ "size": [18, 6], "min": [12, 5], "max": [30, 16] })),
         ];
         offers.extend(tour::steps());
         offers
     }
 
     fn actions(&self) -> Vec<ActionSpec> {
-        Vec::new()
+        vec![ActionSpec::new(
+            "status",
+            "Print each battery's level, and each peripheral's",
+        )]
     }
 
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {
@@ -137,19 +149,25 @@ impl Module for BatteryModule {
             let settings: Settings = ctx.settings()?;
             let levels = settings.levels();
             let connection = Connection::system().await?;
-            let (sender, mut batteries) = mpsc::unbounded_channel();
+            let (sender, mut snapshots) = mpsc::unbounded_channel();
             tokio::spawn(upower::watch(connection, sender));
             let mut tracker = Tracker::default();
+            let mut peripherals = Peripherals::default();
             let mut bubble: Option<BubbleId> = None;
             let mut was_critical = false;
-            ctx.publish_state(model::payload(None, &levels));
+            let mut last = Snapshot::default();
+            ctx.publish_state(model::payload(&last, &levels));
             loop {
                 tokio::select! {
                     event = ctx.next_event() => match event {
                         None => return Ok(()),
-                        Some(ModuleEvent::Command(command)) => {
-                            command.reply(Err("battery has no actions".into()));
-                        }
+                        Some(ModuleEvent::Command(command)) => match command.action.as_str() {
+                            "status" => command.answer(Ok(model::status(&last))),
+                            other => {
+                                let error = format!("battery has no action {other}");
+                                command.reply(Err(error));
+                            }
+                        },
                         Some(ModuleEvent::BubbleClicked(_)) => {
                             let open = ctx.call("control-center", "open", &[]);
                             tokio::spawn(async move {
@@ -160,14 +178,19 @@ impl Module for BatteryModule {
                         }
                         Some(_) => {}
                     },
-                    Some(battery) = batteries.recv() => {
-                        ctx.publish_state(model::payload(battery.as_ref(), &levels));
+                    Some(snapshot) = snapshots.recv() => {
+                        ctx.publish_state(model::payload(&snapshot, &levels));
+                        let battery = snapshot.display;
                         if let Some(battery) = battery
                             && let Some(notice) = tracker.apply(battery, &levels)
                         {
                             show(&ctx, &notice);
                         }
+                        for notice in peripherals.apply(&snapshot.peripherals, &levels) {
+                            show(&ctx, &notice);
+                        }
                         update_bubble(&ctx, &mut bubble, &mut was_critical, battery.as_ref(), &levels);
+                        last = snapshot;
                     }
                 }
             }
@@ -176,11 +199,18 @@ impl Module for BatteryModule {
 }
 
 fn show(ctx: &ModuleCtx, notice: &Notice) {
-    let spec = ActivitySpec::new("Notice").key("notice").payload(json!({
+    // A peripheral's notice waits its turn rather than replace the laptop's.
+    let key = if notice.icon.is_some() {
+        "peripheral"
+    } else {
+        "notice"
+    };
+    let spec = ActivitySpec::new("Notice").key(key).payload(json!({
         "text": notice.text,
         "level": notice.level,
         "charging": notice.charging,
         "critical": notice.critical,
+        "icon": notice.icon,
     }));
     let spec = if notice.critical {
         // Not fleeting: it waits for a panel to close, and stays.

@@ -41,7 +41,7 @@ Most shells you see on [r/unixporn](https://www.reddit.com/r/unixporn/) are some
 - 📋 A clipboard history, with text and images
 - 📶 Wi-Fi, Ethernet and VPNs
 - 🔵 Bluetooth devices, with their battery
-- 🔋 Your laptop's battery
+- 🔋 Your laptop's battery, and your mouse's or controller's
 - 🌙 Night light, and ☕ keeping the screen awake
 - 🎙️ A sign when the microphone or the camera is in use, with a mute
 - 📊 CPU, memory, GPU and temperatures, with a warning when one stays high
