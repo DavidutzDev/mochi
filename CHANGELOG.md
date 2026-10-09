@@ -8,6 +8,10 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 - A universal installer: `curl -fsSL https://raw.githubusercontent.com/DavidutzDev/mochi/main/install.sh | sh` installs the latest release into `~/.local`, checked against its sum, and updates it when run again, restarting a running mochid. `--prefix`, `--version`, `--enable` and `--uninstall` change what it does, and `MOCHI_FROM_SOURCE=1` builds the release with cargo instead, or `main` with `MOCHI_FROM_SOURCE=main`. Mochi installed by Nix, pacman, apt or rpm is left to them.
 
+### Changed
+
+- A preset picked in the settings panel replaces the colors `theme.toml`'s `[colors]` sets, and the ones picked in the panel before it. Picking one used to change nothing when the file set every color. Copy then gives the preset without those colors.
+
 ## 0.0.8 - 2026-10-09
 
 ### Added

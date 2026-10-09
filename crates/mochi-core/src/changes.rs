@@ -175,6 +175,47 @@ pub fn merged(base: &Table, over: &Table) -> Table {
     table
 }
 
+/// Lays `over` on `base` like [`merge`], for `file`. In the theme, a
+/// preset in `over` replaces the colors under it: picking a theme shows
+/// that theme, whatever `[colors]` said before. Colors in `over` still go
+/// on it.
+pub fn lay(file: File, base: &mut Table, over: &Table) {
+    if file == File::Theme && over.contains_key("preset") {
+        base.remove("colors");
+    }
+    merge(base, over);
+}
+
+/// `base` with `over` laid on it, as [`lay`] does.
+pub fn laid(file: File, base: &Table, over: &Table) -> Table {
+    let mut table = base.clone();
+    lay(file, &mut table, over);
+    table
+}
+
+/// [`prune`] for `file`, with `base` what's under the changes. A preset
+/// change stays while `base` has colors, since it hides them, and the
+/// changes' colors are then weighed against none.
+pub fn prune_over(file: File, changes: &mut Table, base: &Table, defaults: &Table) {
+    let preset = changes.get("preset").cloned();
+    let hides = file == File::Theme
+        && preset.is_some()
+        && base
+            .get("colors")
+            .and_then(Value::as_table)
+            .is_some_and(|colors| !colors.is_empty());
+    if !hides {
+        prune(changes, base, defaults);
+        return;
+    }
+    let mut under = base.clone();
+    under.remove("colors");
+    prune(changes, &under, defaults);
+    if let Some(preset) = preset {
+        changes.insert("preset".to_owned(), preset);
+    }
+}
+
 pub fn get<'a>(table: &'a Table, path: &[&str]) -> Option<&'a Value> {
     let (last, parents) = path.split_last()?;
     let mut current = table;

@@ -6,7 +6,8 @@
 
 # A theme: obsidian, catppuccin, nord, gruvbox, rose-pine, tokyo-night, one
 # installed in ~/.local/share/mochi/themes, or wallpaper, made from your
-# wallpaper. What [colors] sets below goes over it.
+# wallpaper. What [colors] sets below goes over it, until the settings panel
+# picks another preset, which replaces those colors.
 # preset = "obsidian"
 # "dark" or "light", or "auto" to follow the system's preference.
 # appearance = "dark"

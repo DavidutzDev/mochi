@@ -143,7 +143,7 @@ impl Store {
         }
         modules::check_config(&config, catalog, &self.config_file)?;
         let theme = mochi_core::config::theme_from_table(
-            changes::merged(&self.base.theme, &changes.theme),
+            changes::laid(File::Theme, &self.base.theme, &changes.theme),
             &self.theme_file,
             self.system_light,
         )?;
@@ -152,7 +152,8 @@ impl Store {
 
     fn pruned(&self, mut changes: Changes) -> Changes {
         for file in File::ALL {
-            changes::prune(
+            changes::prune_over(
+                file,
                 changes.table_mut(file),
                 self.base.get(file),
                 self.defaults.get(file),
@@ -182,6 +183,10 @@ impl Store {
                 let (file, parts, value) = self.value(path, value)?;
                 // What's kept wins over what's tried.
                 changes::remove(preview.table_mut(file), &parts);
+                // A preset picked here replaces the colors picked before.
+                if file == File::Theme && parts == ["preset"] && value.is_some() {
+                    changes::remove(changes.table_mut(file), &["colors"]);
+                }
                 match value {
                     Some(value) => changes::set(changes.table_mut(file), &parts, value),
                     None => changes::remove(changes.table_mut(file), &parts),
@@ -217,7 +222,7 @@ impl Store {
             }
             Op::Keep => {
                 for file in File::ALL {
-                    changes::merge(changes.table_mut(file), preview.table(file));
+                    changes::lay(file, changes.table_mut(file), preview.table(file));
                 }
                 preview = Changes::default();
             }
@@ -225,7 +230,7 @@ impl Store {
             Op::Merge(over) => {
                 for file in File::ALL {
                     let table = over.table(file);
-                    changes::merge(changes.table_mut(file), table);
+                    changes::lay(file, changes.table_mut(file), table);
                     // What's kept wins over what's tried.
                     let mut paths = Vec::new();
                     leaf_paths(table, &mut Vec::new(), &mut paths);
@@ -270,8 +275,13 @@ impl Store {
     /// The preview without what the files and the changes already say.
     fn pruned_over(&self, mut preview: Changes, changes: &Changes) -> Changes {
         for file in File::ALL {
-            let under = changes::merged(self.base.get(file), changes.table(file));
-            changes::prune(preview.table_mut(file), &under, self.defaults.get(file));
+            let under = changes::laid(file, self.base.get(file), changes.table(file));
+            changes::prune_over(
+                file,
+                preview.table_mut(file),
+                &under,
+                self.defaults.get(file),
+            );
         }
         preview
     }
@@ -309,8 +319,8 @@ impl Store {
     fn effective(&self, file: File) -> Table {
         let mut table = self.defaults.get(file).clone();
         let mut layers = self.base.get(file).clone();
-        changes::merge(&mut layers, self.changes.table(file));
-        changes::merge(&mut layers, self.preview.table(file));
+        changes::lay(file, &mut layers, self.changes.table(file));
+        changes::lay(file, &mut layers, self.preview.table(file));
         if file == File::Theme {
             changes::merge(&mut table, &self.palette(&layers));
         }
@@ -457,7 +467,7 @@ impl Store {
     /// `config.toml` and `theme.toml`, without what's being tried.
     pub fn exported(&self) -> (Table, Table) {
         let mut config = changes::merged(&self.base.config, &self.changes.config);
-        let theme = changes::merged(&self.base.theme, &self.changes.theme);
+        let theme = changes::laid(File::Theme, &self.base.theme, &self.changes.theme);
         // The list is always worth writing down: it says what runs.
         let modules = config.remove("modules");
         let mut config = changes::diff(&config, &self.defaults.config);
@@ -527,7 +537,7 @@ fn leaf_paths(table: &Table, prefix: &mut Vec<String>, out: &mut Vec<Vec<String>
 fn layered(changes: &Changes, preview: &Changes) -> Changes {
     let mut out = changes.clone();
     for file in File::ALL {
-        changes::merge(out.table_mut(file), preview.table(file));
+        changes::lay(file, out.table_mut(file), preview.table(file));
     }
     out
 }
@@ -1218,6 +1228,78 @@ mod tests {
         assert!(store.reload().is_err());
         std::fs::write(&config, "").unwrap();
         assert_eq!(store.reload().unwrap().config.modules, ["idle"]);
+        std::fs::remove_dir_all(config.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_preset_picked_here_replaces_the_files_colors() {
+        let config = temp("preset");
+        let theme = config.with_file_name("theme.toml");
+        std::fs::write(
+            &theme,
+            "[colors]\naccent = \"#b4befe\"\nsurface = \"#1e1e2e\"\n\n[text]\nfamily = \"Iosevka\"\n",
+        )
+        .unwrap();
+        let (mut store, loaded) = Store::load(&config, None).unwrap();
+        assert_eq!(loaded.theme.colors.accent.as_str(), "#b4befe");
+        let palette = |preset: &str| mochi_core::palette::colors(preset, false, "auto").unwrap();
+        let accent = |preset: &str| palette(preset)["accent"].as_str().unwrap().to_owned();
+
+        // Tried, then picked: the preset's colors, not the file's.
+        let loaded = store
+            .change(&Op::Preview {
+                values: vec![("theme.preset".into(), json!("nord"))],
+                replace: true,
+            })
+            .unwrap();
+        assert_eq!(loaded.theme.colors.accent.as_str(), accent("nord"));
+        let loaded = store
+            .change(&set("theme.preset", json!("gruvbox")))
+            .unwrap();
+        assert_eq!(loaded.theme.colors.accent.as_str(), accent("gruvbox"));
+        assert_eq!(
+            loaded.theme.colors.surface.as_str(),
+            palette("gruvbox")["surface"].as_str().unwrap()
+        );
+
+        // A color picked after it goes on it, and a new preset replaces it.
+        let loaded = store
+            .change(&set("theme.colors.accent", json!("#30d158")))
+            .unwrap();
+        assert_eq!(loaded.theme.colors.accent.as_str(), "#30d158");
+        let loaded = store
+            .change(&set("theme.preset", json!("obsidian")))
+            .unwrap();
+        assert_eq!(loaded.theme.colors.accent.as_str(), accent("obsidian"));
+        let saved = Changes::load(&Changes::path(&config)).unwrap();
+        assert_eq!(
+            saved.theme,
+            toml::from_str("preset = \"obsidian\"").unwrap()
+        );
+
+        // The copy has none of the file's colors, and no preset since
+        // obsidian is the default, so pasting it gives what the panel
+        // shows, and the change goes.
+        let nix = store.export("nix").unwrap();
+        assert!(!nix.contains("colors"), "{nix}");
+        assert!(nix.contains("text.family = \"Iosevka\";"), "{nix}");
+        let toml = store.export("toml").unwrap();
+        let (_, theme_part) = toml.split_once("# theme.toml\n").unwrap();
+        std::fs::write(&theme, theme_part).unwrap();
+        let loaded = store.reload().unwrap();
+        assert_eq!(loaded.theme.colors.accent.as_str(), accent("obsidian"));
+        assert!(!Changes::path(&config).exists());
+
+        // Reset, the file's colors are back.
+        std::fs::write(&theme, "[colors]\naccent = \"#b4befe\"\n").unwrap();
+        store.reload().unwrap();
+        store.change(&set("theme.preset", json!("nord"))).unwrap();
+        let loaded = store
+            .change(&Op::Reset {
+                path: "theme.preset".into(),
+            })
+            .unwrap();
+        assert_eq!(loaded.theme.colors.accent.as_str(), "#b4befe");
         std::fs::remove_dir_all(config.parent().unwrap()).unwrap();
     }
 

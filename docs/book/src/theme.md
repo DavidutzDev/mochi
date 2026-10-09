@@ -10,7 +10,7 @@ The defaults are "Obsidian": a black island that disappears into the screen's be
 
 `preset = "wallpaper"` makes the palette from your wallpaper: the accent from its most colorful hue, and the backgrounds from the same hue nearly grey, with lightness chosen so text stays readable. `wallpaper = "auto"` reads the image, or the plain color, that awww, swww or hyprpaper shows; a path reads that image. `mochi reload` reads it again after the wallpaper changes.
 
-The settings panel lists the presets with their colors, and applies them as you pick.
+The settings panel lists the presets with their colors, and applies them as you pick. A preset picked there replaces the colors `[colors]` sets, in the file and in the panel, so you see that theme. Copy then gives the preset without them, for your own files.
 
 ## Theme packages
 
