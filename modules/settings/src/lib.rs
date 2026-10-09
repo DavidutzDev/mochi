@@ -8,8 +8,11 @@
 //! `mochi ipc settings open colors`. The launcher finds sections and
 //! options by name.
 
+mod about;
 mod bento;
 mod tour;
+
+use std::path::Path;
 
 use include_dir::{Dir, include_dir};
 use mochi_core::{
@@ -135,14 +138,22 @@ impl Module for Settings {
                 .arg(ArgSpec::string("name", "What it's called").optional().rest()),
             ActionSpec::new("bento-parts", "Say what this setup has to share, for the Share page"),
             ActionSpec::new("bento-forget", "Close what the Bento pages show about a plan or a share"),
+            ActionSpec::new("about", "Read what the About page shows"),
+            ActionSpec::new("about-copy", "Copy the About page as text, for a bug report"),
+            ActionSpec::new("open-link", "Open one of Mochi's pages in the browser").arg(
+                ArgSpec::string("page", "repository, documentation or issue"),
+            ),
         ]
     }
 
     fn needs(&self, _settings: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
-        vec![mochi_core::Need::new(
-            "wl-copy",
-            "Copy as Nix or TOML, while the clipboard module is off",
-        )]
+        vec![
+            mochi_core::Need::new(
+                "wl-copy",
+                "Copy as Nix or TOML, while the clipboard module is off",
+            ),
+            mochi_core::Need::new("xdg-open", "The links on the About page"),
+        ]
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
@@ -167,6 +178,8 @@ impl Module for Settings {
             }
             let (done, mut answers) = tokio::sync::mpsc::unbounded_channel();
             panel.done = Some(done.clone());
+            let (read, mut abouts) = tokio::sync::mpsc::unbounded_channel();
+            panel.read = Some(read);
             panel.publish(&ctx);
             loop {
                 let event = tokio::select! {
@@ -176,6 +189,12 @@ impl Module for Settings {
                     },
                     Some(answer) = answers.recv() => {
                         panel.bento.finished(&ctx, &done, answer);
+                        panel.publish(&ctx);
+                        continue;
+                    }
+                    Some(about) = abouts.recv() => {
+                        panel.about = Some(about);
+                        panel.reading = false;
                         panel.publish(&ctx);
                         continue;
                     }
@@ -220,6 +239,12 @@ struct Panel {
     bento: bento::Bento,
     /// Where Bento's commands send their answers.
     done: Option<tokio::sync::mpsc::UnboundedSender<bento::Done>>,
+    /// What the About page shows, once read.
+    about: Option<Value>,
+    /// The About page is being read.
+    reading: bool,
+    /// Where reading the About page sends what it found.
+    read: Option<tokio::sync::mpsc::UnboundedSender<Value>>,
 }
 
 impl Panel {
@@ -363,6 +388,28 @@ impl Panel {
                 self.publish(ctx);
                 result
             }
+            "about" => {
+                self.read_about(ctx);
+                self.publish(ctx);
+                Ok(())
+            }
+            "about-copy" => match &self.about {
+                Some(about) => {
+                    copy(ctx, about::text(about));
+                    Ok(())
+                }
+                None => Err("the About page isn't read yet".to_owned()),
+            },
+            "open-link" => match about::link(&arg("page")) {
+                Some(url) => mochi_core::process::spawn_detached(
+                    &mochi_core::process::in_app_scope(&["xdg-open".into(), url.into()]),
+                    None,
+                ),
+                None => Err(format!(
+                    "no page {:?}: repository, documentation or issue",
+                    arg("page")
+                )),
+            },
             other => Err(format!("settings has no action {other}")),
         };
         command.reply(result);
@@ -403,6 +450,20 @@ impl Panel {
         self.shown = Some(ctx.present(spec));
     }
 
+    /// Reads the About page again, off the module's loop: asking the
+    /// daemon its status waits on it.
+    fn read_about(&mut self, ctx: &ModuleCtx) {
+        let Some(read) = self.read.clone() else {
+            return;
+        };
+        self.reading = true;
+        let socket = ctx.socket().map(Path::to_path_buf);
+        let config = ctx.config_file().map(Path::to_path_buf);
+        tokio::spawn(async move {
+            let _ = read.send(about::gather(socket, config).await);
+        });
+    }
+
     fn close(&mut self, ctx: &ModuleCtx) {
         if let Some(id) = self.shown.take() {
             ctx.withdraw(id);
@@ -418,6 +479,8 @@ impl Panel {
         state["error"] = self.error.clone().unwrap_or(Value::Null);
         state["editor"] = self.editor.clone().unwrap_or(Value::Null);
         state["bento"] = self.bento.state();
+        state["about"] = self.about.clone().unwrap_or(Value::Null);
+        state["about_reading"] = Value::Bool(self.reading);
         ctx.publish_state(state);
     }
 }

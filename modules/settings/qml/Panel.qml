@@ -29,6 +29,8 @@ Item {
     readonly property var current: sections.find(entry => entry.id === section) ?? sections[0] ?? null
     // Bento's pages, which aren't options.
     readonly property bool bentoPage: current?.group === "bento"
+    // The About page, which isn't options either.
+    readonly property bool aboutPage: current?.id === "about"
     readonly property string bentoConsent: "config.bento.i_really_understand_that_bento_can_harm_and_contain_malicious_content"
     readonly property var error: settings.error ?? null
 
@@ -122,7 +124,7 @@ Item {
             if (!entry)
                 return "[]";
             // The Modules and Bento pages draw their own content.
-            const paths = entry.id === "modules" || entry.group === "bento" ? [] : entry.fields.map(field => field.path);
+            const paths = entry.id === "modules" || entry.id === "about" || entry.group === "bento" ? [] : entry.fields.map(field => field.path);
             return JSON.stringify([
                 {
                     "section": entry.id,
@@ -517,7 +519,7 @@ Item {
                 }
 
                 Button {
-                    visible: !content.searching && root.current !== null && root.current.id !== "modules" && !root.bentoPage
+                    visible: !content.searching && root.current !== null && root.current.id !== "modules" && !root.bentoPage && !root.aboutPage
                     text: root.editing ? "Options" : "TOML"
                     icon: root.editing ? "tune" : "code"
                     tone: root.editing ? "neutral" : "ghost"
@@ -525,7 +527,7 @@ Item {
                 }
 
                 CopyButton {
-                    visible: !root.bentoPage
+                    visible: !root.bentoPage && !root.aboutPage
                     width: 120
                     module: "settings"
                     down: true
@@ -624,6 +626,11 @@ Item {
                         page: root.bentoPage ? root.current.id : ""
                     }
 
+                    About {
+                        visible: !content.searching && root.aboutPage
+                        width: parent.width
+                    }
+
                     // The Modules page: a switch per module.
                     Column {
                         visible: !content.searching && root.current?.id === "modules"
@@ -681,7 +688,7 @@ Item {
                     }
 
                     Text {
-                        visible: !content.searching && root.current !== null && root.current.id !== "modules" && root.current.fields.length === 0 && !root.bentoPage
+                        visible: !content.searching && root.current !== null && root.current.id !== "modules" && root.current.fields.length === 0 && !root.bentoPage && !root.aboutPage
                         width: parent.width
                         leftPadding: Theme.spaceMedium
                         text: "Nothing to set here."

@@ -1174,7 +1174,9 @@ name = "mochi-module-settings"
 version = "0.0.8"
 dependencies = [
  "include_dir",
+ "libc",
  "mochi-core",
+ "mochi-protocol",
  "serde_json",
  "tokio",
  "tracing",

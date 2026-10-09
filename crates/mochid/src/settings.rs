@@ -905,6 +905,19 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
             fields,
         });
     }
+    // Which Mochi runs, on what, for a bug report.
+    out.push(Section {
+        id: "about".to_owned(),
+        path: "about".to_owned(),
+        title: "About".to_owned(),
+        description:
+            "The version, the system it runs on and how it's doing, to copy into a bug report."
+                .to_owned(),
+        group: Group::About,
+        icon: "info".to_owned(),
+        module: None,
+        fields: Vec::new(),
+    });
     out
 }
 

@@ -9,9 +9,11 @@ publish.workspace = true
 
 [dependencies]
 include_dir.workspace = true
+libc.workspace = true
 mochi-core.workspace = true
+mochi-protocol.workspace = true
 serde_json.workspace = true
-tokio = { workspace = true, features = ["macros", "process", "rt", "sync"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt", "sync", "time"] }
 tracing.workspace = true
 
 [lints]

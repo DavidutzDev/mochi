@@ -2,7 +2,7 @@
 
 A panel with every option: the theme, the island, the bubbles, which modules run, each module's settings and each plugin's. A change applies as you make it. Theme options apply while you drag. A module's own options apply 400 ms after you stop, since the module restarts to read them. Its Bento pages install plugins, themes and whole setups from the registry, and share yours: see [Bento](../bento.md#in-the-settings).
 
-`mochi ipc settings open` opens it, and `mochi ipc settings open osd` opens a section: a module's id, `colors`, `text`, `layout`, `motion`, `island`, `bubbles` or `modules`. An option's path, like `theme.colors.accent`, opens its section and points at it. The control center's gear opens the panel at the page you're on, and the launcher finds "Settings", each section and each option by name.
+`mochi ipc settings open` opens it, and `mochi ipc settings open osd` opens a section: a module's id, `colors`, `text`, `layout`, `motion`, `island`, `bubbles`, `modules` or `about`. An option's path, like `theme.colors.accent`, opens its section and points at it. The control center's gear opens the panel at the page you're on, and the launcher finds "Settings", each section and each option by name.
 
 ## Using it
 
@@ -13,6 +13,10 @@ A panel with every option: the theme, the island, the bubbles, which modules run
 - Every change applies at once and is kept, so what you see is what you get. When something else tries settings without keeping them, like `mochi ipc settings preview`, a bar offers **Keep**, which makes them changes like any other, or **Drop**. A reload drops them too, and Copy leaves them out.
 - TOML shows the section as TOML, every option at its value, to edit by hand. Save checks it first and shows what's wrong instead of changing anything. Options for which the panel has no control, like the launcher's providers, are edited there.
 - Copy gives everything that isn't a default as Nix, the `settings` and `theme` attributes of home-manager's `programs.mochi`, ready to paste. Copy as TOML gives `config.toml` and `theme.toml` instead.
+
+## About
+
+The About page, at the bottom of the sidebar, says which Mochi runs and where: the version and build, the revision for a build from the source tree, Quickshell's version, the distribution, kernel, architecture, processor and memory, the desktop and compositor with its screens, the modules and plugins that run, and the memory and uptime of mochid and of the processes it started. "Copy details" puts all of it on the clipboard as text, to paste into a bug report; "Report a bug" opens a new issue on GitHub. A value in red says something is wrong, like a plugin that failed or a Quickshell version Mochi doesn't support.
 
 ## Where changes go
 
@@ -34,5 +38,7 @@ When `changes.toml` has an option that no longer fits, after an update renamed i
 | `bento-add <source> [commit]`, `bento-remove <id>`, `bento-update [id]`, `bento-try <source>`, `bento-use <id\|mine>`, `bento-share <dir> [theme or parts] [name]`, `bento-parts` | What the Bento pages' buttons run, with `mochid bento`. `bento-forget` closes what a plan or a share shows. |
 | `text <path>`, `edit <path> <toml>` | A section as TOML, and replacing it. |
 | `export [nix\|toml]`, `copy [nix\|toml]` | Prints, or copies, every option that isn't at its default. |
+| `about`, `about-copy` | Read what the About page shows, and copy it as text for a bug report. |
+| `open-link <page>` | Opens `repository`, `documentation` or `issue` (a new issue on GitHub) in the browser, with `xdg-open`. Nothing else opens. |
 
 The settings module has no settings of its own.

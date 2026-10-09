@@ -32,6 +32,7 @@ pub enum Group {
     Modules,
     Plugins,
     Bento,
+    About,
 }
 
 /// One page of the panel.
