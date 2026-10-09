@@ -149,7 +149,7 @@ Item {
     // The sidebar: a heading per group, then its sections' ids. While
     // searching, only the sections with a match.
     readonly property string sidebarKey: {
-        const groups = [["appearance", "Appearance"], ["shell", "Shell"], ["modules", "Modules"], ["plugins", "Plugins"], ["bento", "Bento"]];
+        const groups = [["appearance", "Appearance"], ["shell", "Shell"], ["modules", "Modules"], ["bento", "Bento"], ["plugins", "Plugins"], ["about", "Mochi"]];
         const found = needle === "" ? null : layout.map(block => block.section);
         const rows = [];
         for (const [group, title] of groups) {
