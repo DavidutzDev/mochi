@@ -54,6 +54,50 @@ fn the_panel_opens_on_a_tab() {
     ));
 }
 
+/// The clock's next published state that `check` takes, skipping the rest.
+fn clock_state(
+    ui: &mut common::Client,
+    mut check: impl FnMut(&serde_json::Value) -> bool,
+) -> serde_json::Value {
+    loop {
+        if let DaemonMessage::State { module, state } = ui.recv()
+            && module == "clock"
+            && check(&state)
+        {
+            return state;
+        }
+    }
+}
+
+#[test]
+fn the_zone_picker_gets_the_zones_only_while_open() {
+    let daemon = Daemon::start("clock-zones", "idle,clock");
+    let mut ui = daemon.client(Role::Ui);
+    let mut ctl = daemon.client(Role::Ctl);
+    clock_state(&mut ui, |state| state["picking"] == false);
+
+    assert_eq!(
+        ctl.command("clock", "zone-picker", &["on", "buenos", "aires"]),
+        DaemonMessage::Ok
+    );
+    let open = clock_state(&mut ui, |state| state["picking"] == true);
+    assert_eq!(open["zoneSearch"], "buenos aires");
+    // A list where the system has a zone database, as a desktop does.
+    let zones = open["timezones"].as_array().unwrap();
+    if !zones.is_empty() {
+        assert!(zones.iter().any(|zone| zone["value"] == "Asia/Tokyo"
+            && zone["label"] == "Tokyo, Asia"
+            && zone["detail"] == "UTC+9 · Japan"));
+    }
+
+    assert_eq!(
+        ctl.command("clock", "zone-picker", &["off"]),
+        DaemonMessage::Ok
+    );
+    let closed = clock_state(&mut ui, |state| state["picking"] == false);
+    assert!(closed["timezones"].is_null());
+}
+
 #[test]
 fn reminders_come_and_go_from_the_cli() {
     let daemon = Daemon::start("clock-reminders", "idle,clock");

@@ -6,8 +6,10 @@ import qs.island
 // how far ahead or behind it is. The clock module reads the zones' offsets
 // from the system, as the widgets module does for the world clock widget.
 // Here is the inverted card, like the picked tab in the navbar, so the
-// others read against it. "Add a city" lays a list of common cities over
-// the cards, west to east, to add or take off with a click.
+// others read against it. "Add a city" lays the island's ZonePicker over
+// the cards: every zone the system has, with a search, to add or take off
+// with a click or Enter. The clock module publishes the zones only while
+// it's open, since there are a few hundred.
 Item {
     id: root
 
@@ -16,14 +18,41 @@ Item {
     readonly property var zones: clock.world ?? []
     // The most the clock module takes.
     readonly property int most: 8
-    // Cities whose zone has their name, so the card says the same.
+    // Common cities, west to east, listed before anything is typed so the
+    // usual ones are a click away. Each zone has the city's name, so the
+    // card says the same.
     readonly property var cities: ["Pacific/Honolulu", "America/Los_Angeles", "America/Denver", "America/Chicago", "America/Mexico_City", "America/New_York", "America/Toronto", "America/Sao_Paulo", "America/Argentina/Buenos_Aires", "Europe/London", "Europe/Lisbon", "Africa/Lagos", "Europe/Paris", "Europe/Madrid", "Europe/Amsterdam", "Europe/Berlin", "Europe/Rome", "Europe/Stockholm", "Africa/Johannesburg", "Africa/Cairo", "Europe/Athens", "Europe/Istanbul", "Africa/Nairobi", "Europe/Moscow", "Asia/Dubai", "Asia/Kolkata", "Asia/Bangkok", "Asia/Singapore", "Asia/Hong_Kong", "Asia/Shanghai", "Asia/Seoul", "Asia/Tokyo", "Australia/Sydney", "Pacific/Auckland"]
-    property bool picking: false
+    // The module says when the picker is open, so `mochi ipc clock
+    // zone-picker on` opens it too.
+    readonly property bool picking: clock.picking === true
+    // What `zone-picker on tokyo` asked to search for.
+    readonly property string search: clock.zoneSearch ?? ""
+
+    onPickingChanged: {
+        zonePicker.type(picking ? search : "");
+        if (picking)
+            Qt.callLater(() => zonePicker.focusSearch());
+    }
+    onSearchChanged: {
+        if (picking)
+            zonePicker.type(search);
+    }
+
+    function openPicker(): void {
+        Daemon.command("clock", "zone-picker", ["on"]);
+    }
 
     // Back to the cards, the keyboard on the button that opened the list.
     function closePicker(): void {
-        picking = false;
+        Daemon.command("clock", "zone-picker", ["off"]);
         addCity.forceActiveFocus();
+    }
+
+    // Another tab, or the panel closing: the module stops publishing the
+    // zones.
+    Component.onDestruction: {
+        if (picking)
+            Daemon.command("clock", "zone-picker", ["off"]);
     }
     // Here first, as an empty zone.
     readonly property var cards: [""].concat(zones)
@@ -216,15 +245,12 @@ Item {
 
                 text: "Add a city"
                 icon: "add"
-                onClicked: {
-                    root.picking = true;
-                    picker.forceActiveFocus();
-                }
+                onClicked: root.openPicker()
             }
         }
     }
 
-    // The cities, over the cards. Escape or Done goes back to them.
+    // Every zone, over the cards. Escape or Done goes back to them.
     Rectangle {
         id: picker
 
@@ -232,7 +258,6 @@ Item {
         visible: root.picking
         radius: Theme.radiusSurface
         color: Theme.surface
-        Keys.onEscapePressed: root.closePicker()
 
         // Clicks stay here.
         MouseArea {
@@ -244,7 +269,7 @@ Item {
 
             x: Theme.spaceLarge
             y: Theme.spaceLarge
-            width: parent.width - Theme.spaceLarge * 2 - done.width
+            width: parent.width - Theme.spaceLarge * 3 - done.width
 
             Text {
                 text: "Add a city"
@@ -254,13 +279,15 @@ Item {
                 font.weight: Theme.weightTitle
             }
 
+            // At the limit it says so plainly, in the text's own color.
             Text {
                 width: parent.width
                 elide: Text.ElideRight
-                text: root.zones.length >= root.most ? `The World tab is full, with ${root.most} zones. Take one off to add another.` : `A click adds a city or takes it off. ${root.zones.length} of ${root.most} zones.`
-                color: Theme.muted
+                text: root.zones.length >= root.most ? `The World tab is full, with ${root.most} zones. Take one off to add another.` : `A click or Enter adds a zone or takes it off. ${root.zones.length} of ${root.most}.`
+                color: root.zones.length >= root.most ? Theme.foreground : Theme.muted
                 font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
+                font.weight: root.zones.length >= root.most ? Theme.weightTitle : Theme.weightBody
             }
         }
 
@@ -275,8 +302,8 @@ Item {
             onClicked: root.closePicker()
         }
 
-        Flickable {
-            id: cityView
+        ZonePicker {
+            id: zonePicker
 
             anchors.top: heading.bottom
             anchors.topMargin: Theme.spaceMedium
@@ -284,94 +311,18 @@ Item {
             anchors.bottomMargin: Theme.spaceMedium
             x: Theme.spaceLarge
             width: parent.width - Theme.spaceLarge * 2
-            contentWidth: width
-            contentHeight: flow.height
-            interactive: contentHeight > height
-            boundsBehavior: Flickable.StopAtBounds
-            clip: true
-
-            ScrollFade {
-                view: cityView
-                color: Theme.surface
-            }
-
-            Flow {
-                id: flow
-
-                width: parent.width
-                spacing: Theme.spaceSmall
-
-                Repeater {
-                    model: root.cities
-
-                    // A chip, filled while the city is on the World tab.
-                    Rectangle {
-                        id: chip
-
-                        required property string modelData
-                        readonly property bool chosen: root.zones.includes(modelData)
-                        readonly property bool open: chosen || root.zones.length < root.most
-
-                        function pick(): void {
-                            if (open)
-                                Daemon.command("clock", chosen ? "remove-zone" : "add-zone", [modelData]);
-                        }
-
-                        width: label.implicitWidth + Theme.spaceLarge + Theme.spaceSmall
-                        height: Theme.controlHeight - Theme.spaceTiny
-                        radius: height / 2
-                        opacity: open ? 1 : 0.4
-                        color: chosen ? Theme.foreground : area.containsMouse && open ? Theme.highlight : Theme.raised
-                        activeFocusOnTab: open
-                        Keys.onReturnPressed: pick()
-                        Keys.onEnterPressed: pick()
-                        Keys.onSpacePressed: pick()
-
-                        Row {
-                            id: label
-
-                            anchors.centerIn: parent
-                            spacing: Theme.spaceTiny
-
-                            Symbol {
-                                anchors.verticalCenter: parent.verticalCenter
-                                visible: chip.chosen
-                                name: "check"
-                                size: 14
-                                color: Theme.background
-                            }
-
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: chip.modelData.split("/").pop().replace(/_/g, " ")
-                                color: chip.chosen ? Theme.background : Theme.foreground
-                                font.pixelSize: Theme.textCaption
-                                font.family: Theme.fontFamily
-                                font.weight: Theme.weightTitle
-                            }
-                        }
-
-                        MouseArea {
-                            id: area
-
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: chip.open ? Qt.PointingHandCursor : Qt.ArrowCursor
-                            onClicked: chip.pick()
-                        }
-
-                        Rectangle {
-                            visible: chip.activeFocus
-                            anchors.fill: parent
-                            anchors.margins: -3
-                            radius: height / 2
-                            color: "transparent"
-                            border.width: 2
-                            border.color: Theme.accent
-                        }
-                    }
-                }
-            }
+            zones: root.clock.timezones ?? null
+            chosen: root.zones
+            suggested: root.cities
+            most: root.most
+            color: Theme.surface
+            titles: ({
+                    "chosen": "On the World tab",
+                    "suggested": "Common cities",
+                    "all": "Every zone, west to east"
+                })
+            onPicked: value => Daemon.command("clock", root.zones.includes(value) ? "remove-zone" : "add-zone", [value])
+            onClosed: root.closePicker()
         }
     }
 }

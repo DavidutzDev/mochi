@@ -41,7 +41,7 @@ mod tour;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use include_dir::{Dir, include_dir};
 use mochi_core::zones::{self, Offsets};
@@ -315,6 +315,20 @@ impl Module for Clock {
             ActionSpec::new("remove-zone", "Take a time zone off the World tab")
                 .arg(ArgSpec::string("zone", "Like Europe/Paris")),
             ActionSpec::new(
+                "zone-picker",
+                "Open the World tab's zone picker, or close it",
+            )
+            .arg(ArgSpec::choice(
+                "state",
+                "on to open it, off to close it",
+                ["on", "off"],
+            ))
+            .arg(
+                ArgSpec::string("search", "What it searches for, like tokyo")
+                    .optional()
+                    .rest(),
+            ),
+            ActionSpec::new(
                 "credit",
                 "Open mochi-clock, by Xonex5, which inspired the clock, in the browser",
             ),
@@ -365,6 +379,8 @@ impl Module for Clock {
                 panel: None,
                 notices: BTreeMap::new(),
                 told: BTreeSet::new(),
+                zone_choices: None,
+                zone_search: String::new(),
             };
             state.publish(&ctx);
             let mut refresh = tokio::time::interval(zones::REFRESH);
@@ -551,6 +567,11 @@ struct State {
     /// The reminders that came up since mochid started, so one whose
     /// notice went by unanswered doesn't come up again until a restart.
     told: BTreeSet<u64>,
+    /// The system's zones for the World tab's picker, while it shows, and
+    /// when they were read: a few hundred, so only then.
+    zone_choices: Option<(Instant, Value)>,
+    /// What `zone-picker on` asked the picker to search for.
+    zone_search: String,
 }
 
 impl State {
@@ -634,6 +655,15 @@ impl State {
                     Err(error) => Err(error),
                 }
             }
+            "zone-picker" => {
+                match command.args.str("state") {
+                    Some("on") => self.read_zone_choices(),
+                    _ => self.zone_choices = None,
+                }
+                self.zone_search = command.args.str("search").unwrap_or_default().to_owned();
+                self.publish(ctx);
+                Ok(None)
+            }
             "credit" => mochi_core::process::spawn_detached(
                 &mochi_core::process::in_app_scope(&["xdg-open".into(), CREDIT.into()]),
                 None,
@@ -643,7 +673,14 @@ impl State {
         };
         let changed = !matches!(
             command.action.as_str(),
-            "reminders" | "toggle" | "open" | "close" | "runs" | "copy-run" | "credit"
+            "reminders"
+                | "toggle"
+                | "open"
+                | "close"
+                | "runs"
+                | "copy-run"
+                | "credit"
+                | "zone-picker"
         ) && result.is_ok();
         if changed {
             self.save(ctx);
@@ -764,9 +801,28 @@ impl State {
         }
     }
 
+    /// Reads the system's zones for the picker, unless they were read a
+    /// moment ago: their offsets move with daylight saving.
+    fn read_zone_choices(&mut self) {
+        let fresh = self
+            .zone_choices
+            .as_ref()
+            .is_some_and(|(read, _)| read.elapsed() < zones::REFRESH);
+        if fresh {
+            return;
+        }
+        let choices: Value = zones::system(seconds())
+            .iter()
+            .map(zones::Zone::choice)
+            .collect();
+        self.zone_choices = Some((Instant::now(), choices));
+    }
+
     fn ended(&mut self, activity: ActivityId) {
         if self.panel == Some(activity) {
             self.panel = None;
+            // The World tab went with it.
+            self.zone_choices = None;
         }
         self.notices.retain(|_, notice| *notice != activity);
     }
@@ -828,6 +884,10 @@ impl State {
             "world": settings.zones,
             "zones": offsets,
             "unknownZones": unknown,
+            // Only while the World tab's picker shows, which `picking` opens.
+            "picking": self.zone_choices.is_some(),
+            "zoneSearch": self.zone_search,
+            "timezones": self.zone_choices.as_ref().map_or(Value::Null, |(_, choices)| choices.clone()),
             "reminders": self.reminders.all(),
             "stopwatch": self.stopwatch,
             "runs": self.runs,

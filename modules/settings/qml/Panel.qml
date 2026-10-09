@@ -1071,6 +1071,63 @@ Item {
         }
     }
 
+    // Time zones: the island's ZonePicker, every zone the system has with
+    // a search, like the clock's World tab. One picked for a list, like the
+    // clock's zones, is added or taken off and the picker stays.
+    Rectangle {
+        id: zoneMenu
+
+        readonly property var owner: root.popupKind === "zones" ? root.popupOwner : null
+
+        visible: owner !== null
+        onVisibleChanged: {
+            zonePicker.clear();
+            if (visible)
+                Qt.callLater(() => zonePicker.focusSearch());
+        }
+        z: 10
+        x: Math.min(root.popupAt.x, root.width - width - Theme.spaceMedium)
+        y: Math.min(root.popupAt.y, root.height - height - Theme.spaceMedium)
+        width: 320
+        height: 380
+        radius: Theme.radiusField
+        color: Theme.raised
+
+        // Clicks inside don't reach the panel, which closes it.
+        MouseArea {
+            anchors.fill: parent
+        }
+
+        ZonePicker {
+            id: zonePicker
+
+            anchors.fill: parent
+            anchors.margins: Theme.spaceTiny
+            zones: Daemon.state("settings")?.timezones ?? null
+            chosen: {
+                const owner = zoneMenu.owner;
+                if (!owner)
+                    return [];
+                return owner.multiple ? (owner.value ?? []).map(String) : [String(owner.value ?? "")];
+            }
+            custom: true
+            color: Theme.raised
+            fieldColor: Theme.highlight
+            titles: ({
+                    "chosen": "Chosen",
+                    "suggested": "",
+                    "all": "Every zone, west to east"
+                })
+            onPicked: value => {
+                const owner = zoneMenu.owner;
+                owner.pick(value);
+                if (!owner.multiple)
+                    root.closePopup();
+            }
+            onClosed: root.closePopup()
+        }
+    }
+
     // The fonts installed, each drawn in itself, with a search.
     Rectangle {
         id: fonts
