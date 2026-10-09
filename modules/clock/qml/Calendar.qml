@@ -2,11 +2,11 @@ import QtQuick
 import qs.island
 import "Time.js" as Time
 
-// The Calendar tab: a month on the left, today in an accent circle, the
-// one accent here, and a dot under each day with reminders; the picked
-// day's reminders on the right, with a field to add one. The arrows move
-// the picked day while the month has the keyboard, Page Up and Page Down
-// turn the month, and Home goes back to today.
+// The Calendar tab: a month on the left, today in an accent pentagon as on the
+// calendar widgets, the one accent here, and a dot under each day with
+// reminders; the picked day's reminders on the right, with a field to add one.
+// The arrows move the picked day while the month has the keyboard, Page Up and
+// Page Down turn the month, and Home goes back to today.
 Item {
     id: root
 
@@ -234,7 +234,7 @@ Item {
                     ExpressiveShape {
                         anchors.centerIn: parent
                         visible: cell.isToday
-                        shape: "circle"
+                        shape: "pentagon"
                         size: 28
                         color: Theme.accent
                     }

@@ -19,7 +19,7 @@ Along the bottom, the next reminder and when it's due, or the oldest one still d
 
 ## Calendar and reminders
 
-A month, today in an accent circle and a dot under each day with reminders, a full one while one of them isn't done. Picking a day lists its reminders on the right, by time: **Done** for one that's due, and the bin to delete it. Under them, a time and a text add one to the picked day. The time takes `18:30`, or `6:30 PM` and `6 pm` on a 12-hour clock.
+A month, today in an accent pentagon and a dot under each day with reminders, a full one while one of them isn't done. Picking a day lists its reminders on the right, by time: **Done** for one that's due, and the bin to delete it. Under them, a time and a text add one to the picked day. The time takes `18:30`, or `6:30 PM` and `6 pm` on a 12-hour clock.
 
 When a reminder comes due, the island says so, with **Snooze 10 min** and **Done**. Left alone, the notice goes after a minute, and the reminder stays due on the Today tab and in the calendar until you mark it done. Reminders go by the wall clock, so one that came due while the computer slept comes up within seconds of waking, and one that came due while mochid wasn't running comes up when it starts, with how long ago it was due.
 
