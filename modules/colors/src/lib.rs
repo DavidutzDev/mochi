@@ -5,8 +5,9 @@
 //!
 //! The history is kept in `$XDG_STATE_HOME/mochi/colors.json`, newest first.
 //! The control center gets a card with the latest colors and a page with all of
-//! them, and the launcher a `#` provider: `#` alone offers to pick and lists
-//! the history, `#` with a color lists it in every format.
+//! them, the desktop a palette widget with the latest ones, and the launcher
+//! a `#` provider: `#` alone offers to pick and lists the history, `#` with a
+//! color lists it in every format.
 //!
 //! The overlay shows the frozen screens, but the pixels come from copies
 //! the module makes as the picker opens, through screencopy: see
@@ -116,6 +117,9 @@ impl Module for Colors {
                 "search": "search",
                 "pick": "pick-result",
             })),
+            ContributionSpec::new("widgets", "widget", "palette", "Palette", "Colors")
+                .icon("palette")
+                .options(json!({ "size": [16, 7], "min": [8, 5], "max": [40, 30] })),
         ];
         offers.extend(tour::steps());
         offers
@@ -761,6 +765,24 @@ mod tests {
             color["formats"][3],
             json!({ "format": "oklch", "label": "OKLCH", "text": "oklch(24% 0.03 284 / 0.5)" })
         );
+    }
+
+    #[test]
+    fn offers_a_palette_widget() {
+        let palette = Colors
+            .contributions()
+            .into_iter()
+            .map(|spec| spec.into_contribution("colors"))
+            .find(|offer| offer.target == "widgets")
+            .expect("a widget");
+        assert_eq!(
+            (palette.kind.as_str(), palette.id.as_str()),
+            ("widget", "palette")
+        );
+        let view = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("qml")
+            .join(format!("{}.qml", palette.view));
+        assert!(view.is_file(), "{}", view.display());
     }
 
     #[test]

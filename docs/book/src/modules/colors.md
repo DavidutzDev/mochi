@@ -25,6 +25,10 @@ The colors you pick are kept in `$XDG_STATE_HOME/mochi/colors.json`, newest firs
 
 The control center has a Colors card with the last 8 colors as dots: hover one to see it in the default format, click it to copy it. Its Pick button closes the control center and opens the picker. The Colors page lists the whole history, each color with its four formats as buttons that copy them and a trash button that removes it, with "Pick a color" and "Clear" above. `mochi ipc control-center open colors/history` opens the page.
 
+## On the desktop
+
+The Palette [widget](widgets.md) shows the latest colors as swatches, newest first, as many as fit: a bigger widget shows more. Hover a swatch to see it in the default format, click it to copy it. Its pick button opens the picker. Add it from the drawer while arranging widgets, or with `mochi ipc widgets add colors palette`.
+
 ## In the launcher
 
 Type `#` in the [launcher](launcher.md). Alone, it offers "Pick a color from the screen" and lists the history. Followed by a color, it lists that color in every format; Enter copies the one you choose, Shift+Enter types it into the window you were in, and the color goes into the history. It reads:
