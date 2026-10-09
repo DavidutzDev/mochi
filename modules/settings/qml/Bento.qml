@@ -363,6 +363,16 @@ Column {
                 }
             }
 
+            Fact {
+                visible: (planned.plan.theme?.sets ?? []).length > 0
+                icon: "text_fields"
+                text: "Sets its own " + (planned.plan.theme?.sets ?? []).map(section => ({
+                            "text": "fonts",
+                            "layout": "island shape and spacing",
+                            "motion": "motion"
+                        })[section] ?? section).join(", ") + ", under what your theme.toml sets"
+            }
+
             // A bento: what it changes, then each plugin it needs.
             Column {
                 visible: planned.details !== null

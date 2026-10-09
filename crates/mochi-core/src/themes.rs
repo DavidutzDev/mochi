@@ -48,6 +48,12 @@ pub struct ThemeFile {
     /// Role to color. A role left out takes Obsidian's.
     pub dark: Option<BTreeMap<String, String>>,
     pub light: Option<BTreeMap<String, String>>,
+    /// Fonts and text sizes, the island's shape and spacing, and how
+    /// things move, with the keys `theme.toml` has. What `theme.toml` sets
+    /// goes over them.
+    pub text: Option<Table>,
+    pub layout: Option<Table>,
+    pub motion: Option<Table>,
 }
 
 /// `[theme]`.
@@ -93,7 +99,31 @@ impl ThemeFile {
                     .map_err(|error| format!("[{part}] {role}: {error}"))?;
             }
         }
+        // The rest reads as `theme.toml` would, with the same limits.
+        section::<mochi_protocol::Text>("text", &file.text)?;
+        section::<mochi_protocol::Layout>("layout", &file.layout)?;
+        section::<mochi_protocol::Motion>("motion", &file.motion)?;
+        let look = file.look();
+        if !look.is_empty() {
+            let theme: mochi_protocol::Theme = Value::Table(look)
+                .try_into()
+                .map_err(|error: toml::de::Error| error.to_string())?;
+            crate::config::check_theme(&theme)?;
+        }
         Ok(file)
+    }
+
+    /// What it sets besides colors: its `text`, `layout` and `motion`
+    /// tables, as `theme.toml` has them.
+    pub fn look(&self) -> Table {
+        [
+            ("text", &self.text),
+            ("layout", &self.layout),
+            ("motion", &self.motion),
+        ]
+        .into_iter()
+        .filter_map(|(name, table)| Some((name.to_owned(), Value::Table(table.clone()?))))
+        .collect()
     }
 
     /// Its colors as `[colors]` would set them: the light or dark version,
@@ -115,6 +145,20 @@ impl ThemeFile {
             colors.insert(role.clone(), Value::String(color.clone()));
         }
         colors
+    }
+}
+
+/// Checks a section of a theme as `theme.toml` would read it, naming it.
+fn section<T: serde::de::DeserializeOwned>(
+    name: &str,
+    table: &Option<Table>,
+) -> Result<(), String> {
+    match table {
+        Some(table) => Value::Table(table.clone())
+            .try_into::<T>()
+            .map(drop)
+            .map_err(|error| format!("[{name}]: {}", error.message())),
+        None => Ok(()),
     }
 }
 
@@ -294,6 +338,21 @@ accent = "#3eb489"
         );
         assert!(error(&format!("{SMALL}\nfont = \"x\"")).contains("unknown role `font`"));
         assert!(error(&format!("{SMALL}\n[fonts]\nbody = \"x\"")).contains("unknown field"));
+    }
+
+    #[test]
+    fn a_theme_may_set_fonts_shape_and_motion() {
+        let full = format!("{SMALL}\n[text]\nfamily = \"Inter\"\n\n[motion]\nspeed = 1.5\n");
+        let theme = ThemeFile::parse(&full).unwrap();
+        let look = theme.look();
+        assert_eq!(look["text"]["family"].as_str(), Some("Inter"));
+        assert!(!look.contains_key("layout"));
+        let error = |text: &str| ThemeFile::parse(text).unwrap_err();
+        assert!(
+            error(&full.replace("family", "famly")).starts_with("[text]: unknown field `famly`")
+        );
+        assert!(error(&full.replace("1.5", "-1.0")).contains("motion.speed must be above 0"));
+        assert!(error(&format!("{SMALL}\n[layout]\nidle_height = 0\n")).contains("idle_height"));
     }
 
     #[test]

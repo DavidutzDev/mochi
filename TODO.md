@@ -555,6 +555,7 @@ Sharing plugins, themes and whole configs, and a reviewed registry of them. Desi
 Phase 1, without a registry:
 
 - [x] `mochi-theme.toml`: dark and light palettes; the builtin presets become bundled themes, and `preset = "<id>"` also finds themes installed in `~/.local/share/mochi/themes/<id>/`
+- [x] Themes set fonts, the island's shape and motion too: `[text]`, `[layout]` and `[motion]`, under `theme.toml`
 - [x] `mochi-bento.toml`: modules and their settings, island and bubbles, the hub's arrangement, widgets on screens named by size (`screen-1` is the largest) instead of output names, a theme, a wallpaper, the plugins it needs
 - [x] `bento.toml` next to `config.toml`, written by Bento and laid over `plugins.toml`, so installing works when home-manager owns the config; Copy as Nix includes it
 - [x] `mochi bento share`: turns the running config into a bento, leaving out device names, paths under `$HOME` and values that look like secrets, and listing them

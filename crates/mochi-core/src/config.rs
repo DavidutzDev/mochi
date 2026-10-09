@@ -385,12 +385,44 @@ pub fn theme_from_table(
     let mut merged = colors;
     crate::changes::merge(&mut merged, &user);
     table.insert("colors".to_owned(), toml::Value::Table(merged));
+    // The theme's fonts, shape and motion, under what the file sets.
+    let look = preset_look(&table);
+    lay_under(&mut table, look);
     let mut theme: Theme = toml::Value::Table(table)
         .try_into()
         .map_err(|error: toml::de::Error| ConfigError::invalid(path, error.to_string()))?;
     theme.text.migrate();
     check_theme(&theme).map_err(|message| ConfigError::invalid(path, message))?;
     Ok(theme)
+}
+
+/// Puts `look`'s sections under the same sections of `table`, which win.
+fn lay_under(table: &mut toml::Table, look: toml::Table) {
+    for (section, look) in look {
+        let toml::Value::Table(mut under) = look else {
+            continue;
+        };
+        if let Some(toml::Value::Table(over)) = table.get(&section) {
+            crate::changes::merge(&mut under, over);
+        }
+        table.insert(section, toml::Value::Table(under));
+    }
+}
+
+/// What the theme a theme table's `preset` names sets besides colors: its
+/// `text`, `layout` and `motion`. Nothing for `wallpaper`, or for a theme
+/// that can't be read, which `palette_of` reports.
+pub fn preset_look(table: &toml::Table) -> toml::Table {
+    let preset = table
+        .get("preset")
+        .and_then(toml::Value::as_str)
+        .unwrap_or("obsidian");
+    if preset == "wallpaper" {
+        return toml::Table::new();
+    }
+    crate::themes::find(preset)
+        .map(|theme| theme.look())
+        .unwrap_or_default()
 }
 
 /// The palette a theme table's `preset` and `appearance` give. A
@@ -442,7 +474,7 @@ pub fn theme_notes(path: &Path) -> Result<Vec<String>, ConfigError> {
 }
 
 /// Rejects values the UI can't use, naming the key.
-fn check_theme(theme: &Theme) -> Result<(), String> {
+pub(crate) fn check_theme(theme: &Theme) -> Result<(), String> {
     let motion = &theme.motion;
     if !(motion.spring.is_finite() && motion.spring > 0.0) {
         return Err(format!(
@@ -612,6 +644,22 @@ mod tests {
         assert_eq!(theme.colors.accent.as_str(), "#30d158");
         assert_eq!(theme.motion.damping, 0.5);
         assert_eq!(theme.layout, Theme::default().layout);
+    }
+
+    #[test]
+    fn a_theme_package_sits_under_the_file() {
+        let mut table: toml::Table =
+            toml::from_str("[text]\nfamily = \"Mine\"\n[motion]\nspeed = 2.0\n").unwrap();
+        let look: toml::Table = toml::from_str(
+            "[text]\nfamily = \"Theirs\"\ndisplay_family = \"Display\"\n[layout]\nmargin = 6\n",
+        )
+        .unwrap();
+        lay_under(&mut table, look);
+        let theme = theme_from_table(table, Path::new("theme.toml"), false).unwrap();
+        assert_eq!(theme.text.family, "Mine");
+        assert_eq!(theme.text.display_family, "Display");
+        assert_eq!(theme.layout.margin, 6);
+        assert!((theme.motion.speed - 2.0).abs() < f64::EPSILON);
     }
 
     #[test]

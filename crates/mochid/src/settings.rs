@@ -318,11 +318,14 @@ impl Store {
         table
     }
 
-    /// The colors the preset in `theme` gives, as `[colors]`: what the
-    /// color options show where nothing sets them.
+    /// What the preset in `theme` gives: its colors as `[colors]`, and its
+    /// theme's `text`, `layout` and `motion`. What the options show where
+    /// nothing else sets them.
     fn palette(&self, theme: &Table) -> Table {
         let colors = mochi_core::config::palette_of(theme, self.system_light).unwrap_or_default();
-        Table::from_iter([("colors".to_owned(), Value::Table(colors))])
+        let mut table = mochi_core::config::preset_look(theme);
+        table.insert("colors".to_owned(), Value::Table(colors));
+        table
     }
 
     /// The system's light or dark preference changed, for

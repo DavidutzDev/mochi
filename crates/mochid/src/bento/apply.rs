@@ -1184,6 +1184,7 @@ pub fn plan(config_file: &Path, text: &str) -> Result<(), String> {
             details["theme"] = serde_json::json!({
                 "dark": theme.colors(false),
                 "light": theme.colors(true),
+                "sets": theme.look().keys().cloned().collect::<Vec<_>>(),
             });
             details
         }

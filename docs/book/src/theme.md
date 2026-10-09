@@ -22,7 +22,19 @@ A theme is a directory with a `mochi-theme.toml`. Installed ones live in `~/.loc
 
 `[theme]` says what it is. `id` is lowercase letters, digits, `-` and `_`, starting with a letter, and must match the directory's name. `name` is what the settings panel shows, and `mochi` is the oldest Mochi it works with: a newer one is refused, and `mochi config check` says so. `description`, `authors` and `homepage` are optional.
 
-`[dark]` and `[light]` give each role a color, the roles of `[colors]` below. A theme with only one of them uses it for both appearances, so a dark theme stays dark, and a role it leaves out takes Obsidian's of the same version, so a theme can be as short as an accent. A theme holds colors only, no fonts or views, so it can't run anything. A typo, like an unknown role or a color that isn't `#rrggbb` or `#aarrggbb`, is an error naming the key.
+`[dark]` and `[light]` give each role a color, the roles of `[colors]` below. A theme with only one of them uses it for both appearances, so a dark theme stays dark, and a role it leaves out takes Obsidian's of the same version, so a theme can be as short as an accent. Like every theme, it holds no views or code, so it can't run anything. A typo, like an unknown role or a color that isn't `#rrggbb` or `#aarrggbb`, is an error naming the key.
+
+A theme can also set the rest of the look, with the sections `theme.toml` has below: `[text]` for its fonts and sizes, `[layout]` for the island's shape and spacing, and `[motion]` for how things move. What your `theme.toml` sets goes over them, and the settings panel shows the theme's values where you set nothing:
+
+```toml
+[text]
+family = "IBM Plex Sans"
+
+[motion]
+speed = 1.5
+```
+
+They're checked like `theme.toml`, so a typo or a value out of range is an error naming its section. A font the theme names that isn't installed is drawn in another font Qt picks, so install the fonts a theme names.
 
 `mochi bento add <directory or repository>` installs a theme, and `mochi bento try` tries it until you keep it or drop it: see [Bento](bento.md).
 
