@@ -1,5 +1,5 @@
-# Weather, from Open-Meteo.
-[module.weather]
+# Meteo: the weather from Open-Meteo, an example plugin.
+[module.meteo]
 # A place name to look up, like "Lyon" or "Lyon, France". Leave it empty
 # and set latitude and longitude instead to skip the lookup.
 # city = ""

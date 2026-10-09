@@ -97,7 +97,7 @@ async fn run(mut ctx: ModuleCtx) -> Result<(), mochi_sdk::Error> {
                 weather = match fetch(place, settings.units).await {
                     Ok(weather) => weather,
                     Err(error) => {
-                        eprintln!("weather: {error}");
+                        eprintln!("meteo: {error}");
                         json!({ "place": place.name, "error": error })
                     }
                 };
@@ -149,7 +149,7 @@ async fn locate(settings: &Settings) -> Result<Place, String> {
         });
     }
     if settings.city.is_empty() {
-        return Err("set `city`, or `latitude` and `longitude`, in [module.weather]".into());
+        return Err("set `city`, or `latitude` and `longitude`, in [module.meteo]".into());
     }
     // "Lyon, France": look up the name, prefer the country.
     let (name, country) = match settings.city.split_once(',') {

@@ -1,10 +1,11 @@
 # An example plugin: the weather where you are, from Open-Meteo, which
 # needs no account or key. A card on the control center, and
-# `mochi ipc weather show` for a forecast on the island.
+# `mochi ipc meteo show` for a forecast on the island. Mochi has a weather
+# module of its own; this one shows how a plugin fetches from the web.
 
 [plugin]
-id = "weather"
-name = "Weather"
+id = "meteo"
+name = "Meteo"
 version = "0.1.0"
 description = "The weather from Open-Meteo: a control center card and a forecast on the island"
 authors = ["Mochi"]
@@ -12,11 +13,11 @@ api = 1
 homepage = "https://open-meteo.com"
 
 [backend]
-exec = "bin/weather"
-build = "cargo build --release --locked --target-dir target && install -Dm755 target/release/weather bin/weather"
+exec = "bin/meteo"
+build = "cargo build --release --locked --target-dir target && install -Dm755 target/release/meteo bin/meteo"
 
 [release]
-asset = "weather-{version}-{arch}-linux.tar.gz"
+asset = "meteo-{version}-{arch}-linux.tar.gz"
 
 [[actions]]
 name = "show"
@@ -31,7 +32,7 @@ target = "control-center"
 kind = "card"
 id = "now"
 view = "Card"
-title = "Weather"
+title = "Meteo"
 options = { span = 1, rows = 1 }
 order = 70
 
@@ -41,7 +42,7 @@ target = "widgets"
 kind = "widget"
 id = "now"
 view = "Card"
-title = "Weather"
+title = "Meteo"
 options = { size = [18, 9], min = [14, 7], max = [36, 16], description = "The temperature and the sky now, and the day's low and high" }
 
 # How the settings panel shows the options in settings.toml: kinds and

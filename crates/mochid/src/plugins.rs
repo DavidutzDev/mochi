@@ -985,10 +985,10 @@ fn check_against(
 mod tests {
     use super::*;
 
-    /// The weather example's settings become rows of the right kinds.
+    /// The meteo example's settings become rows of the right kinds.
     #[test]
     fn plugin_settings_take_the_manifests_hints() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/plugins/weather");
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/plugins/meteo");
         let manifest = Manifest::load(&dir).unwrap();
         let plugin = PluginModule::new(dir, manifest);
         let schema = plugin.settings_schema().unwrap();
@@ -997,11 +997,11 @@ mod tests {
             mochi_core::toml::from_str(&mochi_core::examples::uncommented(plugin.example()))
                 .unwrap();
         let fields =
-            mochi_core::options::fields(&schema, "config", "module.weather", &comments, &defaults);
+            mochi_core::options::fields(&schema, "config", "module.meteo", &comments, &defaults);
         let field = |key: &str| {
             fields
                 .iter()
-                .find(|field| field.path == format!("config.module.weather.{key}"))
+                .find(|field| field.path == format!("config.module.meteo.{key}"))
                 .unwrap_or_else(|| panic!("no {key}"))
         };
         use mochi_core::options::Kind;
@@ -1037,20 +1037,18 @@ mod tests {
 
     #[test]
     fn settings_are_checked_against_the_plugins_settings_toml() {
-        let weather = example("weather");
-        weather
+        let meteo = example("meteo");
+        meteo
             .check_settings(&table(
                 "city = \"Lyon\"\nlatitude = 45\nrefresh_minutes = 5",
             ))
             .unwrap();
 
-        let typo = weather
-            .check_settings(&table("ctiy = \"Lyon\""))
-            .unwrap_err();
+        let typo = meteo.check_settings(&table("ctiy = \"Lyon\"")).unwrap_err();
         assert!(typo.contains("unknown setting `ctiy`"), "{typo}");
         assert!(typo.contains("`city`"), "{typo}");
 
-        let wrong = weather
+        let wrong = meteo
             .check_settings(&table("refresh_minutes = \"often\""))
             .unwrap_err();
         assert!(
@@ -1059,7 +1057,7 @@ mod tests {
         );
 
         // Every example's own defaults pass.
-        for name in ["weather", "pomodoro"] {
+        for name in ["meteo", "pomodoro"] {
             let plugin = example(name);
             let defaults = plugin.defaults.clone().unwrap();
             assert!(!defaults.is_empty(), "{name} shows no defaults");

@@ -15,7 +15,7 @@ The repository has example plugins to copy:
 | Example | Shows |
 |---|---|
 | `examples/plugins/pomodoro` | A Rust backend: a countdown bubble updated every second, island notices, actions with arguments, a control center card with buttons, watching the media module's state |
-| `examples/plugins/weather` | A Rust backend fetching from the web on a timer, settings with a place and units, a control center card and a forecast view |
+| `examples/plugins/meteo` | A Rust backend fetching from the web on a timer, settings with a place and units, a control center card and a forecast view |
 | `examples/plugins/emoji` | A Rust backend that is a [launcher provider](launcher-providers.md): an emoji picker with no views |
 | `examples/python/hello` | A Python backend with a small SDK of its own: see [Making an SDK](custom-sdks.md) |
 

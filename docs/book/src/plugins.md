@@ -12,8 +12,8 @@ Plugins are listed in `plugins.toml`, next to `config.toml` in `~/.config/mochi/
 [plugins.pomodoro]
 source = "git:github.com/User/mochi-pomodoro:main"
 
-[plugins.weather]
-source = "git-release:github.com/User/mochi-weather:v0.2.0"
+[plugins.meteo]
+source = "git-release:github.com/User/mochi-meteo:v0.2.0"
 
 [plugins.clock]
 source = "https://example.org/mochi-clock-1.0.tar.gz#sha256=9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"

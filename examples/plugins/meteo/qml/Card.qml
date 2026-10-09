@@ -70,6 +70,6 @@ Item {
         anchors.fill: parent
         enabled: root.ready
         cursorShape: Qt.PointingHandCursor
-        onClicked: Daemon.command("weather", "show", [])
+        onClicked: Daemon.command("meteo", "show", [])
     }
 }

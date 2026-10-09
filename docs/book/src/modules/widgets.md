@@ -102,7 +102,7 @@ It's written as a file Mochi can change, not a link into the store, so arranging
 | Battery | `battery`, `level` | The control center's card, with the power profiles and the peripherals' batteries. It steps aside without a battery or a peripheral with one |
 | Performance | `performance`, `graphs` | `cpu`, `memory`, `gpu` (on unless set off), `disk`, `network` (off unless set on): which readings show, each with its last two minutes as a graph. An older widget with `reading` set to one reading in `widgets.toml` shows only that one until you remove the line |
 | Palette | `colors`, `palette` | The latest [colors](colors.md) you picked, as many as fit. Click one to copy it, hover it to see it |
-| Weather | `weather`, `now` | From the example weather plugin |
+| Meteo | `meteo`, `now` | From the example meteo plugin |
 
 Each to-do list and note keeps its own content, in the [notes](notes.md) module. Typing into one gives the desktop the keyboard until you click a window; Escape lets go of the field.
 

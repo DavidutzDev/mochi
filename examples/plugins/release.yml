@@ -7,8 +7,8 @@
 # A Rust backend, one with a Cargo.toml, is built as a static binary for
 # the musl target instead of with the manifest's `build`: it needs no
 # loader and no libraries, so it runs on any Linux, NixOS without nix-ld
-# included. The binary is the one named like `exec`'s file, `weather` for
-# `bin/weather`. Each architecture builds on its own runner, so the Rust
+# included. The binary is the one named like `exec`'s file, `meteo` for
+# `bin/meteo`. Each architecture builds on its own runner, so the Rust
 # toolchain links it with the runner's `cc` and the musl that comes with the
 # target; musl-tools gives `musl-gcc` for crates that compile C.
 #

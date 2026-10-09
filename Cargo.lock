@@ -1323,21 +1323,21 @@ dependencies = [
 ]
 
 [[package]]
-name = "mochi-plugin-pomodoro"
-version = "0.1.0"
-dependencies = [
- "mochi-sdk",
- "serde",
- "tokio",
-]
-
-[[package]]
-name = "mochi-plugin-weather"
+name = "mochi-plugin-meteo"
 version = "0.1.0"
 dependencies = [
  "mochi-sdk",
  "serde",
  "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "mochi-plugin-pomodoro"
+version = "0.1.0"
+dependencies = [
+ "mochi-sdk",
+ "serde",
  "tokio",
 ]
 
