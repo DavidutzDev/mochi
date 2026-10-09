@@ -6,9 +6,19 @@ use serde_json::{Map, Value, json};
 
 use crate::pulse::{Device, Snapshot, Stream, Target};
 
+/// Before an app's name or a stream's id, names what the app records rather
+/// than what it plays: `recording:discord`.
+pub const RECORDING: &str = "recording:";
+
 /// Finds what a command names: `output` or `input` for the defaults, an
-/// app's stream id, a device's name, or an app's name for all its streams.
+/// app's stream id, a device's name, or an app's name for all its streams;
+/// after `recording:`, an app's recording streams.
 pub fn targets(snapshot: &Snapshot, name: &str) -> Result<Vec<Target>, String> {
+    if let Some(name) = name.strip_prefix(RECORDING) {
+        return pick(&snapshot.recording, name)
+            .map(|streams| streams.into_iter().map(Target::Recording).collect())
+            .map_err(|_| format!("no app called {name} is recording"));
+    }
     match name {
         "output" => snapshot
             .default_sink
@@ -34,18 +44,22 @@ pub fn targets(snapshot: &Snapshot, name: &str) -> Result<Vec<Target>, String> {
     }
 }
 
-/// The streams of an app, by a stream's id or the app's name, matched
-/// exactly first, then ignoring case.
+/// The streams of an app playing sound, by a stream's id or the app's name.
 pub fn streams(snapshot: &Snapshot, name: &str) -> Result<Vec<u32>, String> {
+    pick(&snapshot.streams, name)
+}
+
+/// The streams in `streams` with a volume to change, by a stream's id or
+/// the app's name, matched exactly first, then ignoring case.
+fn pick(streams: &[Stream], name: &str) -> Result<Vec<u32>, String> {
+    let streams = || streams.iter().filter(|stream| stream.mixable);
     if let Ok(index) = name.parse::<u32>()
-        && snapshot.streams.iter().any(|stream| stream.index == index)
+        && streams().any(|stream| stream.index == index)
     {
         return Ok(vec![index]);
     }
     let named = |exact: bool| -> Vec<u32> {
-        snapshot
-            .streams
-            .iter()
+        streams()
             .filter(|stream| {
                 if exact {
                     stream.app == name
@@ -99,16 +113,19 @@ pub fn current(snapshot: &Snapshot, targets: &[Target]) -> Option<(u32, bool)> {
             .find(|device| device.name == name)
             .map(|device| (device.volume, device.muted))
     };
+    let stream = |streams: &[Stream], index: u32| {
+        streams
+            .iter()
+            .find(|stream| stream.index == index)
+            .map(|stream| (stream.volume, stream.muted))
+    };
     let mut all: Option<(u32, bool)> = None;
     for target in targets {
         let (volume, muted) = match target {
             Target::Sink(name) => device(&snapshot.sinks, name),
             Target::Source(name) => device(&snapshot.sources, name),
-            Target::Stream(index) => snapshot
-                .streams
-                .iter()
-                .find(|stream| stream.index == *index)
-                .map(|stream| (stream.volume, stream.muted)),
+            Target::Stream(index) => stream(&snapshot.streams, *index),
+            Target::Recording(index) => stream(&snapshot.recording, *index),
         }?;
         all = Some(all.map_or((volume, muted), |(loudest, all_muted)| {
             (loudest.max(volume), all_muted && muted)
@@ -140,16 +157,18 @@ pub struct Group<'a> {
 }
 
 impl Group<'_> {
-    fn playing(&self) -> bool {
+    /// Whether any of its streams plays or records, rather than waiting.
+    fn active(&self) -> bool {
         self.streams.iter().any(|stream| !stream.corked)
     }
 }
 
-/// The streams by app name: apps playing first, then by name, and in each,
-/// streams playing first. A stream keeps its place while it plays.
-pub fn groups(snapshot: &Snapshot) -> Vec<Group<'_>> {
+/// The streams with a volume, by app name: apps playing or recording first,
+/// then by name, and in each, streams playing first. A stream keeps its
+/// place while it plays.
+pub fn groups(streams: &[Stream]) -> Vec<Group<'_>> {
     let mut groups: Vec<Group<'_>> = Vec::new();
-    for stream in &snapshot.streams {
+    for stream in streams.iter().filter(|stream| stream.mixable) {
         match groups.iter_mut().find(|group| group.app == stream.app) {
             Some(group) => group.streams.push(stream),
             None => groups.push(Group {
@@ -163,7 +182,7 @@ pub fn groups(snapshot: &Snapshot) -> Vec<Group<'_>> {
             .streams
             .sort_by_key(|stream| (stream.corked, stream.index));
     }
-    groups.sort_by_cached_key(|group| (!group.playing(), group.app.to_lowercase()));
+    groups.sort_by_cached_key(|group| (!group.active(), group.app.to_lowercase()));
     groups
 }
 
@@ -200,46 +219,37 @@ pub fn payload(snapshot: Option<&Snapshot>, max_volume: u32) -> Value {
         snapshot
             .sinks
             .iter()
-            .find(|sink| sink.index == stream.sink)
+            .find(|sink| sink.index == stream.device)
             .map(|sink| sink.name.as_str())
     };
 
-    let apps: Vec<Value> = groups(snapshot)
+    let apps: Vec<Value> = groups(&snapshot.streams)
         .into_iter()
         .map(|group| {
-            let first = group.streams[0];
-            let streams: Vec<Value> = group
-                .streams
-                .iter()
-                .map(|stream| {
-                    json!({
-                        "id": stream.index.to_string(),
-                        "title": stream.title,
-                        "volume": stream.volume,
-                        "muted": stream.muted,
-                        "playing": !stream.corked,
-                        "output": output(stream),
-                    })
-                })
-                .collect();
-            // The output they all play through, if they agree.
-            let shared = output(first).filter(|name| {
-                group
-                    .streams
-                    .iter()
-                    .all(|stream| output(stream) == Some(name))
+            let mut row = row(&group, "", |stream, value| {
+                value["playing"] = (!stream.corked).into();
+                value["output"] = output(stream).into();
             });
-            json!({
-                "id": group.app,
-                "name": group.app,
-                "title": if group.streams.len() == 1 { first.title.as_str() } else { "" },
-                "icon": first.icon,
-                "volume": group.streams.iter().map(|stream| stream.volume).max(),
-                "muted": group.streams.iter().all(|stream| stream.muted),
-                "playing": group.playing(),
-                "output": shared,
-                "streams": streams,
-            })
+            // The output they all play through, if they agree.
+            let first = output(group.streams[0]);
+            let shared =
+                first.filter(|_| group.streams.iter().all(|stream| output(stream) == first));
+            row["playing"] = group.active().into();
+            row["output"] = shared.into();
+            row
+        })
+        .collect();
+
+    // The apps recording, in rows like the apps playing; `target` names them
+    // for `volume` and `mute`.
+    let recorders: Vec<Value> = groups(&snapshot.recording)
+        .into_iter()
+        .map(|group| {
+            let mut row = row(&group, RECORDING, |stream, value| {
+                value["recording"] = (!stream.corked).into();
+            });
+            row["recording"] = group.active().into();
+            row
         })
         .collect();
 
@@ -267,19 +277,53 @@ pub fn payload(snapshot: Option<&Snapshot>, max_volume: u32) -> Value {
         "outputs": outputs,
         "inputs": inputs,
         "apps": apps,
+        "recorders": recorders,
+    })
+}
+
+/// An app's row: its name, icon, volume and mute, and each of its streams,
+/// to which `each` adds. `prefix` goes before the names in `target`, what
+/// `volume` and `mute` take.
+fn row(group: &Group<'_>, prefix: &str, each: impl Fn(&Stream, &mut Value)) -> Value {
+    let first = group.streams[0];
+    let streams: Vec<Value> = group
+        .streams
+        .iter()
+        .map(|stream| {
+            let mut value = json!({
+                "id": stream.index.to_string(),
+                "target": format!("{prefix}{}", stream.index),
+                "title": stream.title,
+                "volume": stream.volume,
+                "muted": stream.muted,
+            });
+            each(stream, &mut value);
+            value
+        })
+        .collect();
+    json!({
+        "id": group.app,
+        "target": format!("{prefix}{}", group.app),
+        "name": group.app,
+        "title": if group.streams.len() == 1 { first.title.as_str() } else { "" },
+        "icon": first.icon,
+        "volume": group.streams.iter().map(|stream| stream.volume).max(),
+        "muted": group.streams.iter().all(|stream| stream.muted),
+        "streams": streams,
     })
 }
 
 /// What the meters show: `output` and `input`, each stream by id under
-/// `streams`, and each app, the loudest of its streams, under `apps`. Levels
-/// are on the volume's scale, 1 for 100%, so a full-scale sound at 50% fills
-/// half of a slider that ends at 100%, and never goes past the volume.
+/// `streams`, and each app, the loudest of its streams, under `apps`; the
+/// same for the apps recording under `recording`. Levels are on the
+/// volume's scale, 1 for 100%, so a full-scale sound at 50% fills half of a
+/// slider that ends at 100%, and never goes past the volume.
 pub fn levels(snapshot: &Snapshot, shown: &HashMap<String, f32>) -> Value {
     let level = |key: &str| shown.get(key).copied().unwrap_or(0.0);
     let round = |level: f32| (f64::from(level) * 100.0).round() / 100.0;
     let mut streams = Map::new();
     let mut apps = Map::new();
-    for group in groups(snapshot) {
+    for group in groups(&snapshot.streams) {
         let mut loudest = 0.0f32;
         for stream in group.streams {
             let id = stream.index.to_string();
@@ -302,11 +346,39 @@ pub fn levels(snapshot: &Snapshot, shown: &HashMap<String, f32>) -> Value {
                 level("output") * sink.volume as f32 / 100.0
             }
         });
+
+    // A recording stream has no meter of its own: it takes what the input
+    // hears, at its own volume. Only the input in use has a meter.
+    let input = snapshot
+        .sources
+        .iter()
+        .find(|source| snapshot.default_source.as_ref() == Some(&source.name))
+        .map(|source| source.index);
+    let mut recording_streams = Map::new();
+    let mut recording_apps = Map::new();
+    for group in groups(&snapshot.recording) {
+        let mut loudest = 0.0f32;
+        for stream in group.streams {
+            let heard = if stream.muted || stream.corked || Some(stream.device) != input {
+                0.0
+            } else {
+                level("input") * stream.volume as f32 / 100.0
+            };
+            loudest = loudest.max(heard);
+            recording_streams.insert(stream.index.to_string(), round(heard).into());
+        }
+        recording_apps.insert(group.app.to_owned(), round(loudest).into());
+    }
+
     json!({
         "output": round(output),
         "input": round(level("input")),
         "streams": streams,
         "apps": apps,
+        "recording": {
+            "streams": recording_streams,
+            "apps": recording_apps,
+        },
     })
 }
 
@@ -323,7 +395,6 @@ pub fn fall(last: f32, peak: Option<f32>) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::pulse::Recorder;
 
     fn device(index: u32, name: &str, volume: u32) -> Device {
         Device {
@@ -341,13 +412,14 @@ mod tests {
     fn stream(index: u32, app: &str, corked: bool) -> Stream {
         Stream {
             index,
-            sink: 1,
+            device: 1,
             app: app.into(),
             title: format!("{app} {index}"),
             icon: None,
             volume: 80,
             muted: false,
             corked,
+            mixable: true,
         }
     }
 
@@ -364,7 +436,7 @@ mod tests {
                 Stream {
                     volume: 50,
                     muted: true,
-                    sink: 2,
+                    device: 2,
                     ..stream(31, "Firefox", true)
                 },
                 Stream {
@@ -372,20 +444,29 @@ mod tests {
                     ..stream(5, "Firefox", false)
                 },
             ],
+            // Recording streams count apart from playing ones: 12 is
+            // Spotify's too.
             recording: vec![
-                recorder("discord", false),
-                recorder("discord", false),
-                recorder("OBS", true),
+                recorder(12, "discord", false),
+                Stream {
+                    volume: 50,
+                    ..recorder(13, "discord", false)
+                },
+                recorder(4, "OBS", true),
+                // Counts as recording, but has no volume to mix.
+                Stream {
+                    mixable: false,
+                    ..recorder(9, "Speech", false)
+                },
             ],
         }
     }
 
-    fn recorder(app: &str, corked: bool) -> Recorder {
-        Recorder {
-            source: 3,
-            app: app.into(),
-            icon: None,
-            corked,
+    fn recorder(index: u32, app: &str, corked: bool) -> Stream {
+        Stream {
+            device: 3,
+            volume: 100,
+            ..stream(index, app, corked)
         }
     }
 
@@ -425,6 +506,30 @@ mod tests {
     }
 
     #[test]
+    fn names_what_an_app_records() {
+        let snapshot = snapshot();
+        assert_eq!(
+            targets(&snapshot, "recording:Discord"),
+            Ok(vec![Target::Recording(12), Target::Recording(13)])
+        );
+        // An id names the recording stream, not the playing one.
+        assert_eq!(
+            targets(&snapshot, "recording:12"),
+            Ok(vec![Target::Recording(12)])
+        );
+        assert_eq!(
+            current(&snapshot, &[Target::Recording(13)]),
+            Some((50, false))
+        );
+        // Spotify only plays, and Speech has no volume to change.
+        assert!(targets(&snapshot, "recording:spotify").is_err());
+        assert!(targets(&snapshot, "recording:Speech").is_err());
+        assert!(targets(&snapshot, "recording:9").is_err());
+        // Without the prefix, apps that only record aren't found.
+        assert!(targets(&snapshot, "OBS").is_err());
+    }
+
+    #[test]
     fn an_app_is_as_loud_as_its_loudest_stream_and_muted_when_all_are() {
         let snapshot = snapshot();
         let firefox = targets(&snapshot, "Firefox").unwrap();
@@ -448,7 +553,7 @@ mod tests {
     #[test]
     fn groups_streams_by_app() {
         let snapshot = snapshot();
-        let groups = groups(&snapshot);
+        let groups = groups(&snapshot.streams);
         let apps: Vec<&str> = groups.iter().map(|group| group.app).collect();
         // Spotify only has a paused stream, so it comes last.
         assert_eq!(apps, ["discord", "Firefox", "Spotify"]);
@@ -505,13 +610,37 @@ mod tests {
         assert_eq!(firefox["output"], Value::Null);
         assert_eq!(firefox["streams"][2]["output"], "headset");
 
-        // Each app recording once, and none paused.
+        assert_eq!(discord["target"], "discord");
+        assert_eq!(discord["streams"][0]["target"], "7");
+
+        // Each app recording once, and none paused, with a volume or not.
         assert_eq!(
             payload["recording"],
-            json!([{ "name": "discord", "icon": null }])
+            json!([{ "name": "discord", "icon": null }, { "name": "Speech", "icon": null }])
         );
 
         assert_eq!(super::payload(None, 100)["connected"], false);
+    }
+
+    #[test]
+    fn payload_lists_the_apps_recording() {
+        let payload = payload(Some(&snapshot()), 100);
+        let recorders = payload["recorders"].as_array().unwrap();
+        // Only those with a volume, recording first.
+        let names: Vec<&str> = recorders
+            .iter()
+            .map(|app| app["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, ["discord", "OBS"]);
+
+        let discord = &recorders[0];
+        assert_eq!(discord["target"], "recording:discord");
+        assert_eq!(discord["volume"], 100);
+        assert_eq!(discord["muted"], false);
+        assert_eq!(discord["recording"], true);
+        assert_eq!(discord["streams"][1]["target"], "recording:13");
+        assert_eq!(discord["streams"][1]["volume"], 50);
+        assert_eq!(recorders[1]["recording"], false);
     }
 
     #[test]
@@ -529,6 +658,25 @@ mod tests {
         assert_eq!(levels["streams"]["31"], 0.0);
         assert_eq!(levels["apps"]["Firefox"], 0.75);
         assert_eq!(levels["apps"]["discord"], 0.0);
+    }
+
+    #[test]
+    fn an_app_recording_meters_the_input_at_its_volume() {
+        let shown = HashMap::from([("input".to_owned(), 0.5)]);
+        let mut snapshot = snapshot();
+        let levels = levels(&snapshot, &shown);
+        let recording = &levels["recording"];
+        assert_eq!(recording["streams"]["12"], 0.5);
+        assert_eq!(recording["streams"]["13"], 0.25);
+        assert_eq!(recording["apps"]["discord"], 0.5);
+        // Paused.
+        assert_eq!(recording["apps"]["OBS"], 0.0);
+
+        // Muted, or recording from another input than the one metered.
+        snapshot.recording[0].muted = true;
+        snapshot.recording[1].device = 8;
+        let levels = super::levels(&snapshot, &shown);
+        assert_eq!(levels["recording"]["apps"]["discord"], 0.0);
     }
 
     #[test]

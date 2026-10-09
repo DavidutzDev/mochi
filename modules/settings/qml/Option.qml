@@ -329,7 +329,11 @@ Item {
                     "label": "Input",
                     "detail": "The microphone in use"
                 }
-            ].concat(valuesFor("audio-output"), valuesFor("audio-input"), valuesFor("audio-app"));
+            ].concat(valuesFor("audio-output"), valuesFor("audio-input"), valuesFor("audio-app"), (Daemon.state("audio")?.recorders ?? []).map(app => ({
+                        "value": app.target,
+                        "label": app.name,
+                        "detail": "Recording now"
+                    })));
         case "bluetooth-device":
             {
                 const bluetooth = Daemon.state("bluetooth");

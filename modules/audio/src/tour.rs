@@ -184,5 +184,73 @@ pub fn steps() -> Vec<ContributionSpec> {
                     ]
                 }
             })),
+        ContributionSpec::new("tour", "step", "recording", "Panel", "Apps recording")
+            .icon("mic")
+            .order(42)
+            .options(json!({
+                "chapter": "panels",
+                "since": "0.0.10",
+                "caption": "Apps recording from the microphone get their own rows, with a volume and a mute each.",
+                "payload": {
+                    "connected": true,
+                    "max_volume": 100,
+                    "output": {
+                        "name": "out",
+                        "description": "Arctis Nova 7",
+                        "volume": 62,
+                        "muted": false,
+                        "icon": "headset",
+                        "default": true
+                    },
+                    "input": {
+                        "name": "in",
+                        "description": "Arctis Nova 7 microphone",
+                        "volume": 80,
+                        "muted": false,
+                        "icon": "headset",
+                        "default": true
+                    },
+                    "outputs": [],
+                    "inputs": [],
+                    "apps": [
+                        {
+                            "id": "Discord",
+                            "target": "Discord",
+                            "name": "Discord",
+                            "title": "",
+                            "icon": "discord",
+                            "volume": 85,
+                            "muted": false,
+                            "playing": true,
+                            "output": "out",
+                            "streams": []
+                        }
+                    ],
+                    "recorders": [
+                        {
+                            "id": "Discord",
+                            "target": "recording:Discord",
+                            "name": "Discord",
+                            "title": "",
+                            "icon": "discord",
+                            "volume": 100,
+                            "muted": false,
+                            "recording": true,
+                            "streams": []
+                        },
+                        {
+                            "id": "OBS",
+                            "target": "recording:OBS",
+                            "name": "OBS",
+                            "title": "",
+                            "icon": "com.obsproject.Studio",
+                            "volume": 70,
+                            "muted": true,
+                            "recording": false,
+                            "streams": []
+                        }
+                    ]
+                }
+            })),
     ]
 }

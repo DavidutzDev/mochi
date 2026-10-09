@@ -77,7 +77,7 @@ pub fn wanted(snapshot: &Snapshot) -> HashMap<String, Tap> {
         if let Some(source) = snapshot
             .sinks
             .iter()
-            .find(|sink| sink.index == stream.sink)
+            .find(|sink| sink.index == stream.device)
             .and_then(monitor)
         {
             taps.insert(
@@ -284,13 +284,14 @@ mod tests {
             }],
             streams: vec![AppStream {
                 index: 40,
-                sink: 2,
+                device: 2,
                 app: "Firefox".into(),
                 title: String::new(),
                 icon: None,
                 volume: 100,
                 muted: false,
                 corked: false,
+                mixable: true,
             }],
             recording: Vec::new(),
         };

@@ -3,8 +3,9 @@ import qs.island
 
 // The mixer, for the control center page and the island: the output and the
 // input, each with a list of devices to switch to, then every app playing
-// sound, one row per app with its streams inside. Every slider has a peak meter
-// while the mixer shows. The width comes from the parent.
+// sound, one row per app with its streams inside, and the apps recording
+// while any does. Every slider has a peak meter while the mixer shows. The
+// width comes from the parent.
 Column {
     id: root
 
@@ -14,6 +15,7 @@ Column {
     readonly property bool connected: payload?.connected ?? false
     readonly property int maxVolume: payload?.max_volume ?? 100
     readonly property var apps: payload?.apps ?? []
+    readonly property var recorders: payload?.recorders ?? []
     readonly property var outputs: payload?.outputs ?? []
     // Which device list is open: "output", "input" or "".
     property string choosing: ""
@@ -310,6 +312,72 @@ Column {
                         key: `stream:${single.streamId}`
                         current: single.stream.output ?? null
                     }
+                }
+            }
+        }
+    }
+
+    SectionLabel {
+        visible: root.connected && root.recorders.length > 0
+        topPadding: 8
+        text: "Recording"
+    }
+
+    // The apps recording, in rows like the apps playing, without outputs to
+    // move them to. Their meters show what the input hears at their volume.
+    Repeater {
+        model: root.connected ? root.recorders.length : 0
+
+        delegate: Column {
+            id: recorder
+
+            required property int index
+            readonly property var modelData: root.recorders[index] ?? {}
+            // What `volume` and `mute` take: recording:<name>.
+            readonly property string target: modelData.target ?? ""
+            readonly property var streams: modelData.streams ?? []
+            readonly property bool open: streams.length > 1 && root.opened[target] === true
+
+            width: root.width
+
+            Volume {
+                width: parent.width
+                opacity: (recorder.modelData.recording ?? true) ? 1 : 0.6
+                target: recorder.target
+                title: recorder.modelData.name ?? ""
+                subtitle: recorder.streams.length > 1 ? `${recorder.streams.length} streams` : (recorder.modelData.title ?? "")
+                appIcon: recorder.modelData.icon ?? (recorder.modelData.name ?? "").toLowerCase()
+                symbol: "mic"
+                mutedSymbol: "mic-muted"
+                volume: recorder.modelData.volume ?? 0
+                muted: recorder.modelData.muted ?? false
+                maxVolume: root.maxVolume
+                choosable: recorder.streams.length > 1
+                choosing: recorder.open
+                onChoose: root.toggleOpen(recorder.target)
+                level: root.levels === null ? -1 : (root.levels.recording?.apps?.[recorder.modelData.id] ?? 0)
+            }
+
+            Repeater {
+                model: recorder.open ? recorder.streams.length : 0
+
+                delegate: Volume {
+                    id: take
+
+                    required property int index
+                    readonly property var stream: recorder.streams[index] ?? {}
+
+                    x: 24
+                    width: recorder.width - 24
+                    opacity: (take.stream.recording ?? true) ? 1 : 0.6
+                    target: take.stream.target ?? ""
+                    title: (take.stream.title ?? "") !== "" ? take.stream.title : (recorder.modelData.name ?? "")
+                    symbol: "mic"
+                    mutedSymbol: "mic-muted"
+                    volume: take.stream.volume ?? 0
+                    muted: take.stream.muted ?? false
+                    maxVolume: root.maxVolume
+                    level: root.levels === null ? -1 : (root.levels.recording?.streams?.[take.stream.id] ?? 0)
                 }
             }
         }

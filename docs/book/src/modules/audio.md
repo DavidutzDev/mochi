@@ -1,14 +1,16 @@
 # Audio
 
-A volume mixer, like pavucontrol's: the output and the input with their volumes, and a slider and a mute for each app playing sound. It shows as the control center's Sound page, and `mochi ipc audio toggle`, bound to a key, opens the same mixer on the island; Escape or a click outside closes it. It needs PipeWire with its PulseAudio server, or PulseAudio.
+A volume mixer, like pavucontrol's: the output and the input with their volumes, and a slider and a mute for each app playing sound and each app recording. It shows as the control center's Sound page, and `mochi ipc audio toggle`, bound to a key, opens the same mixer on the island; Escape or a click outside closes it. It needs PipeWire with its PulseAudio server, or PulseAudio.
 
 Click the output's or the input's name to list the other devices, and click one to switch to it. Click an icon to mute or unmute. Apps playing come first; paused ones are dimmed. Streams without a volume of their own, like some system sounds, aren't listed.
 
 The streams of one app share a row, so two browser tabs playing get one Firefox row. Its slider sets every stream to the same level, and its icon mutes them all; the row shows the loudest stream's volume, and shows muted only when all of them are. When an app has more than one stream, click its name to open the row and see each stream with its own slider, mute and output.
 
+While an app records from a microphone, like Discord in a call or OBS, a Recording section under the apps lists it, one row per app with its own volume and mute, and its streams inside like an app playing. That volume is what the app hears, apart from the input's volume, which every app recording hears. Paused recordings are dimmed. The section leaves when no app records.
+
 With more than one output, the button at the end of an app's row lists the outputs, with the one the app plays through marked, and a click moves every stream of the app there. In an opened row, each stream's button moves only that stream. PipeWire remembers where you moved an app: its next stream plays through the same output, without Mochi doing anything. `mochi ipc audio move firefox headphones` does the same from a keybind.
 
-While the mixer shows, on the island or as the control center's Sound page, every slider has a meter: the fill dims, and the part of it the sound reaches stays lit. A meter is on the volume's scale, so it never goes past the slider's end: a full-scale sound fills the whole volume, a quiet one a little of it. An app's row shows its loudest stream. The output's meter moves only while something plays, and the input's only while an app records from it, so opening the mixer never wakes the microphone. The meters cost nothing while no mixer shows: Mochi asks the audio server for peak levels only while one is open, and the server sends 25 a second for each slider instead of the sound itself.
+While the mixer shows, on the island or as the control center's Sound page, every slider has a meter: the fill dims, and the part of it the sound reaches stays lit. A meter is on the volume's scale, so it never goes past the slider's end: a full-scale sound fills the whole volume, a quiet one a little of it. An app's row shows its loudest stream. An app recording has no meter of its own: its row shows the input's meter at the app's volume, while it records from the input in use. The output's meter moves only while something plays, and the input's only while an app records from it, so opening the mixer never wakes the microphone. The meters cost nothing while no mixer shows: Mochi asks the audio server for peak levels only while one is open, and the server sends 25 a second for each slider instead of the sound itself.
 
 ```toml
 {{#include ../../../../modules/audio/settings.toml}}
@@ -24,7 +26,7 @@ While the mixer shows, on the island or as the control center's Sound page, ever
 | `move <app> <device>` | Plays every stream of an app, or one stream by its id, through another output: its name, its description like `Headphones`, or `output` for the one in use |
 | `meters <view> on\|off` | Runs the meters for 10 seconds, or stops them; the mixer sends this while it shows |
 
-A `target` is `output` or `input` for the devices in use, a device's name, an app's name for all its streams, or a stream's id. App names match ignoring case when no app has the exact name. `pactl list short sinks`, `sources` and `sink-inputs` list them. `mochi ipc audio volume output +5` makes a volume key.
+A `target` is `output` or `input` for the devices in use, a device's name, an app's name for all its streams, or a stream's id. `recording:` before an app's name or a stream's id names what the app records instead of what it plays: `mochi ipc audio mute recording:discord` mutes Discord's microphone and leaves the call's sound alone. App names match ignoring case when no app has the exact name. `pactl list short sinks`, `sources`, `sink-inputs` and `source-outputs` list them. `mochi ipc audio volume output +5` makes a volume key.
 
 `max_volume = 200` lets the sliders and `volume` go to 200%; the OSD's volume bar then shows 200% as full, with a mark at 100%. Past 100%, the sliders and the bar turn to the accent color. Volume keys bound to `mochi ipc audio volume output +5` stop at the same place; `wpctl set-volume -l` has its own limit.
 

@@ -1,6 +1,6 @@
 //! The volume mixer: the output and input with their volumes and a choice
-//! of device, and a volume and mute for each app playing sound, from the
-//! audio server over the PulseAudio protocol.
+//! of device, and a volume and mute for each app playing sound and each app
+//! recording, from the audio server over the PulseAudio protocol.
 //!
 //! It shows as a control center page, and `mochi ipc audio toggle`, bound to a
 //! key, opens the same mixer on the island. The `volume`, `mute`, `output`,
@@ -116,7 +116,7 @@ impl Module for Audio {
         let target = || {
             ArgSpec::string(
                 "target",
-                "output, input, a device's name, an app's name for all its streams, or a stream's id",
+                "output, input, a device's name, an app's name for all its streams, or a stream's id; recording: before an app or id for what it records",
             )
             .source("audio-target")
         };

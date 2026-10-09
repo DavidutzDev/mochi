@@ -55,17 +55,7 @@ pub struct Snapshot {
     pub streams: Vec<Stream>,
     /// Apps recording from one of `sources`, one entry per stream; Mochi's
     /// own meters and recordings of outputs are left out.
-    pub recording: Vec<Recorder>,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct Recorder {
-    /// The index of the input it records from.
-    pub source: u32,
-    pub app: String,
-    pub icon: Option<String>,
-    /// Paused: connected, but taking nothing.
-    pub corked: bool,
+    pub recording: Vec<Stream>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -84,21 +74,27 @@ pub struct Device {
     pub running: bool,
 }
 
+/// An app's stream: one playing sound (a sink input), or one recording it (a
+/// source output).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Stream {
     pub index: u32,
-    /// The index of the output it plays through.
-    pub sink: u32,
+    /// The index of the output it plays through, or of the input it records
+    /// from.
+    pub device: u32,
     /// The app's name, like "Spotify" or "Firefox".
     pub app: String,
-    /// What it plays, like a tab's title.
+    /// What it plays or records, like a tab's title.
     pub title: String,
     /// An icon theme name, from the app or its binary.
     pub icon: Option<String>,
     pub volume: u32,
     pub muted: bool,
-    /// Paused streams stay connected but send nothing.
+    /// Paused streams stay connected but send or take nothing.
     pub corked: bool,
+    /// Whether its volume can change. Playing streams without one aren't
+    /// listed at all; recording ones still count as recording.
+    pub mixable: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -114,6 +110,8 @@ pub enum Target {
     Sink(String),
     Source(String),
     Stream(u32),
+    /// An app's recording stream.
+    Recording(u32),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -415,14 +413,14 @@ fn refresh(link: &Rc<Link>) {
     let recorders = Rc::clone(link);
     introspect.get_source_output_info_list(move |result| match result {
         ListResult::Item(output) => {
-            if let Some(recorder) = recorder(output) {
-                recorders
-                    .building
-                    .borrow_mut()
-                    .snapshot
-                    .recording
-                    .push(recorder);
-            }
+            let Some(recorder) = recorder(output) else {
+                return;
+            };
+            let mut building = recorders.building.borrow_mut();
+            building
+                .volumes
+                .insert(Target::Recording(recorder.index), output.volume);
+            building.snapshot.recording.push(recorder);
         }
         ListResult::End | ListResult::Error => answered(&recorders),
     });
@@ -442,7 +440,7 @@ fn answered(link: &Rc<Link>) {
         let sources: Vec<u32> = snapshot.sources.iter().map(|source| source.index).collect();
         snapshot
             .recording
-            .retain(|recorder| sources.contains(&recorder.source));
+            .retain(|recorder| sources.contains(&recorder.device));
         (building.snapshot, building.volumes, building.again)
     };
     *link.volumes.borrow_mut() = volumes;
@@ -488,6 +486,9 @@ fn apply(link: &Link, command: Command) {
                 Target::Stream(index) => {
                     introspect.set_sink_input_volume(index, &volumes, None);
                 }
+                Target::Recording(index) => {
+                    introspect.set_source_output_volume(index, &volumes, None);
+                }
             }
         }
         Command::Mute(target, muted) => match target {
@@ -499,6 +500,9 @@ fn apply(link: &Link, command: Command) {
             }
             Target::Stream(index) => {
                 introspect.set_sink_input_mute(index, muted, None);
+            }
+            Target::Recording(index) => {
+                introspect.set_source_output_mute(index, muted, None);
             }
         },
         Command::DefaultSink(name) => {
@@ -566,56 +570,73 @@ fn stream(input: &SinkInputInfo) -> Option<Stream> {
     if !input.has_volume || !input.volume_writable {
         return None;
     }
+    Some(Stream {
+        volume: percent(input.volume.max()),
+        muted: input.mute,
+        corked: input.corked,
+        mixable: true,
+        ..named(
+            input.index,
+            input.sink,
+            input.name.as_deref(),
+            &input.proplist,
+        )
+    })
+}
+
+/// An app recording, unless it's one of Mochi's meters.
+fn recorder(output: &SourceOutputInfo) -> Option<Stream> {
+    if output
+        .proplist
+        .get_str(properties::APPLICATION_ID)
+        .as_deref()
+        == Some(crate::meter::APP_ID)
+    {
+        return None;
+    }
+    Some(Stream {
+        volume: percent(output.volume.max()),
+        muted: output.mute,
+        corked: output.corked,
+        mixable: output.has_volume && output.volume_writable,
+        ..named(
+            output.index,
+            output.source,
+            output.name.as_deref(),
+            &output.proplist,
+        )
+    })
+}
+
+/// A stream with the app's name, icon and title from its properties, at
+/// full volume.
+fn named(index: u32, device: u32, name: Option<&str>, proplist: &Proplist) -> Stream {
     let property = |key: &str| {
-        input
-            .proplist
+        proplist
             .get_str(key)
             .filter(|value| !value.trim().is_empty())
     };
     let binary = property(properties::APPLICATION_PROCESS_BINARY);
     let app = property(properties::APPLICATION_NAME)
         .or_else(|| binary.clone())
-        .or_else(|| input.name.as_deref().map(str::to_owned))
+        .or_else(|| name.map(str::to_owned))
         .unwrap_or_else(|| "Unknown app".to_owned());
     let title = property(properties::MEDIA_NAME)
-        .or_else(|| input.name.as_deref().map(str::to_owned))
+        .or_else(|| name.map(str::to_owned))
         .unwrap_or_default();
-    Some(Stream {
-        index: input.index,
-        sink: input.sink,
+    Stream {
+        index,
+        device,
         icon: property(properties::APPLICATION_ICON_NAME)
             .or_else(|| binary.map(|binary| binary.to_lowercase())),
         // Apps often name the stream after themselves; that says nothing.
         title: if title == app { String::new() } else { title },
         app,
-        volume: percent(input.volume.max()),
-        muted: input.mute,
-        corked: input.corked,
-    })
-}
-
-/// An app recording, unless it's one of Mochi's meters.
-fn recorder(output: &SourceOutputInfo) -> Option<Recorder> {
-    let property = |key: &str| {
-        output
-            .proplist
-            .get_str(key)
-            .filter(|value| !value.trim().is_empty())
-    };
-    if property(properties::APPLICATION_ID).as_deref() == Some(crate::meter::APP_ID) {
-        return None;
+        volume: 100,
+        muted: false,
+        corked: false,
+        mixable: true,
     }
-    let binary = property(properties::APPLICATION_PROCESS_BINARY);
-    Some(Recorder {
-        source: output.source,
-        app: property(properties::APPLICATION_NAME)
-            .or_else(|| binary.clone())
-            .or_else(|| output.name.as_deref().map(str::to_owned))
-            .unwrap_or_else(|| "Unknown app".to_owned()),
-        icon: property(properties::APPLICATION_ICON_NAME)
-            .or_else(|| binary.map(|binary| binary.to_lowercase())),
-        corked: output.corked,
-    })
 }
 
 /// Guesses what an output plugs into from what the server reports: the form

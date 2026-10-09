@@ -4,7 +4,8 @@ import qs.island
 
 // One volume in the mixer: an icon that mutes on click, the name, a slider
 // and the percent. `symbol` is a built-in icon, `appIcon` an icon theme
-// name for apps. With `choosable`, clicking the name sends `choose`, for
+// name for apps, which falls back to `symbol` when the theme lacks it, and
+// to a note without one. With `choosable`, clicking the name sends `choose`, for
 // picking another device or opening an app's streams. With `routeIcon`, a
 // button with that icon at the end sends `route`, for the app's output.
 // `level` is the meter's, from 0 to 1 on the scale of 100%; below 0, none.
@@ -75,11 +76,11 @@ Item {
             asynchronous: true
         }
 
-        // Apps without an icon in the theme.
+        // Apps without an icon in the theme: `symbol`, or a note.
         Symbol {
             anchors.centerIn: parent
             visible: root.appIcon !== "" && picture.status !== Image.Ready
-            name: "music"
+            name: root.symbol !== "" ? root.symbol : "music"
             size: 20
             color: Theme.muted
             opacity: root.muted ? 0.35 : 1
@@ -89,7 +90,7 @@ Item {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             visible: root.appIcon !== "" && root.muted
-            name: "volume-muted"
+            name: root.mutedSymbol !== "" ? root.mutedSymbol : "volume-muted"
             size: 14
             color: Theme.foreground
         }
