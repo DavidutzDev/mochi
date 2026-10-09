@@ -180,6 +180,10 @@ pub struct CompositorState {
     /// What is being captured, by monitor or window name.
     #[serde(default)]
     pub captured: Vec<String>,
+    /// The active keyboard layout's name, like `English (US)`, when the
+    /// compositor says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyboard_layout: Option<String>,
 }
 
 /// A monitor.
@@ -315,6 +319,7 @@ mod tests {
                 focused_app: Some("kitty".into()),
                 screencast: false,
                 captured: Vec::new(),
+                keyboard_layout: Some("English (US)".into()),
             },
         });
         round_trip_to(ToPlugin::CallResult {

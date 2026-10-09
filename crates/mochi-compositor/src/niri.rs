@@ -1,5 +1,6 @@
 //! niri's IPC, at `$NIRI_SOCKET`: the focused output, where windows are,
-//! and every screencast, which its event stream reports from the start.
+//! the keyboard layout, and every screencast, which its event stream
+//! reports from the start.
 //!
 //! A request is a JSON line, like `"Windows"`, and its reply one line,
 //! `{"Ok": ...}` or `{"Err": "..."}`. After `"EventStream"`, niri writes
@@ -14,7 +15,7 @@ use tokio::net::UnixStream;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::Window;
-use crate::ipc::Event;
+use crate::ipc::{self, Event};
 
 /// Sends `request` and returns what its `Ok` holds.
 async fn request(path: &Path, request: &str) -> std::io::Result<Value> {
@@ -46,6 +47,8 @@ struct Tracker {
     outputs: HashMap<u64, String>,
     /// Each screencast's target, by stream id.
     casts: HashMap<u64, String>,
+    /// The configured keyboard layouts' names, in order.
+    layouts: Vec<String>,
 }
 
 impl Tracker {
@@ -100,8 +103,29 @@ impl Tracker {
                 }
                 vec![self.casting()]
             }
+            "KeyboardLayoutsChanged" => {
+                let layouts = &body["keyboard_layouts"];
+                self.layouts = layouts["names"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .map(|name| name.as_str().unwrap_or_default().to_owned())
+                    .collect();
+                self.layout(&layouts["current_idx"])
+            }
+            "KeyboardLayoutSwitched" => self.layout(&body["idx"]),
             _ => Vec::new(),
         }
+    }
+
+    /// The layout at `index` in the list, when it has a name.
+    fn layout(&self, index: &Value) -> Vec<Event> {
+        index
+            .as_u64()
+            .and_then(|index| self.layouts.get(usize::try_from(index).ok()?))
+            .and_then(|name| ipc::layout_name(name))
+            .map(|name| vec![Event::KeyboardLayout(name)])
+            .unwrap_or_default()
     }
 
     fn casting(&self) -> Event {
@@ -234,6 +258,19 @@ mod tests {
         let events = tracker.event(&json!({ "WorkspaceActivated": { "id": 3, "focused": true } }));
         assert_eq!(events, [Event::Focus("DP-1".into())]);
         let events = tracker.event(&json!({ "WorkspaceActivated": { "id": 1, "focused": false } }));
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn the_layout_follows_switches() {
+        let mut tracker = Tracker::default();
+        let events = tracker.event(&json!({ "KeyboardLayoutsChanged": { "keyboard_layouts": {
+            "names": ["English (US)", "Russian"], "current_idx": 0,
+        } } }));
+        assert_eq!(events, [Event::KeyboardLayout("English (US)".into())]);
+        let events = tracker.event(&json!({ "KeyboardLayoutSwitched": { "idx": 1 } }));
+        assert_eq!(events, [Event::KeyboardLayout("Russian".into())]);
+        let events = tracker.event(&json!({ "KeyboardLayoutSwitched": { "idx": 5 } }));
         assert!(events.is_empty());
     }
 

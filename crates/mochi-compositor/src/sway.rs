@@ -1,6 +1,7 @@
 //! Sway's IPC, at `$SWAYSOCK`: the focused output, which its workspace
-//! events report even when focus moves to an empty workspace, and where
-//! windows are, from its tree. It says nothing about screencasts.
+//! events report even when focus moves to an empty workspace, the keyboard
+//! layout, from its input events, and where windows are, from its tree. It
+//! says nothing about screencasts.
 //!
 //! Each message is the bytes `i3-ipc`, the payload's length and the
 //! message's type as native-endian 32-bit integers, then a JSON payload.
@@ -14,14 +15,16 @@ use tokio::net::UnixStream;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::Window;
-use crate::ipc::Event;
+use crate::ipc::{self, Event};
 
 const MAGIC: &[u8; 6] = b"i3-ipc";
 const SUBSCRIBE: u32 = 2;
 const GET_OUTPUTS: u32 = 3;
 const GET_TREE: u32 = 4;
-/// The workspace event, with the event bit set.
+const GET_INPUTS: u32 = 100;
+/// The workspace and input events, with the event bit set.
 const WORKSPACE_EVENT: u32 = 0x8000_0000;
+const INPUT_EVENT: u32 = 0x8000_0015;
 
 async fn send(socket: &mut UnixStream, kind: u32, payload: &str) -> std::io::Result<()> {
     let mut message = Vec::with_capacity(14 + payload.len());
@@ -55,13 +58,13 @@ async fn request(path: &Path, kind: u32) -> std::io::Result<Value> {
     Ok(receive(&mut socket).await?.1)
 }
 
-/// One connection: the focused output, then every focus change. `Ok` means
-/// the receiver is gone.
+/// One connection: the focused output and the keyboard layout, then every
+/// change to them. `Ok` means the receiver is gone.
 pub(crate) async fn session(path: &Path, events: &UnboundedSender<Event>) -> std::io::Result<()> {
     // Subscribe first, so no change slips in between the query and the
     // subscription.
     let mut socket = UnixStream::connect(path).await?;
-    send(&mut socket, SUBSCRIBE, r#"["workspace"]"#).await?;
+    send(&mut socket, SUBSCRIBE, r#"["workspace", "input"]"#).await?;
     receive(&mut socket).await?;
     if events.send(Event::Connected).is_err() {
         return Ok(());
@@ -71,15 +74,47 @@ pub(crate) async fn session(path: &Path, events: &UnboundedSender<Event>) -> std
     {
         return Ok(());
     }
+    if let Some(layout) = layout_from_inputs(&request(path, GET_INPUTS).await?)
+        && events.send(Event::KeyboardLayout(layout)).is_err()
+    {
+        return Ok(());
+    }
     loop {
         let (kind, event) = receive(&mut socket).await?;
-        if kind == WORKSPACE_EVENT
-            && let Some(output) = focused_from_event(&event)
-            && events.send(Event::Focus(output)).is_err()
+        let event = match kind {
+            WORKSPACE_EVENT => focused_from_event(&event).map(Event::Focus),
+            INPUT_EVENT => layout_from_event(&event).map(Event::KeyboardLayout),
+            _ => None,
+        };
+        if let Some(event) = event
+            && events.send(event).is_err()
         {
             return Ok(());
         }
     }
+}
+
+/// A keyboard's active layout, from `get_inputs` or an input event.
+fn layout_of(input: &Value) -> Option<String> {
+    if input["type"] != "keyboard" {
+        return None;
+    }
+    ipc::layout_name(input["xkb_active_layout_name"].as_str()?)
+}
+
+/// The layout of the first keyboard with a named one. Sway has no main
+/// keyboard, and keyboards usually share the layout from its config.
+fn layout_from_inputs(inputs: &Value) -> Option<String> {
+    inputs.as_array()?.iter().find_map(layout_of)
+}
+
+/// An input event for a keyboard that came, or whose layout or keymap
+/// changed.
+fn layout_from_event(event: &Value) -> Option<String> {
+    if event["change"] == "removed" {
+        return None;
+    }
+    layout_of(&event["input"])
 }
 
 /// The output `get_outputs` marks as focused.
@@ -186,6 +221,30 @@ mod tests {
         assert_eq!(windows[0].title, "Terminal");
         assert!(!windows[1].floating);
         assert_eq!((windows[1].width, windows[1].height), (1920, 1080));
+    }
+
+    #[test]
+    fn the_layout_follows_input_events() {
+        let inputs = json!([
+            { "type": "pointer", "name": "Mouse" },
+            { "type": "keyboard", "name": "wlr_virtual_keyboard_v1", "xkb_active_layout_name": null },
+            { "type": "keyboard", "name": "AT keyboard", "xkb_active_layout_name": "English (US)" },
+        ]);
+        assert_eq!(layout_from_inputs(&inputs).as_deref(), Some("English (US)"));
+        assert_eq!(layout_from_inputs(&json!([])), None);
+
+        let switched = json!({
+            "change": "xkb_layout",
+            "input": { "type": "keyboard", "xkb_active_layout_name": "German" },
+        });
+        assert_eq!(layout_from_event(&switched).as_deref(), Some("German"));
+        let removed = json!({
+            "change": "removed",
+            "input": { "type": "keyboard", "xkb_active_layout_name": "German" },
+        });
+        assert_eq!(layout_from_event(&removed), None);
+        let touchpad = json!({ "change": "libinput_config", "input": { "type": "touchpad" } });
+        assert_eq!(layout_from_event(&touchpad), None);
     }
 
     #[test]

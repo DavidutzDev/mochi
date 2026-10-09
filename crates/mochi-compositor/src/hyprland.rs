@@ -1,8 +1,8 @@
 //! Hyprland's IPC, used only for what the standard protocols don't say: which
-//! output has focus, where windows are, what's being shared, and monitors
-//! of Mochi's own. Focusing an empty workspace on another monitor moves no
-//! window, so the standard window-based guess can't see it; Hyprland's
-//! event socket can.
+//! output has focus, where windows are, what's being shared, the keyboard
+//! layout, and monitors of Mochi's own. Focusing an empty workspace on
+//! another monitor moves no window, so the standard window-based guess
+//! can't see it; Hyprland's event socket can.
 //!
 //! The focused output name goes to the Wayland task, which owns the model.
 
@@ -14,7 +14,7 @@ use tokio::net::UnixStream;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::Window;
-use crate::ipc::Event;
+use crate::ipc::{self, Event};
 
 /// The longest a blocking request may take.
 const BLOCKING_TIMEOUT: Duration = Duration::from_millis(100);
@@ -27,8 +27,8 @@ pub(crate) fn socket_dir() -> Option<PathBuf> {
     dir.join(".socket2.sock").exists().then_some(dir)
 }
 
-/// One connection: the focused output, then every focus or screencast
-/// change. `Ok` means the receiver is gone.
+/// One connection: the focused output and the keyboard layout, then every
+/// change to them or to screencasts. `Ok` means the receiver is gone.
 pub(crate) async fn session(dir: &Path, focus: &UnboundedSender<Event>) -> std::io::Result<()> {
     // Connect to the events first, so no change slips in between the query
     // and the subscription.
@@ -38,6 +38,11 @@ pub(crate) async fn session(dir: &Path, focus: &UnboundedSender<Event>) -> std::
     }
     if let Some(output) = query_focused(dir).await?
         && focus.send(Event::Focus(output)).is_err()
+    {
+        return Ok(());
+    }
+    if let Some(layout) = layout_from_devices(&query(dir, "j/devices").await?)
+        && focus.send(Event::KeyboardLayout(layout)).is_err()
     {
         return Ok(());
     }
@@ -257,6 +262,9 @@ fn event(line: &str) -> Option<Event> {
     if let Some(output) = focused_from_event(line) {
         return Some(Event::Focus(output.to_owned()));
     }
+    if let Some(layout) = layout_from_event(line) {
+        return Some(Event::KeyboardLayout(layout));
+    }
     if let Some((started, target)) = captured_from_event(line) {
         return Some(Event::Captured {
             started,
@@ -298,6 +306,29 @@ fn focused_from_event(line: &str) -> Option<&str> {
     let rest = line.strip_prefix("focusedmon>>")?;
     let (output, _workspace) = rest.split_once(',')?;
     (!output.is_empty()).then_some(output)
+}
+
+/// `activelayout>>roccat-vulcan-tkl,English (UK)`: a keyboard's layout
+/// changed, or a keyboard came with its own. The keyboard's name has no
+/// comma; the layout's may.
+fn layout_from_event(line: &str) -> Option<String> {
+    let rest = line.strip_prefix("activelayout>>")?;
+    let (_keyboard, layout) = rest.split_once(',')?;
+    ipc::layout_name(layout)
+}
+
+/// The layout of the main keyboard in `hyprctl -j devices`, the one
+/// Hyprland types with, or else the first named one.
+fn layout_from_devices(json: &str) -> Option<String> {
+    let devices: serde_json::Value = serde_json::from_str(json).ok()?;
+    let keyboards = devices["keyboards"].as_array()?;
+    let layout =
+        |keyboard: &serde_json::Value| ipc::layout_name(keyboard["active_keymap"].as_str()?);
+    keyboards
+        .iter()
+        .filter(|keyboard| keyboard["main"] == true)
+        .chain(keyboards)
+        .find_map(layout)
 }
 
 /// The output marked `"focused": true` in `hyprctl -j monitors` output.
@@ -416,6 +447,46 @@ mod tests {
         assert_eq!(windows.len(), 1);
         assert_eq!(windows[0].title, "b");
         assert_eq!(windows_from("nope", monitors), None);
+    }
+
+    #[test]
+    fn reads_layout_events_of_named_layouts() {
+        assert_eq!(
+            event("activelayout>>roccat-roccat-vulcan-tkl,English (UK)"),
+            Some(Event::KeyboardLayout("English (UK)".into()))
+        );
+        assert_eq!(
+            layout_from_event("activelayout>>at-keyboard,Russian (phonetic, YAZHERTY)").as_deref(),
+            Some("Russian (phonetic, YAZHERTY)")
+        );
+        // Mochi's own keyboard, which pastes, has an unnamed keymap.
+        assert_eq!(
+            layout_from_event("activelayout>>hl-virtual-keyboard-.mochid-wrapped,error"),
+            None
+        );
+        assert_eq!(layout_from_event("activelayout>>at-keyboard,none"), None);
+        assert_eq!(layout_from_event("activewindow>>kitty,~"), None);
+    }
+
+    #[test]
+    fn the_layout_comes_from_the_main_keyboard() {
+        let devices = r#"{"mice": [], "keyboards": [
+            {"name": "power-button", "active_keymap": "English (UK)", "main": false},
+            {"name": "hl-virtual-keyboard-.mochid-wrapped", "active_keymap": "error", "main": false},
+            {"name": "roccat-roccat-vulcan-tkl", "active_keymap": "German", "main": true}
+        ]}"#;
+        assert_eq!(layout_from_devices(devices).as_deref(), Some("German"));
+        // Without a main one, the first keyboard with a named layout.
+        let devices = r#"{"keyboards": [
+            {"name": "hl-virtual-keyboard-.mochid-wrapped", "active_keymap": "error", "main": false},
+            {"name": "usb-keyboard", "active_keymap": "English (US)", "main": false}
+        ]}"#;
+        assert_eq!(
+            layout_from_devices(devices).as_deref(),
+            Some("English (US)")
+        );
+        assert_eq!(layout_from_devices(r#"{"keyboards": []}"#), None);
+        assert_eq!(layout_from_devices("not json"), None);
     }
 
     #[test]

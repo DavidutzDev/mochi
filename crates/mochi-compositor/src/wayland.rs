@@ -269,6 +269,10 @@ async fn run(
                         client.model.ipc_casts(&targets);
                         client.done = true;
                     }
+                    Some(Event::KeyboardLayout(layout)) => {
+                        client.model.ipc_keyboard_layout(layout);
+                        client.done = true;
+                    }
                     Some(Event::Connected) => {
                         client.model.ipc_connected();
                         client.done = true;

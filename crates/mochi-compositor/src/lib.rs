@@ -11,9 +11,9 @@
 //!
 //! Compositor IPC only fills gaps the standards leave, and modules never see
 //! it: on Hyprland, niri and Sway, it reports the focused output exactly,
-//! including when focus moves to an empty workspace, and where windows
-//! are; Hyprland and niri also say what's being shared, and Hyprland makes
-//! monitors of Mochi's own.
+//! including when focus moves to an empty workspace, where windows are,
+//! and the keyboard layout; Hyprland and niri also say what's being
+//! shared, and Hyprland makes monitors of Mochi's own.
 //!
 //! Modules read the latest [`State`], wait for changes with
 //! [`Compositor::subscribe`], and act with methods like
@@ -71,6 +71,10 @@ pub struct State {
     /// What is being captured now, by monitor or window name, from the same
     /// events. Sorted.
     pub captured: Vec<String>,
+    /// The active keyboard layout's name, like `English (US)`, when the
+    /// compositor says. No standard protocol does; Hyprland, niri and Sway
+    /// do through their IPC.
+    pub keyboard_layout: Option<String>,
 }
 
 /// Monitors Mochi makes for itself, like the share module's switchable
@@ -452,6 +456,7 @@ mod tests {
             focused_app: None,
             screencast: false,
             captured: Vec::new(),
+            keyboard_layout: None,
         });
         let (actions, mut received) = mpsc::unbounded_channel();
         let (_, toplevels) = watch::channel(Vec::new());

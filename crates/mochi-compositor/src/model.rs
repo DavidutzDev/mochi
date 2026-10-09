@@ -30,6 +30,9 @@ pub(crate) struct Model {
     screencasts: u32,
     /// The same, by what they capture.
     captured: BTreeMap<String, u32>,
+    /// The active keyboard layout, from IPC. It stays across a reconnect,
+    /// which sends it again.
+    keyboard_layout: Option<String>,
     /// IPC connected once already: a new connection may have missed events.
     ipc_seen: bool,
     /// Focus changes so far, to order windows by when they had it.
@@ -245,6 +248,10 @@ impl Model {
         }
     }
 
+    pub fn ipc_keyboard_layout(&mut self, layout: String) {
+        self.keyboard_layout = Some(layout);
+    }
+
     pub fn reset_screencasts(&mut self) {
         self.screencasts = 0;
         self.captured.clear();
@@ -341,6 +348,7 @@ impl Model {
                 .filter(|app_id| !app_id.is_empty()),
             screencast: self.screencasts > 0,
             captured: self.captured.keys().cloned().collect(),
+            keyboard_layout: self.keyboard_layout.clone(),
         }
     }
 
@@ -494,6 +502,19 @@ mod tests {
         model.assume_captures(&["DP-3".into()]);
         model.ipc_connected();
         assert!(model.snapshot().captured.is_empty());
+    }
+
+    #[test]
+    fn the_keyboard_layout_stays_across_a_reconnect() {
+        let mut model = Model::default();
+        assert_eq!(model.snapshot().keyboard_layout, None);
+        model.ipc_keyboard_layout("English (UK)".into());
+        model.ipc_connected();
+        model.ipc_connected();
+        assert_eq!(
+            model.snapshot().keyboard_layout.as_deref(),
+            Some("English (UK)")
+        );
     }
 
     #[test]

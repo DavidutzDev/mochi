@@ -1,7 +1,7 @@
 //! Compositor IPC, for what the standard protocols don't say: which output
-//! has focus, where windows are, and what's being shared. Hyprland, niri
-//! and Sway each have their own; on any other compositor, the protocols
-//! are all there is.
+//! has focus, where windows are, what's being shared, and the keyboard
+//! layout. Hyprland, niri and Sway each have their own; on any other
+//! compositor, the protocols are all there is.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -25,6 +25,8 @@ pub(crate) enum Event {
     /// Every capture running now, by what it captures: niri's, which says
     /// them all at once.
     Casts(Vec<String>),
+    /// The active keyboard layout's name, like `English (US)`.
+    KeyboardLayout(String),
     /// The IPC (re)connected: counts kept so far may be stale.
     Connected,
 }
@@ -102,5 +104,26 @@ impl Ipc {
             Self::Niri(socket) => niri::windows(socket).await,
             Self::Sway(socket) => sway::windows(socket).await,
         }
+    }
+}
+
+/// A keyboard layout's name worth showing. Keymaps that apps make to type
+/// through a virtual keyboard, Mochi's included, often name no layout, and
+/// Hyprland then says `error` or `none`.
+pub(crate) fn layout_name(name: &str) -> Option<String> {
+    let name = name.trim();
+    (!name.is_empty() && name != "error" && name != "none").then(|| name.to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unnamed_layouts_are_left_out() {
+        assert_eq!(layout_name("English (UK)").as_deref(), Some("English (UK)"));
+        assert_eq!(layout_name("error"), None);
+        assert_eq!(layout_name("none"), None);
+        assert_eq!(layout_name(" "), None);
     }
 }

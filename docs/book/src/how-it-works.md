@@ -65,7 +65,7 @@ A plugin is a module that isn't built into Mochi, with the same powers. It's a m
 
 ## Compositors
 
-Mochi reads workspaces, windows and screens through standard Wayland protocols, like `ext-workspace-v1` and `wlr-foreign-toplevel-management`, so it works on any compositor that has them: Hyprland, niri and Sway. Where a compositor offers more through its own IPC, Mochi uses it: Hyprland, for example, tells it what's being shared on screen. `mochi doctor` says what yours offers.
+Mochi reads workspaces, windows and screens through standard Wayland protocols, like `ext-workspace-v1` and `wlr-foreign-toplevel-management`, so it works on any compositor that has them: Hyprland, niri and Sway. Where a compositor offers more through its own IPC, Mochi uses it: Hyprland, for example, tells it what's being shared on screen, and Hyprland, niri and Sway tell it the keyboard layout, which no protocol says. `mochi doctor` says what yours offers.
 
 ## Talking to it
 

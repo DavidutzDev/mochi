@@ -80,6 +80,8 @@ pub enum Change {
     Output(Option<Output>),
     Input(Option<Input>),
     Locks(Locks),
+    /// The keyboard layout's name, when the compositor says.
+    Layout(Option<String>),
     /// The audio connection was lost. The next reports set a new baseline.
     AudioReset,
 }
@@ -101,6 +103,9 @@ pub enum Notice {
         key: LockKey,
         on: bool,
     },
+    Layout {
+        name: String,
+    },
 }
 
 impl Notice {
@@ -111,6 +116,7 @@ impl Notice {
             Self::Device { .. } => "Device",
             Self::Microphone { .. } => "Microphone",
             Self::Lock { .. } => "Lock",
+            Self::Layout { .. } => "Layout",
         }
     }
 
@@ -122,6 +128,7 @@ impl Notice {
             }
             Self::Microphone { muted } => json!({ "muted": muted }),
             Self::Lock { key, on } => json!({ "key": key, "on": on }),
+            Self::Layout { name } => json!({ "name": name }),
         }
     }
 }
@@ -132,6 +139,7 @@ pub struct Tracker {
     output: Option<Option<Output>>,
     input: Option<Option<Input>>,
     locks: Option<Locks>,
+    layout: Option<Option<String>>,
 }
 
 impl Tracker {
@@ -166,6 +174,17 @@ impl Tracker {
                     })
                 } else {
                     None
+                }
+            }
+            Change::Layout(next) => {
+                let previous = self.layout.replace(next.clone())?;
+                // The first layout the compositor says, after it connects,
+                // is no switch.
+                match (previous, next) {
+                    (Some(previous), Some(next)) if previous != next => {
+                        Some(Notice::Layout { name: next })
+                    }
+                    _ => None,
                 }
             }
             Change::AudioReset => {
@@ -389,6 +408,25 @@ mod tests {
     }
 
     #[test]
+    fn a_layout_switch_shows_the_new_layout() {
+        let mut tracker = Tracker::default();
+        let layout = |name: &str| Change::Layout(Some(name.into()));
+        // Unknown until the compositor's IPC connects, then known: no switch.
+        assert_eq!(tracker.apply(Change::Layout(None)), None);
+        assert_eq!(tracker.apply(layout("English (US)")), None);
+        assert_eq!(tracker.apply(layout("English (US)")), None);
+        assert_eq!(
+            tracker.apply(layout("Russian")),
+            Some(Notice::Layout {
+                name: "Russian".into()
+            })
+        );
+        // An audio reconnect leaves the layout's baseline.
+        tracker.apply(Change::AudioReset);
+        assert!(tracker.apply(layout("English (US)")).is_some());
+    }
+
+    #[test]
     fn device_kinds() {
         assert_eq!(
             DeviceKind::detect(Some("headset"), "analog-output", "x"),
@@ -439,5 +477,10 @@ mod tests {
             .payload(),
             json!({ "key": "caps", "on": true })
         );
+        let notice = Notice::Layout {
+            name: "German".into(),
+        };
+        assert_eq!(notice.view(), "Layout");
+        assert_eq!(notice.payload(), json!({ "name": "German" }));
     }
 }

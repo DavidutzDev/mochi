@@ -231,8 +231,13 @@ fn run(command: Command, json: bool) -> Result<(), String> {
                         .as_deref()
                         .map(|output| format!(", focus on {output}"))
                         .unwrap_or_default();
+                    let layout = compositor
+                        .keyboard_layout
+                        .as_deref()
+                        .map(|layout| format!(", layout {layout}"))
+                        .unwrap_or_default();
                     println!(
-                        "compositor: {}, outputs {}, {} workspaces{focused}",
+                        "compositor: {}, outputs {}, {} workspaces{focused}{layout}",
                         compositor.backend,
                         compositor.outputs.join(" "),
                         compositor.workspaces

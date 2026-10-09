@@ -190,7 +190,7 @@ tokio::spawn(async move {
 
 ## The compositor
 
-`ctx.compositor()` is the latest state: `outputs`, `workspaces`, `focused_output`, `focused_app`, and `screencast` with what's `captured`. `compositor_changes()` is a `tokio::sync::watch::Receiver` that wakes on every new state. Check `backend`: without a supported compositor it's `"unsupported"` and the lists stay empty.
+`ctx.compositor()` is the latest state: `outputs`, `workspaces`, `focused_output`, `focused_app`, `screencast` with what's `captured`, and `keyboard_layout`, the active layout's name, on Hyprland, niri and Sway. `compositor_changes()` is a `tokio::sync::watch::Receiver` that wakes on every new state. Check `backend`: without a supported compositor it's `"unsupported"` and the lists stay empty.
 
 `activate_workspace(id)`, `windows()` and `pointer_output()` ask the compositor and return futures, like `call`.
 

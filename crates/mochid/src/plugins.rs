@@ -687,6 +687,7 @@ fn wire_state(state: &compositor::State) -> CompositorState {
         focused_app: state.focused_app.clone(),
         screencast: state.screencast,
         captured: state.captured.clone(),
+        keyboard_layout: state.keyboard_layout.clone(),
     }
 }
 

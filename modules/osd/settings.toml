@@ -1,5 +1,6 @@
-# OSD: shows volume, mute, the output device, microphone mute, Caps Lock and
-# Num Lock as they change, from any source. Needs PipeWire or PulseAudio.
+# OSD: shows volume, mute, the output device, microphone mute, Caps Lock,
+# Num Lock and the keyboard layout as they change, from any source. Needs
+# PipeWire or PulseAudio.
 [module.osd]
 # How long a notice stays, in milliseconds.
 # timeout_ms = 1500
@@ -8,3 +9,4 @@
 # device = true
 # microphone = true
 # locks = true
+# layout = true

@@ -45,6 +45,7 @@ Item {
             "display": "desktop_windows",
             "caps-lock": "keyboard_capslock",
             "num-lock": "dialpad",
+            "keyboard": "keyboard",
             "wifi": "wifi",
             "wifi-2": "wifi_2_bar",
             "wifi-1": "wifi_1_bar",
@@ -212,6 +213,10 @@ Item {
             "num-lock": {
                 "fill": "",
                 "stroke": "M6 3.5h12a2.5 2.5 0 0 1 2.5 2.5v12a2.5 2.5 0 0 1-2.5 2.5H6A2.5 2.5 0 0 1 3.5 18V6A2.5 2.5 0 0 1 6 3.5zM10.5 9l2-1.5V17M10 17h5"
+            },
+            "keyboard": {
+                "fill": "",
+                "stroke": "M4 6h16a1.5 1.5 0 0 1 1.5 1.5v9A1.5 1.5 0 0 1 20 18H4a1.5 1.5 0 0 1-1.5-1.5v-9A1.5 1.5 0 0 1 4 6zM6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M8.5 14.5h7"
             },
 
             // Connections.

@@ -192,6 +192,7 @@ mod tests {
             focused_app: None,
             screencast: false,
             captured: Vec::new(),
+            keyboard_layout: None,
         }
     }
 

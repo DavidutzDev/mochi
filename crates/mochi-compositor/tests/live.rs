@@ -87,3 +87,29 @@ async fn lists_windows() {
     }
     assert!(!windows.is_empty(), "no windows");
 }
+
+/// Only reads, so it's safe on a live session. Switch the layout while it
+/// waits to see the change come:
+///
+///     cargo test -p mochi-compositor --test live keyboard_layout -- --ignored --nocapture
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "talks to the session's compositor; run with --ignored"]
+async fn reads_the_keyboard_layout() {
+    let compositor = mochi_compositor::connect();
+    let mut updates = compositor.subscribe();
+    let layout = tokio::time::timeout(
+        TIMEOUT,
+        updates.wait_for(|state| state.keyboard_layout.is_some()),
+    )
+    .await
+    .expect("the compositor says the layout in time")
+    .expect("the backend is still running")
+    .keyboard_layout
+    .clone();
+    eprintln!("layout: {layout:?}");
+    let switched = updates.wait_for(|state| state.keyboard_layout != layout);
+    match tokio::time::timeout(Duration::from_secs(5), switched).await {
+        Ok(state) => eprintln!("switched to {:?}", state.unwrap().keyboard_layout),
+        Err(_) => eprintln!("no switch within 5 seconds"),
+    }
+}

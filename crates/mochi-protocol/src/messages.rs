@@ -242,6 +242,9 @@ pub struct CompositorStatus {
     /// The output with focus, when the compositor says.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub focused: Option<String>,
+    /// The active keyboard layout, when the compositor says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keyboard_layout: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -495,6 +498,7 @@ mod tests {
                     outputs: vec!["DP-3".into()],
                     workspaces: 4,
                     focused: Some("DP-3".into()),
+                    keyboard_layout: Some("English (UK)".into()),
                 },
                 plugins: vec![PluginStatus {
                     id: "pomodoro".into(),

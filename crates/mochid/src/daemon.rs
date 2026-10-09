@@ -1252,6 +1252,7 @@ impl Daemon {
                 .collect(),
             workspaces: state.workspaces.len(),
             focused: state.focused_output,
+            keyboard_layout: state.keyboard_layout,
         }
     }
 

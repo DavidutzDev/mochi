@@ -1,8 +1,11 @@
 //! On-screen display for changes made anywhere on the system: output volume
-//! and mute, the default output device, microphone mute, Caps Lock and Num
-//! Lock. It only listens; nothing needs to call it.
+//! and mute, the default output device, microphone mute, Caps Lock, Num
+//! Lock and the keyboard layout. It only listens; nothing needs to call it.
 //!
 //! All notices share one slot: the newest replaces whatever OSD is shown.
+//!
+//! It also publishes the keyboard layout for any view: `keyboard_layout` in
+//! its state, the layout's name, or null when the compositor doesn't say.
 //!
 //! Settings in `config.toml`, all optional:
 //!
@@ -13,9 +16,11 @@
 //! device = true       # default output device switches
 //! microphone = true   # microphone mute
 //! locks = true        # Caps Lock and Num Lock
+//! layout = true       # keyboard layout switches
 //! ```
 
 mod audio;
+mod layout;
 mod locks;
 mod notice;
 mod tour;
@@ -28,9 +33,10 @@ use mochi_core::{
     Priority, SamePriority,
 };
 use serde::Deserialize;
+use serde_json::json;
 use tokio::sync::mpsc;
 
-use crate::notice::{Notice, Tracker};
+use crate::notice::{Change, Notice, Tracker};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
@@ -48,6 +54,7 @@ struct Settings {
     device: bool,
     microphone: bool,
     locks: bool,
+    layout: bool,
 }
 
 impl Default for Settings {
@@ -58,6 +65,7 @@ impl Default for Settings {
             device: true,
             microphone: true,
             locks: true,
+            layout: true,
         }
     }
 }
@@ -69,6 +77,7 @@ impl Settings {
             Notice::Device { .. } => self.device,
             Notice::Microphone { .. } => self.microphone,
             Notice::Lock { .. } => self.locks,
+            Notice::Layout { .. } => self.layout,
         }
     }
 
@@ -116,6 +125,8 @@ impl Module for Osd {
             if settings.locks {
                 tokio::spawn(locks::watch(sender.clone()));
             }
+            // Watched even with its notice off, for the published state.
+            tokio::spawn(layout::watch(ctx.compositor().clone(), sender.clone()));
             drop(sender);
 
             let mut tracker = Tracker::default();
@@ -129,6 +140,9 @@ impl Module for Osd {
                         Some(_) => {}
                     },
                     Some(change) = changes.recv() => {
+                        if let Change::Layout(layout) = &change {
+                            ctx.publish_state(json!({ "keyboard_layout": layout }));
+                        }
                         if let Some(notice) = tracker.apply(change)
                             && settings.shows(&notice)
                         {
