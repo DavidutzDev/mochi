@@ -134,7 +134,7 @@ For a `git-release:` source, attach an archive to a release on GitHub, on a Forg
 
 The same archive works without a forge too: put it anywhere over HTTPS, and users list it with its hash, as `source = "https://example.org/clock-1.0-x86_64.tar.gz#sha256=<hash>"`, the hash being what `sha256sum` prints for the file. An archive pins one architecture and one version, so `mochi plugins update` never moves it; `git-release:` picks the asset for each machine and finds new releases.
 
-This GitHub Actions workflow does it on every tag: copy it to `.github/workflows/release.yml` in the plugin's repository. It reads the manifest, runs its `build` on x86_64 and aarch64, packs the manifest, `settings.toml`, the views and the built `exec`, and attaches the archive to the tag's release.
+This GitHub Actions workflow does it on every tag: copy it to `.github/workflows/release.yml` in the plugin's repository. It reads the manifest, builds the backend on x86_64 and aarch64, packs the manifest, `settings.toml`, the views and the built `exec`, and attaches the archive to the tag's release. A Rust backend is built as a static binary for the musl target rather than with `build`, so it runs on any Linux, NixOS included, with no loader or libraries to find; the binary is the one named like `exec`'s file. For another language it runs `build`; make the binary static if the language can, like Go with `CGO_ENABLED=0`. On another forge, its CI or a release made by hand attaches the same archive.
 
 ```yaml
 {{#include ../../../examples/plugins/release.yml}}

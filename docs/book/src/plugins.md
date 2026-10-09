@@ -60,7 +60,7 @@ NixOS has no build tools installed by default, and doesn't put libraries where a
 
 This covers most plugins, not all of them. Mochi guesses the build from the plugin's files, and a plugin that does more than its language's usual build can fail, like one that generates code, links a library its manifest doesn't name, or downloads things while building. Go without `vendor/`, Java, and other languages without a lock file Nix can read aren't built at all, since Nix would need a hash for their downloads. For those, use the plugin's releases:
 
-- With `mochi plugins install`: a `git-release:` source. A usual Linux binary looks for its loader in `/lib64`, which NixOS doesn't have, so it runs only if the binary is static or `programs.nix-ld` is on.
+- With `mochi plugins install`: a `git-release:` source. A usual Linux binary looks for its loader in `/lib64`, which NixOS doesn't have, so it runs only if the binary is static or `programs.nix-ld` is on. Rust plugins released with [Mochi's release workflow](writing-plugins.md#publishing-a-release) are static.
 - With home-manager: the release archive as `src`, as a flake input like `url = "https://github.com/User/repo/releases/download/v1.0/plugin-1.0-x86_64-linux.tar.gz"; flake = false;`. Mochi patches its binaries to run on NixOS, and `flake.lock` pins the archive, with no hash to write.
 
 If a plugin has no releases and doesn't build, ask its author for releases or a `flake.nix`.

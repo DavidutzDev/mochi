@@ -1,12 +1,21 @@
 # A GitHub Actions workflow for a plugin repository, for `git-release:`
 # sources. Copy it to .github/workflows/release.yml. Pushing a tag like
-# v0.1.0 builds the backend on x86_64 and aarch64 with the manifest's
-# `build`, packs what `mochi plugins install` needs, and attaches it to the
-# tag's release under the name `[release] asset` gives.
+# v0.1.0 builds the backend on x86_64 and aarch64, packs what
+# `mochi plugins install` needs, and attaches it to the tag's release under
+# the name `[release] asset` gives.
+#
+# A Rust backend, one with a Cargo.toml, is built as a static binary for
+# the musl target instead of with the manifest's `build`: it needs no
+# loader and no libraries, so it runs on any Linux, NixOS without nix-ld
+# included. The binary is the one named like `exec`'s file, `weather` for
+# `bin/weather`. Each architecture builds on its own runner, so the Rust
+# toolchain links it with the runner's `cc` and the musl that comes with the
+# target; musl-tools gives `musl-gcc` for crates that compile C.
 #
 # It reads everything from mochi-plugin.toml, so it needs no changes for a
-# Rust backend. For another language, add the steps that install its tools
-# before "Build".
+# Rust backend. For another language, `build` runs as it is: add the steps
+# that install its tools before "Build", and build it static if the
+# language can, like Go with CGO_ENABLED=0.
 name: Release
 
 on:
@@ -26,10 +35,17 @@ jobs:
           - arch: aarch64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    env:
+      TARGET: ${{ matrix.arch }}-unknown-linux-musl
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.TARGET }}
+
+      - name: Install musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Read the manifest
         id: manifest
@@ -62,7 +78,24 @@ jobs:
         env:
           MOCHI_PLUGIN_DIR: ${{ github.workspace }}
           BUILD: ${{ steps.manifest.outputs.build }}
-        run: sh -c "$BUILD"
+          EXEC: ${{ steps.manifest.outputs.exec }}
+        run: |
+          if [ ! -f Cargo.toml ]; then
+            sh -c "$BUILD"
+            exit
+          fi
+          # C code in the dependencies compiles against musl too.
+          export "CC_$(echo "$TARGET" | tr - _)=musl-gcc"
+          name=$(basename "$EXEC")
+          cargo build --release --locked --target "$TARGET" --target-dir target --bin "$name"
+          install -Dm755 "target/$TARGET/release/$name" "$EXEC"
+          # A dynamically linked binary fails the release.
+          linked=$(file "$EXEC")
+          echo "$linked"
+          case "$linked" in
+            *static*) ;;
+            *) echo "$EXEC isn't static" >&2; exit 1 ;;
+          esac
 
       - name: Pack
         env:
