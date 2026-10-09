@@ -9,13 +9,74 @@ import "Time.js" as Time
 // 15m Tea, the lengths from `presets`, and each timer with its time left,
 // when it ends, "+1 min", pause and stop. Everything counts down with the
 // timer module's own Countdown view, so the bubbles and this read the time
-// the same way. Without the timer module, it says so and opens its
-// settings.
+// the same way. Along the bottom, the alarm: its volume, its sound with
+// Choose and the theme's default, and Play it; each change goes to the
+// timer's settings through the settings module and applies at once.
+// Without the timer module, it says so and opens its settings.
 Item {
     id: root
 
     readonly property bool on: Daemon.modules.includes("timer")
     readonly property var timer: Daemon.state("timer")
+    readonly property var alarm: timer?.alarm ?? null
+    // The alarm's settings are changed through the settings module.
+    readonly property bool settingsOn: Daemon.modules.includes("settings")
+    readonly property string soundPath: "config.module.timer.sound_file"
+    readonly property bool choosing: Daemon.state("settings")?.choosing === soundPath
+    // What the settings module last said about the sound file, like a
+    // chooser that couldn't open.
+    readonly property string soundError: {
+        const error = Daemon.state("settings")?.error;
+        return error?.path === soundPath ? error.message : "";
+    }
+    // The error closed here, which stays closed until another comes.
+    property string dismissedError: ""
+    readonly property bool showError: soundError !== "" && soundError !== dismissedError && !choosing
+    // The volume on the way while the slider moves, or -1.
+    property int pendingVolume: -1
+    readonly property int volume: pendingVolume >= 0 ? pendingVolume : alarm?.volume ?? 80
+
+    function setVolume(volume: int): void {
+        pendingVolume = Math.max(0, Math.min(100, volume));
+        settle.restart();
+    }
+
+    // The sound file's name without its folder or its ending, like "Bell".
+    function soundName(file: string): string {
+        if (file === "")
+            return "The theme's alarm";
+        const name = file.split("/").pop();
+        const dot = name.lastIndexOf(".");
+        return dot > 0 ? name.slice(0, dot) : name;
+    }
+
+    // A drag writes the volume once it rests, not at every step.
+    Timer {
+        id: settle
+
+        interval: 300
+        onTriggered: {
+            Daemon.command("settings", "set", ["config.module.timer.volume", `${root.pendingVolume}`]);
+            forget.restart();
+        }
+    }
+
+    // A volume the settings refused goes back to the timer's.
+    Timer {
+        id: forget
+
+        interval: 2000
+        onTriggered: {
+            if (!settle.running)
+                root.pendingVolume = -1;
+        }
+    }
+
+    // The timer's answer replaces what was on the way.
+    onAlarmChanged: {
+        if (!settle.running && alarm?.volume === pendingVolume)
+            pendingVolume = -1;
+    }
     readonly property var countdown: counter.item
     readonly property bool running: countdown?.running ?? false
     readonly property bool paused: countdown?.paused ?? false
@@ -86,13 +147,22 @@ Item {
         }
     }
 
+    // The room above the alarm.
+    Item {
+        id: top
+
+        visible: root.on
+        width: parent.width
+        height: parent.height - alarmRow.height - Theme.spaceMedium
+    }
+
     // The focus session.
     Column {
         id: focusSide
 
         visible: root.on
         width: 300
-        anchors.verticalCenter: parent.verticalCenter
+        anchors.verticalCenter: top.verticalCenter
         spacing: Theme.spaceLarge
 
         Row {
@@ -223,7 +293,7 @@ Item {
         visible: root.on
         x: focusSide.width + Theme.spaceLarge
         width: 1
-        height: parent.height
+        height: top.height
         color: Theme.border
     }
 
@@ -235,7 +305,7 @@ Item {
         anchors.left: rule.right
         anchors.leftMargin: Theme.spaceLarge
         anchors.right: parent.right
-        height: parent.height
+        height: top.height
         spacing: Theme.spaceSmall
 
         SectionLabel {
@@ -406,6 +476,210 @@ Item {
                         onClicked: Daemon.command("timer", "stop", [`${row.modelData.id}`])
                     }
                 }
+            }
+        }
+    }
+
+    // The alarm, for every timer: how loud, which sound, and a button to
+    // hear it. The slider moves with the keyboard too, 5% a press.
+    Rectangle {
+        id: alarmRow
+
+        visible: root.on
+        anchors.bottom: parent.bottom
+        width: parent.width
+        height: Theme.rowHeight
+        radius: Theme.radiusField
+        color: Theme.surface
+
+        // What went wrong choosing a sound, like no file chooser, over the
+        // volume and the sound's name until it's closed or the next
+        // change clears it.
+        Row {
+            visible: root.showError
+            x: Theme.spaceMedium
+            width: sound.x - x - Theme.spaceSmall
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.spaceSmall
+
+            Symbol {
+                anchors.verticalCenter: parent.verticalCenter
+                name: "error"
+                size: 18
+                color: Theme.danger
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width - Theme.spaceSmall * 2 - 18 - closeError.width
+                text: root.soundError
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                color: Theme.foreground
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+            }
+
+            ActionButton {
+                id: closeError
+
+                anchors.verticalCenter: parent.verticalCenter
+                icon: "close"
+                tone: "ghost"
+                onClicked: root.dismissedError = root.soundError
+            }
+        }
+
+        Row {
+            id: level
+
+            visible: !root.showError
+            x: Theme.spaceMedium
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.spaceSmall
+
+            Symbol {
+                anchors.verticalCenter: parent.verticalCenter
+                name: root.volume === 0 ? "notifications_off" : "alarm"
+                size: 18
+                color: Theme.muted
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Alarm"
+                color: Theme.foreground
+                font.pixelSize: Theme.textBody
+                font.family: Theme.fontFamily
+                font.weight: Theme.weightLabel
+            }
+
+            // The player of `sound_command` keeps its own volume.
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.alarm?.own_command === true
+                text: "Your sound_command sets the volume"
+                color: Theme.muted
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+            }
+
+            Item {
+                id: volumeKeys
+
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.alarm?.own_command !== true
+                width: 132
+                height: Theme.controlHeight
+                enabled: root.settingsOn
+                opacity: enabled ? 1 : 0.4
+                activeFocusOnTab: enabled
+                Keys.onLeftPressed: root.setVolume(root.volume - 5)
+                Keys.onRightPressed: root.setVolume(root.volume + 5)
+
+                Slider {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width
+                    thickness: 4
+                    value: root.volume / 100
+                    // A double click goes back to the default, 80%.
+                    reset: 0.8
+                    onMoved: value => root.setVolume(Math.round(value * 100))
+                    onReleased: value => root.setVolume(Math.round(value * 100))
+                }
+
+                Rectangle {
+                    visible: volumeKeys.activeFocus
+                    anchors.fill: parent
+                    anchors.margins: -3
+                    radius: height / 2
+                    color: "transparent"
+                    border.width: 2
+                    border.color: Theme.accent
+                }
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.alarm?.own_command !== true
+                width: 36
+                text: `${root.volume}%`
+                color: Theme.muted
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+            }
+        }
+
+        Rectangle {
+            id: divider
+
+            visible: !root.showError
+            anchors.left: level.right
+            anchors.leftMargin: Theme.spaceMedium
+            anchors.verticalCenter: parent.verticalCenter
+            width: 1
+            height: Theme.controlHeight - Theme.spaceSmall
+            color: Theme.border
+        }
+
+        Symbol {
+            id: note
+
+            visible: !root.showError
+            anchors.left: divider.right
+            anchors.leftMargin: Theme.spaceMedium
+            anchors.verticalCenter: parent.verticalCenter
+            name: "music_note"
+            size: 18
+            color: Theme.muted
+        }
+
+        // The sound, while a chooser is open, or its name.
+        Text {
+            visible: !root.showError
+            anchors.left: note.right
+            anchors.leftMargin: Theme.spaceSmall
+            anchors.right: sound.left
+            anchors.rightMargin: Theme.spaceSmall
+            anchors.verticalCenter: parent.verticalCenter
+            elide: Text.ElideRight
+            text: root.choosing ? "Choosing a sound…" : root.soundName(root.alarm?.sound_file ?? "")
+            color: Theme.foreground
+            font.pixelSize: Theme.textBody
+            font.family: Theme.fontFamily
+        }
+
+        Row {
+            id: sound
+
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.spaceSmall
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.spaceTiny
+
+            ActionButton {
+                visible: root.settingsOn
+                text: "Choose…"
+                icon: "folder_open"
+                tone: "ghost"
+                onClicked: Daemon.command("settings", "choose-file", [root.soundPath])
+            }
+
+            // Back to alarm-clock-elapsed from the sound theme.
+            ActionButton {
+                visible: root.settingsOn && (root.alarm?.sound_file ?? "") !== ""
+                text: "Default"
+                icon: "restart_alt"
+                tone: "ghost"
+                onClicked: Daemon.command("settings", "set", [root.soundPath, "\"\""])
+            }
+
+            ActionButton {
+                enabled: root.volume > 0
+                text: "Play it"
+                icon: "play"
+                onClicked: Daemon.command("timer", "test-sound", [])
             }
         }
     }

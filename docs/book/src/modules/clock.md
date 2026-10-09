@@ -38,6 +38,8 @@ mochi ipc clock delete 3
 
 On the left, the [focus timer](timer.md)'s countdown in a ring that waves while it runs, with lengths to start focus or a break, and pause, resume and stop while one runs. On the right, the timer module's [custom timers](timer.md#custom-timers): a field that starts one from what you type, like `15m Tea`, `90s` or `1h 30m`, a button for each of its `presets`, and each running timer with its time left, when it ends, "+1 min", pause and stop. Start stays greyed out, with a hint under the field, until what's typed begins with a length. The timer module does the counting, so its bubbles and its notices work as always. With the timer module off, the tab says so and opens its settings.
 
+Along the bottom, the alarm every timer plays: a slider for its `volume`, which Left and Right move 5% at a time and a double click puts back to 80%, the sound's name, **Choose…** to pick another file with the desktop's file chooser, **Default** to go back to the sound theme's alarm, and **Play it**. Each change goes to the timer's settings through the settings module and applies at once, as on the timer's page in the settings. With `sound_command` set, its player keeps its own volume, so the slider gives way to a line that says so. When no file chooser can open, the row says why, until its close button or the next change.
+
 ## Stopwatch
 
 The time to the tenth of a second, or the hundredth with `precision = "hundredths"`, with **Start**, **Lap**, **Pause** and **Reset**. On the right, the laps, newest first: how long each took next to its number, the time at the end of it, and the fastest and the slowest marked. The clock module keeps the stopwatch, so it runs on with the panel closed and through a restart of mochid, like after an update; logging out forgets it. It keeps up to 99 laps.
@@ -54,7 +56,9 @@ Lap 2  0:00.8  0:02.1
 
 The time here, then in each of the `zones`, two to a row: the city, whether it's yesterday, today or tomorrow there, how many hours ahead or behind it is, and the time. The zones' offsets come from the system's time zone database, read again every 10 minutes for daylight saving, as for the world clock widget. A zone the system doesn't have says so.
 
-**Add a city** lists common cities from Honolulu to Auckland, west to east: a click adds one, or takes off one that's there, until the tab has its 8. Escape or **Done** goes back to the cards. The list writes the `zones` setting, as the settings panel does, and **Change the zones** opens it there, where the Add menu lists the system's zones with a search, each as its city and region with its offset now and its country, like "Tokyo, Asia" and "UTC+9 · Japan". Typing a zone's name there works too.
+**Add a city** lays every zone the system has over the cards, with a search: each as its city and region, with its offset now and its country under it, like "Tokyo, Asia" and "UTC+9 · Japan". Before you type, it lists the zones on the tab, checked, then common cities from Honolulu to Auckland, then every zone west to east. A search finds a city, a region, a country or an offset, like `tok`, `buenos aires`, `japan` or `utc+9`, cities that start with it first; accents don't matter, so `sao` finds São Paulo. A click adds a zone, or takes off one that's there; with the keyboard, Down and Up move through the list and Enter does the same to the zone marked, which a search puts on its first match. Once the tab has its 8, the others dim and the heading says to take one off first. Escape or **Done** goes back to the cards.
+
+The picker writes the `zones` setting, as the settings panel does, and **Change the zones** opens it there, where the same picker lists the zones, and a zone's name the list doesn't have can be typed. The clock module reads the system's zones only while the picker is open, since there are a few hundred; `mochi ipc clock zone-picker on tokyo` opens it on the World tab with a search typed.
 
 ## In the control center
 
@@ -79,6 +83,7 @@ The seconds and the day's progress on Today, the stopwatch's tenths and past run
 | `copy-run [run]` | Copies the run going with its laps, or a past one by its number |
 | `forget-run [run]` | Forgets a past run, or all of them |
 | `add-zone <zone>`, `remove-zone <zone>` | Adds a time zone like `Europe/Paris` to the World tab, or takes one off, in the `zones` setting |
+| `zone-picker <on\|off> [search]` | Opens the World tab's zone picker, with a search typed, or closes it; the World tab shows it while the panel is on that tab |
 | `credit` | Opens mochi-clock's page on GitHub, which inspired the clock |
 
 ```toml
