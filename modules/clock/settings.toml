@@ -9,3 +9,15 @@
 # hours = "24"
 # The day weeks start on in the calendar: "monday" or "sunday".
 # first_day = "monday"
+# Show the seconds on the Today tab.
+# seconds = false
+# How far through the day it is, on the Today tab: a "line" under the date,
+# a "ring" around the clock, or "none".
+# day_progress = "line"
+# The shape the Today tab's clock sits in: "cookie", "circle", "pentagon",
+# "clover", "burst", "hexagon", "octagon", "squircle", "pill" or "none".
+# shape = "cookie"
+# The stopwatch to the "tenths" of a second, or the "hundredths".
+# precision = "tenths"
+# How many of the stopwatch's past runs to keep, up to 50; 0 keeps none.
+# history = 10

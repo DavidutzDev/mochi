@@ -6,13 +6,25 @@ import qs.island
 // how far ahead or behind it is. The clock module reads the zones' offsets
 // from the system, as the widgets module does for the world clock widget.
 // Here is the inverted card, like the picked tab in the navbar, so the
-// others read against it.
+// others read against it. "Add a city" lays a list of common cities over
+// the cards, west to east, to add or take off with a click.
 Item {
     id: root
 
     property var clock: ({})
     readonly property bool twelve: clock.hours === "12"
     readonly property var zones: clock.world ?? []
+    // The most the clock module takes.
+    readonly property int most: 8
+    // Cities whose zone has their name, so the card says the same.
+    readonly property var cities: ["Pacific/Honolulu", "America/Los_Angeles", "America/Denver", "America/Chicago", "America/Mexico_City", "America/New_York", "America/Toronto", "America/Sao_Paulo", "America/Argentina/Buenos_Aires", "Europe/London", "Europe/Lisbon", "Africa/Lagos", "Europe/Paris", "Europe/Madrid", "Europe/Amsterdam", "Europe/Berlin", "Europe/Rome", "Europe/Stockholm", "Africa/Johannesburg", "Africa/Cairo", "Europe/Athens", "Europe/Istanbul", "Africa/Nairobi", "Europe/Moscow", "Asia/Dubai", "Asia/Kolkata", "Asia/Bangkok", "Asia/Singapore", "Asia/Hong_Kong", "Asia/Shanghai", "Asia/Seoul", "Asia/Tokyo", "Australia/Sydney", "Pacific/Auckland"]
+    property bool picking: false
+
+    // Back to the cards, the keyboard on the button that opened the list.
+    function closePicker(): void {
+        picking = false;
+        addCity.forceActiveFocus();
+    }
     // Here first, as an empty zone.
     readonly property var cards: [""].concat(zones)
     readonly property int columns: 2
@@ -26,6 +38,8 @@ Item {
     Flickable {
         id: view
 
+        // The list of cities takes its place.
+        visible: !root.picking
         width: parent.width
         anchors.top: parent.top
         anchors.bottom: footer.top
@@ -166,6 +180,7 @@ Item {
     Item {
         id: footer
 
+        visible: !root.picking
         anchors.bottom: parent.bottom
         width: parent.width
         height: Theme.controlHeight
@@ -176,20 +191,187 @@ Item {
             anchors.rightMargin: Theme.spaceMedium
             anchors.verticalCenter: parent.verticalCenter
             elide: Text.ElideRight
-            text: root.zones.length === 0 ? "No time zones yet. Add some, like Europe/Paris." : root.zones.length === 1 ? "1 time zone" : `${root.zones.length} time zones`
+            text: root.zones.length === 0 ? "No time zones yet. Add a city, or any zone in the settings." : root.zones.length === 1 ? "1 time zone" : `${root.zones.length} time zones`
             color: Theme.muted
             font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
         }
 
-        ActionButton {
+        Row {
             id: change
 
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
-            text: root.zones.length === 0 ? "Choose time zones" : "Change the zones"
-            icon: "edit"
-            onClicked: Daemon.command("settings", "open", ["config.module.clock.zones"])
+            spacing: Theme.spaceSmall
+
+            ActionButton {
+                text: "Change the zones"
+                icon: "edit"
+                tone: "ghost"
+                onClicked: Daemon.command("settings", "open", ["config.module.clock.zones"])
+            }
+
+            ActionButton {
+                id: addCity
+
+                text: "Add a city"
+                icon: "add"
+                onClicked: {
+                    root.picking = true;
+                    picker.forceActiveFocus();
+                }
+            }
+        }
+    }
+
+    // The cities, over the cards. Escape or Done goes back to them.
+    Rectangle {
+        id: picker
+
+        anchors.fill: parent
+        visible: root.picking
+        radius: Theme.radiusSurface
+        color: Theme.surface
+        Keys.onEscapePressed: root.closePicker()
+
+        // Clicks stay here.
+        MouseArea {
+            anchors.fill: parent
+        }
+
+        Column {
+            id: heading
+
+            x: Theme.spaceLarge
+            y: Theme.spaceLarge
+            width: parent.width - Theme.spaceLarge * 2 - done.width
+
+            Text {
+                text: "Add a city"
+                color: Theme.foreground
+                font.pixelSize: Theme.textTitle
+                font.family: Theme.fontFamily
+                font.weight: Theme.weightTitle
+            }
+
+            Text {
+                width: parent.width
+                elide: Text.ElideRight
+                text: root.zones.length >= root.most ? `The World tab is full, with ${root.most} zones. Take one off to add another.` : `A click adds a city or takes it off. ${root.zones.length} of ${root.most} zones.`
+                color: Theme.muted
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+            }
+        }
+
+        ActionButton {
+            id: done
+
+            anchors.right: parent.right
+            anchors.rightMargin: Theme.spaceLarge
+            anchors.verticalCenter: heading.verticalCenter
+            text: "Done"
+            icon: "check"
+            onClicked: root.closePicker()
+        }
+
+        Flickable {
+            id: cityView
+
+            anchors.top: heading.bottom
+            anchors.topMargin: Theme.spaceMedium
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: Theme.spaceMedium
+            x: Theme.spaceLarge
+            width: parent.width - Theme.spaceLarge * 2
+            contentWidth: width
+            contentHeight: flow.height
+            interactive: contentHeight > height
+            boundsBehavior: Flickable.StopAtBounds
+            clip: true
+
+            ScrollFade {
+                view: cityView
+                color: Theme.surface
+            }
+
+            Flow {
+                id: flow
+
+                width: parent.width
+                spacing: Theme.spaceSmall
+
+                Repeater {
+                    model: root.cities
+
+                    // A chip, filled while the city is on the World tab.
+                    Rectangle {
+                        id: chip
+
+                        required property string modelData
+                        readonly property bool chosen: root.zones.includes(modelData)
+                        readonly property bool open: chosen || root.zones.length < root.most
+
+                        function pick(): void {
+                            if (open)
+                                Daemon.command("clock", chosen ? "remove-zone" : "add-zone", [modelData]);
+                        }
+
+                        width: label.implicitWidth + Theme.spaceLarge + Theme.spaceSmall
+                        height: Theme.controlHeight - Theme.spaceTiny
+                        radius: height / 2
+                        opacity: open ? 1 : 0.4
+                        color: chosen ? Theme.foreground : area.containsMouse && open ? Theme.highlight : Theme.raised
+                        activeFocusOnTab: open
+                        Keys.onReturnPressed: pick()
+                        Keys.onEnterPressed: pick()
+                        Keys.onSpacePressed: pick()
+
+                        Row {
+                            id: label
+
+                            anchors.centerIn: parent
+                            spacing: Theme.spaceTiny
+
+                            Symbol {
+                                anchors.verticalCenter: parent.verticalCenter
+                                visible: chip.chosen
+                                name: "check"
+                                size: 14
+                                color: Theme.background
+                            }
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: chip.modelData.split("/").pop().replace(/_/g, " ")
+                                color: chip.chosen ? Theme.background : Theme.foreground
+                                font.pixelSize: Theme.textCaption
+                                font.family: Theme.fontFamily
+                                font.weight: Theme.weightTitle
+                            }
+                        }
+
+                        MouseArea {
+                            id: area
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: chip.open ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onClicked: chip.pick()
+                        }
+
+                        Rectangle {
+                            visible: chip.activeFocus
+                            anchors.fill: parent
+                            anchors.margins: -3
+                            radius: height / 2
+                            color: "transparent"
+                            border.width: 2
+                            border.color: Theme.accent
+                        }
+                    }
+                }
+            }
         }
     }
 }

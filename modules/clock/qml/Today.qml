@@ -2,10 +2,13 @@ import QtQuick
 import qs.island
 import "Time.js" as Time
 
-// The Today tab: the time big inside a cookie in the accent color, the one
-// accent here, with the date above and a greeting under; the weather now,
-// its details, the next hours and days beside it; and the next reminder
-// along the bottom, or the oldest one still due.
+// The Today tab: the time big inside a shape in the accent color, the one
+// accent here, a cookie unless the `shape` setting picks another or none,
+// with the seconds under the minutes if `seconds` is on; the date above,
+// with how far through the day it is on a thin line, or as a ring around
+// the shape, and a greeting under. Beside it, the weather now, its details,
+// the next hours and days; and the next reminder along the bottom, or the
+// oldest one still due.
 Item {
     id: root
 
@@ -16,6 +19,11 @@ Item {
     signal addReminder
 
     readonly property bool twelve: clock.hours === "12"
+    readonly property bool seconds: clock.seconds === true
+    readonly property string progress: clock.day_progress ?? "line"
+    readonly property string shape: clock.shape ?? "cookie"
+    // How far through the day it is, from 0 to 1.
+    readonly property real dayDone: (here.parts.hours * 3600 + here.parts.minutes * 60 + here.parts.seconds) / 86400
     // The first reminder not done, by when it's due: one that's due comes
     // before the ones ahead.
     readonly property var next: {
@@ -26,6 +34,8 @@ Item {
 
     ClockTime {
         id: here
+
+        seconds: root.seconds
     }
 
     readonly property string greeting: {
@@ -76,24 +86,113 @@ Item {
                 font.pixelSize: Theme.textBody
                 font.family: Theme.fontFamily
             }
+
+            // How far through the day, with the share beside it.
+            Item {
+                visible: root.progress === "line"
+                width: parent.width
+                height: visible ? percent.implicitHeight + Theme.spaceSmall : 0
+
+                ProgressBar {
+                    anchors.left: parent.left
+                    anchors.right: percent.left
+                    anchors.rightMargin: Theme.spaceSmall
+                    anchors.verticalCenter: percent.verticalCenter
+                    height: 3
+                    value: root.dayDone
+                }
+
+                Text {
+                    id: percent
+
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    text: `${Math.floor(root.dayDone * 100)}%`
+                    color: Theme.muted
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
+                    font.features: {
+                        "tnum": 1
+                    }
+                }
+            }
         }
 
-        ExpressiveShape {
-            id: cookie
+        // The room between the date and the greeting, square.
+        Item {
+            id: slot
+
+            readonly property real from: dateLines.y + dateLines.height + Theme.spaceMedium
+            readonly property real to: greetingLine.y - Theme.spaceMedium
 
             anchors.horizontalCenter: parent.horizontalCenter
-            y: dateLines.y + dateLines.height + (parent.height - dateLines.y - dateLines.height - greetingLine.height - Theme.spaceLarge - size) / 2
-            size: Math.min(parent.width - Theme.spaceLarge * 2, parent.height - dateLines.height - greetingLine.height - Theme.spaceLarge * 2 - Theme.spaceMedium * 2)
-            shape: "cookie"
-            color: Theme.accent
+            y: from + (to - from - height) / 2
+            width: Math.min(parent.width - Theme.spaceLarge * 2, to - from)
+            height: width
 
-            StackedTime {
+            // The day so far, around the shape, from the top.
+            WavyRing {
+                visible: root.progress === "ring"
+                anchors.fill: parent
+                size: slot.width
+                thickness: 4
+                wavy: false
+                color: Theme.foreground
+                value: root.dayDone
+            }
+
+            ExpressiveShape {
+                id: cookie
+
+                readonly property bool none: root.shape === "none"
+                readonly property color ink: none ? Theme.foreground : Theme.onAccent
+                // A wide room, like a pill's, takes the time on one line.
+                readonly property bool oneLine: roomWidth > roomHeight * 1.4
+
                 anchors.centerIn: parent
-                width: cookie.size * 0.5
-                height: cookie.size * 0.62
-                hours: here.hour(root.twelve)
-                minutes: here.pad(here.parts.minutes)
-                color: Theme.onAccent
+                width: root.progress === "ring" ? slot.width - 20 : slot.width
+                height: width
+                // Without a shape, the time takes a squircle's room.
+                shape: none ? "squircle" : root.shape
+                color: none ? "transparent" : Theme.accent
+
+                // The seconds under the minutes, under half their size.
+                Column {
+                    anchors.centerIn: parent
+                    visible: !cookie.oneLine
+
+                    StackedTime {
+                        id: stacked
+
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        width: cookie.roomWidth * 0.78
+                        height: cookie.roomHeight * (root.seconds ? 0.7 : 0.94)
+                        hours: here.hour(root.twelve)
+                        minutes: here.pad(here.parts.minutes)
+                        color: cookie.ink
+                    }
+
+                    RollingText {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        visible: root.seconds
+                        text: here.pad(here.parts.seconds)
+                        color: cookie.none ? Theme.muted : Qt.alpha(Theme.onAccent, 0.75)
+                        family: Theme.displayFamily
+                        weight: Theme.weightTitle
+                        pixelSize: Math.max(Theme.textCaption, stacked.pixelSize * 0.42)
+                    }
+                }
+
+                RollingText {
+                    anchors.centerIn: parent
+                    visible: cookie.oneLine
+                    text: here.time(root.twelve, root.seconds)
+                    color: cookie.ink
+                    family: Theme.displayFamily
+                    weight: Theme.weightTitle
+                    // A digit is about 0.62 of the size wide.
+                    pixelSize: Math.max(Theme.textCaption, Math.min(cookie.roomHeight * 0.7, cookie.roomWidth / (text.length * 0.62)))
+                }
             }
         }
 

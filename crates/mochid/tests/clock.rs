@@ -169,7 +169,7 @@ fn the_stopwatch_carries_on_after_a_restart() {
         first.starts_with("1:0") && first.ends_with(" running"),
         "{status}"
     );
-    assert_eq!(lines.next(), Some("lap 1 0:20.00 0:20.00"));
+    assert_eq!(lines.next(), Some("lap 1 0:20.0 0:20.0"));
 
     assert_eq!(
         ctl.command("clock", "stopwatch", &["lap"]),
@@ -193,6 +193,23 @@ fn the_stopwatch_carries_on_after_a_restart() {
     );
     assert_eq!(
         output(ctl.command("clock", "stopwatch", &["status"])),
-        "0:00.00 stopped"
+        "0:00.0 stopped"
     );
+
+    // Reset kept the run, with its two laps, in the state directory.
+    let runs = output(ctl.command("clock", "runs", &[]));
+    assert!(
+        runs.starts_with("1  ") && runs.ends_with(", 2 laps"),
+        "{runs}"
+    );
+    let saved =
+        std::fs::read_to_string(daemon.dir.join("state/mochi/stopwatch-runs.json")).unwrap();
+    let saved: serde_json::Value = serde_json::from_str(&saved).unwrap();
+    assert_eq!(saved[0]["laps"].as_array().unwrap().len(), 2);
+    assert!(refused(&ctl.command("clock", "copy-run", &["2"])));
+    assert_eq!(
+        ctl.command("clock", "forget-run", &["1"]),
+        DaemonMessage::Ok
+    );
+    assert_eq!(output(ctl.command("clock", "runs", &[])), "no past runs");
 }

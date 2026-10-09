@@ -8,10 +8,16 @@
 //! [`reminders`]. When one comes due, the island says so, with Done and
 //! Snooze; one that came due while mochid was down or the computer slept
 //! comes up as soon as either is back. The stopwatch is kept in the session
-//! directory, so it runs on through a restart, like the timer.
+//! directory, so it runs on through a restart, like the timer; resetting it
+//! keeps the run in `$XDG_STATE_HOME/mochi/stopwatch-runs.json`.
 //!
 //! The views count the stopwatch up themselves from when it started, so
 //! the daemon only speaks when something changes.
+//!
+//! The control center gets a card, with the time and the next reminder or
+//! the stopwatch, and a page with the panel's tabs but the timer's. The
+//! clock's page in the settings credits mochi-clock, by Xonex5, which some
+//! of the clock's features come from.
 //!
 //! Settings in `config.toml`, all optional and applied without a restart:
 //!
@@ -21,6 +27,11 @@
 //! zones = ["Europe/London", "America/New_York", "Asia/Tokyo"]
 //! hours = "24"             # or "12"
 //! first_day = "monday"     # or "sunday"
+//! seconds = false          # the seconds on Today
+//! day_progress = "line"    # "ring" or "none"
+//! shape = "cookie"         # what Today's clock sits in, or "none"
+//! precision = "tenths"     # or "hundredths", for the stopwatch
+//! history = 10             # the stopwatch's past runs it keeps
 //! ```
 
 mod local;
@@ -35,14 +46,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use include_dir::{Dir, include_dir};
 use mochi_core::zones::{self, Offsets};
 use mochi_core::{
-    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, ContributionSpec, Module,
-    ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
+    ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, CallError, ContributionSpec,
+    Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority, SettingsOp,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use crate::reminders::{Reminder, Reminders};
-use crate::stopwatch::Stopwatch;
+use crate::stopwatch::{MOST_RUNS, Precision, Runs, Stopwatch};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
@@ -63,7 +74,21 @@ const SNOOZE: i64 = 10;
 /// The most zones the World tab shows.
 const MOST_ZONES: usize = 8;
 /// Every setting is read by the views or the next look at the clock.
-const LIVE: [&str; 4] = ["tab", "zones", "hours", "first_day"];
+const LIVE: [&str; 9] = [
+    "tab",
+    "zones",
+    "hours",
+    "first_day",
+    "seconds",
+    "day_progress",
+    "shape",
+    "precision",
+    "history",
+];
+/// mochi-clock, by Xonex5, which inspired the clock's seconds, day
+/// progress, stopwatch runs and city list. The credit on the settings page
+/// opens it, and nothing else.
+const CREDIT: &str = "https://github.com/Xonex5/mochi-clock";
 
 #[derive(Debug, Default)]
 pub struct Clock;
@@ -109,6 +134,49 @@ enum FirstDay {
     Sunday,
 }
 
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+enum DayProgress {
+    /// A thin line under the date.
+    #[default]
+    Line,
+    /// A ring around the clock.
+    Ring,
+    /// Neither.
+    None,
+}
+
+/// The shapes of ExpressiveShape a clock can sit in.
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+enum Shape {
+    /// No shape: the time in the text's color.
+    None,
+    /// A circle.
+    Circle,
+    /// A pentagon with round corners.
+    Pentagon,
+    /// A cookie with soft lobes.
+    #[default]
+    Cookie,
+    /// Four round lobes.
+    Clover,
+    /// A burst with soft points.
+    Burst,
+    /// A hexagon with round corners.
+    Hexagon,
+    /// An octagon with round corners.
+    Octagon,
+    /// A square with soft sides.
+    Squircle,
+    /// A wide pill.
+    Pill,
+}
+
 #[derive(Debug, Clone, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
@@ -120,6 +188,17 @@ struct Settings {
     hours: Hours,
     /// The day weeks start on in the calendar.
     first_day: FirstDay,
+    /// Show the seconds on the Today tab.
+    seconds: bool,
+    /// How far through the day it is, on the Today tab.
+    day_progress: DayProgress,
+    /// The shape the Today tab's clock sits in.
+    shape: Shape,
+    /// How finely the stopwatch shows the time.
+    precision: Precision,
+    /// How many of the stopwatch's past runs to keep, up to 50; 0 keeps
+    /// none. Reset keeps a run.
+    history: u32,
 }
 
 impl Default for Settings {
@@ -129,6 +208,11 @@ impl Default for Settings {
             zones: zones::DEFAULT.map(str::to_owned).to_vec(),
             hours: Hours::TwentyFour,
             first_day: FirstDay::Monday,
+            seconds: false,
+            day_progress: DayProgress::Line,
+            shape: Shape::Cookie,
+            precision: Precision::Tenths,
+            history: 10,
         }
     }
 }
@@ -141,6 +225,12 @@ impl Settings {
             return Err(format!(
                 "zones lists {}; the World tab shows up to {MOST_ZONES}",
                 settings.zones.len()
+            ));
+        }
+        if settings.history > MOST_RUNS {
+            return Err(format!(
+                "history is {}; the stopwatch keeps up to {MOST_RUNS} runs",
+                settings.history
             ));
         }
         Ok(settings)
@@ -202,11 +292,52 @@ impl Module for Clock {
                     ["start", "pause", "toggle", "lap", "reset", "status"],
                 ),
             ),
+            ActionSpec::new(
+                "runs",
+                "Print the stopwatch's past runs, with their numbers",
+            ),
+            ActionSpec::new(
+                "copy-run",
+                "Copy a stopwatch run with its laps: the one going, or a past one",
+            )
+            .arg(ArgSpec::int("run", "Its number, from runs").optional()),
+            ActionSpec::new(
+                "forget-run",
+                "Forget one of the stopwatch's past runs, or all of them",
+            )
+            .arg(ArgSpec::int("run", "Its number, from runs").optional()),
+            ActionSpec::new("add-zone", "Add a time zone to the World tab")
+                .arg(ArgSpec::string("zone", "Like Europe/Paris")),
+            ActionSpec::new("remove-zone", "Take a time zone off the World tab")
+                .arg(ArgSpec::string("zone", "Like Europe/Paris")),
+            ActionSpec::new(
+                "credit",
+                "Open mochi-clock, by Xonex5, which inspired the clock, in the browser",
+            ),
         ]
     }
 
+    fn needs(&self, _settings: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
+        vec![mochi_core::Need::new(
+            "xdg-open",
+            "The link to mochi-clock on the clock's settings page",
+        )]
+    }
+
     fn contributions(&self) -> Vec<ContributionSpec> {
-        tour::steps()
+        let mut offers = vec![
+            ContributionSpec::new("settings", "section", "credit", "Credit", "Credit"),
+            // After the control center's own Today card.
+            ContributionSpec::new("control-center", "card", "clock", "Card", "Clock")
+                .icon("clock")
+                .order(4)
+                .options(json!({ "span": 1, "rows": 1, "page": "clock" })),
+            ContributionSpec::new("control-center", "page", "clock", "Page", "Clock")
+                .icon("clock")
+                .order(14),
+        ];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {
@@ -215,10 +346,13 @@ impl Module for Clock {
             let table: mochi_core::toml::Table = ctx.settings()?;
             let settings = Settings::load(&table)?;
             let path = Reminders::path();
+            let runs_path = Runs::path();
             let session = ctx.session_dir().to_owned();
             let mut state = State {
                 reminders: path.as_deref().map(Reminders::load).unwrap_or_default(),
                 path,
+                runs: runs_path.as_deref().map(Runs::load).unwrap_or_default(),
+                runs_path,
                 stopwatch: load_stopwatch(&session),
                 session,
                 zones: Offsets::read(settings.zones.clone()).await,
@@ -242,7 +376,12 @@ impl Module for Clock {
                         Some(ModuleEvent::Ended { activity, .. }) => state.ended(activity),
                         Some(ModuleEvent::Reconfigured(table)) => match Settings::load(&table) {
                             Ok(settings) => {
+                                let fewer = settings.history < state.settings.history;
                                 state.settings = settings;
+                                if fewer {
+                                    state.runs.0.truncate(state.settings.history as usize);
+                                    state.save_runs();
+                                }
                                 if state.zones.missing(&state.settings.zones) {
                                     state.zones = Offsets::read(state.settings.zones.clone()).await;
                                 }
@@ -307,6 +446,49 @@ fn save_stopwatch(dir: &Path, stopwatch: &Stopwatch) {
     }
 }
 
+/// Copies `text` through the clipboard module, or with wl-copy when it's
+/// off.
+fn copy(ctx: &ModuleCtx, text: String) {
+    let call = ctx.call("clipboard", "copy-text", &[&text]);
+    tokio::spawn(async move {
+        match call.await {
+            Ok(()) => {}
+            Err(CallError::NotEnabled(_)) => {
+                let copied = mochi_core::process::spawn_detached(
+                    &["wl-copy".into(), "--".into(), text],
+                    None,
+                );
+                if let Err(error) = copied {
+                    tracing::warn!(%error, "can't copy: enable the clipboard module or install wl-copy");
+                }
+            }
+            Err(error) => tracing::warn!(%error, "the clipboard module couldn't copy it"),
+        }
+    });
+}
+
+/// `zones` with `zone` added or taken off, for the `zones` setting.
+fn changed_zones(zones: &[String], add: bool, zone: &str) -> Result<Vec<String>, String> {
+    let zone = zone.trim();
+    if zone.is_empty() {
+        return Err("which time zone? Like Europe/Paris".to_owned());
+    }
+    let mut zones = zones.to_vec();
+    let at = zones.iter().position(|known| known == zone);
+    match (add, at) {
+        (true, Some(_)) => return Err(format!("{zone} is on the World tab already")),
+        (true, None) if zones.len() >= MOST_ZONES => {
+            return Err(format!("the World tab shows up to {MOST_ZONES} zones"));
+        }
+        (true, None) => zones.push(zone.to_owned()),
+        (false, Some(at)) => {
+            zones.remove(at);
+        }
+        (false, None) => return Err(format!("{zone} isn't on the World tab")),
+    }
+    Ok(zones)
+}
+
 /// A reminder's time here, like `2026-10-21 20:00`.
 fn when(at: i64) -> String {
     local::from_epoch(at).map_or_else(
@@ -349,6 +531,10 @@ struct State {
     /// Where the reminders are kept; `None` without a home, when they last
     /// only as long as mochid.
     path: Option<PathBuf>,
+    /// The stopwatch's past runs, and where they're kept, like the
+    /// reminders.
+    runs: Runs,
+    runs_path: Option<PathBuf>,
     stopwatch: Stopwatch,
     /// The session directory, where the stopwatch is kept.
     session: PathBuf,
@@ -419,11 +605,40 @@ impl State {
                 Ok(None)
             }),
             "stopwatch" => self.stopwatch(command.args.str("what").unwrap_or_default()),
+            "runs" => Ok(Some(self.runs.listing(self.settings.precision, when))),
+            "copy-run" => self.run_text(command.args.int("run")).map(|text| {
+                copy(ctx, text);
+                None
+            }),
+            "forget-run" => self.runs.forget(command.args.int("run")).map(|()| None),
+            "add-zone" | "remove-zone" => {
+                let add = command.action == "add-zone";
+                let zone = command.args.str("zone").unwrap_or_default();
+                match changed_zones(&self.settings.zones, add, zone) {
+                    Ok(zones) => {
+                        // Answers once the setting is kept.
+                        let set = ctx.settings_op(SettingsOp::Set {
+                            path: "config.module.clock.zones".into(),
+                            value: json!(zones),
+                        });
+                        self.settings.zones = zones;
+                        self.publish(ctx);
+                        tokio::spawn(async move { command.reply(set.await.map(drop)) });
+                        return;
+                    }
+                    Err(error) => Err(error),
+                }
+            }
+            "credit" => mochi_core::process::spawn_detached(
+                &mochi_core::process::in_app_scope(&["xdg-open".into(), CREDIT.into()]),
+                None,
+            )
+            .map(|()| None),
             other => Err(format!("clock has no action {other}")),
         };
         let changed = !matches!(
             command.action.as_str(),
-            "reminders" | "toggle" | "open" | "close"
+            "reminders" | "toggle" | "open" | "close" | "runs" | "copy-run" | "credit"
         ) && result.is_ok();
         if changed {
             self.save(ctx);
@@ -452,14 +667,53 @@ impl State {
             "pause" => self.stopwatch.pause(now),
             "toggle" => self.stopwatch.toggle(now),
             "lap" => self.stopwatch.lap(now)?,
-            "reset" => self.stopwatch.reset(),
-            "status" => return Ok(Some(self.stopwatch.status(now))),
+            "reset" => {
+                if let Some(run) = self.stopwatch.reset(now, seconds())
+                    && self.settings.history > 0
+                {
+                    self.runs.add(run, self.settings.history as usize);
+                }
+            }
+            "status" => {
+                return Ok(Some(self.stopwatch.status(now, self.settings.precision)));
+            }
             other => return Err(format!("the stopwatch can't {other}")),
         }
         Ok(None)
     }
 
-    /// After a change: keeps the reminders and the stopwatch, and publishes.
+    /// The run `number` as it's copied, or the one going without a number
+    /// or with 0.
+    fn run_text(&self, number: Option<i64>) -> Result<String, String> {
+        let precision = self.settings.precision;
+        match number.filter(|number| *number != 0) {
+            None => {
+                let total = self.stopwatch.elapsed(millis());
+                if total == 0 {
+                    return Err("the stopwatch hasn't run".to_owned());
+                }
+                Ok(stopwatch::report(
+                    "Stopwatch",
+                    total,
+                    &self.stopwatch.laps,
+                    precision,
+                ))
+            }
+            Some(number) => {
+                let run = self.runs.get(number)?;
+                let title = format!("Stopwatch, {}", when(run.ended));
+                Ok(stopwatch::report(
+                    &title,
+                    run.total_ms,
+                    &run.laps,
+                    precision,
+                ))
+            }
+        }
+    }
+
+    /// After a change: keeps the reminders, the stopwatch and its runs, and
+    /// publishes.
     fn save(&mut self, ctx: &ModuleCtx) {
         if let Some(path) = &self.path
             && let Err(error) = self.reminders.save(path)
@@ -467,7 +721,16 @@ impl State {
             tracing::warn!(%error, "the reminders");
         }
         save_stopwatch(&self.session, &self.stopwatch);
+        self.save_runs();
         self.publish(ctx);
+    }
+
+    fn save_runs(&self) {
+        if let Some(path) = &self.runs_path
+            && let Err(error) = self.runs.save(path)
+        {
+            tracing::warn!(%error, "the stopwatch's runs");
+        }
     }
 
     fn open(&mut self, ctx: &ModuleCtx, tab: &str) {
@@ -544,18 +807,25 @@ impl State {
     }
 
     /// What the views read: the settings, the zones' offsets, the
-    /// reminders and the stopwatch.
+    /// reminders, the stopwatch and its past runs.
     fn publish(&self, ctx: &ModuleCtx) {
         let (offsets, unknown) = self.zones.fields();
+        let settings = &self.settings;
         ctx.publish_state(json!({
-            "tab": self.settings.tab,
-            "hours": self.settings.hours,
-            "first_day": self.settings.first_day,
-            "world": self.settings.zones,
+            "tab": settings.tab,
+            "hours": settings.hours,
+            "first_day": settings.first_day,
+            "seconds": settings.seconds,
+            "day_progress": settings.day_progress,
+            "shape": settings.shape,
+            "precision": settings.precision,
+            "history": settings.history,
+            "world": settings.zones,
             "zones": offsets,
             "unknownZones": unknown,
             "reminders": self.reminders.all(),
             "stopwatch": self.stopwatch,
+            "runs": self.runs,
         }));
     }
 }
@@ -616,6 +886,10 @@ mod tests {
         assert!(Settings::load(&table("hours = \"13\"")).is_err());
         let many: Vec<String> = (0..9).map(|n| format!("\"Etc/GMT+{n}\"")).collect();
         assert!(Settings::load(&table(&format!("zones = [{}]", many.join(",")))).is_err());
+        assert!(Settings::load(&table("history = 50")).is_ok());
+        assert!(Settings::load(&table("history = 51")).is_err());
+        assert!(Settings::load(&table("shape = \"hexagon\"")).is_ok());
+        assert!(Settings::load(&table("shape = \"star\"")).is_err());
         // Every tab the setting takes, the open action takes.
         for tab in [
             Tab::Today,
@@ -626,6 +900,25 @@ mod tests {
         ] {
             assert!(TABS.contains(&tab_name(tab).as_str()));
         }
+    }
+
+    #[test]
+    fn adds_and_takes_off_zones() {
+        let zones = vec!["Europe/London".to_owned()];
+        assert_eq!(
+            changed_zones(&zones, true, " Asia/Tokyo ").unwrap(),
+            ["Europe/London", "Asia/Tokyo"]
+        );
+        assert!(changed_zones(&zones, true, "Europe/London").is_err());
+        assert!(changed_zones(&zones, true, "  ").is_err());
+        assert!(changed_zones(&zones, false, "Asia/Tokyo").is_err());
+        assert!(
+            changed_zones(&zones, false, "Europe/London")
+                .unwrap()
+                .is_empty()
+        );
+        let full: Vec<String> = (0..MOST_ZONES).map(|n| format!("Etc/GMT+{n}")).collect();
+        assert!(changed_zones(&full, true, "Asia/Tokyo").is_err());
     }
 
     #[test]
