@@ -19,4 +19,4 @@ When several players are open, the one that last started playing wins, and a pla
 | `next-player`, `previous-player` | Shows another player, until it stops |
 | `player <name>` | Shows the player with this name, like `spotify` or `firefox`, until it stops |
 
-It offers the control center a Now Playing card.
+It offers the control center a Now Playing card, and the [desktop](widgets.md) a widget in three looks: the same card; artwork, a tall card with the cover big and the track, the progress and the controls under it; and cover, only the cover, without a card, with a button to play or pause in its corner.

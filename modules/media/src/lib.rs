@@ -118,7 +118,34 @@ impl Module for Media {
                     "size": [24, 8],
                     "min": [18, 7],
                     "max": [40, 9],
-                    "description": "The cover beside the track, with its controls",
+                    // The card first: widgets placed before there were
+                    // looks have it.
+                    "variants": [
+                        {
+                            "id": "card",
+                            "title": "Card",
+                            "description": "The cover beside the track, with its controls",
+                        },
+                        {
+                            "id": "artwork",
+                            "title": "Artwork",
+                            "description": "The cover big, the track and controls under it",
+                            "view": "Artwork",
+                            "size": [14, 23],
+                            "min": [11, 19],
+                            "max": [24, 36],
+                        },
+                        {
+                            "id": "cover",
+                            "title": "Cover",
+                            "description": "Only the cover, with a button to play or pause",
+                            "view": "Cover",
+                            "size": [10, 10],
+                            "min": [6, 6],
+                            "max": [24, 24],
+                            "frame": false,
+                        },
+                    ],
                 })),
         ];
         offers.extend(tour::steps());
