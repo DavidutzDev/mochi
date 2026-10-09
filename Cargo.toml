@@ -19,6 +19,7 @@ mochi-compositor = { path = "crates/mochi-compositor" }
 mochi-core = { path = "crates/mochi-core" }
 mochi-plugins = { path = "crates/mochi-plugins" }
 mochi-sdk = { path = "crates/mochi-sdk" }
+mochi-module-agents = { path = "modules/agents" }
 mochi-module-audio = { path = "modules/audio" }
 mochi-module-battery = { path = "modules/battery" }
 mochi-module-brightness = { path = "modules/brightness" }

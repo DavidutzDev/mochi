@@ -56,6 +56,7 @@ pub fn builtin() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_tour::Tour),
         Box::new(mochi_module_updater::Updater),
         Box::new(mochi_module_timer::Timer),
+        Box::new(mochi_module_agents::Agents),
     ];
     #[cfg(feature = "demo")]
     modules.push(Box::new(mochi_module_demo::Demo));

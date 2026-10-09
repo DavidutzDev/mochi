@@ -21,6 +21,7 @@ futures-util.workspace = true
 libc.workspace = true
 mochi-core.workspace = true
 mochi-plugins.workspace = true
+mochi-module-agents.workspace = true
 mochi-module-audio.workspace = true
 mochi-module-battery.workspace = true
 mochi-module-brightness.workspace = true
