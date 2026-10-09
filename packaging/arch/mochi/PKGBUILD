@@ -1,7 +1,7 @@
 # Maintainer: David Gheghea
 
 pkgname=mochi
-pkgver=0.0.8
+pkgver=0.0.9
 pkgrel=1
 pkgdesc='A desktop shell built around a central island'
 arch=('x86_64')
@@ -22,7 +22,7 @@ optdepends=(
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz"
         "MaterialSymbolsRounded.ttf::https://raw.githubusercontent.com/google/material-design-icons/bd8cb85bd4bad964fe6918f79665bb40c3a8efef/variablefont/MaterialSymbolsRounded%5BFILL%2CGRAD%2Copsz%2Cwght%5D.ttf")
-sha256sums=('284f38898675ba021a6f856caf6f7d4074d1f2fdb4325f7c50b5397bcd6c1262'
+sha256sums=('aa73e6ad2382582d13ac97802a3b45f24cb2c8b2b1bbf2194939107582f7c04a'
             'c2182b6337495e64cc9e2311c52522567ac277d25a842bd027f9c9e3a5cc6d86')
 
 prepare() {
