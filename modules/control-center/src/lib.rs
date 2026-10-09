@@ -143,7 +143,7 @@ impl Module for ControlCenter {
             )
             .arg(ArgSpec::string(
                 "order",
-                "Cards as module/id, separated by commas, like network/status,control-center/clock",
+                "Cards as module/id, separated by commas, like network/status,clock/clock",
             ))
             .arg(ArgSpec::string("hidden", "Cards to hide, the same way").optional()),
             ActionSpec::new(
@@ -158,17 +158,9 @@ impl Module for ControlCenter {
         ]
     }
 
-    // The control center's own card goes through the same door as everyone
-    // else's.
+    // Every card and page comes from a module; the time is the clock's.
     fn contributions(&self) -> Vec<ContributionSpec> {
-        let mut offers = vec![
-            ContributionSpec::new("control-center", "card", "clock", "Clock", "Today")
-                .icon("clock")
-                .order(3)
-                .options(json!({ "span": 1, "rows": 1 })),
-        ];
-        offers.extend(tour::steps());
-        offers
+        tour::steps()
     }
 
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {
@@ -365,8 +357,8 @@ mod settings_example {
     #[test]
     fn arrangements_are_lists_of_cards() {
         assert_eq!(
-            super::cards(" network/status, control-center/clock,,"),
-            ["network/status", "control-center/clock"]
+            super::cards(" network/status, clock/clock,,"),
+            ["network/status", "clock/clock"]
         );
         assert!(super::cards("").is_empty());
     }

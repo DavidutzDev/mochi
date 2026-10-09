@@ -1,8 +1,8 @@
 # Control center
 
-A panel that grows out of the island: a home screen of cards, and pages in a navbar at the bottom. It has no content of its own besides the date and time. Other modules provide the rest: media a Now Playing card, audio a volume card and a Sound page, brightness a slider per display and one for the keyboard, night light a tile, notifications a card and a page, power a page, clipboard a card and a page, capture a Captures page, network a card and a page, bluetooth a tile and a page, battery a card with the peripherals' batteries, performance a page, the focus timer a card, weather a card with the next hours, a smaller one and a page, the [clock](clock.md) a card with the next reminder or the stopwatch and a page with its tabs. A module that isn't running provides nothing.
+A panel that grows out of the island: a home screen of cards, and pages in a navbar at the bottom. It has no content of its own: every card and page comes from a module. The [clock](clock.md) gives the Today card with the time and the date, and a page with its tabs, media a Now Playing card, audio a volume card and a Sound page, brightness a slider per display and one for the keyboard, night light a tile, notifications a card and a page, power a page, clipboard a card and a page, capture a Captures page, network a card and a page, bluetooth a tile and a page, battery a card with the peripherals' batteries, performance a page, the focus timer a card, weather a card with the next hours, a smaller one and a page. A module that isn't running provides nothing.
 
-Clicking the clock opens it, and Escape or a click elsewhere closes it. With the [clock module](clock.md) on, a click on the Today card opens the clock panel, with the calendar and the reminders. A card whose module also has a page shows a chevron by its heading: clicking the heading, or the card beside its controls, opens that page.
+Clicking the clock opens it, and Escape or a click elsewhere closes it. A card whose module also has a page shows a chevron by its heading: clicking the heading, or the card beside its controls, opens that page.
 
 | Action | What it does |
 |---|---|

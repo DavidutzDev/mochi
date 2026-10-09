@@ -1,6 +1,6 @@
 # Clock
 
-A panel on the island with five tabs: Today, Calendar, Timer, Stopwatch and World. `mochi ipc clock toggle`, bound to a key, opens and closes it; `mochi ipc clock open calendar` opens it on a tab, or switches to that tab while it's open. A click on the Today card in the [control center](control-center.md) opens it too. Opening it closes the other panels, like the launcher or the control center, and Escape closes it.
+A panel on the island with five tabs: Today, Calendar, Timer, Stopwatch and World. `mochi ipc clock toggle`, bound to a key, opens and closes it; `mochi ipc clock open calendar` opens it on a tab, or switches to that tab while it's open. The [control center](control-center.md) has the same tabs as its Clock page. Opening it closes the other panels, like the launcher or the control center, and Escape closes it.
 
 The keyboard reaches everything: Tab goes through the controls and the navbar, 1 to 5 pick a tab, Left and Right move along the navbar, and Enter or Space press what has the focus. In the calendar's month, the arrows move the picked day, Page Up and Page Down turn the month, Home goes back to today, and Enter goes to the field for a new reminder.
 
@@ -62,7 +62,7 @@ The picker writes the `zones` setting, as the settings panel does, and **Change 
 
 ## In the control center
 
-With the [control center](control-center.md) on, the clock offers a card for its home. It waits under More cards until you put it there, since the control center's own Today card already shows the time. The card has the time, then the stopwatch while it has time on it, with a button to pause or resume it, or the next reminder and when it's due. Its heading opens the Clock page, which has the panel's Today, Calendar, Stopwatch and World tabs, the same views, on a row at the top. The focus timer has a card of its own there.
+With the [control center](control-center.md) on, the clock gives its home the Today card: the time, large, with the weekday and the date beside it. While the stopwatch has time on it, the stopwatch shows there instead, with a button to pause or resume it, and a reminder due within a day shows with when it's due. Without the clock module, the control center has no time card; `control-center/clock` in its `order` or `hidden` becomes `clock/clock`. Its heading opens the Clock page, which has the panel's Today, Calendar, Stopwatch and World tabs, the same views, on a row at the top. The focus timer has a card of its own there.
 
 ## Credit
 

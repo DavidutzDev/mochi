@@ -490,7 +490,8 @@ pub fn read_table(path: &Path) -> Result<toml::Table, ConfigError> {
 
 /// Moves the old ids of renamed modules in a `config.toml` table to their
 /// new ones: in `modules`, `[module.<id>]`, `[bubbles.<id>]` and the
-/// `<id>/<card>` names the control center's `order` and `hidden` list.
+/// `<id>/<card>` names the control center's `order` and `hidden` list, where
+/// the control center's own time card is now the clock's, `clock/clock`.
 /// Returns a note for each old id it found, for a warning.
 pub fn migrate_module_ids(table: &mut toml::Table) -> Vec<String> {
     let mut found = std::collections::BTreeSet::new();
@@ -540,6 +541,11 @@ pub fn migrate_module_ids(table: &mut toml::Table) -> Vec<String> {
                         && let Some((module, rest)) = text.split_once('/')
                     {
                         *text = format!("{}/{rest}", rename(module));
+                        // The control center's own time card became the
+                        // clock module's.
+                        if text == "control-center/clock" {
+                            *text = "clock/clock".to_owned();
+                        }
                     }
                 }
             }
@@ -737,7 +743,7 @@ mod tests {
             r#"
             modules = ["idle", "control-center"]
             [module.control-center]
-            order = ["control-center/clock", "network/card"]
+            order = ["clock/clock", "network/card"]
             hidden = []
             [bubbles.control-center]
             area = "left"

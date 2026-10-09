@@ -332,12 +332,12 @@ impl Module for Clock {
             // At the bottom of its settings page.
             ContributionSpec::new("settings", "section", "credit", "Inspired", "Credit")
                 .options(json!({ "place": "bottom" })),
-            // Spare: it waits under More cards, since the control center's own
-            // Today card already shows the time.
-            ContributionSpec::new("control-center", "card", "clock", "Card", "Clock")
+            // The control center's time card, where its own used to be: its
+            // heading opens the Clock page.
+            ContributionSpec::new("control-center", "card", "clock", "Card", "Today")
                 .icon("clock")
-                .order(4)
-                .options(json!({ "span": 1, "rows": 1, "page": "clock", "spare": true })),
+                .order(3)
+                .options(json!({ "span": 1, "rows": 1, "page": "clock" })),
             ContributionSpec::new("control-center", "page", "clock", "Page", "Clock")
                 .icon("clock")
                 .order(14),

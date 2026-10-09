@@ -172,7 +172,7 @@ fn bubbles_reach_the_ui_and_clicks_reach_the_module() {
 
 #[test]
 fn modules_offer_contributions_and_call_each_other() {
-    let daemon = Daemon::start("calls", "idle,demo,control-center");
+    let daemon = Daemon::start("calls", "idle,demo,control-center,clock");
     let mut ui = daemon.client(Role::Ui);
     let mut ctl = daemon.client(Role::Ctl);
 
@@ -191,9 +191,15 @@ fn modules_offer_contributions_and_call_each_other() {
             )
         })
         .collect();
-    assert_eq!(
-        offered,
-        [("control-center", "control-center", "card", "Clock")]
+    // The time card is the clock's, offered to the control center with
+    // its page.
+    assert!(
+        offered.contains(&("clock", "control-center", "card", "Card")),
+        "{offered:?}"
+    );
+    assert!(
+        offered.contains(&("clock", "control-center", "page", "Page")),
+        "{offered:?}"
     );
     ui.wait_for_view("idle", "Pill");
 

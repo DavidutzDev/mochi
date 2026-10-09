@@ -2,9 +2,10 @@ import QtQuick
 import qs.island
 import "Time.js" as Time
 
-// The control center's Clock card: the time, then the stopwatch while it
-// has time on it, with a button to pause or resume it, or else the next
-// reminder and when it's due. Its heading opens the Clock page.
+// The control center's Today card: the time, large, and beside it the
+// weekday and the date; the stopwatch instead while it has time on it, with
+// a button to pause or resume it; or a reminder due within a day. Its
+// heading opens the Clock page.
 Item {
     id: root
 
@@ -19,11 +20,13 @@ Item {
     readonly property real elapsed: (watch.banked_ms ?? 0) + (running ? Math.max(0, now - watch.since_ms) : 0)
     readonly property bool timing: elapsed > 0
 
-    // The first reminder not done, by when it's due, as on Today.
+    // The first reminder not done, by when it's due, as on Today, when it's
+    // due within a day or already is: the date shows otherwise.
     readonly property var next: {
         const open = (clock.reminders ?? []).filter(reminder => !reminder.done);
         const due = reminder => reminder.snoozed ?? reminder.at;
-        return open.sort((a, b) => due(a) - due(b))[0] ?? null;
+        const first = open.sort((a, b) => due(a) - due(b))[0] ?? null;
+        return first && due(first) * 1000 - here.now.getTime() < 24 * 3600 * 1000 ? first : null;
     }
 
     implicitHeight: Theme.rowHeight
@@ -60,7 +63,7 @@ Item {
         anchors.left: parent.left
         anchors.verticalCenter: parent.verticalCenter
         text: here.time(root.twelve, false)
-        pixelSize: Theme.textHeadline
+        pixelSize: Theme.textDisplay
         family: Theme.displayFamily
         weight: Theme.weightTitle
     }
@@ -78,9 +81,9 @@ Item {
             text: {
                 if (root.timing)
                     return root.format(root.elapsed);
-                return root.next ? root.next.text : "No reminders coming up";
+                return root.next ? root.next.text : here.now.toLocaleDateString(Qt.locale(), "dddd");
             }
-            color: root.timing || root.next ? Theme.foreground : Theme.muted
+            color: Theme.foreground
             font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
             font.weight: Theme.weightLabel
@@ -97,7 +100,7 @@ Item {
                 if (root.timing)
                     return root.running ? "Stopwatch" : "Stopwatch, paused";
                 if (!root.next)
-                    return "";
+                    return here.now.toLocaleDateString(Qt.locale(), "d MMMM");
                 const at = new Date((root.next.snoozed ?? root.next.at) * 1000);
                 if (at <= here.now)
                     return `Due ${Time.relative(at, here.now)}`;
@@ -105,7 +108,7 @@ Item {
                 return Time.sameDay(at, here.now) ? `${clockTime} · ${Time.relative(at, here.now)}` : `${Time.shortDate(at)}, ${clockTime}`;
             }
             color: Theme.muted
-            font.pixelSize: Theme.textCaption
+            font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
         }
     }
