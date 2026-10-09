@@ -192,7 +192,7 @@ pub enum RegistryAction {
 }
 
 /// Why Bento refuses while it's off, and how to turn it on.
-pub(super) const OFF: &str = "Bento is off. What it installs comes from other people: a plugin runs as you, with your files, a theme or a bento changes your setup, and being in the registry doesn't make it safe. To turn it on, set\n\n  [bento]\n  i_really_understand_that_bento_can_harm_and_contain_malicious_content = true\n\nin config.toml, or turn it on in the settings' Bento page.";
+pub(super) const OFF: &str = "Bento is off. It installs what other people made for Mochi, and a plugin among those runs with your rights, so it could read your files or send them somewhere. The Bento page in the settings explains more and turns it on, or set\n\n  [bento]\n  i_really_understand_that_bento_can_harm_and_contain_malicious_content = true\n\nin config.toml.";
 
 /// Whether the user turned Bento on, in their files or the settings.
 pub fn on(config_file: &Path) -> Result<bool, String> {

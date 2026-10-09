@@ -29,6 +29,7 @@ Item {
     readonly property var current: sections.find(entry => entry.id === section) ?? sections[0] ?? null
     // Bento's pages, which aren't options.
     readonly property bool bentoPage: current?.group === "bento"
+    readonly property string bentoConsent: "config.bento.i_really_understand_that_bento_can_harm_and_contain_malicious_content"
     readonly property var error: settings.error ?? null
 
     implicitWidth: 960
@@ -483,6 +484,14 @@ Item {
                     enabled: root.settings.fixed_modules !== true
                     checked: root.current?.enabled === true
                     onToggled: checked => root.toggleModule(root.current.module, checked)
+                }
+
+                // Whether Bento is on, on its pages.
+                Switch {
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: !content.searching && root.bentoPage
+                    checked: root.fields[root.bentoConsent]?.value === true
+                    onToggled: checked => Daemon.command("settings", "set", [root.bentoConsent, checked ? "true" : "false"])
                 }
             }
 

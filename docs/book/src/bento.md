@@ -19,7 +19,7 @@ mochi bento update                       # move to newer releases
 
 ## Turning it on
 
-Bento is off until you turn it on. What it installs comes from other people: a plugin is a program that runs as you, with your files and your network, and a theme or a bento changes your settings, and a bento can install plugins. A person reads each plugin in the registry before it's listed, and a script checks themes and bentos, which catches some problems and not all of them; anything from a repository or a link isn't checked at all.
+Bento is off until you turn it on. What it installs comes from other people. Themes and bentos are settings, so the most they can do is change how your desktop looks and behaves, and you can switch back to your own setup. Plugins are programs: once installed, a plugin runs with the same rights as you, so it could read your files or send them somewhere, and a bento can bring plugins with it. Someone reads each plugin's code before the registry lists it, and the themes and bentos there are checked automatically, which stops a lot but not everything; nothing installed from a link or a repository is checked at all.
 
 The settings' Bento page explains this and has a button to turn it on, or set this in `config.toml`:
 
@@ -28,7 +28,7 @@ The settings' Bento page explains this and has a button to turn it on, or set th
 i_really_understand_that_bento_can_harm_and_contain_malicious_content = true
 ```
 
-While it's off, `add`, `try`, `plan`, `search`, `info` and `update` refuse and say why, and nothing is downloaded. Turning it off again works the same way, with **Turn Bento off** at the bottom of Discover. What's installed stays until you remove it: `list`, `remove`, `use mine` and themes keep working, and so do `share`, `check` and `publish`, which only read your own files.
+While it's off, `add`, `try`, `plan`, `search`, `info` and `update` refuse and say why, and nothing is downloaded. The switch at the top of the Bento pages turns it off again, and on. What's installed stays until you remove it: `list`, `remove`, `use mine` and themes keep working, and so do `share`, `check` and `publish`, which only read your own files.
 
 The switch belongs to no setup: switching between bentos leaves it as it is.
 

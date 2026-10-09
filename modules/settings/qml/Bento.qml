@@ -298,48 +298,44 @@ Column {
     Column {
         visible: root.page === "bento" && !root.on
         width: root.width
-        spacing: Theme.spaceSmall
+        spacing: Theme.spaceMedium
 
-        Row {
+        Text {
             x: Theme.spaceMedium
-            spacing: Theme.spaceSmall
-
-            Symbol {
-                anchors.verticalCenter: parent.verticalCenter
-                name: "gpp_maybe"
-                size: Theme.textHeadline
-                color: Theme.danger
-            }
-
-            Text {
-                anchors.verticalCenter: parent.verticalCenter
-                text: "Bento is off"
-                color: Theme.foreground
-                font.pixelSize: Theme.textTitle
-                font.family: Theme.fontFamily
-                font.weight: Theme.weightTitle
-            }
+            text: "Before you turn on Bento"
+            color: Theme.foreground
+            font.pixelSize: Theme.textTitle
+            font.family: Theme.fontFamily
+            font.weight: Theme.weightTitle
         }
 
         Note {
             color: Theme.foreground
-            text: "Bento installs plugins, themes and whole setups that other people made. A plugin is a program: it runs as you, with your files, your network and everything Mochi can do. A theme or a bento changes your settings, and a bento can install plugins."
+            font.pixelSize: Theme.textBody
+            text: "Bento lets you install what other people made for Mochi. Themes change how it looks. Plugins add features, like a new widget or a way to search from the launcher. A bento is someone's whole setup, ready to try."
         }
 
         Note {
             color: Theme.foreground
-            text: "A person reads each plugin in the registry before it's listed, and a script checks themes and bentos. That catches some problems, not all of them, and anything can come from a repository or a link. Install only what you'd trust as much as a program you download."
+            font.pixelSize: Theme.textBody
+            text: "Themes and bentos are settings, so the most they can do is change how your desktop looks and behaves, and you can always switch back to your own setup. Plugins are programs. Once installed, a plugin runs with the same rights as you, so it could read your files or send them somewhere. A bento can bring plugins with it, and Bento shows you each one before it installs."
         }
 
         Note {
-            text: `You can turn it off again here. Turning it off stops installing, trying and updating; what's installed stays until you remove it on the Installed page. In config.toml, it's [bento] ${root.consent.split(".").pop()} = true.`
+            color: Theme.foreground
+            font.pixelSize: Theme.textBody
+            text: "Someone reads each plugin's code before the registry lists it, and the themes and bentos there are checked automatically. That stops a lot, but no review catches everything, and nothing you install from a link or a repository is checked at all. Install a plugin when you'd trust its author with any other program on your computer."
+        }
+
+        Note {
+            text: `The switch at the top of this page turns Bento off again. That stops new installs and updates, and what you already installed stays until you remove it. In config.toml, the same switch is [bento] ${root.consent.split(".").pop()} = true.`
         }
 
         Button {
             x: Theme.spaceMedium
-            text: "I understand the risks, turn Bento on"
-            icon: "warning"
-            tone: "danger"
+            text: "I understand, turn on Bento"
+            icon: "check"
+            tone: "accent"
             onClicked: Daemon.command("settings", "set", [root.consent, "true"])
         }
     }
@@ -838,16 +834,6 @@ Column {
         }
     }
 
-    // Turning it off again.
-    Button {
-        visible: root.page === "bento" && root.on && !root.planning && root.chosen === null
-        x: Theme.spaceMedium
-        text: "Turn Bento off"
-        icon: "toggle_off"
-        tone: "ghost"
-        onClicked: Daemon.command("settings", "set", [root.consent, "false"])
-    }
-
     // Installed: the setups to switch between, your own first, then the
     // themes and plugins.
     Column {
@@ -1096,19 +1082,39 @@ Column {
             }
         }
 
-        Field {
-            id: folder
-
+        ListRow {
             width: root.width
-            hint: "The directory to write; its name is the id"
-            text: "~/my-bento"
+            flat: true
+            leadingSize: 26
+            icon: "folder"
+            title: "Where to write it"
+            subtitle: "A new directory; its name becomes the id people install it by"
+
+            trailing: Field {
+                id: folder
+
+                anchors.verticalCenter: parent.verticalCenter
+                width: 280
+                hint: "~/my-bento"
+                text: "~/my-bento"
+            }
         }
 
-        Field {
-            id: title
-
+        ListRow {
             width: root.width
-            hint: "What it's called, like Cozy desk"
+            flat: true
+            leadingSize: 26
+            icon: "badge"
+            title: "Its name"
+            subtitle: "What people see in lists; the directory's name without one"
+
+            trailing: Field {
+                id: title
+
+                anchors.verticalCenter: parent.verticalCenter
+                width: 280
+                hint: "Cozy desk"
+            }
         }
 
         Button {
