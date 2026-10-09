@@ -12,3 +12,9 @@
 # order = []
 # Cards to leave off the home, the same way.
 # hidden = []
+# The navbar's pages after Home in this order, as module/id like
+# "network/page"; the ones not listed follow. The pencil arranges them too.
+# pages = []
+# Pages to leave out of the navbar, the same way. They still open with
+# `mochi ipc control-center open <page>` and from their cards.
+# hidden_pages = []

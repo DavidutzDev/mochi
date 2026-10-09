@@ -1003,7 +1003,7 @@ mod tests {
 
     #[test]
     fn every_source_is_one_the_panel_knows() {
-        const KNOWN: [&str; 7] = [
+        const KNOWN: [&str; 8] = [
             "command",
             "module",
             "app",
@@ -1011,6 +1011,7 @@ mod tests {
             "tray-app",
             "player",
             "control-center-card",
+            "control-center-page",
         ];
         let catalog = modules::catalog(Path::new("/nonexistent/config.toml")).unwrap();
         let mut found = 0;

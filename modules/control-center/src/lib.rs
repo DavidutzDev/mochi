@@ -4,7 +4,9 @@
 //!
 //! - `card`: a tile on the home screen. `options.span` sets its width in
 //!   columns, 1 to 3. Its heading, and a click beside its controls, open
-//!   its module's page: `options.page` names one when it has several.
+//!   its module's page: `options.page` names one when it has several. A
+//!   card with `options.spare` set to true starts off the home, under More
+//!   cards while arranging it, until `order` lists it.
 //! - `page`: a tab in the navbar, filling the panel when picked.
 //!
 //! Contributed views get their module's published state as `payload`, and fill
@@ -15,10 +17,13 @@
 //! control center takes the height its content needs, up to `height`; what's
 //! taller scrolls.
 //!
-//! The home is editable: the pencil in the navbar lets you drag cards into
-//! another order, take them off and put them back. Done sends `arrange`,
-//! which keeps the result as the `order` and `hidden` settings. Those two
-//! are live settings, so the control center stays open while they change.
+//! The home is editable: the pencil in the navbar, or `edit`, lets you drag
+//! cards into another order, take them off and put them back, and the same
+//! with the navbar's pages. Done sends `arrange` and `arrange-pages`, which
+//! keep the result as the `order` and `hidden` settings, and `pages` and
+//! `hidden_pages`. Those are live settings, so the control center stays
+//! open while they change. A page left out of the navbar still opens by
+//! name and from its module's card.
 
 mod tour;
 
@@ -49,6 +54,14 @@ struct Settings {
     /// Cards to leave off the home, as module/id.
     #[schemars(extend("x-source" = "control-center-card"))]
     hidden: Vec<String>,
+    /// The navbar's pages in this order after Home, as module/id like
+    /// "network/page"; the ones not listed follow in their own order.
+    #[schemars(extend("x-source" = "control-center-page"))]
+    pages: Vec<String>,
+    /// Pages to leave out of the navbar, as module/id. They still open by
+    /// name, with `mochi ipc control-center open`, and from their cards.
+    #[schemars(extend("x-source" = "control-center-page"))]
+    hidden_pages: Vec<String>,
 }
 
 impl Default for Settings {
@@ -58,12 +71,14 @@ impl Default for Settings {
             height: 480,
             order: Vec::new(),
             hidden: Vec::new(),
+            pages: Vec::new(),
+            hidden_pages: Vec::new(),
         }
     }
 }
 
 /// Applied while the control center runs, so arranging the home keeps it open.
-const LIVE: [&str; 2] = ["order", "hidden"];
+const LIVE: [&str; 4] = ["order", "hidden", "pages", "hidden_pages"];
 
 impl Settings {
     fn load(table: &mochi_core::toml::Table) -> Result<Self, String> {
@@ -119,6 +134,10 @@ impl Module for ControlCenter {
             ),
             ActionSpec::new("close", "Close the control center"),
             ActionSpec::new(
+                "edit",
+                "Open the control center arranging its cards and pages",
+            ),
+            ActionSpec::new(
                 "arrange",
                 "Keep the home's cards in an order, and hide some",
             )
@@ -127,6 +146,15 @@ impl Module for ControlCenter {
                 "Cards as module/id, separated by commas, like network/status,control-center/clock",
             ))
             .arg(ArgSpec::string("hidden", "Cards to hide, the same way").optional()),
+            ActionSpec::new(
+                "arrange-pages",
+                "Keep the navbar's pages in an order, and hide some",
+            )
+            .arg(ArgSpec::string(
+                "pages",
+                "Pages as module/id, separated by commas, like weather/page,network/page",
+            ))
+            .arg(ArgSpec::string("hidden", "Pages to hide, the same way").optional()),
         ]
     }
 
@@ -172,15 +200,17 @@ impl Module for ControlCenter {
     }
 }
 
-/// The home's arrangement, for the view.
+/// The home's and the navbar's arrangement, for the view.
 fn publish(ctx: &ModuleCtx, settings: &Settings) {
     ctx.publish_state(json!({
         "order": settings.order,
         "hidden": settings.hidden,
+        "pages": settings.pages,
+        "hidden_pages": settings.hidden_pages,
     }));
 }
 
-/// A list of cards as `arrange` takes it.
+/// A list of cards or pages as `arrange` and `arrange-pages` take it.
 fn cards(text: &str) -> Vec<String> {
     text.split(',')
         .map(str::trim)
@@ -189,13 +219,40 @@ fn cards(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// Keeps an arrangement: shown at once, and written as changes, which come
-/// back as `Reconfigured`.
-fn arrange(ctx: &ModuleCtx, settings: &mut Settings, order: Vec<String>, hidden: Vec<String>) {
-    settings.order = order;
-    settings.hidden = hidden;
+/// What an arrangement orders and hides.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Arranged {
+    Cards,
+    Pages,
+}
+
+/// Keeps an arrangement of the cards or the pages: shown at once, and
+/// written as changes, which come back as `Reconfigured`.
+fn arrange(
+    ctx: &ModuleCtx,
+    settings: &mut Settings,
+    what: Arranged,
+    order: Vec<String>,
+    hidden: Vec<String>,
+) {
+    let kept = match what {
+        Arranged::Cards => {
+            settings.order = order;
+            settings.hidden = hidden;
+            [("order", &settings.order), ("hidden", &settings.hidden)]
+        }
+        Arranged::Pages => {
+            settings.pages = order;
+            settings.hidden_pages = hidden;
+            [
+                ("pages", &settings.pages),
+                ("hidden_pages", &settings.hidden_pages),
+            ]
+        }
+    };
+    let kept = kept.map(|(key, value)| (key, value.clone()));
     publish(ctx, settings);
-    for (key, value) in [("order", &settings.order), ("hidden", &settings.hidden)] {
+    for (key, value) in kept {
         let set = ctx.settings_op(SettingsOp::Set {
             path: format!("config.module.control-center.{key}"),
             value: json!(value),
@@ -225,7 +282,12 @@ fn command(
                 settings,
                 shown,
                 command.args.str("page").unwrap_or("home"),
+                false,
             );
+            Ok(())
+        }
+        "edit" => {
+            open(ctx, settings, shown, "home", true);
             Ok(())
         }
         "close" => {
@@ -235,7 +297,13 @@ fn command(
         "arrange" => {
             let order = cards(command.args.str("order").unwrap_or_default());
             let hidden = cards(command.args.str("hidden").unwrap_or_default());
-            arrange(ctx, settings, order, hidden);
+            arrange(ctx, settings, Arranged::Cards, order, hidden);
+            Ok(())
+        }
+        "arrange-pages" => {
+            let order = cards(command.args.str("pages").unwrap_or_default());
+            let hidden = cards(command.args.str("hidden").unwrap_or_default());
+            arrange(ctx, settings, Arranged::Pages, order, hidden);
             Ok(())
         }
         other => Err(format!("control-center has no action {other}")),
@@ -243,7 +311,15 @@ fn command(
     command.reply(result);
 }
 
-fn open(ctx: &ModuleCtx, settings: &Settings, shown: &mut Option<ActivityId>, page: &str) {
+/// Shows the control center on `page`, or on the home being arranged when
+/// `editing`.
+fn open(
+    ctx: &ModuleCtx,
+    settings: &Settings,
+    shown: &mut Option<ActivityId>,
+    page: &str,
+    editing: bool,
+) {
     ctx.close_other_panels();
 
     let spec = ActivitySpec::new("ControlCenter")
@@ -255,6 +331,7 @@ fn open(ctx: &ModuleCtx, settings: &Settings, shown: &mut Option<ActivityId>, pa
             // Only the island on this monitor takes the keyboard.
             "output": ctx.compositor().state().focused_output,
             "page": page,
+            "editing": editing,
             "width": settings.width,
             "height": settings.height,
         }));

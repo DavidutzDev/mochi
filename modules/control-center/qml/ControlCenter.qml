@@ -15,8 +15,11 @@ import qs.island
 //
 // The pencil in the navbar edits the home: drag a card onto another to move it
 // there, take it off with its minus, and put it back from the list under the
-// cards. Done keeps the result in the control center's `order` and `hidden`
-// settings; Escape leaves it as it was.
+// cards. The navbar's pages work the same way: drag a page along the navbar,
+// take it off with its minus, and put it back from the list. Done keeps the
+// result in the control center's `order` and `hidden` settings, and `pages`
+// and `hidden_pages`; Escape leaves it as it was. A card offered as `spare`
+// starts off the home until `order` lists it.
 Item {
     id: root
 
@@ -28,31 +31,43 @@ Item {
     property bool editing: false
     property var draftOrder: []
     property var draftHidden: []
+    property var draftPages: []
+    property var draftHiddenPages: []
     readonly property var order: editing ? draftOrder : (layout?.order ?? [])
-    readonly property var hiddenCards: editing ? draftHidden : (layout?.hidden ?? [])
+    // The cards kept off the home: the hidden ones, and the spare ones the
+    // order doesn't list yet.
+    readonly property var savedHidden: (layout?.hidden ?? []).concat(offered.filter(entry => entry.options?.spare === true && !(layout?.order ?? []).includes(keyOf(entry))).map(keyOf))
+    readonly property var hiddenCards: editing ? draftHidden : savedHidden
+    readonly property var pageOrder: editing ? draftPages : (layout?.pages ?? [])
+    readonly property var hiddenPages: editing ? draftHiddenPages : (layout?.hidden_pages ?? [])
     // Every card in the arrangement's order: the listed ones first, then
     // the rest in the order they're offered.
-    readonly property var arranged: {
-        const rank = (entry, index) => {
-            const listed = order.indexOf(keyOf(entry));
-            return listed < 0 ? order.length + index : listed;
-        };
-        return offered.map((entry, index) => ({
-                    "entry": entry,
-                    "rank": rank(entry, index)
-                })).sort((a, b) => a.rank - b.rank).map(ranked => ranked.entry);
-    }
+    readonly property var arranged: ranked(offered, order)
     readonly property var cards: arranged.filter(entry => !hiddenCards.includes(keyOf(entry)))
     readonly property var offCards: arranged.filter(entry => hiddenCards.includes(keyOf(entry)))
     readonly property var pages: Daemon.offered("control-center", "page")
+    // The pages in the navbar's order. A module whose state says it isn't
+    // `available`, like Bluetooth without an adapter, keeps its page out of
+    // the navbar and out of the list.
+    readonly property var arrangedPages: ranked(pages, pageOrder)
+    readonly property var reachable: arrangedPages.filter(entry => Daemon.state(entry.module)?.available !== false)
+    readonly property var offPages: reachable.filter(entry => hiddenPages.includes(keyOf(entry)))
     // "home", or module/id for a page.
     property string page: payload.page ?? "home"
     // `mochi ipc control-center open <page>` while it's open switches pages,
-    // after a click on a tab replaced the binding above.
-    onPayloadChanged: page = payload.page ?? "home"
+    // after a click on a tab replaced the binding above, and `edit` starts
+    // arranging the home.
+    onPayloadChanged: {
+        page = payload.page ?? "home";
+        if (payload.editing === true)
+            startEditing();
+        else
+            editing = false;
+    }
     readonly property var current: pages.find(entry => `${entry.module}/${entry.id}` === page) ?? null
-    // A module whose state says it isn't `available`, like Bluetooth without
-    // an adapter, keeps its page out of the navbar.
+    // Home, then the pages not hidden. A hidden page opened by name, or from
+    // its card, has its tab while it's open, so the navbar shows where you
+    // are.
     readonly property var tabs: [
         {
             "module": "",
@@ -60,7 +75,7 @@ Item {
             "title": "Home",
             "icon": "home"
         }
-    ].concat(pages.filter(entry => Daemon.state(entry.module)?.available !== false))
+    ].concat(reachable.filter(entry => !hiddenPages.includes(keyOf(entry)) || (!editing && keyOf(entry) === page)))
 
     readonly property int margin: Theme.spaceLarge
     readonly property int columns: 3
@@ -81,27 +96,72 @@ Item {
         return `${entry.module}/${entry.id}`;
     }
 
+    // Cards or pages in an arrangement's order: the listed ones first, then
+    // the rest in the order they're offered.
+    function ranked(entries: var, listed: var): var {
+        const rank = (entry, index) => {
+            const at = listed.indexOf(keyOf(entry));
+            return at < 0 ? listed.length + index : at;
+        };
+        return entries.map((entry, index) => ({
+                    "entry": entry,
+                    "rank": rank(entry, index)
+                })).sort((a, b) => a.rank - b.rank).map(ranked => ranked.entry);
+    }
+
+    // The arrangement as editing started, to tell what changed.
+    property string startCards: ""
+    property string startPages: ""
+
     function startEditing(): void {
         draftOrder = arranged.map(keyOf);
-        draftHidden = (layout?.hidden ?? []).slice();
+        draftHidden = savedHidden.slice();
+        draftPages = arrangedPages.map(keyOf);
+        draftHiddenPages = (layout?.hidden_pages ?? []).slice();
+        startCards = JSON.stringify([draftOrder, draftHidden]);
+        startPages = JSON.stringify([draftPages, draftHiddenPages]);
         page = "home";
         editing = true;
     }
 
+    // Keeps the cards and the pages, each only when it changed, so moving
+    // a card leaves the navbar's order unwritten and free to take new pages
+    // where they're offered.
     function finishEditing(): void {
-        Daemon.command("control-center", "arrange", [draftOrder.join(","), draftHidden.join(",")]);
+        if (JSON.stringify([draftOrder, draftHidden]) !== startCards)
+            Daemon.command("control-center", "arrange", [draftOrder.join(","), draftHidden.join(",")]);
+        if (JSON.stringify([draftPages, draftHiddenPages]) !== startPages)
+            Daemon.command("control-center", "arrange-pages", [draftPages.join(","), draftHiddenPages.join(",")]);
         editing = false;
     }
 
-    // Puts `key` where `target` is, pushing `target` along.
-    function moveTo(key: string, target: string): void {
-        const from = draftOrder.indexOf(key);
-        const to = draftOrder.indexOf(target);
+    // `list` with `key` put where `target` is, pushing `target` along.
+    function moved(list: var, key: string, target: string): var {
+        const from = list.indexOf(key);
+        const to = list.indexOf(target);
         if (from < 0 || to < 0 || from === to)
-            return;
-        const next = draftOrder.filter(other => other !== key);
+            return list;
+        const next = list.filter(other => other !== key);
         next.splice(to, 0, key);
-        draftOrder = next;
+        return next;
+    }
+
+    function moveTo(key: string, target: string): void {
+        draftOrder = moved(draftOrder, key, target);
+    }
+
+    function movePage(key: string, target: string): void {
+        draftPages = moved(draftPages, key, target);
+    }
+
+    function hidePage(key: string): void {
+        draftHiddenPages = draftHiddenPages.concat([key]);
+    }
+
+    // Back in the navbar, at the end.
+    function showPage(key: string): void {
+        draftHiddenPages = draftHiddenPages.filter(other => other !== key);
+        draftPages = draftPages.filter(other => other !== key).concat([key]);
     }
 
     function hideCard(key: string): void {
@@ -121,7 +181,11 @@ Item {
         else
             Daemon.event("dismiss");
     }
-    Component.onCompleted: Qt.callLater(() => root.forceActiveFocus())
+    Component.onCompleted: {
+        if (payload.editing === true && !editing)
+            startEditing();
+        Qt.callLater(() => root.forceActiveFocus());
+    }
 
     // One contributed view, with its module's published state as payload.
     component Contributed: Loader {
@@ -248,8 +312,9 @@ Item {
                             return needed > Theme.tileHeight ? 2 : 1;
                         }
                         // The page it opens: `options.page` names one of its
-                        // module's pages, otherwise the module's first.
-                        readonly property var opens: root.tabs.find(tab => tab.module === modelData.module && (modelData.options?.page == null || tab.id === modelData.options.page)) ?? null
+                        // module's pages, otherwise the module's first, in
+                        // the navbar or left out of it.
+                        readonly property var opens: root.reachable.find(tab => tab.module === modelData.module && (modelData.options?.page == null || tab.id === modelData.options.page)) ?? null
 
                         width: root.column * span + root.gap * (span - 1)
                         height: Theme.tileHeight * rows + root.gap * (rows - 1)
@@ -392,7 +457,7 @@ Item {
                     Repeater {
                         model: root.offCards
 
-                        Button {
+                        ActionButton {
                             required property var modelData
 
                             icon: "add"
@@ -401,6 +466,44 @@ Item {
                         }
                     }
                 }
+            }
+
+            // While editing, the pages taken out of the navbar, to put back.
+            Column {
+                width: parent.width
+                visible: root.editing && root.offPages.length > 0
+                spacing: Theme.spaceSmall
+
+                SectionLabel {
+                    text: "More pages"
+                }
+
+                Flow {
+                    width: parent.width
+                    spacing: Theme.spaceSmall
+
+                    Repeater {
+                        model: root.offPages
+
+                        ActionButton {
+                            required property var modelData
+
+                            icon: "add"
+                            text: modelData.title
+                            onClicked: root.showPage(root.keyOf(modelData))
+                        }
+                    }
+                }
+            }
+
+            Text {
+                width: parent.width
+                visible: root.editing
+                text: "Drag a card onto another, or a page along the navbar, to move it. A minus takes one off."
+                wrapMode: Text.Wrap
+                color: Theme.muted
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
             }
         }
 
@@ -479,11 +582,17 @@ Item {
             }
         }
 
+        // While editing, each page's tab has an outline and a minus, and a
+        // drag moves it along: dropped on another tab, it goes there.
         Row {
+            id: strip
+
             anchors.centerIn: parent
             spacing: Theme.spaceSmall
 
             Repeater {
+                id: tabs
+
                 model: root.tabs
 
                 Rectangle {
@@ -492,11 +601,27 @@ Item {
                     required property var modelData
                     readonly property string key: modelData.module ? `${modelData.module}/${modelData.id}` : "home"
                     readonly property bool selected: root.page === key
+                    readonly property bool movable: root.editing && modelData.module !== ""
+                    // How far a drag took it from its place.
+                    property real shift: 0
 
                     width: selected ? content.implicitWidth + 28 : height
                     height: 34
                     radius: height / 2
                     color: selected ? Theme.foreground : area.containsMouse ? Theme.raised : "transparent"
+                    border.width: movable ? 1 : 0
+                    border.color: Theme.accent
+                    z: area.pressed ? 1 : 0
+                    scale: area.pressed && movable ? 1.08 : 1
+                    transform: Translate {
+                        x: tab.shift
+                    }
+
+                    Behavior on scale {
+                        NumberAnimation {
+                            duration: Theme.fast
+                        }
+                    }
 
                     Behavior on width {
                         NumberAnimation {
@@ -539,12 +664,69 @@ Item {
                     MouseArea {
                         id: area
 
+                        // Where the press was, along the navbar.
+                        property real start: 0
+
                         anchors.fill: parent
+                        enabled: !root.editing || tab.movable
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
+                        cursorShape: !root.editing ? Qt.PointingHandCursor : pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                        onPressed: mouse => start = mapToItem(strip, mouse.x, 0).x
+                        onPositionChanged: mouse => {
+                            if (pressed && tab.movable)
+                                tab.shift = mapToItem(strip, mouse.x, 0).x - start;
+                        }
+                        onReleased: {
+                            if (!tab.movable)
+                                return;
+                            const center = tab.x + tab.shift + tab.width / 2;
+                            tab.shift = 0;
+                            for (let index = 0; index < tabs.count; index++) {
+                                const other = tabs.itemAt(index);
+                                if (other && other !== tab && other.movable && center >= other.x && center < other.x + other.width) {
+                                    root.movePage(tab.key, other.key);
+                                    return;
+                                }
+                            }
+                        }
                         onClicked: {
-                            root.editing = false;
+                            if (root.editing)
+                                return;
                             root.page = tab.key;
+                        }
+                    }
+
+                    // Takes the page out of the navbar.
+                    Rectangle {
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.margins: -5
+                        width: 18
+                        height: 18
+                        radius: height / 2
+                        visible: tab.movable
+                        // A card's color with an outline, so it stands out
+                        // from the navbar in light themes too.
+                        color: minus.containsMouse ? Theme.raised : Theme.surface
+                        border.width: 1
+                        border.color: Theme.highlight
+
+                        Symbol {
+                            anchors.centerIn: parent
+                            name: "remove"
+                            size: 12
+                            color: Theme.foreground
+                        }
+
+                        MouseArea {
+                            id: minus
+
+                            // A finger's reach past the small circle.
+                            anchors.fill: parent
+                            anchors.margins: -4
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.hidePage(tab.key)
                         }
                     }
                 }

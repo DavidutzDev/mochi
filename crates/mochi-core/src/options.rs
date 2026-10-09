@@ -106,9 +106,9 @@ pub struct Field {
     pub items: Option<Kind>,
     /// Where its values come from, for a text or a list the panel offers
     /// as a menu: `x-source` in the schema. `command` is a module's action
-    /// and its arguments; `app`, `audio-device`, `tray-app`, `player` and
-    /// `control-center-card` come from what runs now. Typing anything else
-    /// still works.
+    /// and its arguments; `app`, `audio-device`, `tray-app`, `player`,
+    /// `control-center-card` and `control-center-page` come from what runs
+    /// now. Typing anything else still works.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
     /// Ready-made values for a command, like `["hyprlock"]`: `x-suggest` in
