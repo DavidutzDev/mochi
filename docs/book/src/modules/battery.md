@@ -14,7 +14,7 @@ The control center has a card with the level and the time until empty or full. U
 
 `mochi ipc battery status` prints each battery and device with its level.
 
-On the [desktop](widgets.md), the card is a widget too, and so is a ring: the level as a ring with the percent inside, and under it "Charging", "Fully charged", "Plugged in" or "On battery", with how long until full or empty when UPower knows. The ring waves while the battery charges, and turns red when it's low.
+On the [desktop](widgets.md), the card is a widget too, and so is a ring: the level as a ring with the percent inside, and under it "Charging", "Fully charged", "Plugged in" or "On battery", with how long until full or empty when UPower knows. The ring waves while the battery charges, and turns red when it's low. `wavy = false` keeps it flat, as does the theme's `waves = false` in [`[motion]`](../theme.md#motion).
 
 ## Bluetooth devices
 

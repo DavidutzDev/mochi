@@ -3,7 +3,7 @@ import qs.island
 
 // The now playing widget's artwork look, a tall card: the cover as wide as
 // the widget, the title and the artist under it, the progress, waving
-// while the track plays, and the controls, play and pause in the accent
+// while the track plays unless the settings say not to, and the controls, play and pause in the accent
 // color. It reads the media module's state, so it shows whatever the
 // island would, and steps aside while nothing plays.
 Item {
@@ -78,10 +78,10 @@ Item {
         }
 
         // Seeks on a click or a drag, where the player can.
-        WavyProgress {
+        Line {
             width: parent.width
             visible: clock.length > 0
-            playing: root.playing
+            payload: root.payload
             enabled: root.payload?.can_seek ?? false
             value: clock.progress
             onReleased: value => Daemon.command("media", "seek", [(value * clock.length / 1000).toFixed(2)])

@@ -18,6 +18,7 @@
 //! memory = { notice = 85, critical = 95 }
 //! gpu = { notice = 95, critical = 0 }
 //! temperature = { notice = 85, critical = 95 }   # °C, CPU and GPU
+//! wavy = true                                   # the rings look waves
 //! ```
 
 mod model;
@@ -104,6 +105,9 @@ struct Settings {
     memory: Limits,
     gpu: Limits,
     temperature: Limits,
+    /// The rings look waves. Off keeps the rings flat; the theme's
+    /// `motion.waves` off keeps every wave flat, whatever this says.
+    wavy: bool,
 }
 
 impl Default for Settings {
@@ -129,6 +133,7 @@ impl Default for Settings {
                 notice: 85,
                 critical: 95,
             },
+            wavy: true,
         }
     }
 }
@@ -769,6 +774,7 @@ impl State {
                 "own": self.uid.is_some() && sample::owner(&row.pid.to_string()) == self.uid,
             })).collect::<Vec<_>>(),
             "critical": critical,
+            "wavy": self.settings.wavy,
         }));
 
         if critical.is_empty() {

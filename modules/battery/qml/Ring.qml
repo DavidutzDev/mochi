@@ -4,8 +4,8 @@ import qs.island
 // The battery widget's ring look: the level as a ring with the percent in
 // the middle, and under it what the battery is doing, fully charged,
 // charging or on battery, and how long until full or empty. The ring
-// waves while it charges, as power comes in, and lies flat on battery; it
-// turns red when the battery is low. Without a battery, it steps aside.
+// waves while it charges, as power comes in, unless the settings keep it
+// flat, and lies flat on battery; it turns red when the battery is low. Without a battery, it steps aside.
 Item {
     id: root
 
@@ -48,7 +48,7 @@ Item {
             size: root.size
             thickness: Math.max(4, root.size * 0.07)
             value: root.level / 100
-            wavy: root.charging
+            wavy: root.charging && (root.payload?.wavy ?? true)
             color: root.low ? Theme.danger : Theme.accent
 
             Row {

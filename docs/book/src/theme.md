@@ -42,6 +42,8 @@ They're checked like `theme.toml`, so a typo or a value out of range is an error
 
 `[motion]` sets how things move. `reduced = true` turns animations off: views appear and change at once, and the island takes its shape without a spring. `speed` makes every animation faster or slower, 2 being twice as fast.
 
+Some progress lines and rings wave while something goes on: the media line while a track plays, the battery ring while it charges, the timer's ring while it runs, and the performance rings. `waves = false` draws every one of them flat. To keep some and not others, leave it on and turn off a module's own: `wavy = false` in `[module.media]`, `[module.battery]` or `[module.performance]`. With `reduced = true` the waves stay, but the media line's stops drifting.
+
 Text is set in Inter and icons in Material Symbols Rounded, which the Nix and Arch packages bring; `text.family` picks another font. Sizes follow one scale: four text sizes and one for big numbers, five spacings and three corner sizes, so every module lines up. `text.label` and `text.subtitle`, from before the scale, still work as `text.caption` and `text.body`, and `mochi config check` says so.
 
 ```toml

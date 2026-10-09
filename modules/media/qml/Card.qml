@@ -107,13 +107,16 @@ Item {
                     }
                 }
 
-                // It waves while the track plays.
-                WavyProgress {
+                // It waves while the track plays, and only shows unless
+                // `card_seeks` is on.
+                Line {
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width - elapsed.width - total.width - parent.spacing * 2
-                    interactive: false
-                    playing: root.playing
+                    payload: root.payload
+                    interactive: root.payload?.line?.card_seeks ?? false
+                    enabled: root.payload?.can_seek ?? false
                     value: clock.progress
+                    onReleased: value => Daemon.command("media", "seek", [(value * clock.length / 1000).toFixed(2)])
                 }
 
                 Text {

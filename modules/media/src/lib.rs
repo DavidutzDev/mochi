@@ -22,6 +22,9 @@
 //! island_ms = 3000   # then how long the compact view stays before the bubble
 //! paused_ms = 3000   # how long a paused player's bubble stays
 //! ignore = []        # players never shown, like ["firefox"]
+//! wavy = true        # the progress line waves while a track plays
+//! line_color = "foreground"  # or "accent"
+//! card_seeks = false # the now playing card's line seeks too
 //!
 //! [bubbles.media]    # where the bubble goes; center-left by default
 //! area = "left"
@@ -39,8 +42,8 @@ use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Assets, BoxFuture, BubbleId, BubbleSpec,
     ContributionSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
-use serde::Deserialize;
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use tokio::sync::mpsc;
 use zbus::Connection;
 
@@ -63,6 +66,14 @@ struct Settings {
     paused_ms: u64,
     #[schemars(extend("x-source" = "player"))]
     ignore: Vec<String>,
+    /// The progress line waves while a track plays. Off keeps it flat; the
+    /// theme's `motion.waves` off keeps every wave flat, whatever this says.
+    wavy: bool,
+    /// The progress line's color.
+    line_color: LineColor,
+    /// The now playing card's line seeks on a click or a drag, in the
+    /// control center and on the desktop, as the island's player does.
+    card_seeks: bool,
 }
 
 impl Default for Settings {
@@ -72,8 +83,41 @@ impl Default for Settings {
             island_ms: 3000,
             paused_ms: 3000,
             ignore: Vec::new(),
+            wavy: true,
+            line_color: LineColor::Foreground,
+            card_seeks: false,
         }
     }
+}
+
+impl Settings {
+    /// How the views draw the progress line, which they read from the
+    /// payload's `line`.
+    fn line(&self) -> Value {
+        json!({
+            "wavy": self.wavy,
+            "color": self.line_color,
+            "card_seeks": self.card_seeks,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+enum LineColor {
+    /// The text's color.
+    Foreground,
+    /// The theme's accent.
+    Accent,
+}
+
+/// The tracker's payload, with how the settings draw the progress line.
+fn payload(settings: &Settings, tracker: &Tracker) -> Value {
+    let mut payload = tracker.payload();
+    if let Some(fields) = payload.as_object_mut() {
+        fields.insert("line".to_owned(), settings.line());
+    }
+    payload
 }
 
 impl Module for Media {
@@ -89,7 +133,7 @@ impl Module for Media {
         include_str!("../settings.toml")
     }
 
-    fn settings_schema(&self) -> Option<serde_json::Value> {
+    fn settings_schema(&self) -> Option<Value> {
         Some(mochi_core::options::schema_of::<Settings>())
     }
 
@@ -204,7 +248,7 @@ impl Module for Media {
                                 Some(Ok(notice)) => {
                                     command.reply(Ok(()));
                                     if let Some(notice) = notice {
-                                        ctx.publish_state(tracker.payload());
+                                        ctx.publish_state(payload(&settings, &tracker));
                                         screen.apply(&ctx, &settings, notice, &tracker);
                                     }
                                 }
@@ -226,7 +270,7 @@ impl Module for Media {
                         let notice = tracker.apply(update);
                         // For views outside the island, like the control
                         // center's card.
-                        ctx.publish_state(tracker.payload());
+                        ctx.publish_state(payload(&settings, &tracker));
                         let Some(notice) = notice else { continue };
                         tracing::debug!(?notice, "media");
                         screen.apply(&ctx, &settings, notice, &tracker);
@@ -259,9 +303,9 @@ impl Screen {
         };
         match (notice, self.activity, self.bubble) {
             (Notice::Track, ..) => self.open(ctx, settings, tracker),
-            (_, Some(activity), _) => ctx.update(activity, tracker.payload()),
+            (_, Some(activity), _) => ctx.update(activity, payload(settings, tracker)),
             (Notice::Refresh, None, Some(bubble)) => {
-                ctx.update_bubble(bubble, tracker.payload());
+                ctx.update_bubble(bubble, payload(settings, tracker));
             }
             (Notice::Refresh, None, None) => {}
             // Playing, paused or switched: the bubble shows it, and a paused
@@ -279,7 +323,7 @@ impl Screen {
             .priority(Priority::LOW)
             .expand_for(Duration::from_millis(settings.expand_ms))
             .timeout(Duration::from_millis(settings.island_ms))
-            .payload(tracker.payload());
+            .payload(payload(settings, tracker));
         self.activity = Some(ctx.present(spec));
     }
 
@@ -306,7 +350,7 @@ impl Screen {
             .wide("BubbleWide")
             .key(KEY)
             .area(Area::CenterLeft)
-            .payload(tracker.payload());
+            .payload(payload(settings, tracker));
         self.bubble = Some(ctx.show_bubble(spec));
         self.bubble_ends = (player.status != Status::Playing)
             .then(|| Instant::now() + Duration::from_millis(settings.paused_ms));
@@ -406,7 +450,27 @@ fn level(text: &str, now: u32) -> Result<u32, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::level;
+    use serde_json::{Value, json};
+
+    use super::{Settings, Tracker, level, payload};
+
+    #[test]
+    fn the_line_follows_the_settings() {
+        assert_eq!(
+            Settings::default().line(),
+            json!({ "wavy": true, "color": "foreground", "card_seeks": false })
+        );
+        let table =
+            mochi_core::toml::from_str("wavy = false\nline_color = \"accent\"\ncard_seeks = true")
+                .unwrap();
+        let settings: Settings = mochi_core::settings(&table).unwrap();
+        assert_eq!(
+            settings.line(),
+            json!({ "wavy": false, "color": "accent", "card_seeks": true })
+        );
+        // Nothing playing stays nothing, for the views to step aside.
+        assert_eq!(payload(&settings, &Tracker::default()), Value::Null);
+    }
 
     #[test]
     fn reads_volumes_and_steps() {

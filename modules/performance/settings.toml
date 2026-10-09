@@ -17,3 +17,6 @@
 # gpu = { notice = 95, critical = 0 }
 # The same for the CPU's and the GPU's temperatures, in °C.
 # temperature = { notice = 85, critical = 95 }
+# The rings look waves. Off keeps the rings flat. The theme's waves, under
+# Motion, can keep every wave flat whatever this says.
+# wavy = true

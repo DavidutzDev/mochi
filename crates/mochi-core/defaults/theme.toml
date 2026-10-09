@@ -86,6 +86,9 @@
 # fast_ms = 150
 # Things moving inside a view, with a slight overshoot.
 # move_ms = 350
+# Progress lines and rings wave while something goes on, like the media line
+# while a track plays. Off draws every one of them flat.
+# waves = true
 
 [text]
 # A font family name; empty uses Inter, which Mochi's packages bring, or

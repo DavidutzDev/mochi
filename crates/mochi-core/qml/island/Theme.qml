@@ -101,6 +101,10 @@ Singleton {
     // that move or resize. Use with `easing.type: Easing.BezierSpline`.
     // Without motion, no overshoot either.
     readonly property var overshoot: reducedMotion ? [0.2, 0, 0, 1, 1, 1] : [0.38, 1.21, 0.22, 1.0, 1, 1]
+    // Whether progress lines and rings may wave. Off, WavyProgress and
+    // WavyRing lie flat whatever their owner asks. Reduced motion keeps the
+    // waves and only stops them drifting.
+    readonly property bool waves: tokens?.motion.waves ?? true
 
     readonly property string fontFamily: tokens?.text.family || (inter.status === FontLoader.Ready ? inter.name : "Inter")
     // The clocks.

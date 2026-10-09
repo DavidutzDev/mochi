@@ -4,7 +4,8 @@ import QtQuick.Shapes
 // How far along something is, from 0 to 1, as a line that waves while
 // `playing`, like a track's progress, and lies flat when it stops. The
 // wave drifts forward while it plays, at the theme's speed, and holds still
-// without motion or out of sight. A gap and a handle mark where it is.
+// without motion or out of sight. With `wavy` off, or the theme's waves
+// off, it stays flat. A gap and a handle mark where it is.
 // With `interactive` it seeks like a thin Slider: `moved` follows the
 // pointer, `released` gives the final value, and it shows the pointer's
 // value until `value` catches up. Without, or disabled, it only shows,
@@ -14,6 +15,8 @@ Item {
 
     property real value: 0
     property bool playing: false
+    // Whether it may wave at all; the theme can still keep it flat.
+    property bool wavy: true
     property bool interactive: true
     property real thickness: 4
     property color fill: Theme.foreground
@@ -33,7 +36,7 @@ Item {
     // The wave's height either side of the middle, and its length.
     readonly property real wave: thickness * 0.75
     readonly property real wavelength: thickness * 7
-    property real amplitude: playing ? wave : 0
+    property real amplitude: playing && wavy && Theme.waves ? wave : 0
     Behavior on amplitude {
         NumberAnimation {
             duration: Theme.move

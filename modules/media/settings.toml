@@ -9,3 +9,11 @@
 # paused_ms = 3000
 # Players never shown, by name, like ["firefox"].
 # ignore = []
+# The progress line waves while a track plays. Off keeps it flat. The theme's
+# waves, under Motion, can keep every wave flat whatever this says.
+# wavy = true
+# The progress line's color: "foreground", like the text, or "accent".
+# line_color = "foreground"
+# The now playing card's line seeks on a click or a drag, in the control
+# center and on the desktop, as the island's player does.
+# card_seeks = false

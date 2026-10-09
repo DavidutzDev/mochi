@@ -225,6 +225,11 @@ pub struct Motion {
     /// Things moving or resizing inside a view, with a slight overshoot.
     #[schemars(range(min = 0, max = 1200))]
     pub move_ms: u32,
+    /// Progress lines and rings wave while something goes on: the media
+    /// line while a track plays, the battery ring while it charges, the
+    /// timer's ring while it runs. Off draws every one of them flat; each
+    /// module with a wave can also turn off its own.
+    pub waves: bool,
 }
 
 impl Default for Motion {
@@ -239,6 +244,7 @@ impl Default for Motion {
             fade_delay_ms: 90,
             fast_ms: 150,
             move_ms: 350,
+            waves: true,
         }
     }
 }

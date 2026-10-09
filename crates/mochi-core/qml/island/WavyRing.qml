@@ -3,9 +3,9 @@ import QtQuick.Shapes
 
 // How full something is, from 0 to 1, as a ring that fills clockwise from
 // the top over a flat track, like a battery's charge or a disk's use. The
-// filled part is a gentle wave, or a plain arc with `wavy` off; a gap keeps
-// it apart from the track. What's put inside sits in the ring's middle,
-// like a percentage. Changes of `value` glide.
+// filled part is a gentle wave, or a plain arc with `wavy` off or the
+// theme's waves off; a gap keeps it apart from the track. What's put inside
+// sits in the ring's middle, like a percentage. Changes of `value` glide.
 Item {
     id: root
 
@@ -20,7 +20,7 @@ Item {
     property int waves: Math.max(5, Math.round(2 * Math.PI * radius / (thickness * 5.5)))
     default property alias content: middle.data
 
-    readonly property real amplitude: wavy ? thickness * 0.4 : 0
+    readonly property real amplitude: wavy && Theme.waves ? thickness * 0.4 : 0
     // The middle of the line, with room for the wave.
     readonly property real radius: Math.max(0, Math.min(width, height) / 2 - thickness / 2 - thickness * 0.4)
     // The room inside the ring.

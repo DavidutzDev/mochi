@@ -116,12 +116,12 @@ Item {
                 }
             }
 
-            WavyProgress {
+            Line {
                 id: bar
 
                 anchors.verticalCenter: parent.verticalCenter
                 width: parent.width - elapsed.width - total.width - parent.spacing * 2
-                playing: root.playing
+                payload: root.payload
                 enabled: root.payload.can_seek ?? false
                 value: root.length > 0 ? root.shownPosition / root.length : 0
                 onMoved: value => root.seeking = value * root.length

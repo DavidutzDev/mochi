@@ -18,6 +18,7 @@
 //! critical = 10                # red, and a longer notice
 //! plugged = true               # a notice on plugging in or out
 //! peripherals = 15             # a notice when a peripheral drops to this
+//! wavy = true                  # the ring look waves while charging
 //! ```
 
 mod model;
@@ -55,6 +56,9 @@ struct Settings {
     critical: u32,
     plugged: bool,
     peripherals: u32,
+    /// The ring look waves while the battery charges. Off keeps it flat; the
+    /// theme's `motion.waves` off keeps every wave flat, whatever this says.
+    wavy: bool,
 }
 
 impl Default for Settings {
@@ -65,6 +69,7 @@ impl Default for Settings {
             critical: 10,
             plugged: true,
             peripherals: 15,
+            wavy: true,
         }
     }
 }
@@ -179,7 +184,7 @@ impl Module for BatteryModule {
             let mut bubble: Option<BubbleId> = None;
             let mut was_critical = false;
             let mut last = Snapshot::default();
-            ctx.publish_state(model::payload(&last, &levels));
+            ctx.publish_state(state(&last, &levels, settings.wavy));
             loop {
                 tokio::select! {
                     event = ctx.next_event() => match event {
@@ -202,7 +207,7 @@ impl Module for BatteryModule {
                         Some(_) => {}
                     },
                     Some(snapshot) = snapshots.recv() => {
-                        ctx.publish_state(model::payload(&snapshot, &levels));
+                        ctx.publish_state(state(&snapshot, &levels, settings.wavy));
                         let battery = snapshot.display;
                         if let Some(battery) = battery
                             && let Some(notice) = tracker.apply(battery, &levels)
@@ -245,6 +250,13 @@ fn show(ctx: &ModuleCtx, notice: &Notice) {
             .timeout(NOTICE)
     };
     ctx.present(spec);
+}
+
+/// The module's state: the model's payload, and whether the ring may wave.
+fn state(snapshot: &Snapshot, levels: &Levels, wavy: bool) -> serde_json::Value {
+    let mut payload = model::payload(snapshot, levels);
+    payload["wavy"] = json!(wavy);
+    payload
 }
 
 fn update_bubble(

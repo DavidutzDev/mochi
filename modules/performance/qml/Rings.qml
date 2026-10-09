@@ -4,7 +4,8 @@ import qs.island
 // The performance widget's rings look: CPU, memory and disk, each a ring
 // that fills with what's in use, the percent inside and its name under.
 // The disk is the one the home directory is on. A reading over its
-// critical level turns red.
+// critical level turns red. The rings wave unless the settings keep them
+// flat.
 Item {
     id: root
 
@@ -69,6 +70,7 @@ Item {
                     size: root.size
                     thickness: Math.max(3, root.size * 0.07)
                     value: (ring.modelData.value ?? 0) / 100
+                    wavy: root.payload?.wavy ?? true
                     color: ring.hot ? Theme.danger : Theme.accent
 
                     RollingText {

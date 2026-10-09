@@ -15,3 +15,6 @@
 # A notice when a mouse, keyboard, controller or another peripheral drops to
 # this level, once until it charges. 0 turns it off.
 # peripherals = 15
+# The ring look waves while the battery charges. Off keeps it flat. The
+# theme's waves, under Motion, can keep every wave flat whatever this says.
+# wavy = true
