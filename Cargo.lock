@@ -1286,6 +1286,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-weather"
+version = "0.0.9"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-widgets"
 version = "0.0.9"
 dependencies = [
@@ -1413,6 +1426,7 @@ dependencies = [
  "mochi-module-tour",
  "mochi-module-tray",
  "mochi-module-updater",
+ "mochi-module-weather",
  "mochi-module-widgets",
  "mochi-module-workspaces",
  "mochi-plugins",

@@ -1,0 +1,61 @@
+{
+  "results": [
+    {
+      "id": 2996944,
+      "name": "Lyon",
+      "latitude": 45.74906,
+      "longitude": 4.84789,
+      "elevation": 173.0,
+      "feature_code": "PPLA",
+      "country_code": "FR",
+      "admin1_id": 11071625,
+      "admin2_id": 2987410,
+      "admin3_id": 2996943,
+      "admin4_id": 6454573,
+      "timezone": "Europe/Paris",
+      "population": 520774,
+      "country_id": 3017382,
+      "country": "France",
+      "admin1": "Rhône-Alpes",
+      "admin2": "Rhône",
+      "admin3": "Arrondissement of Lyon",
+      "admin4": "Lyon"
+    },
+    {
+      "id": 4434478,
+      "name": "Lyon",
+      "latitude": 34.21789,
+      "longitude": -90.54204,
+      "elevation": 53.0,
+      "feature_code": "PPL",
+      "country_code": "US",
+      "admin1_id": 4436296,
+      "admin2_id": 4422178,
+      "timezone": "America/Chicago",
+      "population": 330,
+      "country_id": 6252001,
+      "country": "United States",
+      "admin1": "Mississippi",
+      "admin2": "Coahoma"
+    },
+    {
+      "id": 4396673,
+      "name": "Lyon",
+      "latitude": 38.51172,
+      "longitude": -91.17404,
+      "elevation": 235.0,
+      "feature_code": "PPL",
+      "country_code": "US",
+      "admin1_id": 4398678,
+      "admin2_id": 4387172,
+      "admin3_id": 4396680,
+      "timezone": "America/Chicago",
+      "country_id": 6252001,
+      "country": "United States",
+      "admin1": "Missouri",
+      "admin2": "Franklin",
+      "admin3": "Lyon Township"
+    }
+  ],
+  "generationtime_ms": 0.38528442
+}

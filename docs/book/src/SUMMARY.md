@@ -41,6 +41,7 @@
 - [Colors](modules/colors.md)
 - [Drop](modules/drop.md)
 - [Focus timer](modules/timer.md)
+- [Weather](modules/weather.md)
 - [Agents](modules/agents.md)
 - [Settings](modules/settings.md)
 - [Tour](modules/tour.md)

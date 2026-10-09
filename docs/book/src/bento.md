@@ -96,7 +96,7 @@ The settings' Share page does the same: **A bento** with a switch for each part,
 It leaves out what belongs to your machine or to you, and lists each thing it left out:
 
 - Options whose values are this machine's devices, like a recording's audio output.
-- Where you are, like night light's `latitude` and `longitude`, and keys that hold secrets, like `token`, `password` or `api_key`.
+- Where you are, like night light's `latitude` and `longitude` or the weather's `place`, and keys that hold secrets, like `token`, `password` or `api_key`.
 - Paths in your home directory. A path written with `~/` stays, since it works on any machine.
 - Values that look like tokens: long runs of letters and digits.
 - Plugins in a local directory (`path:`), which nobody else can install, and the widgets they offer.

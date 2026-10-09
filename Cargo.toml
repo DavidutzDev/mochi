@@ -48,6 +48,7 @@ mochi-module-share = { path = "modules/share" }
 mochi-module-tour = { path = "modules/tour" }
 mochi-module-timer = { path = "modules/timer" }
 mochi-module-updater = { path = "modules/updater" }
+mochi-module-weather = { path = "modules/weather" }
 mochi-module-tray = { path = "modules/tray" }
 mochi-module-workspaces = { path = "modules/workspaces" }
 

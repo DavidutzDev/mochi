@@ -18,7 +18,7 @@ use crate::settings::Store;
 const MACHINE_SOURCES: [&str; 1] = ["audio-device"];
 
 /// Keys that hold where someone is.
-const PLACE_KEYS: [&str; 4] = ["latitude", "longitude", "location", "city"];
+const PLACE_KEYS: [&str; 5] = ["latitude", "longitude", "location", "city", "place"];
 
 /// Keys that hold a secret.
 const SECRET_KEYS: [&str; 8] = [
@@ -740,6 +740,8 @@ modules = ["idle", "nightlight"]
 latitude = 48.85
 temperature = 4000
 [module.weather]
+place = "Lyon"
+units = "imperial"
 api_key = "x"
 token_like = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4"
 [module.capture]
@@ -756,10 +758,11 @@ editor = ["satty", "--filename"]
         assert!(kept.contains("temperature = 4000"), "{kept}");
         assert!(kept.contains("portable"), "{kept}");
         assert!(kept.contains("satty"), "{kept}");
-        for gone in ["latitude", "api_key", "token_like", "directory"] {
+        assert!(kept.contains("imperial"), "{kept}");
+        for gone in ["latitude", "place", "api_key", "token_like", "directory"] {
             assert!(!kept.contains(gone), "{gone} stayed: {kept}");
         }
-        assert_eq!(left.len(), 4, "{left:?}");
+        assert_eq!(left.len(), 5, "{left:?}");
         assert!(
             left.iter()
                 .any(|item| item.starts_with("config.module.nightlight.latitude"))

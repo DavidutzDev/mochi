@@ -1,6 +1,6 @@
 # Control center
 
-A panel that grows out of the island: a home screen of cards, and pages in a navbar at the bottom. It has no content of its own besides the date and time. Other modules provide the rest: media a Now Playing card, audio a volume card and a Sound page, brightness a slider per display and one for the keyboard, night light a tile, notifications a card and a page, power a page, clipboard a card and a page, capture a Captures page, network a card and a page, bluetooth a tile and a page, battery a card with the peripherals' batteries, performance a page, the focus timer a card. A module that isn't running provides nothing.
+A panel that grows out of the island: a home screen of cards, and pages in a navbar at the bottom. It has no content of its own besides the date and time. Other modules provide the rest: media a Now Playing card, audio a volume card and a Sound page, brightness a slider per display and one for the keyboard, night light a tile, notifications a card and a page, power a page, clipboard a card and a page, capture a Captures page, network a card and a page, bluetooth a tile and a page, battery a card with the peripherals' batteries, performance a page, the focus timer a card, weather a card with the next hours. A module that isn't running provides nothing.
 
 Clicking the clock opens it, and Escape or a click elsewhere closes it. A card whose module also has a page shows a chevron by its heading: clicking the heading, or the card beside its controls, opens that page.
 
@@ -12,7 +12,7 @@ Clicking the clock opens it, and Escape or a click elsewhere closes it. A card w
 
 It used to be called the hub. `hub` still works in `config.toml`, in `mochi ipc hub ...` and in plugin manifests, with a warning in the log, so older configs and keybinds keep working until you change them.
 
-The home is a grid of three columns. The control center draws each card's frame, with the card's icon and title at the top, and places the cards in order, each in the first spot where it fits. A card is one or more columns wide and one or two rows tall. With the default modules, the first row has the Network toggles (two columns) and Bluetooth, the second Today, the latest missed notification and the battery, then Now playing takes two columns and two rows beside Clipboard and Colors. Plugin cards, like the weather, come after.
+The home is a grid of three columns. The control center draws each card's frame, with the card's icon and title at the top, and places the cards in order, each in the first spot where it fits. A card is one or more columns wide and one or two rows tall. With the default modules, the first row has the Network toggles (two columns) and Bluetooth, the second Today, the latest missed notification and the battery, then Now playing takes two columns and two rows beside Clipboard and Colors, and the weather (two columns) comes last. Plugin cards come after.
 
 ## Arranging the home
 

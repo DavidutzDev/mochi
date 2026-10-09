@@ -1,0 +1,15 @@
+# Weather: the forecast from Open-Meteo, which needs no account or key.
+# Nothing is sent until a place is set.
+[module.weather]
+# A city or a town, like "Lyon", or "Lyon, France" for the one in that
+# country or region. It's looked up once, with Open-Meteo.
+# place = ""
+
+# Or where you are, which skips the lookup: north and east are positive.
+#   latitude = 45.76
+#   longitude = 4.84
+
+# "metric" for °C and km/h, "imperial" for °F and mph.
+# units = "metric"
+# How often to fetch the forecast again, in minutes.
+# refresh_minutes = 30

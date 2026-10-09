@@ -972,6 +972,7 @@ fn icon(module: &str) -> &'static str {
         "tour" => "tour",
         "timer" => "timer",
         "updater" => "system_update",
+        "weather" => "partly_cloudy_day",
         "share" => "screen_share",
         "tray" => "apps",
         "widgets" => "widgets",
