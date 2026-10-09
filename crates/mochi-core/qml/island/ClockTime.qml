@@ -1,14 +1,15 @@
 import QtQuick
 
-// The time now, here or in a time zone, in parts, for the clocks' looks.
-// QML has no time zone database, so the widgets module reads each zone's
-// offset from the system and publishes it: the zone's time is UTC moved by
+// The time now, here or in a time zone, in parts, for clocks. QML has no
+// time zone database, so a module reads each zone's offset from the system
+// and publishes it, see mochi_core::zones: the zone's time is UTC moved by
 // that offset, read with the UTC getters. Until it has, and for a zone the
 // system doesn't know, it's this computer's time.
 Item {
     id: root
 
-    // The widgets module's state: `zones`, offsets in seconds by zone, and
+    // The state of the module that read the zones, like the widgets or the
+    // clock module's: `zones`, offsets in seconds by zone, and
     // `unknownZones`.
     property var payload: null
     // Like "Europe/Paris"; empty for this computer's.

@@ -25,13 +25,13 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use include_dir::{Dir, include_dir};
+use mochi_core::zones::{self, Offsets};
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, ArgSpec, Assets, BoxFuture, CallError, Contribution,
     ContributionSpec, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tokio::process::Command;
 
 use crate::catalog::Spec;
 use crate::layout::{Anchor, Layout, Placed};
@@ -48,8 +48,6 @@ pub fn check(path: &Path) -> Result<bool, String> {
 
 /// How often the file is checked for changes made by hand.
 const WATCH: Duration = Duration::from_secs(1);
-/// How often the clocks' time zones are read again, for daylight saving.
-const ZONES: Duration = Duration::from_secs(600);
 
 #[derive(Debug, Default)]
 pub struct Widgets;
@@ -190,7 +188,7 @@ impl Module for Widgets {
                         },
                         {
                             "name": "zones",
-                            "default": "Europe/London, America/New_York, Asia/Tokyo",
+                            "default": zones::DEFAULT.join(", "),
                             "description": "Up to four zones, with commas between",
                         },
                     ],
@@ -341,7 +339,7 @@ impl Module for Widgets {
             state.publish(&ctx);
 
             let mut watch = tokio::time::interval(WATCH);
-            let mut zones = tokio::time::interval(ZONES);
+            let mut zones = tokio::time::interval(zones::REFRESH);
             loop {
                 tokio::select! {
                     event = ctx.next_event() => match event {
@@ -469,10 +467,8 @@ struct State {
     banner: Option<ActivityId>,
     /// Whether the drawer is open.
     drawer: bool,
-    /// UTC offsets in seconds, by time zone, for the clocks.
-    zones: BTreeMap<String, i64>,
-    /// The zones the system doesn't have.
-    unknown_zones: BTreeSet<String>,
+    /// The clocks' time zones, as the system knows them.
+    zones: Offsets,
     published: Value,
 }
 
@@ -495,8 +491,7 @@ impl State {
             selected: None,
             banner: None,
             drawer: false,
-            zones: BTreeMap::new(),
-            unknown_zones: BTreeSet::new(),
+            zones: Offsets::default(),
             published: Value::Null,
         };
         state.reload();
@@ -990,28 +985,11 @@ impl State {
     }
 
     fn zones_missing(&self) -> bool {
-        self.wanted_zones()
-            .iter()
-            .any(|zone| !self.zones.contains_key(zone) && !self.unknown_zones.contains(zone))
+        self.zones.missing(&self.wanted_zones())
     }
 
     async fn read_zones(&mut self) {
-        let mut zones = BTreeMap::new();
-        let mut unknown = BTreeSet::new();
-        for zone in self.wanted_zones() {
-            match utc_offset(&zone).await {
-                Some(offset) => {
-                    zones.insert(zone, offset);
-                }
-                None => {
-                    tracing::warn!(%zone, "unknown time zone");
-                    // Not asked again every turn, and the clocks say so.
-                    unknown.insert(zone);
-                }
-            }
-        }
-        self.zones = zones;
-        self.unknown_zones = unknown;
+        self.zones = Offsets::read(self.wanted_zones()).await;
     }
 
     fn publish(&mut self, ctx: &ModuleCtx) {
@@ -1062,6 +1040,7 @@ impl State {
                 })
             })
             .collect();
+        let (zones, unknown_zones) = self.zones.fields();
         let state = json!({
             "grid": self.grid,
             "editing": self.editing.is_some(),
@@ -1072,8 +1051,8 @@ impl State {
             "error": self.error,
             "widgets": widgets,
             "catalog": self.specs.iter().map(Spec::to_json).collect::<Vec<_>>(),
-            "zones": self.zones,
-            "unknownZones": self.unknown_zones,
+            "zones": zones,
+            "unknownZones": unknown_zones,
             // The saved layouts, and the one on the desktop.
             "layouts": layouts,
             "layout": self.layout.name,
@@ -1182,82 +1161,19 @@ const WORLD: usize = 4;
 /// `zones`, a text with commas or spaces between them, or a list in
 /// `widgets.toml`. The world clock's view reads them the same way.
 fn clock_zones(settings: &Value) -> Vec<String> {
-    let listed: Vec<String> = match &settings["zones"] {
-        Value::String(text) => text
-            .split([',', ' '])
-            .map(str::trim)
-            .filter(|zone| !zone.is_empty())
-            .map(str::to_owned)
-            .collect(),
-        Value::Array(zones) => zones
-            .iter()
-            .filter_map(Value::as_str)
-            .map(str::trim)
-            .filter(|zone| !zone.is_empty())
-            .map(str::to_owned)
-            .collect(),
-        _ => Vec::new(),
-    };
     let own = settings["timezone"]
         .as_str()
         .map(str::trim)
         .filter(|zone| !zone.is_empty())
         .map(str::to_owned);
     own.into_iter()
-        .chain(listed.into_iter().take(WORLD))
+        .chain(zones::list(&settings["zones"]).into_iter().take(WORLD))
         .collect()
-}
-
-/// A zone's offset from UTC now, in seconds, from `date`. `None` for a
-/// zone the system doesn't have, which `date` would quietly take as UTC.
-async fn utc_offset(zone: &str) -> Option<i64> {
-    let known = zone_dirs().any(|dir| dir.join(zone).is_file()) && !zone.contains("..");
-    if !known {
-        return None;
-    }
-    let output = Command::new("date")
-        .arg("+%z")
-        .env("TZ", zone)
-        .output()
-        .await
-        .ok()?;
-    parse_offset(String::from_utf8(output.stdout).ok()?.trim())
-}
-
-/// Where the system keeps its time zones: `TZDIR`, or the usual places.
-fn zone_dirs() -> impl Iterator<Item = PathBuf> {
-    std::env::var_os("TZDIR")
-        .map(PathBuf::from)
-        .into_iter()
-        .chain(["/usr/share/zoneinfo", "/etc/zoneinfo"].map(PathBuf::from))
-}
-
-/// `+0200` or `-0330` as seconds.
-fn parse_offset(text: &str) -> Option<i64> {
-    let (sign, digits) = match text.as_bytes().first()? {
-        b'+' => (1, &text[1..]),
-        b'-' => (-1, &text[1..]),
-        _ => return None,
-    };
-    if digits.len() != 4 {
-        return None;
-    }
-    let hours: i64 = digits[..2].parse().ok()?;
-    let minutes: i64 = digits[2..].parse().ok()?;
-    Some(sign * (hours * 3600 + minutes * 60))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn reads_utc_offsets() {
-        assert_eq!(parse_offset("+0200"), Some(7200));
-        assert_eq!(parse_offset("-0330"), Some(-12600));
-        assert_eq!(parse_offset("0200"), None);
-        assert_eq!(parse_offset("+02"), None);
-    }
 
     #[test]
     fn arranges_on_the_monitor_asked_for() {
@@ -1444,18 +1360,6 @@ mod tests {
         assert_eq!(specs[1].look(None).variant.unwrap().id, "month");
     }
 
-    #[tokio::test]
-    async fn asks_the_system_for_offsets() {
-        assert_eq!(utc_offset("Not/A_Zone").await, None);
-        assert_eq!(utc_offset("../../etc/passwd").await, None);
-        // Where the system has a time zone database, as a desktop does.
-        if zone_dirs().any(|dir| dir.join("Asia/Kolkata").is_file()) {
-            assert_eq!(utc_offset("UTC").await, Some(0));
-            // No daylight saving there, and half an hour off the hour.
-            assert_eq!(utc_offset("Asia/Kolkata").await, Some(5 * 3600 + 1800));
-        }
-    }
-
     #[test]
     fn reads_the_zones_a_clock_names() {
         assert_eq!(
@@ -1514,13 +1418,13 @@ mod tests {
         }
 
         // Read: an unknown zone isn't asked again every turn.
-        state.zones = wanted
+        state.zones.known = wanted
             .iter()
             .filter(|zone| *zone != "Europe/Paris")
             .map(|zone| (zone.clone(), 0))
             .collect();
         assert!(state.zones_missing());
-        state.unknown_zones.insert("Europe/Paris".into());
+        state.zones.unknown.insert("Europe/Paris".into());
         assert!(!state.zones_missing());
         let _ = std::fs::remove_dir_all(dir);
     }

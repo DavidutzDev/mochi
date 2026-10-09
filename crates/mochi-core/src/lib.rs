@@ -1,7 +1,7 @@
 //! The daemon's building blocks: the module API, the arbiter that decides
 //! what the island shows, action argument parsing, configuration, the QML
-//! asset writer, the Quickshell supervisor, and the desktop entries of
-//! installed apps.
+//! asset writer, the Quickshell supervisor, the desktop entries of
+//! installed apps, and the offsets of time zones for clocks.
 //!
 //! The UI's core QML lives in this crate's `qml/` directory; see [`QML`].
 
@@ -24,6 +24,7 @@ pub mod process;
 pub mod quality;
 pub mod supervisor;
 pub mod themes;
+pub mod zones;
 
 // Protocol types modules need, so a module only depends on this crate.
 /// Compositor state and actions, from [`ModuleCtx::compositor`].

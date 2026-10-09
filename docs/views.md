@@ -77,6 +77,7 @@ A test in `mochi-core` (`tests/design.rs`) reads every view and rejects new raw 
 | `WavyRing` | how full, as a ring filling clockwise from the top, wavy or flat, with what's put inside in its middle | `value`, `size`, `thickness`, `wavy`, `waves`, `color`, `trackColor` |
 | `ExpressiveShape` | a filled shape behind one thing a widget sets apart, like today's date: `circle`, `pentagon`, `cookie`, `clover` or `burst`, with what's put inside on top | `shape`, `size`, `color`, `lobes` (a cookie's lobes or a burst's points), `angle` (turns the shape, not what's inside) |
 | `StackedTime` | a big clock's hour above its minutes in the display font, sized from the box, with a line under them; the digits roll | `hours`, `minutes`, `date`, `color`, `dateColor`, `weight`, `horizontalAlignment`, `pixelSize` (read-only) |
+| `ClockTime` | the time now in parts, here or in a time zone, for clocks; not drawn. A module reads zones' offsets with `mochi_core::zones` and publishes them as `zones` and `unknownZones`, which `payload` takes | `payload`, `zone`, `seconds`, `ticking`, `now`, `parts`, `known`, `unknown`, `city`, `half`, `hour(twelve)`, `time(twelve, seconds)`, `date(short)` |
 
 Controls report what the user did and leave the state to the owner: a `Switch` sends `toggled`, and the view sets `checked` once the module confirms. `mochi ipc demo controls` shows them all.
 
