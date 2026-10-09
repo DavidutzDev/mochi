@@ -35,9 +35,19 @@ pub enum Action {
         /// What it's called; the directory's name without one.
         #[arg(long)]
         name: Option<String>,
-        /// Bring the wallpaper along.
+        /// Only these parts, by comma: theme, shell (the island and the
+        /// bubbles), modules (which run, with their plugins), settings (every
+        /// module's), module:<id> (one module's), widgets, wallpaper.
+        /// Everything but the wallpaper without it.
+        #[arg(long, value_name = "PARTS")]
+        only: Option<String>,
+        /// Bring the wallpaper along too.
         #[arg(long)]
         wallpaper: bool,
+        /// Write the look in use as a theme package instead: colors in
+        /// both versions, fonts, shape and motion.
+        #[arg(long)]
+        theme: bool,
         /// Write into a directory that isn't empty.
         #[arg(long)]
         force: bool,
@@ -48,6 +58,8 @@ pub enum Action {
         #[arg(long)]
         json: bool,
     },
+    /// What `share` can bring from this setup, as JSON.
+    Parts,
     /// Install a bento, a theme or a plugin: a directory, a git repository
     /// like `github.com/<user>/<repo>`, a gist's URL, or any source
     /// plugins.toml takes.
@@ -208,21 +220,32 @@ pub fn run(action: &Action, config_file: &Path) -> Result<(), String> {
         Action::Share {
             dir,
             name,
+            only,
             wallpaper,
+            theme,
             force,
             print,
             json,
-        } => share::share(
-            config_file,
-            dir,
-            &share::Options {
+        } => {
+            let mut parts = match only {
+                Some(only) => share::Parts::only(only)?,
+                None => share::Parts::default(),
+            };
+            parts.wallpaper |= *wallpaper;
+            let options = share::Options {
                 name: name.clone(),
-                wallpaper: *wallpaper,
+                parts,
                 force: *force,
                 print: *print,
                 json: *json,
-            },
-        ),
+            };
+            if *theme {
+                share::share_theme(config_file, dir, &options)
+            } else {
+                share::share(config_file, dir, &options)
+            }
+        }
+        Action::Parts => share::parts(config_file),
         Action::Add {
             source,
             at,

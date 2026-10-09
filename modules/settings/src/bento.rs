@@ -22,6 +22,8 @@ pub enum Done {
     /// and how it went.
     Job(String, String, Result<(), String>),
     Shared(Result<Value, String>),
+    /// What this setup has to share.
+    Parts(Result<Value, String>),
 }
 
 #[derive(Debug, Default)]
@@ -35,6 +37,7 @@ pub struct Bento {
     job: Value,
     sharing: bool,
     shared: Value,
+    parts: Value,
 }
 
 impl Bento {
@@ -47,6 +50,7 @@ impl Bento {
             "job": self.job,
             "sharing": self.sharing,
             "shared": self.shared,
+            "parts": self.parts,
         })
     }
 
@@ -120,14 +124,22 @@ impl Bento {
                     Done::Job(name, target, result.map(drop))
                 });
             }
+            "bento-parts" => {
+                spawn(ctx, done, vec!["parts".to_owned()], |result| {
+                    Done::Parts(parse(result))
+                });
+            }
             "bento-share" => {
                 let dir = word(0);
                 if dir.trim().is_empty() {
                     return Err("say which directory to write".into());
                 }
                 let mut args = vec!["share".to_owned(), expand(&dir), "--json".into()];
-                if word(1) == "true" {
-                    args.push("--wallpaper".into());
+                // `theme` for a theme package; otherwise the parts, by comma.
+                match word(1).as_str() {
+                    "theme" => args.push("--theme".into()),
+                    "" | "all" => {}
+                    parts => args.extend(["--only".to_owned(), parts.to_owned()]),
                 }
                 let name = words
                     .get(2..)
@@ -176,6 +188,9 @@ impl Bento {
                     self.plan = Value::Null;
                     let _ = self.command(ctx, sender, "bento-catalog", &[]);
                 }
+            }
+            Done::Parts(result) => {
+                self.parts = result.unwrap_or_else(|error| json!({ "error": error }));
             }
             Done::Shared(result) => {
                 self.sharing = false;

@@ -35,14 +35,89 @@ const SECRET_KEYS: [&str; 8] = [
 #[derive(Debug, Default)]
 pub struct Options {
     pub name: Option<String>,
-    /// Bring the wallpaper along.
-    pub wallpaper: bool,
+    /// What it brings.
+    pub parts: Parts,
     /// Write into a directory that isn't empty.
     pub force: bool,
     /// Print the manifest instead of writing a directory.
     pub print: bool,
     /// Say what was written and left out as JSON, for the settings panel.
     pub json: bool,
+}
+
+/// What a bento brings: every part but the wallpaper, unless told.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Parts {
+    /// The theme: preset, colors, fonts, shape, motion.
+    pub theme: bool,
+    /// The island and the bubbles.
+    pub shell: bool,
+    /// Which modules run, with the plugins they need.
+    pub modules: bool,
+    /// Whose settings: every module's with `None`.
+    pub settings: Option<std::collections::BTreeSet<String>>,
+    pub widgets: bool,
+    pub wallpaper: bool,
+}
+
+impl Default for Parts {
+    fn default() -> Self {
+        Self {
+            theme: true,
+            shell: true,
+            modules: true,
+            settings: None,
+            widgets: true,
+            wallpaper: false,
+        }
+    }
+}
+
+impl Parts {
+    /// Only the parts listed, by comma: `theme`, `shell`, `modules`,
+    /// `settings` for every module's, `module:<id>` for one's, `widgets`,
+    /// `wallpaper`.
+    pub fn only(text: &str) -> Result<Self, String> {
+        let mut parts = Self {
+            theme: false,
+            shell: false,
+            modules: false,
+            settings: Some(std::collections::BTreeSet::new()),
+            widgets: false,
+            wallpaper: false,
+        };
+        for word in text
+            .split(',')
+            .map(str::trim)
+            .filter(|word| !word.is_empty())
+        {
+            match word {
+                "theme" => parts.theme = true,
+                "shell" => parts.shell = true,
+                "modules" => parts.modules = true,
+                "settings" => parts.settings = None,
+                "widgets" => parts.widgets = true,
+                "wallpaper" => parts.wallpaper = true,
+                other => match other.strip_prefix("module:") {
+                    Some(id) if !id.is_empty() => {
+                        if let Some(ids) = &mut parts.settings {
+                            ids.insert(id.to_owned());
+                        }
+                    }
+                    _ => {
+                        return Err(format!(
+                            "unknown part {other:?}: theme, shell, modules, settings, module:<id>, widgets or wallpaper"
+                        ));
+                    }
+                },
+            }
+        }
+        Ok(parts)
+    }
+
+    fn settings_of(&self, id: &str) -> bool {
+        self.settings.as_ref().is_none_or(|ids| ids.contains(id))
+    }
 }
 
 /// What was left out, and why, for the user to check.
@@ -62,6 +137,26 @@ pub fn share(config_file: &Path, dir: &Path, options: &Options) -> Result<(), St
     let (store, _) = Store::load(config_file, None).map_err(|error| error.to_string())?;
     let (mut config, mut theme) = store.exported();
     let mut left = Left::new();
+
+    // Only the parts asked for. Whether Bento is on is this person's to say.
+    let parts = &options.parts;
+    config.remove("bento");
+    if !parts.shell {
+        config.remove("island");
+        config.remove("bubbles");
+    }
+    if !parts.modules {
+        config.remove("modules");
+    }
+    if let Some(Value::Table(sections)) = config.get_mut("module") {
+        sections.retain(|id, _| parts.settings_of(id));
+        if sections.is_empty() {
+            config.remove("module");
+        }
+    }
+    if !parts.theme {
+        theme = Table::new();
+    }
 
     // Settings that name this machine's things, or the person.
     let mut paths = Vec::new();
@@ -147,7 +242,7 @@ pub fn share(config_file: &Path, dir: &Path, options: &Options) -> Result<(), St
     // Widgets, on screens named by size.
     let widgets_file = config_file.with_file_name(mochi_module_widgets::FILE);
     let mut widgets = Vec::new();
-    if let Some(layout) = Layout::load(&widgets_file)? {
+    if let Some(layout) = Layout::load(&widgets_file)?.filter(|_| parts.widgets) {
         let screens = screens::connected();
         let shared =
             |module: &str| mochi_plugins::BUILTIN.contains(&module) || plugins.contains_key(module);
@@ -178,7 +273,7 @@ pub fn share(config_file: &Path, dir: &Path, options: &Options) -> Result<(), St
 
     // The wallpaper, when asked.
     let mut wallpaper = None;
-    if options.wallpaper {
+    if parts.wallpaper {
         match mochi_core::palette::source("auto") {
             Ok(mochi_core::palette::Source::Image(path)) if !options.print => {
                 let extension = path
@@ -195,6 +290,12 @@ pub fn share(config_file: &Path, dir: &Path, options: &Options) -> Result<(), St
             }
             Err(error) => left.push(format!("the wallpaper: {error}")),
         }
+    }
+
+    if config.is_empty() && theme.is_empty() && widgets.is_empty() && wallpaper.is_none() {
+        return Err(
+            "nothing to share: the parts picked are all at their defaults, or left out".into(),
+        );
     }
 
     let bento = Bento {
@@ -286,8 +387,9 @@ pub fn summary(bento: &Bento, themes: usize) -> String {
     let mut look = Vec::new();
     leaves(&bento.theme, &mut Vec::new(), &mut look);
     lines.push(format!(
-        "  settings  {} options, {} of the theme",
+        "  settings  {} option{}, {} of the theme",
         settings.len(),
+        if settings.len() == 1 { "" } else { "s" },
         look.len()
     ));
     if themes > 0 {
@@ -435,6 +537,196 @@ fn remove(table: &mut Table, path: &[String]) {
     mochi_core::changes::remove(table, &parts);
 }
 
+/// `mochi bento share --theme`: the look in use as a theme package. Its
+/// colors are the preset's with yours over them, in both versions, and its
+/// fonts, shape and motion the preset's with yours over them.
+pub fn share_theme(config_file: &Path, dir: &Path, options: &Options) -> Result<(), String> {
+    let id = id_from(dir)?;
+    if mochi_core::themes::is_bundled(&id) {
+        return Err(format!(
+            "{id} is a theme Mochi brings: name the directory otherwise"
+        ));
+    }
+    mochi_core::themes::check_id(&id)?;
+    if !options.print {
+        let busy = std::fs::read_dir(dir).is_ok_and(|mut entries| entries.next().is_some());
+        if busy && !options.force {
+            return Err(format!(
+                "{} isn't empty; pick another directory, or add --force to write into it",
+                dir.display()
+            ));
+        }
+    }
+    let (store, _) = Store::load(config_file, None).map_err(|error| error.to_string())?;
+    let (_, mut theme) = store.exported();
+    let mut left = Left::new();
+    clean(&mut theme, "theme", &mut left);
+    let preset = theme
+        .get("preset")
+        .and_then(Value::as_str)
+        .unwrap_or("obsidian")
+        .to_owned();
+    let wallpaper = theme
+        .get("wallpaper")
+        .and_then(Value::as_str)
+        .unwrap_or("auto")
+        .to_owned();
+    let yours = match theme.get("colors") {
+        Some(Value::Table(colors)) => colors.clone(),
+        _ => Table::new(),
+    };
+    let mut file = Table::new();
+    let about = Table::from_iter([
+        ("id".to_owned(), Value::String(id.clone())),
+        (
+            "name".to_owned(),
+            Value::String(options.name.clone().unwrap_or_else(|| title(&id))),
+        ),
+        ("version".to_owned(), Value::String("1.0.0".into())),
+        (
+            "mochi".to_owned(),
+            Value::String(mochi_core::version::VERSION.into()),
+        ),
+    ]);
+    file.insert("theme".into(), Value::Table(about));
+    for (name, light) in [("dark", false), ("light", true)] {
+        let mut colors = mochi_core::palette::colors(&preset, light, &wallpaper)?;
+        mochi_core::changes::merge(&mut colors, &yours);
+        file.insert(name.into(), Value::Table(colors));
+    }
+    let mut look = if preset == "wallpaper" {
+        Table::new()
+    } else {
+        mochi_core::themes::find(&preset)
+            .map(|theme| theme.look())
+            .unwrap_or_default()
+    };
+    for section in ["text", "layout", "motion"] {
+        if let Some(Value::Table(over)) = theme.get(section) {
+            let mut under = match look.remove(section) {
+                Some(Value::Table(under)) => under,
+                _ => Table::new(),
+            };
+            mochi_core::changes::merge(&mut under, over);
+            look.insert(section.into(), Value::Table(under));
+        }
+    }
+    let sets: Vec<String> = look.keys().cloned().collect();
+    file.extend(look);
+    // `[theme]` first, then the colors, then the rest.
+    let mut text = "# A Mochi theme. `mochi bento add <where it is>` installs it, and the\n# Theme page of Mochi's documentation explains this file.\n".to_owned();
+    for names in [
+        &["theme"][..],
+        &["dark", "light"],
+        &["text", "layout", "motion"],
+    ] {
+        let part: Table = names
+            .iter()
+            .filter_map(|name| Some(((*name).to_owned(), file.get(*name)?.clone())))
+            .collect();
+        if !part.is_empty() {
+            text.push('\n');
+            text.push_str(
+                &mochi_core::toml::to_string_pretty(&part).map_err(|error| error.to_string())?,
+            );
+        }
+    }
+    let parsed = mochi_core::themes::ThemeFile::parse(&text)?;
+    if let Err(problem) = super::apply::readable(&parsed) {
+        left.push(format!("a warning: {problem}; the registry refuses that"));
+    }
+
+    let mut summary = vec![format!(
+        "colors from {preset}, with yours over them, dark and light"
+    )];
+    if !sets.is_empty() {
+        summary.push(format!("its own {}", sets.join(", ")));
+    }
+    if options.print {
+        print!("{text}");
+    } else {
+        let io = |error: std::io::Error| format!("cannot write {}: {error}", dir.display());
+        std::fs::create_dir_all(dir).map_err(io)?;
+        std::fs::write(dir.join(mochi_core::themes::MANIFEST), &text).map_err(io)?;
+    }
+    if options.json {
+        let dir = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_owned());
+        println!(
+            "{}",
+            serde_json::json!({
+                "dir": dir,
+                "id": id,
+                "manifest": dir.join(mochi_core::themes::MANIFEST),
+                "summary": summary,
+                "left": left,
+            })
+        );
+        return Ok(());
+    }
+    if !options.print {
+        eprintln!("Wrote the theme {id} in {}:", dir.display());
+        for line in &summary {
+            eprintln!("  {line}");
+        }
+    }
+    if !left.is_empty() {
+        eprintln!("Left out:");
+        for item in &left {
+            eprintln!("  {item}");
+        }
+    }
+    Ok(())
+}
+
+/// `mochi bento parts`: what this setup has to share, as JSON, for the
+/// settings' Share page to offer.
+pub fn parts(config_file: &Path) -> Result<(), String> {
+    let (store, _) = Store::load(config_file, None).map_err(|error| error.to_string())?;
+    let (config, theme) = store.exported();
+    let modules: Vec<String> = config
+        .get("modules")
+        .and_then(Value::as_array)
+        .map(|modules| {
+            modules
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default();
+    let settings: Vec<String> = match config.get("module") {
+        Some(Value::Table(sections)) => sections.keys().cloned().collect(),
+        _ => Vec::new(),
+    };
+    let listed =
+        PluginList::of(&Locations::beside(config_file)).map_err(|error| error.to_string())?;
+    let plugins: Vec<&String> = listed
+        .plugins
+        .keys()
+        .filter(|plugin| modules.contains(plugin))
+        .collect();
+    let widgets = Layout::load(&config_file.with_file_name(mochi_module_widgets::FILE))?
+        .map_or(0, |layout| layout.widgets.len());
+    let wallpaper = matches!(
+        mochi_core::palette::source("auto"),
+        Ok(mochi_core::palette::Source::Image(_))
+    );
+    println!(
+        "{}",
+        serde_json::json!({
+            "theme": !theme.is_empty(),
+            "preset": theme.get("preset").and_then(Value::as_str).unwrap_or("obsidian"),
+            "shell": config.contains_key("island") || config.contains_key("bubbles"),
+            "modules": modules,
+            "settings": settings,
+            "plugins": plugins,
+            "widgets": widgets,
+            "wallpaper": wallpaper,
+        })
+    );
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -472,6 +764,19 @@ editor = ["satty", "--filename"]
             left.iter()
                 .any(|item| item.starts_with("config.module.nightlight.latitude"))
         );
+    }
+
+    #[test]
+    fn parts_are_picked_by_name() {
+        let all = Parts::default();
+        assert!(all.theme && all.modules && all.widgets && !all.wallpaper);
+        assert!(all.settings_of("osd"));
+        let some = Parts::only("theme, module:osd,wallpaper").unwrap();
+        assert!(some.theme && some.wallpaper && !some.modules && !some.shell && !some.widgets);
+        assert!(some.settings_of("osd"));
+        assert!(!some.settings_of("idle"));
+        assert!(Parts::only("settings").unwrap().settings_of("idle"));
+        assert!(Parts::only("colours").unwrap_err().contains("unknown part"));
     }
 
     #[test]

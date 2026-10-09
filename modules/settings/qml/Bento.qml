@@ -46,6 +46,8 @@ Column {
         selected = "";
         if (page === "bento-installed" || (page === "bento" && on && (catalog.packages === undefined || catalog.on === false) && bento.loading !== true))
             load(false);
+        if (page === "bento-share")
+            Daemon.command("settings", "bento-parts", []);
     }
 
     Component.onCompleted: arrive()
@@ -121,6 +123,15 @@ Column {
                 font: input.font
             }
         }
+    }
+
+    // A part of a bento to share, on or off.
+    component Part: SwitchRow {
+        required property string key
+
+        width: root.width
+        checked: sharing.has(key)
+        onToggled: sharing.flip(key)
     }
 
     // One fact about what installing does: an icon and a line.
@@ -952,21 +963,144 @@ Column {
         }
     }
 
-    // Share.
+    // Share: a bento with the parts picked, or the look as a theme.
     Column {
+        id: sharing
+
         visible: root.page === "bento-share"
         width: root.width
         spacing: Theme.spaceSmall
 
+        readonly property var parts: root.bento.parts ?? ({})
+        property string kind: "bento"
+        // The parts left out, by the names `share --only` takes.
+        property var off: ({
+                "wallpaper": true
+            })
+
+        function has(key: string): bool {
+            return off[key] !== true;
+        }
+
+        function flip(key: string): void {
+            const next = Object.assign({}, off);
+            next[key] = !has(key);
+            off = next;
+        }
+
+        readonly property string picked: {
+            const keys = [];
+            if (parts.theme)
+                keys.push("theme");
+            if (parts.shell)
+                keys.push("shell");
+            if ((parts.modules ?? []).length > 0)
+                keys.push("modules");
+            for (const id of parts.settings ?? [])
+                keys.push(`module:${id}`);
+            if ((parts.widgets ?? 0) > 0)
+                keys.push("widgets");
+            if (parts.wallpaper)
+                keys.push("wallpaper");
+            return keys.filter(key => has(key)).join(",");
+        }
+
+        Segmented {
+            x: Theme.spaceMedium
+            width: 280
+            height: Theme.controlHeight
+            current: sharing.kind
+            options: [
+                {
+                    "value": "bento",
+                    "label": "A bento"
+                },
+                {
+                    "value": "theme",
+                    "label": "A theme"
+                }
+            ]
+            onPicked: value => {
+                sharing.kind = value;
+                folder.text = value === "theme" ? "~/my-theme" : "~/my-bento";
+            }
+        }
+
         Note {
-            text: "A bento is a directory: push it to a git repository, or paste its mochi-bento.toml into a gist, and anyone installs it with `mochi bento add`. Device names, where you are, secrets and paths in your home are left out, and listed."
+            text: sharing.kind === "theme" ? "Your colors, in their dark and light versions, and the fonts, shape and motion you set, as a theme others install with `mochi bento add`. Nothing else from your setup goes in." : "Pick what goes in. Device names, where you are, secrets and paths in your home are left out, and listed. Push the directory to a git repository, or paste its mochi-bento.toml into a gist, and anyone installs it with `mochi bento add`."
+        }
+
+        Note {
+            visible: (sharing.parts.error ?? null) !== null
+            color: Theme.danger
+            text: sharing.parts.error ?? ""
+        }
+
+        Column {
+            visible: sharing.kind === "bento"
+            width: root.width
+            spacing: 2
+
+            Part {
+                visible: sharing.parts.theme === true
+                key: "theme"
+                icon: "palette"
+                title: "The theme"
+                subtitle: `${sharing.parts.preset ?? ""}, with the colors and fonts you set`
+            }
+
+            Part {
+                visible: sharing.parts.shell === true
+                key: "shell"
+                icon: "crop_16_9"
+                title: "The island and the bubbles"
+                subtitle: "Where they sit and how they behave"
+            }
+
+            Part {
+                visible: (sharing.parts.modules ?? []).length > 0
+                key: "modules"
+                icon: "extension"
+                title: "Which modules run"
+                subtitle: `${(sharing.parts.modules ?? []).length} modules` + ((sharing.parts.plugins ?? []).length > 0 ? `, with the plugins ${sharing.parts.plugins.join(", ")}` : "")
+            }
+
+            Repeater {
+                model: sharing.parts.settings ?? []
+
+                Part {
+                    required property string modelData
+                    readonly property var section: (Daemon.state("settings")?.sections ?? []).find(entry => entry.module === modelData) ?? null
+
+                    key: `module:${modelData}`
+                    icon: section?.icon ?? "tune"
+                    title: `${section?.title ?? modelData}'s settings`
+                    subtitle: "What you changed in it"
+                }
+            }
+
+            Part {
+                visible: (sharing.parts.widgets ?? 0) > 0
+                key: "widgets"
+                icon: "widgets"
+                title: "The widgets"
+                subtitle: `${sharing.parts.widgets ?? 0} on the desktop, on screens named by size`
+            }
+
+            Part {
+                visible: sharing.parts.wallpaper === true
+                key: "wallpaper"
+                icon: "wallpaper"
+                title: "The wallpaper"
+                subtitle: "The image awww, swww or hyprpaper shows"
+            }
         }
 
         Field {
             id: folder
 
             width: root.width
-            hint: "~/my-bento, the directory to write; its name is the bento's id"
+            hint: "The directory to write; its name is the id"
             text: "~/my-bento"
         }
 
@@ -977,23 +1111,13 @@ Column {
             hint: "What it's called, like Cozy desk"
         }
 
-        SwitchRow {
-            id: wallpaper
-
-            width: root.width
-            icon: "wallpaper"
-            title: "Bring the wallpaper"
-            subtitle: "The image awww, swww or hyprpaper shows"
-            onToggled: on => checked = on
-        }
-
         Button {
             x: Theme.spaceMedium
-            text: root.bento.sharing === true ? "Writing…" : "Make the bento"
+            text: root.bento.sharing === true ? "Writing…" : sharing.kind === "theme" ? "Make the theme" : "Make the bento"
             icon: "ios_share"
             tone: "accent"
-            enabled: root.bento.sharing !== true && folder.text.trim() !== ""
-            onClicked: Daemon.command("settings", "bento-share", [folder.text.trim(), wallpaper.checked ? "true" : "false", title.text.trim()].filter(word => word !== ""))
+            enabled: root.bento.sharing !== true && folder.text.trim() !== "" && (sharing.kind === "theme" || sharing.picked !== "")
+            onClicked: Daemon.command("settings", "bento-share", [folder.text.trim(), sharing.kind === "theme" ? "theme" : sharing.picked, title.text.trim()].filter(word => word !== ""))
         }
 
         Note {

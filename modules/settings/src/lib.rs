@@ -125,8 +125,15 @@ impl Module for Settings {
             .arg(ArgSpec::string("name", "A bento's or a theme's id, or mine")),
             ActionSpec::new("bento-share", "Make a bento of this setup")
                 .arg(ArgSpec::string("dir", "The directory to write"))
-                .arg(ArgSpec::bool("wallpaper", "Bring the wallpaper").optional())
+                .arg(
+                    ArgSpec::string(
+                        "what",
+                        "theme for a theme, or the parts by comma: theme, shell, modules, settings, module:<id>, widgets, wallpaper",
+                    )
+                    .optional(),
+                )
                 .arg(ArgSpec::string("name", "What it's called").optional().rest()),
+            ActionSpec::new("bento-parts", "Say what this setup has to share, for the Share page"),
             ActionSpec::new("bento-forget", "Close what the Bento pages show about a plan or a share"),
         ]
     }
@@ -338,11 +345,8 @@ impl Panel {
                     "bento-add" => vec![text("source"), text("at")],
                     "bento-remove" | "bento-update" => vec![text("id")],
                     "bento-use" => vec![text("name")],
-                    "bento-share" => vec![
-                        text("dir"),
-                        args.bool("wallpaper").unwrap_or(false).to_string(),
-                        text("name"),
-                    ],
+                    "bento-share" => vec![text("dir"), text("what"), text("name")],
+                    "bento-parts" => Vec::new(),
                     _ => vec![text("source")],
                 };
                 // From a link: the Bento page, on what it names.

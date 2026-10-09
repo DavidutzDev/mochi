@@ -583,6 +583,7 @@ Phase 3, the Bento category in the settings:
 - [x] `mochi://bento/<id>` links, `mochi open-url` and `mochi-links.desktop`
 - [x] Bento off until the user turns it on, in a consent page or with `[bento] i_really_understand_that_bento_can_harm_and_contain_malicious_content`; and off again
 - [x] Switching between setups, your own and each bento, each keeping its changes and widgets; themes put on with Use
+- [x] Sharing parts of a setup, and the look as a theme package
 - [ ] A live preview of a theme on hover, before it's installed: the index would need its colors
 - [ ] GitHub stars on the cards
 

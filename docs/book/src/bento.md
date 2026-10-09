@@ -41,7 +41,7 @@ While Bento is off, Discover says what Bento installs and what can go wrong, wit
 - **Discover** lists the registry: a card per package, with its first screenshot, a search, and filters for plugins, widgets (plugins tagged `widget`), themes and bentos. A card opens the package's page: its screenshots, who looks after it, its license and repository, then **Install** and, for themes and bentos, **Try**. Under the cards, a field takes anything else `add` takes, like a repository or a gist.
 - **Install** first shows what it will do, the same as the terminal's question: what a plugin builds, starts, runs and reads; a theme's colors; a bento's settings, themes, widgets and wallpaper, and the plugins it needs with what each runs. Nothing happens until you press Install again. A bento whose settings don't check, or that needs a plugin that can't be installed, can't be installed.
 - **Installed** lists your own setup and each bento, with **Use** to switch to one, then the themes, with **Use** to put one on, and the plugins. It has **Update** where the registry has a newer release, **Update all**, and **Remove**, which asks once more. What a bento brought follows its bento. A release the registry withdrew says so in red.
-- **Share** makes a bento of this setup in a directory you name, with or without the wallpaper, and lists what it wrote and what it left out.
+- **Share** makes a bento of this setup, with the parts you pick, or your look as a theme, in a directory you name, and lists what it wrote and what it left out.
 
 The panel runs `mochid bento` for each of these, so it does exactly what the terminal does, and stays usable while a plugin builds.
 
@@ -79,6 +79,18 @@ mochi bento share ~/cozy --name "Cozy"
 ```
 
 `share` writes `~/cozy/mochi-bento.toml` from the setup running now: what your files and the settings panel set that isn't a default, the theme, the widgets and the plugins they use. The directory's name is the bento's id. A theme you installed goes along in `themes/<id>/`, and `--wallpaper` brings the wallpaper awww, swww or hyprpaper shows. `--print` prints the manifest instead, to paste into a gist.
+
+To share only some of it, name the parts with `--only`:
+
+```sh
+mochi bento share ~/night --only theme,module:nightlight,widgets
+```
+
+The parts are `theme`; `shell`, the island and the bubbles; `modules`, which modules run, with the plugins they need; `settings`, every module's settings, or `module:<id>` for one module's; `widgets`; and `wallpaper`. Without `--only`, a bento brings every part but the wallpaper. `mochi bento parts` says which parts your setup has. Whether Bento is on never goes in.
+
+`--theme` writes your look as a theme instead, a `mochi-theme.toml`: the colors of the preset in use with yours over them, in both versions, and the fonts, shape and motion you set. Others install it like any [theme](theme.md#theme-packages).
+
+The settings' Share page does the same: **A bento** with a switch for each part, each module's settings on its own, or **A theme**.
 
 It leaves out what belongs to your machine or to you, and lists each thing it left out:
 

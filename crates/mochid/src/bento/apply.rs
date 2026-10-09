@@ -971,7 +971,7 @@ fn data_only(dir: &Path) -> Result<(), String> {
 
 /// Text on cards and the accent's own text must read well, in both
 /// versions of a theme.
-fn readable(theme: &ThemeFile) -> Result<(), String> {
+pub(super) fn readable(theme: &ThemeFile) -> Result<(), String> {
     for (light, name) in [(false, "dark"), (true, "light")] {
         let colors = theme.colors(light);
         let get = |role: &str| colors.get(role).and_then(Value::as_str).unwrap_or_default();
