@@ -1623,7 +1623,9 @@ pub(crate) mod tests {
         let missing: Source = format!("git:file://{}:nope", repo.display())
             .parse()
             .unwrap();
-        let error = installer.run("ticker", &missing, Mode::Install).unwrap_err();
+        let error = installer
+            .run("ticker", &missing, Mode::Install)
+            .unwrap_err();
         assert!(
             error.0.contains("no branch, tag or commit \"nope\""),
             "{error}"
