@@ -2,6 +2,12 @@
 
 Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor release may change the config format, the protocol or the module interface; the changelog says when.
 
+## Unreleased
+
+### Fixed
+
+- The installer restarts the running mochid only when it's the one it just updated. Installing into another prefix used to restart a mochid from a package or Nix too.
+
 ## 0.0.9 - 2026-10-09
 
 ### Added

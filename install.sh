@@ -174,9 +174,17 @@ if has systemctl && systemctl --user daemon-reload 2>/dev/null; then
     if [ -n "$enable" ]; then
         systemctl --user enable --now mochid
     elif systemctl --user is-active --quiet mochid; then
-        # An update: the running shell takes the new binaries.
-        systemctl --user restart mochid
-        say "Restarted mochid."
+        # An update: the running shell takes the new binaries, when it's
+        # the one from this prefix. Another one, like a package's, stays.
+        pid=$(systemctl --user show -p MainPID --value mochid 2>/dev/null || true)
+        running=$(readlink -f "/proc/$pid/exe" 2>/dev/null || true)
+        here=$(cd "$prefix/bin" 2>/dev/null && pwd -P)
+        if [ -n "$here" ] && [ "${running%/*}" = "$here" ]; then
+            systemctl --user restart mochid
+            say "Restarted mochid."
+        else
+            say "The running mochid comes from ${running:-somewhere else}: restart it from this prefix to use $version."
+        fi
     fi
 fi
 if [ -n "$installed" ]; then
