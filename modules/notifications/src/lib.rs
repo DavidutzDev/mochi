@@ -17,6 +17,8 @@
 //! - Do not disturb sends everything but critical ones straight to the
 //!   history, and shows a bubble while it's on.
 //! - The history lasts across restarts, in `$XDG_STATE_HOME/mochi/`.
+//! - A new popup plays the sound its app asks for, if any ([`sound`]).
+//!   Nothing plays during do not disturb.
 //!
 //! If another notification daemon runs, Mochi waits for the name and takes
 //! over when that daemon stops.
@@ -29,6 +31,9 @@
 //! history = 50          # missed notifications kept
 //! same_app = "replace"  # or "stack": every popup from an app in turn
 //! save_history = true   # keep the history across restarts
+//! sounds = true         # play the sounds apps ask for
+//! sound_command = []    # what plays a sound file, like ["mpv", "--really-quiet"]
+//! sound_theme = "freedesktop"
 //!
 //! [bubbles.notifications]  # the missed count; center-right by default
 //! area = "right"
@@ -40,6 +45,7 @@ mod markup;
 mod note;
 mod saved;
 mod server;
+mod sound;
 mod tour;
 
 use std::collections::BTreeMap;
@@ -78,6 +84,9 @@ struct Settings {
     same_app: SameApp,
     save_history: bool,
     markdown: bool,
+    sounds: bool,
+    sound_command: Vec<String>,
+    sound_theme: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
@@ -97,6 +106,9 @@ impl Default for Settings {
             same_app: SameApp::Replace,
             save_history: true,
             markdown: true,
+            sounds: true,
+            sound_command: Vec::new(),
+            sound_theme: "freedesktop".into(),
         }
     }
 }
@@ -114,11 +126,24 @@ impl Module for Notifications {
         include_str!("../settings.toml")
     }
 
-    fn needs(&self, _settings: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
-        vec![mochi_core::Need::new(
+    fn needs(&self, table: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
+        let settings: Settings = mochi_core::settings(table).unwrap_or_default();
+        let mut needs = vec![mochi_core::Need::new(
             "xdg-open",
             "Opening links in notifications",
-        )]
+        )];
+        // canberra-gtk-play isn't one: without it, Mochi finds the sound
+        // theme's files itself.
+        if settings.sounds {
+            needs.push(match settings.sound_command.first() {
+                Some(program) => mochi_core::Need::new(program, "Notification sounds"),
+                None => mochi_core::Need::new(
+                    sound::player().unwrap_or(sound::PLAYERS[0]),
+                    "Notification sounds, with pw-play or paplay",
+                ),
+            });
+        }
+        needs
     }
 
     fn settings_schema(&self) -> Option<Value> {
@@ -203,11 +228,7 @@ impl Module for Notifications {
             loop {
                 tokio::select! {
                     message = incoming.recv() => match message {
-                        Some(Incoming::Notify(note)) => {
-                            let note = daemon.store_image(*note);
-                            let effects = daemon.center.notify(note);
-                            daemon.apply(&ctx, effects).await;
-                        }
+                        Some(Incoming::Notify(note)) => daemon.notify(&ctx, *note).await,
                         Some(Incoming::Close(id)) => {
                             let effects = daemon.center.close(id, Reason::Closed);
                             daemon.apply(&ctx, effects).await;
@@ -261,6 +282,8 @@ struct Daemon {
     dnd_bubble: Option<BubbleId>,
     /// The state last published, so unchanged history isn't sent again.
     published: Value,
+    /// Plays notifications' sounds; `None` when `sounds` is off.
+    speaker: Option<sound::Speaker>,
 }
 
 impl Daemon {
@@ -295,7 +318,23 @@ impl Daemon {
             count_bubble: None,
             dnd_bubble: None,
             published: Value::Null,
+            speaker: settings.sounds.then(|| {
+                sound::Speaker::new(settings.sound_command.clone(), settings.sound_theme.clone())
+            }),
         }
+    }
+
+    async fn notify(&mut self, ctx: &ModuleCtx, note: Note) {
+        let note = self.store_image(note);
+        let (id, sound) = (note.id, note.sound.clone());
+        let new = self.center.get(id).is_none();
+        let effects = self.center.notify(note);
+        if let (Some(speaker), Some(sound)) = (&mut self.speaker, sound)
+            && audible(new, &effects, id, self.center.dnd())
+        {
+            speaker.play(&sound);
+        }
+        self.apply(ctx, effects).await;
     }
 
     /// Views load files, so raw pixels become a PNG in the data directory.
@@ -542,6 +581,13 @@ impl Daemon {
     }
 }
 
+/// Whether notification `id` plays its sound, given what the center did
+/// with it: only a new one that pops up, not an update of one shown, and
+/// nothing during do not disturb, critical ones included.
+fn audible(new: bool, effects: &[Effect], id: u32, dnd: bool) -> bool {
+    new && !dnd && effects.contains(&Effect::Popup(id))
+}
+
 fn bubble(view: &str, key: &str) -> BubbleSpec {
     BubbleSpec::new(view)
         .key(key)
@@ -608,5 +654,59 @@ mod settings_example {
             "notifications",
             include_str!("../settings.toml"),
         );
+    }
+}
+
+#[cfg(test)]
+mod sounds {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::note::Request;
+
+    fn note(id: u32, urgency: u8) -> Note {
+        let hints = HashMap::from([(
+            "urgency".to_owned(),
+            zbus::zvariant::Value::U8(urgency).try_to_owned().unwrap(),
+        )]);
+        let request = Request {
+            app_name: format!("app {id}"),
+            app_icon: String::new(),
+            summary: "hi".into(),
+            body: String::new(),
+            actions: Vec::new(),
+            hints,
+            expire_timeout: -1,
+        };
+        Note::new(id, request, SystemTime::UNIX_EPOCH)
+    }
+
+    /// What `Daemon::notify` decides, with a real center.
+    fn plays(center: &mut Center, note: Note) -> bool {
+        let id = note.id;
+        let new = center.get(id).is_none();
+        let effects = center.notify(note);
+        audible(new, &effects, id, center.dnd())
+    }
+
+    #[test]
+    fn only_new_popups_make_a_sound() {
+        let mut center = Center::new(10, true);
+        assert!(plays(&mut center, note(1, 1)));
+        // Updating the popup shown, like a progress bar, stays quiet.
+        assert!(!plays(&mut center, note(1, 1)));
+        // So does updating one in the history.
+        center.popup_ended(1, PopupEnd::TimedOut);
+        assert!(!plays(&mut center, note(1, 1)));
+    }
+
+    #[test]
+    fn do_not_disturb_is_quiet_even_for_critical_ones() {
+        let mut center = Center::new(10, true);
+        center.set_dnd(true);
+        assert!(!plays(&mut center, note(1, 1)));
+        assert!(!plays(&mut center, note(2, 2)));
+        center.set_dnd(false);
+        assert!(plays(&mut center, note(3, 2)));
     }
 }

@@ -47,6 +47,7 @@ impl Server {
             "icon-static",
             "inline-reply",
             "persistence",
+            "sound",
         ]
     }
 

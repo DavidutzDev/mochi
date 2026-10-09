@@ -17,3 +17,15 @@
 # *italic*, __underline__, ~~strike~~, `code`, [links](https://…) and
 # ||spoilers||. Plain https:// links become links too.
 # markdown = true
+# Play the sound an app asks for when its notification pops up, like a
+# chat app's message sound. Only notifications that ask make one, and none
+# during do not disturb.
+# sounds = true
+# What plays a sound file, with any options of your own; the file goes
+# last. [] uses pw-play or paplay for files, and canberra-gtk-play for
+# sounds from the theme. Like: sound_command = ["mpv", "--really-quiet"]
+# sound_command = []
+# The sound theme names like "message-new-instant" come from, when
+# canberra-gtk-play isn't installed or sound_command is set. Sounds it
+# lacks come from "freedesktop".
+# sound_theme = "freedesktop"

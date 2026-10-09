@@ -70,6 +70,7 @@ pub fn load(path: &Path) -> Vec<Note> {
             image: saved.image.map(Image::Path),
             resident: false,
             transient: false,
+            sound: None,
             received: SystemTime::UNIX_EPOCH + Duration::from_millis(saved.received_ms),
         })
         .collect()
@@ -155,6 +156,7 @@ mod tests {
             image: Some(Image::Path("/tmp/ana.png".into())),
             resident: true,
             transient: false,
+            sound: None,
             received: SystemTime::UNIX_EPOCH + Duration::from_millis(1_700_000_000_123),
         };
         save(&path, [&note].into_iter()).unwrap();

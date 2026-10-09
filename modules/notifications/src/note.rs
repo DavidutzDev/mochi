@@ -8,6 +8,8 @@ use std::time::{Duration, SystemTime};
 
 use zbus::zvariant::{OwnedValue, Value};
 
+use crate::sound::Sound;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Urgency {
     Low,
@@ -68,6 +70,8 @@ pub struct Note {
     pub resident: bool,
     /// Never goes to the history.
     pub transient: bool,
+    /// What to play when it pops up.
+    pub sound: Option<Sound>,
     pub received: SystemTime,
 }
 
@@ -109,6 +113,19 @@ impl Note {
                     .filter(|path| !path.is_empty())
                     .map(Image::Path)
             });
+        // A file is the more exact of the two, when an app sends both.
+        let sound = if flag("suppress-sound") {
+            None
+        } else {
+            hint("sound-file")
+                .and_then(string)
+                .and_then(|file| Sound::file(&file))
+                .or_else(|| {
+                    hint("sound-name")
+                        .and_then(string)
+                        .and_then(|name| Sound::name(&name))
+                })
+        };
 
         Self {
             id,
@@ -134,6 +151,7 @@ impl Note {
             image,
             resident: flag("resident"),
             transient: flag("transient"),
+            sound,
             received,
         }
     }
@@ -286,6 +304,38 @@ mod tests {
         timed.expire_timeout = 2500;
         let note = Note::new(1, timed, SystemTime::UNIX_EPOCH);
         assert_eq!(note.timeout, Some(Duration::from_millis(2500)));
+    }
+
+    #[test]
+    fn reads_the_sound_hints() {
+        let sound = |hints| Note::new(1, request(hints), SystemTime::UNIX_EPOCH).sound;
+        assert_eq!(
+            sound(vec![("sound-name", Value::from("message-new-instant"))]),
+            Some(Sound::Name("message-new-instant".into()))
+        );
+        assert_eq!(
+            sound(vec![
+                ("sound-name", Value::from("message-new-instant")),
+                ("sound-file", Value::from("/tmp/ding.oga")),
+            ]),
+            Some(Sound::File("/tmp/ding.oga".into()))
+        );
+        // A file that isn't one falls back to the name.
+        assert_eq!(
+            sound(vec![
+                ("sound-name", Value::from("bell")),
+                ("sound-file", Value::from("ding.oga")),
+            ]),
+            Some(Sound::Name("bell".into()))
+        );
+        assert_eq!(
+            sound(vec![
+                ("sound-name", Value::from("bell")),
+                ("suppress-sound", Value::from(true)),
+            ]),
+            None
+        );
+        assert_eq!(sound(vec![]), None);
     }
 
     #[test]

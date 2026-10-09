@@ -282,6 +282,7 @@ mod tests {
             image: None,
             resident: false,
             transient: false,
+            sound: None,
             received: SystemTime::UNIX_EPOCH,
         }
     }
