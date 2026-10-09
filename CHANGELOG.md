@@ -8,7 +8,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 - A universal installer: `curl -fsSL https://raw.githubusercontent.com/DavidutzDev/mochi/main/install.sh | sh` installs the latest release into `~/.local`, checked against its sum, and updates it when run again, restarting a running mochid. `--prefix`, `--version`, `--enable` and `--uninstall` change what it does, and `MOCHI_FROM_SOURCE=1` builds the release with cargo instead, or `main` with `MOCHI_FROM_SOURCE=main`. Mochi installed by Nix, pacman, apt or rpm is left to them.
 
-- `mochid --dev` takes over from the shell already running, which stops its island and modules, waits, and starts again by itself when the dev daemon stops. A bubble on the left says the dev shell runs, with its revision and the shell it took over from. The running shell has to be this version or newer to step aside.
+- Dev mode is the default of a debug build, so `cargo run -p mochid` is enough, and release builds refuse `--dev`. `--no-dev` runs a debug build as an installed shell runs. A dev daemon takes over from the shell already running, which stops its island and modules, waits, and starts again by itself when the dev daemon stops. A bubble on the left says the dev shell runs, with its revision and the shell it took over from. The running shell has to be this version or newer to step aside.
 
 ### Changed
 

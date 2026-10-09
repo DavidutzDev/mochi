@@ -26,9 +26,7 @@ fn second(first: &Daemon, name: &str, dev: bool) -> Command {
         .env("XDG_STATE_HOME", first.dir.join("state"))
         .stdin(Stdio::null())
         .stdout(Stdio::null());
-    if dev {
-        command.arg("--dev");
-    }
+    command.arg(if dev { "--dev" } else { "--no-dev" });
     command
 }
 
@@ -50,6 +48,8 @@ fn a_second_daemon_leaves_the_session_alone() {
     assert!(UnixStream::connect(&first.socket).is_ok());
 }
 
+// Dev mode runs only in debug builds; `nix build` tests a release one.
+#[cfg(debug_assertions)]
 #[test]
 fn a_dev_daemon_takes_over_until_it_stops() {
     let mut first = Daemon::start("session-dev", "idle");
@@ -98,4 +98,15 @@ fn a_dev_daemon_takes_over_until_it_stops() {
         "the first daemon's shell again",
     );
     first.terminate();
+}
+
+#[cfg(not(debug_assertions))]
+#[test]
+fn a_release_build_refuses_dev_mode() {
+    let first = Daemon::start("session-release", "idle");
+    let output = second(&first, "dev", true).output().unwrap();
+    assert!(!output.status.success());
+    let log = String::from_utf8_lossy(&output.stderr);
+    assert!(log.contains("only in a debug build"), "{log}");
+    assert!(UnixStream::connect(&first.socket).is_ok());
 }

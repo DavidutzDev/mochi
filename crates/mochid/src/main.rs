@@ -33,11 +33,17 @@ use crate::settings::Store;
 #[derive(Debug, Parser)]
 #[command(version, about)]
 struct Args {
-    /// Link the QML to the source tree instead of copying it, so edits
-    /// hot-reload, and take over from the shell already running, which
-    /// starts again when this one stops. A bubble shows the revision.
-    #[arg(long)]
+    /// Dev mode, the default of a debug build like `cargo run`: link the QML
+    /// to the source tree instead of copying it, so edits hot-reload, and
+    /// take over from the shell already running, which starts again when
+    /// this one stops. A bubble shows the revision. Release builds, like the
+    /// packages, never run it.
+    #[arg(long, overrides_with = "no_dev")]
     dev: bool,
+
+    /// Run a debug build as an installed shell runs, without dev mode.
+    #[arg(long)]
+    no_dev: bool,
 
     /// Read this config.toml instead of ~/.config/mochi/config.toml. The
     /// theme.toml next to it is used too.
@@ -259,6 +265,17 @@ fn config_command(action: &ConfigAction, config: Option<PathBuf>) -> anyhow::Res
 }
 
 async fn run(args: Args) -> anyhow::Result<daemon::Outcome> {
+    // A build from source runs as dev unless told not to; a release build,
+    // with no source tree to link, never does.
+    let dev = if cfg!(debug_assertions) {
+        !args.no_dev
+    } else if args.dev {
+        anyhow::bail!(
+            "--dev runs only in a debug build from the source tree: `cargo run -p mochid` starts one"
+        );
+    } else {
+        false
+    };
     let mut paths = Paths::from_env()?;
     // One shell per Wayland session, whatever --runtime-dir says.
     let display = std::env::var("WAYLAND_DISPLAY").ok();
@@ -284,14 +301,14 @@ async fn run(args: Args) -> anyhow::Result<daemon::Outcome> {
         pid: std::process::id(),
         socket: paths.socket(),
         version: env!("CARGO_PKG_VERSION").to_owned(),
-        dev: args.dev,
+        dev,
     };
-    let (session, took_over) = session::Session::acquire(&lock, &holder, args.dev).await?;
+    let (session, took_over) = session::Session::acquire(&lock, &holder, dev).await?;
     std::fs::create_dir_all(&paths.runtime_dir)
         .with_context(|| format!("cannot create {}", paths.runtime_dir.display()))?;
     let listener = match ipc::bind(&paths.socket()).await {
         // A daemon from before sessions had locks, on the same socket.
-        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse && args.dev => {
+        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse && dev => {
             session::step_aside(&paths.socket(), holder.pid)
                 .await
                 .with_context(|| {
@@ -319,7 +336,7 @@ async fn run(args: Args) -> anyhow::Result<daemon::Outcome> {
     // Without a supported compositor this logs why and returns a handle whose
     // state says so; modules that need it stay idle.
     let compositor = mochi_core::compositor::connect();
-    let mode = if args.dev { Mode::Link } else { Mode::Copy };
+    let mode = if dev { Mode::Link } else { Mode::Copy };
     let socket = paths.socket();
     let shell_dir = paths.shell_dir();
     let mut runner = Runner::new(paths, mode, compositor, request_sender, exit_sender);
@@ -333,7 +350,7 @@ async fn run(args: Args) -> anyhow::Result<daemon::Outcome> {
     };
     let config = loaded.config.clone();
     let mut daemon = Daemon::new(runner, files, store, loaded);
-    if args.dev {
+    if dev {
         daemon.show_dev(session::dev_payload(took_over.as_ref()));
     }
     daemon.apply(&config)?;

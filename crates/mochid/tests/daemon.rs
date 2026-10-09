@@ -417,6 +417,7 @@ fn sigterm_stops_quickshell_and_removes_the_socket() {
 fn a_second_daemon_refuses_to_start() {
     let daemon = Daemon::start("twice", "idle");
     let second = std::process::Command::new(env!("CARGO_BIN_EXE_mochid"))
+        .arg("--no-dev")
         .env("XDG_RUNTIME_DIR", daemon.dir.join("run"))
         .env("XDG_CONFIG_HOME", daemon.dir.join("config"))
         .env("MOCHI_LOG", "error")

@@ -72,7 +72,8 @@ impl Daemon {
         let log = fs::File::create(dir.join("mochid.log")).unwrap();
         let mut command = Command::new(BINARY);
         command
-            .args(["--modules", modules, "--quickshell"])
+            // As an installed shell runs, also in a debug build.
+            .args(["--no-dev", "--modules", modules, "--quickshell"])
             .arg(&quickshell)
             // Private runtime, config, data and state dirs, so a daemon
             // already running in the session and the user's files don't

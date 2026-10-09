@@ -85,11 +85,11 @@ The [documentation](https://davidutzdev.github.io/mochi/) covers everything:
 Everything runs from the dev shell, `nix develop`:
 
 ```sh
-cargo run -p mochid -- --dev    # the shell, with views that reload as you edit them
-cargo test --workspace          # the tests
+cargo run -p mochid        # the shell, with views that reload as you edit them
+cargo test --workspace     # the tests
 ```
 
-Only one Mochi runs per session. `--dev` takes over from the one already running, which starts again by itself when you stop the dev one. A bubble on the left shows the revision the dev shell runs.
+A debug build like this one runs in dev mode. Only one Mochi runs per session, so the dev shell takes over from the one already running, which starts again by itself when you stop the dev one. A bubble on the left shows the revision the dev shell runs. `--no-dev` runs a debug build as an installed shell runs, and release builds never run in dev mode.
 
 `TODO.md` has the plan, `CHANGELOG.md` what each release brought, and `RELEASING.md` how to make one.
 
