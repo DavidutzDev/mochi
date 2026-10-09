@@ -122,6 +122,15 @@ impl Module for Timer {
                 .icon("timer")
                 .order(14)
                 .options(json!({ "span": 1, "rows": 1 })),
+            ContributionSpec::new("widgets", "widget", "focus", "Widget", "Focus timer")
+                .icon("timer")
+                .options(json!({
+                    "size": [11, 13],
+                    "min": [9, 11],
+                    "max": [24, 28],
+                    "category": "Clock",
+                    "description": "The time left in a ring, or a button to start",
+                })),
         ];
         offers.extend(tour::steps());
         offers

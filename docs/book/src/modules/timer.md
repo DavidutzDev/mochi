@@ -4,7 +4,7 @@ A focus timer, after the pomodoro technique: 25 minutes of focus, then a 5-minut
 
 While it runs, a bubble by the island counts down: a ring that empties as the time goes, with the minutes left inside it, in the accent color for focus and in green for a break. Rest the pointer on it for the time to the second. A click pauses it or resumes it. With `wide = true` in `[bubbles.timer]`, the bubble shows the time to the second, like 18:42.
 
-When focus ends, the island says so and offers the break, with Start the break and Done. With `auto_break = true` the break starts by itself and the notice says so, with Skip the break to go straight back to focus. When a break ends, the island offers the next session. The card in the control center has the time left with pause and stop, or Start when nothing runs.
+When focus ends, the island says so and offers the break, with Start the break and Done. With `auto_break = true` the break starts by itself and the notice says so, with Skip the break to go straight back to focus. When a break ends, the island offers the next session. The card in the control center has the time left with pause and stop, or Start when nothing runs. The [desktop](widgets.md) has a focus timer widget: the time left big inside a ring that waves while it counts down, with pause and stop, or Start focus when nothing runs.
 
 The timer carries on when mochid restarts, like after an update, and changing its settings doesn't stop it: the new lengths apply from the next phase. A phase that ran out while the computer slept ends as soon as it wakes. Logging out forgets it.
 
