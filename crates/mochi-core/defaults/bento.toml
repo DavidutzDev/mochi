@@ -1,0 +1,10 @@
+# Bento: plugins, themes and whole setups other people share, from the
+# registry or from their repositories. It's off until you turn it on here or
+# in the settings: a plugin is code that runs as you, with your files, and a
+# theme or a bento changes your setup. Being listed in the registry doesn't
+# make a package safe.
+[bento]
+# Turn Bento on, knowing that what it installs can harm your computer and
+# contain malicious content. Turning it off again stops installing, trying
+# and updating; what's installed stays until you remove it.
+# i_really_understand_that_bento_can_harm_and_contain_malicious_content = false

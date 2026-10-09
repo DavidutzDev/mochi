@@ -96,13 +96,18 @@ pub fn info(config_file: &Path, id: &str) -> Result<(), String> {
 /// `mochi bento catalog`: the registry's packages and what Bento
 /// installed, as JSON, for the settings panel. A registry that can't be
 /// reached gives an `error` and the installed list still.
-pub fn catalog(config_file: &Path, refresh: bool) -> Result<(), String> {
+pub fn catalog(config_file: &Path, refresh: bool, on: bool, preset: &str) -> Result<(), String> {
     let locations = Locations::beside(config_file);
     let installed = mochi_plugins::bento::Installed::load(&locations.bento)
         .map_err(|error| error.to_string())?;
     let lock = mochi_plugins::Lock::load(&locations.lock).unwrap_or_default();
-    let loaded = registry::registry(&locations, None)
-        .and_then(|registry| registry::load(&registry, &registry::cache_dir(), refresh));
+    // While Bento is off, nothing is downloaded: only what's installed.
+    let loaded = if on {
+        registry::registry(&locations, None)
+            .and_then(|registry| registry::load(&registry, &registry::cache_dir(), refresh))
+    } else {
+        Err("Bento is off".to_owned())
+    };
     let (index, error) = match loaded {
         Ok(index) => (Some(index), None),
         Err(error) => (None, Some(error)),
@@ -178,10 +183,23 @@ pub fn catalog(config_file: &Path, refresh: bool) -> Result<(), String> {
                 let newest = package.pick(pinned.as_deref()).ok()?;
                 (commit.as_deref() != Some(newest.commit.as_str())).then(|| newest.version.clone())
             });
-            let name = index
-                .as_ref()
-                .and_then(|index| index.packages.get(id))
-                .map_or_else(|| id.clone(), |package| package.name.clone());
+            // Its own manifest's name, or the registry's, or its id.
+            let own = match kind {
+                "bento" => super::profiles::stored(id)
+                    .ok()
+                    .and_then(|dir| super::manifest::Bento::load(&dir).ok())
+                    .map(|bento| bento.bento.name),
+                "theme" => mochi_core::themes::find(id)
+                    .ok()
+                    .map(|theme| theme.theme.name),
+                _ => None,
+            };
+            let name = own.unwrap_or_else(|| {
+                index
+                    .as_ref()
+                    .and_then(|index| index.packages.get(id))
+                    .map_or_else(|| id.clone(), |package| package.name.clone())
+            });
             list.push(serde_json::json!({
                 "id": id,
                 "kind": kind,
@@ -192,13 +210,20 @@ pub fn catalog(config_file: &Path, refresh: bool) -> Result<(), String> {
                 "withdrawn": withdrawn,
                 "harmful": harmful,
                 "update": update,
+                "in_use": match kind {
+                    "bento" => installed.active.as_deref() == Some(id.as_str()),
+                    "theme" => preset == id,
+                    _ => false,
+                },
             }));
         }
     }
     println!(
         "{}",
         serde_json::json!({
-            "error": error,
+            "on": on,
+            "active": installed.active,
+            "error": if on { error } else { None },
             "packages": packages,
             "installed": list,
         })

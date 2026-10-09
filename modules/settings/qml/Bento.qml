@@ -21,6 +21,14 @@ Column {
     readonly property bool busy: job?.running === true
     readonly property bool planning: (bento.planning ?? null) !== null
 
+    // Bento stays off until the user says they understand what it installs.
+    readonly property string consent: "config.bento.i_really_understand_that_bento_can_harm_and_contain_malicious_content"
+    readonly property bool on: ((Daemon.state("settings")?.sections ?? []).find(entry => entry.id === "bento")?.fields ?? []).find(field => field.path === consent)?.value === true
+    onOnChanged: {
+        if (on && page === "bento")
+            load(false);
+    }
+
     // Discover's filters, and the package whose page is open.
     property string query: ""
     property string kind: "all"
@@ -36,7 +44,7 @@ Column {
     // The registry is read when a page shows, not when the panel opens.
     function arrive(): void {
         selected = "";
-        if (page === "bento-installed" || (page === "bento" && catalog.packages === undefined && bento.loading !== true))
+        if (page === "bento-installed" || (page === "bento" && on && (catalog.packages === undefined || catalog.on === false) && bento.loading !== true))
             load(false);
     }
 
@@ -244,11 +252,12 @@ Column {
                 wrapMode: Text.Wrap
                 text: {
                     const job = root.job ?? {};
-                    const what = job.target || "everything";
+                    const what = job.target === "mine" ? "your own setup" : job.target || "everything";
                     const doing = {
                         "add": ["Installing", "Installed"],
                         "remove": ["Removing", "Removed"],
-                        "update": ["Updating", "Updated"]
+                        "update": ["Updating", "Updated"],
+                        "use": ["Switching to", "Switched to"]
                     }[job.action] ?? ["Working on", "Done with"];
                     if (job.running)
                         return `${doing[0]} ${what}…`;
@@ -274,11 +283,61 @@ Column {
         }
     }
 
+    // Off until the user turns it on, knowing what it installs.
+    Column {
+        visible: root.page === "bento" && !root.on
+        width: root.width
+        spacing: Theme.spaceSmall
+
+        Row {
+            x: Theme.spaceMedium
+            spacing: Theme.spaceSmall
+
+            Symbol {
+                anchors.verticalCenter: parent.verticalCenter
+                name: "gpp_maybe"
+                size: Theme.textHeadline
+                color: Theme.danger
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: "Bento is off"
+                color: Theme.foreground
+                font.pixelSize: Theme.textTitle
+                font.family: Theme.fontFamily
+                font.weight: Theme.weightTitle
+            }
+        }
+
+        Note {
+            color: Theme.foreground
+            text: "Bento installs plugins, themes and whole setups that other people made. A plugin is a program: it runs as you, with your files, your network and everything Mochi can do. A theme or a bento changes your settings, and a bento can install plugins."
+        }
+
+        Note {
+            color: Theme.foreground
+            text: "A person reads each plugin in the registry before it's listed, and a script checks themes and bentos. That catches some problems, not all of them, and anything can come from a repository or a link. Install only what you'd trust as much as a program you download."
+        }
+
+        Note {
+            text: `You can turn it off again here. Turning it off stops installing, trying and updating; what's installed stays until you remove it on the Installed page. In config.toml, it's [bento] ${root.consent.split(".").pop()} = true.`
+        }
+
+        Button {
+            x: Theme.spaceMedium
+            text: "I understand the risks, turn Bento on"
+            icon: "warning"
+            tone: "danger"
+            onClicked: Daemon.command("settings", "set", [root.consent, "true"])
+        }
+    }
+
     // What installing something will do, before it does.
     Column {
         id: planned
 
-        visible: root.page === "bento" && root.planning
+        visible: root.page === "bento" && root.on && root.planning
         width: root.width
         spacing: Theme.spaceSmall
 
@@ -412,7 +471,7 @@ Column {
                 }
                 Fact {
                     icon: "undo"
-                    text: "Removing it on the Installed page puts back the settings and widgets it replaces"
+                    text: "It becomes the setup in use; the Installed page switches back to your own, as you left it"
                 }
 
                 Repeater {
@@ -473,7 +532,7 @@ Column {
 
     // Discover: a package's page.
     Column {
-        visible: root.page === "bento" && !root.planning && root.chosen !== null
+        visible: root.page === "bento" && root.on && !root.planning && root.chosen !== null
         width: root.width
         spacing: Theme.spaceSmall
 
@@ -563,7 +622,7 @@ Column {
 
     // Discover: the registry.
     Column {
-        visible: root.page === "bento" && !root.planning && root.chosen === null
+        visible: root.page === "bento" && root.on && !root.planning && root.chosen === null
         width: root.width
         spacing: Theme.spaceMedium
 
@@ -768,17 +827,45 @@ Column {
         }
     }
 
-    // Installed.
+    // Turning it off again.
+    Button {
+        visible: root.page === "bento" && root.on && !root.planning && root.chosen === null
+        x: Theme.spaceMedium
+        text: "Turn Bento off"
+        icon: "toggle_off"
+        tone: "ghost"
+        onClicked: Daemon.command("settings", "set", [root.consent, "false"])
+    }
+
+    // Installed: the setups to switch between, your own first, then the
+    // themes and plugins.
     Column {
         visible: root.page === "bento-installed"
         width: root.width
         spacing: 2
 
+        readonly property bool bentos: root.installed.some(entry => entry.kind === "bento")
+        readonly property var rows: (bentos ? [
+                {
+                    "id": "mine",
+                    "kind": "mine",
+                    "name": "Your own setup",
+                    "source": "Your files, and what you changed while using it",
+                    "in_use": (root.catalog.active ?? null) === null
+                }
+            ] : []).concat(root.installed)
+
+        Note {
+            visible: !root.on
+            bottomPadding: Theme.spaceSmall
+            text: "Bento is off: you can switch back to your own setup, change themes and remove what's installed, but not install, update or switch to a bento."
+        }
+
         Row {
             x: Theme.spaceMedium
             bottomPadding: Theme.spaceSmall
             spacing: Theme.spaceSmall
-            visible: root.installed.some(entry => entry.update)
+            visible: root.on && root.installed.some(entry => entry.update)
 
             Button {
                 text: "Update all"
@@ -801,20 +888,22 @@ Column {
         }
 
         Repeater {
-            model: root.installed
+            model: parent.rows
 
             ListRow {
                 id: row
 
                 required property var modelData
                 property bool confirming: false
+                readonly property bool switchable: modelData.kind === "mine" || modelData.kind === "theme" || (modelData.kind === "bento" && root.on)
 
                 width: root.width
                 height: Theme.rowHeight + (modelData.withdrawn ? 16 : 0)
                 flat: true
+                selected: modelData.in_use === true && modelData.kind !== "theme"
                 leadingSize: 26
-                icon: root.kindIcon(modelData.kind)
-                title: `${modelData.name} ${modelData.version ?? ""}`
+                icon: modelData.kind === "mine" ? "person" : root.kindIcon(modelData.kind)
+                title: modelData.kind === "mine" ? modelData.name : `${modelData.name} ${modelData.version ?? ""}`
                 subtitle: modelData.withdrawn ? `<font color="${Theme.danger}">${modelData.withdrawn}</font><br>${modelData.source}` : modelData.by ? `${modelData.source}, with ${modelData.by}` : modelData.source
                 subtitleFormat: Text.StyledText
                 onClicked: confirming = false
@@ -823,15 +912,32 @@ Column {
                     anchors.verticalCenter: parent.verticalCenter
                     spacing: Theme.spaceSmall
 
+                    Text {
+                        visible: row.modelData.in_use === true
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: "In use"
+                        color: Theme.accent
+                        font.pixelSize: Theme.textCaption
+                        font.family: Theme.fontFamily
+                        font.weight: Theme.weightTitle
+                    }
+
                     Button {
-                        visible: (row.modelData.update ?? null) !== null
+                        visible: row.modelData.in_use === false && row.switchable
+                        text: "Use"
+                        enabled: !root.busy
+                        onClicked: Daemon.command("settings", "bento-use", [row.modelData.id])
+                    }
+
+                    Button {
+                        visible: root.on && (row.modelData.update ?? null) !== null
                         text: `Update to ${row.modelData.update}`
                         enabled: !root.busy
                         onClicked: Daemon.command("settings", "bento-update", [row.modelData.id])
                     }
 
                     Button {
-                        visible: !row.modelData.by
+                        visible: !row.modelData.by && row.modelData.kind !== "mine"
                         text: row.confirming ? "Remove it?" : "Remove"
                         tone: row.confirming ? "danger" : "ghost"
                         enabled: !root.busy

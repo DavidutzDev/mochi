@@ -15,6 +15,7 @@ mod apply;
 mod client;
 mod fetch;
 mod manifest;
+mod profiles;
 mod publish;
 mod registry;
 mod screens;
@@ -52,6 +53,9 @@ pub enum Action {
     /// plugins.toml takes.
     Add {
         source: String,
+        /// Install a theme or a bento without switching to it.
+        #[arg(long)]
+        no_use: bool,
         /// Install this commit of a git or registry source, the one `plan`
         /// showed.
         #[arg(long)]
@@ -60,6 +64,9 @@ pub enum Action {
         #[arg(long, short)]
         yes: bool,
     },
+    /// Switch to a bento, back to your own setup with `mine`, or put a
+    /// theme on. Each setup keeps what you change while using it.
+    Use { name: String },
     /// Say what `add` would do, as JSON, changing nothing.
     Plan { source: String },
     /// The registry's packages and what Bento installed, as JSON.
@@ -172,7 +179,31 @@ pub enum RegistryAction {
     },
 }
 
+/// Why Bento refuses while it's off, and how to turn it on.
+pub(super) const OFF: &str = "Bento is off. What it installs comes from other people: a plugin runs as you, with your files, a theme or a bento changes your setup, and being in the registry doesn't make it safe. To turn it on, set\n\n  [bento]\n  i_really_understand_that_bento_can_harm_and_contain_malicious_content = true\n\nin config.toml, or turn it on in the settings' Bento page.";
+
+/// Whether the user turned Bento on, in their files or the settings.
+pub fn on(config_file: &Path) -> Result<bool, String> {
+    let (_, loaded) =
+        crate::settings::Store::load(config_file, None).map_err(|error| error.to_string())?;
+    Ok(loaded.config.bento.on)
+}
+
 pub fn run(action: &Action, config_file: &Path) -> Result<(), String> {
+    // What fetches other people's packages waits for consent; listing,
+    // removing, sharing and the registry's own tools don't.
+    let fetches = matches!(
+        action,
+        Action::Add { .. }
+            | Action::Try { .. }
+            | Action::Plan { .. }
+            | Action::Search { .. }
+            | Action::Info { .. }
+            | Action::Update { .. }
+    );
+    if fetches && !on(config_file)? {
+        return Err(OFF.to_owned());
+    }
     match action {
         Action::Share {
             dir,
@@ -192,7 +223,13 @@ pub fn run(action: &Action, config_file: &Path) -> Result<(), String> {
                 json: *json,
             },
         ),
-        Action::Add { source, at, yes } => apply::add(config_file, source, at.as_deref(), *yes),
+        Action::Add {
+            source,
+            at,
+            no_use,
+            yes,
+        } => apply::add(config_file, source, at.as_deref(), !*no_use, *yes),
+        Action::Use { name } => apply::use_it(config_file, name, on(config_file)?),
         Action::Plan { source } => apply::plan(config_file, source),
         Action::Publish {
             dir,
@@ -213,7 +250,16 @@ pub fn run(action: &Action, config_file: &Path) -> Result<(), String> {
                 yes: *yes,
             },
         ),
-        Action::Catalog { refresh } => registry::catalog(config_file, *refresh),
+        Action::Catalog { refresh } => {
+            let (_, loaded) = crate::settings::Store::load(config_file, None)
+                .map_err(|error| error.to_string())?;
+            registry::catalog(
+                config_file,
+                *refresh,
+                loaded.config.bento.on,
+                &loaded.theme.preset,
+            )
+        }
         Action::Try { source } => apply::try_it(config_file, source),
         Action::Remove { id, yes } => apply::remove(config_file, id, *yes),
         Action::List => apply::list(config_file),

@@ -8,6 +8,8 @@ mochi bento add pomodoro                 # install from it
 mochi bento share ~/cozy                 # make a bento of your setup
 mochi bento add github.com/someone/cozy  # install one from anywhere
 mochi bento try github.com/someone/dusk  # try a theme or a bento, then Keep or Drop
+mochi bento use cozy                      # switch to an installed bento, or a theme
+mochi bento use mine                      # back to your own setup
 mochi bento remove cozy                  # take it out again
 mochi bento list                         # what Bento installed
 mochi bento update                       # move to newer releases
@@ -15,13 +17,30 @@ mochi bento update                       # move to newer releases
 
 `add`, `try` and `remove` work for all three kinds: a directory with a `mochi-bento.toml` is a bento, one with a `mochi-theme.toml` a [theme](theme.md#theme-packages), and one with a `mochi-plugin.toml` a [plugin](plugins.md). Themes and bentos hold only TOML and images, so they run nothing; a plugin is code, and asks before it installs, as `mochi plugins install` does.
 
+## Turning it on
+
+Bento is off until you turn it on. What it installs comes from other people: a plugin is a program that runs as you, with your files and your network, and a theme or a bento changes your settings, and a bento can install plugins. A person reads each plugin in the registry before it's listed, and a script checks themes and bentos, which catches some problems and not all of them; anything from a repository or a link isn't checked at all.
+
+The settings' Bento page explains this and has a button to turn it on, or set this in `config.toml`:
+
+```toml
+[bento]
+i_really_understand_that_bento_can_harm_and_contain_malicious_content = true
+```
+
+While it's off, `add`, `try`, `plan`, `search`, `info` and `update` refuse and say why, and nothing is downloaded. Turning it off again works the same way, with **Turn Bento off** at the bottom of Discover. What's installed stays until you remove it: `list`, `remove`, `use mine` and themes keep working, and so do `share`, `check` and `publish`, which only read your own files.
+
+The switch belongs to no setup: switching between bentos leaves it as it is.
+
 ## In the settings
 
 The [settings panel](modules/settings.md) has a Bento group at the bottom of its sidebar, with three pages. `mochi ipc settings open bento` opens it.
 
+While Bento is off, Discover says what Bento installs and what can go wrong, with a button to turn it on: see [Turning it on](#turning-it-on).
+
 - **Discover** lists the registry: a card per package, with its first screenshot, a search, and filters for plugins, widgets (plugins tagged `widget`), themes and bentos. A card opens the package's page: its screenshots, who looks after it, its license and repository, then **Install** and, for themes and bentos, **Try**. Under the cards, a field takes anything else `add` takes, like a repository or a gist.
 - **Install** first shows what it will do, the same as the terminal's question: what a plugin builds, starts, runs and reads; a theme's colors; a bento's settings, themes, widgets and wallpaper, and the plugins it needs with what each runs. Nothing happens until you press Install again. A bento whose settings don't check, or that needs a plugin that can't be installed, can't be installed.
-- **Installed** lists what Bento installed, with **Update** where the registry has a newer release, **Update all**, and **Remove**, which asks once more. What a bento brought follows its bento. A release the registry withdrew says so in red.
+- **Installed** lists your own setup and each bento, with **Use** to switch to one, then the themes, with **Use** to put one on, and the plugins. It has **Update** where the registry has a newer release, **Update all**, and **Remove**, which asks once more. What a bento brought follows its bento. A release the registry withdrew says so in red.
 - **Share** makes a bento of this setup in a directory you name, with or without the wallpaper, and lists what it wrote and what it left out.
 
 The panel runs `mochid bento` for each of these, so it does exactly what the terminal does, and stays usable while a plugin builds.
@@ -87,14 +106,22 @@ Cozy 1.0.0 (cozy)
   plugins   pomodoro
   widgets   3 on 2 screens
   needs     pomodoro from git:github.com/someone/mochi-pomodoro, which asks before it installs
-  Its settings go over yours, in changes.toml, and its widgets replace yours. `mochi bento remove cozy`
-  puts back what it replaces.
+  It's a setup you switch to: its settings go over yours, its widgets replace yours, and
+  `mochi bento use mine` switches back to your own, as you left it.
 Add cozy? [y/N]
 ```
 
-Before installing anything, `add` checks the bento's settings the way `mochi config check` would, so a typo or an option this Mochi doesn't know changes nothing. Then it installs the themes it brings and the plugins it needs, each plugin showing what it runs and asking. Its settings go into `changes.toml`, over your files, like changes from the [settings panel](modules/settings.md): a dot marks each one there, Copy hands them to your Nix or TOML config, and they work while home-manager owns your files. Its widgets replace `widgets.toml`, and its wallpaper is set with awww or swww when one runs. If any step fails, what it installed is removed and nothing changes.
+Before installing anything, `add` checks the bento's settings the way `mochi config check` would, so a typo or an option this Mochi doesn't know changes nothing. Then it installs the themes it brings and the plugins it needs, each plugin showing what it runs and asking. Then it switches to the bento, unless you add `--no-use`. If any step fails, what it installed is removed and nothing changes.
 
-`mochi bento remove cozy` puts `changes.toml` and `widgets.toml` back as they were before the bento, and removes the themes and plugins it brought. Changes you made after adding it go too, and `remove` says so before it asks. Adding a bento again updates it, and `remove` still goes back to before the first time.
+Adding a theme puts it on in the same way, as `preset`; `--no-use` only installs it.
+
+## Switching setups
+
+Your own setup and each bento you installed are setups to switch between: `mochi bento use cozy`, `mochi bento use mine`, or **Use** on the Installed page. Each keeps its own `changes.toml` and `widgets.toml`, so what you change while using a bento stays with that bento, and your own setup comes back as you left it. A bento used for the first time starts from your own setup, with its settings over yours, like changes from the [settings panel](modules/settings.md): a dot marks each one there, Copy hands them to your Nix or TOML config, and they work while home-manager owns your files. Its widgets replace yours, and its wallpaper is set with awww or swww when one runs; going back to your own setup sets your wallpaper again.
+
+The plugins a bento needs run while it's in use, since its list of modules is the one in place. `mochi bento use <theme>` puts a theme on in whichever setup is in use.
+
+`mochi bento remove cozy` switches back to your own setup first when cozy is in use, forgets what its setup became, and removes the themes and plugins it brought that no other bento needs. Adding a bento again updates it: the one in use gets its new settings over the ones in place, and another starts fresh the next time you use it. Setups are kept in `~/.local/share/mochi/bentos/`.
 
 `--yes` skips the questions, plugins' included.
 
@@ -182,7 +209,7 @@ version = "1.0.0"
 friends = "https://friends.example/index.json"
 ```
 
-Its plugins count as if `plugins.toml` listed them: `mochi plugins install` installs them on a new machine, `mochi plugins list` shows them, and `plugins.toml` wins when both list an id. `by` names the bento that brought something, which removing the bento removes too. The settings panel's Copy as Nix includes its plugins as `plugins`, for `programs.mochi.plugins`. Themes go in `~/.local/share/mochi/themes/`, and what a bento replaced in `~/.local/share/mochi/bentos/<id>/`.
+Its plugins count as if `plugins.toml` listed them: `mochi plugins install` installs them on a new machine, `mochi plugins list` shows them, and `plugins.toml` wins when both list an id. `by` names the bento that brought something, which removing the bento removes too. The settings panel's Copy as Nix includes its plugins as `plugins`, for `programs.mochi.plugins`. Themes go in `~/.local/share/mochi/themes/`, and the bentos with their setups in `~/.local/share/mochi/bentos/<id>/`, yours in `.mine/`. `active` names the bento in use, when one is.
 
 `[registries]` is the one part you edit yourself: see [Other registries](#other-registries).
 

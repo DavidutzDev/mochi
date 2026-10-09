@@ -118,6 +118,11 @@ impl Module for Settings {
             ActionSpec::new("bento-update", "Move what Bento installed to newer releases")
                 .arg(ArgSpec::string("id", "Only this").optional()),
             ActionSpec::new("bento-try", "Try a theme or a bento's look").arg(source()),
+            ActionSpec::new(
+                "bento-use",
+                "Switch to a bento, back to your own setup with mine, or put a theme on",
+            )
+            .arg(ArgSpec::string("name", "A bento's or a theme's id, or mine")),
             ActionSpec::new("bento-share", "Make a bento of this setup")
                 .arg(ArgSpec::string("dir", "The directory to write"))
                 .arg(ArgSpec::bool("wallpaper", "Bring the wallpaper").optional())
@@ -332,6 +337,7 @@ impl Panel {
                     "bento-catalog" => vec![text("refresh")],
                     "bento-add" => vec![text("source"), text("at")],
                     "bento-remove" | "bento-update" => vec![text("id")],
+                    "bento-use" => vec![text("name")],
                     "bento-share" => vec![
                         text("dir"),
                         args.bool("wallpaper").unwrap_or(false).to_string(),

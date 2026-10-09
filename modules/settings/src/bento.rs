@@ -89,7 +89,7 @@ impl Bento {
                 }
                 self.shared = Value::Null;
             }
-            "bento-add" | "bento-remove" | "bento-update" | "bento-try" => {
+            "bento-add" | "bento-remove" | "bento-update" | "bento-try" | "bento-use" => {
                 if self.job["running"] == json!(true) {
                     return Err("Bento is busy with something else".into());
                 }
@@ -103,6 +103,7 @@ impl Bento {
                         args
                     }
                     "bento-remove" => vec!["remove".to_owned(), target.clone(), "--yes".into()],
+                    "bento-use" => vec!["use".to_owned(), target.clone()],
                     "bento-update" => vec!["update".to_owned(), "--yes".into()],
                     _ => vec!["try".to_owned(), target.clone()],
                 };

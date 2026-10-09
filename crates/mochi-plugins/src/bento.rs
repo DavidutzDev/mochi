@@ -44,6 +44,10 @@ pub struct Installed {
     pub bentos: BTreeMap<String, Entry>,
     /// Registries besides the default one, by name, with their index's URL;
     /// `bento` here points the default one elsewhere.
+    /// The bento in use, when one is: its settings and widgets are the ones
+    /// in place, and yours wait in Bento's folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub registries: BTreeMap<String, String>,
 }

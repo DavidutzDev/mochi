@@ -31,7 +31,7 @@ When `changes.toml` has an option that no longer fits, after an update renamed i
 | `preview <path> <json>`, `keep`, `drop` | Tries an option without keeping it, then keeps or drops what's being tried. |
 | `try <json>` | Tries whole tables of settings, like `{"config": {...}, "theme": {...}}`, in place of what was being tried; `mochi bento try` sends it. |
 | `bento-catalog [refresh]`, `bento-plan <source>`, `bento-show <source>` | Read Bento's registry and what it installed, or say what installing something does; `show` opens the Discover page on it, as `mochi://bento/` links do. See [Bento](../bento.md#in-the-settings). |
-| `bento-add <source> [commit]`, `bento-remove <id>`, `bento-update [id]`, `bento-try <source>`, `bento-share <dir> [wallpaper] [name]` | What the Bento pages' buttons run, with `mochid bento`. `bento-forget` closes what a plan or a share shows. |
+| `bento-add <source> [commit]`, `bento-remove <id>`, `bento-update [id]`, `bento-try <source>`, `bento-use <id\|mine>`, `bento-share <dir> [wallpaper] [name]` | What the Bento pages' buttons run, with `mochid bento`. `bento-forget` closes what a plan or a share shows. |
 | `text <path>`, `edit <path> <toml>` | A section as TOML, and replacing it. |
 | `export [nix\|toml]`, `copy [nix\|toml]` | Prints, or copies, every option that isn't at its default. |
 

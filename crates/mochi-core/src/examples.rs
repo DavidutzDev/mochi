@@ -19,6 +19,9 @@ pub const ISLAND: &str = include_str!("../defaults/island.toml");
 /// The `[bubbles]` section of `config.toml`.
 pub const BUBBLES: &str = include_str!("../defaults/bubbles.toml");
 
+/// The `[bento]` section of `config.toml`.
+pub const BENTO: &str = include_str!("../defaults/bento.toml");
+
 /// The TOML an example stands for: each `# key = value` line uncommented.
 /// Other comments, like a commented `# [bubbles.media]`, stay comments.
 pub fn uncommented(example: &str) -> String {
@@ -70,6 +73,8 @@ pub fn config(enabled: &[&str], modules: &[(&str, &str)]) -> String {
     text.push_str(ISLAND.trim_end());
     text.push_str("\n\n");
     text.push_str(BUBBLES.trim_end());
+    text.push_str("\n\n");
+    text.push_str(BENTO.trim_end());
     for (_, example) in modules {
         if !example.is_empty() {
             text.push_str("\n\n");

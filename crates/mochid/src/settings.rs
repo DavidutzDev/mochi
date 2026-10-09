@@ -583,7 +583,7 @@ fn defaults(catalog: &Catalog) -> Tables {
         "modules".to_owned(),
         Value::Array(vec![Value::String("idle".to_owned())]),
     );
-    let examples = [examples::ISLAND, examples::BUBBLES]
+    let examples = [examples::ISLAND, examples::BUBBLES, examples::BENTO]
         .into_iter()
         .map(str::to_owned)
         .chain(
@@ -851,7 +851,7 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
             "bento",
             "Discover",
             "storefront",
-            "Plugins, themes and whole setups from Bento's registry, each release checked before it's listed.",
+            "Plugins, themes and whole setups other people share, from Bento's registry or their own repositories.",
         ),
         (
             "bento-installed",
@@ -866,15 +866,27 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
             "Make a bento of this setup: its settings, theme, widgets and plugins, without what belongs to this machine or to you.",
         ),
     ] {
+        // Discover holds the switch that turns Bento on, which the page draws
+        // as its consent; search still finds it.
+        let (path, fields) = if id == "bento" {
+            let comments = Comments::parse(examples::BENTO);
+            let schema = options::schema_of::<mochi_core::BentoConfig>();
+            (
+                "config.bento".to_owned(),
+                options::fields(&schema, "config", "bento", &comments, &config_defaults),
+            )
+        } else {
+            (id.to_owned(), Vec::new())
+        };
         out.push(Section {
             id: id.to_owned(),
-            path: id.to_owned(),
+            path,
             title: title.to_owned(),
             description: description.to_owned(),
             group: Group::Bento,
             icon: icon.to_owned(),
             module: None,
-            fields: Vec::new(),
+            fields,
         });
     }
     out
@@ -1116,6 +1128,10 @@ mod tests {
             ("theme".to_owned(), options::schema_of::<Theme>()),
             ("island".to_owned(), options::schema_of::<IslandConfig>()),
             ("bubbles".to_owned(), options::schema_of::<BubblesConfig>()),
+            (
+                "bento".to_owned(),
+                options::schema_of::<mochi_core::BentoConfig>(),
+            ),
         ];
         for module in &catalog.modules {
             if let Some(schema) = module.settings_schema() {

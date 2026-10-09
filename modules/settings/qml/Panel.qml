@@ -120,7 +120,8 @@ Item {
             const entry = current;
             if (!entry)
                 return "[]";
-            const paths = entry.id === "modules" ? [] : entry.fields.map(field => field.path);
+            // The Modules and Bento pages draw their own content.
+            const paths = entry.id === "modules" || entry.group === "bento" ? [] : entry.fields.map(field => field.path);
             return JSON.stringify([
                 {
                     "section": entry.id,
@@ -499,7 +500,7 @@ Item {
                 }
 
                 Button {
-                    visible: !content.searching && root.current !== null && root.sectionModified(root.current)
+                    visible: !content.searching && root.current !== null && !root.bentoPage && root.sectionModified(root.current)
                     text: "Reset"
                     icon: "restart_alt"
                     tone: "ghost"

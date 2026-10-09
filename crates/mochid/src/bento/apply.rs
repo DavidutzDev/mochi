@@ -13,7 +13,6 @@ use std::path::{Path, PathBuf};
 use mochi_core::changes::Changes;
 use mochi_core::themes::{self, ThemeFile};
 use mochi_core::toml::{Table, Value};
-use mochi_module_widgets::layout::Layout;
 use mochi_plugins::bento::{Entry, Installed};
 use mochi_plugins::install::{Installer, Mode, Outcome, Plan};
 use mochi_plugins::registry::Kind;
@@ -21,7 +20,7 @@ use mochi_plugins::{Locations, Manifest, Source};
 
 use super::fetch::{self, Fetched};
 use super::manifest::{self, Bento};
-use super::{client, screens, share};
+use super::{client, profiles, screens, share};
 use crate::settings::{Op, Store};
 
 /// What a source holds, found by the manifest at its root.
@@ -71,9 +70,9 @@ fn theme_in(dir: &Path) -> Result<ThemeFile, String> {
 }
 
 /// What `add` and `remove` work with.
-struct Context {
-    config_file: PathBuf,
-    locations: Locations,
+pub(super) struct Context {
+    pub(super) config_file: PathBuf,
+    pub(super) locations: Locations,
     yes: bool,
 }
 
@@ -89,11 +88,11 @@ impl Context {
         })
     }
 
-    fn installed(&self) -> Result<Installed, String> {
+    pub(super) fn installed(&self) -> Result<Installed, String> {
         Installed::load(&self.locations.bento).map_err(|error| error.to_string())
     }
 
-    fn save(&self, installed: &Installed) -> Result<(), String> {
+    pub(super) fn save(&self, installed: &Installed) -> Result<(), String> {
         installed
             .save(&self.locations.bento)
             .map_err(|error| error.to_string())
@@ -112,7 +111,7 @@ impl Context {
 
     /// The settings store, refusing when `changes.toml` has changes it
     /// sets aside: laying a bento over them would lose them.
-    fn store(&self) -> Result<Store, String> {
+    pub(super) fn store(&self) -> Result<Store, String> {
         let (store, _) = Store::load(&self.config_file, None).map_err(|error| error.to_string())?;
         let path = Changes::path(&self.config_file);
         let saved = Changes::load(&path).map_err(|error| error.to_string())?;
@@ -154,23 +153,75 @@ fn get(
     Ok((source, fetched, package))
 }
 
-/// `mochi bento add`.
-pub fn add(config_file: &Path, text: &str, at: Option<&str>, yes: bool) -> Result<(), String> {
+/// `mochi bento add`: installs, then switches to a theme or a bento unless
+/// `use_it` is off.
+pub fn add(
+    config_file: &Path,
+    text: &str,
+    at: Option<&str>,
+    use_it: bool,
+    yes: bool,
+) -> Result<(), String> {
     let context = Context::new(config_file, yes)?;
     let (source, fetched, package) = get(&context, text, at)?;
     match package {
         Package::Theme(theme) => {
             add_theme(&context, &source, &fetched, &theme, None)?;
             let id = &theme.theme.id;
-            eprintln!(
-                "Installed the theme {} ({id}). Pick it in the settings, or run\n  mochi ipc settings set theme.preset '\"{id}\"'",
-                theme.theme.name
-            );
+            if use_it {
+                use_theme(&context, id)?;
+                eprintln!(
+                    "Installed the theme {} ({id}), and it's in use.",
+                    theme.theme.name
+                );
+            } else {
+                eprintln!(
+                    "Installed the theme {} ({id}). `mochi bento use {id}` puts it on.",
+                    theme.theme.name
+                );
+            }
             Ok(())
         }
         Package::Plugin(manifest) => add_plugin(&context, &source, &manifest),
-        Package::Bento(bento) => add_bento(&context, &source, &fetched, &bento),
+        Package::Bento(bento) => add_bento(&context, &source, &fetched, &bento, use_it),
     }
+}
+
+/// Puts a theme on: `preset` in the settings' changes, in the setup in use.
+fn use_theme(context: &Context, id: &str) -> Result<(), String> {
+    themes::find(id)?;
+    let mut store = context.store()?;
+    store.change(&Op::Merge(Changes {
+        config: Table::new(),
+        theme: Table::from_iter([("preset".to_owned(), Value::String(id.to_owned()))]),
+    }))?;
+    client::reload();
+    Ok(())
+}
+
+/// `mochi bento use`: switches to a bento, back to your own setup with
+/// `mine`, or puts a theme on.
+pub fn use_it(config_file: &Path, name: &str, on: bool) -> Result<(), String> {
+    let context = Context::new(config_file, true)?;
+    let installed = context.installed()?;
+    match profiles::setup_of(name) {
+        None => {
+            profiles::switch(&context, None)?;
+            eprintln!("Back to your own setup.");
+        }
+        Some(id) if installed.bentos.contains_key(id) => {
+            if !on {
+                return Err(super::OFF.to_owned());
+            }
+            profiles::switch(&context, Some(id))?;
+            eprintln!("Using {id}. `mochi bento use mine` switches back to your own setup.");
+        }
+        Some(id) => {
+            use_theme(&context, id)?;
+            eprintln!("The theme {id} is on.");
+        }
+    }
+    Ok(())
 }
 
 /// Copies a theme's manifest into the themes directory and records it.
@@ -345,20 +396,12 @@ fn add_plugin(context: &Context, source: &Source, manifest: &Manifest) -> Result
     client::reload();
     Ok(())
 }
-
-/// Where Bento keeps a bento's things: what it replaced, and its
-/// wallpaper.
-fn bento_dir(id: &str) -> Result<PathBuf, String> {
-    mochi_core::config::data_dir()
-        .map(|data| data.join("bentos").join(id))
-        .ok_or_else(|| "no data directory: set HOME or XDG_DATA_HOME".into())
-}
-
 fn add_bento(
     context: &Context,
     source: &Source,
     fetched: &Fetched,
     bento: &Bento,
+    use_it: bool,
 ) -> Result<(), String> {
     let id = bento.bento.id.clone();
     let sources = bento.sources()?;
@@ -399,41 +442,29 @@ fn add_bento(
             if screens.len() == 1 { "is" } else { "are" }
         );
     }
-    let mut installed = context.installed()?;
+    let installed = context.installed()?;
     let again = installed.bentos.contains_key(&id);
+    let active = installed.active.as_deref() == Some(id.as_str());
     if again {
         eprintln!("  It's installed already: this updates it.");
     }
-    eprintln!(
-        "  Its settings go over yours, in changes.toml{}. `mochi bento remove {id}`\n  puts back what it replaces.",
-        if bento.widgets.is_empty() {
-            ""
-        } else {
-            ", and its widgets replace yours"
-        }
-    );
+    if active {
+        eprintln!("  It's in use: its new settings go over the ones in place.");
+    } else if use_it {
+        eprintln!(
+            "  It's a setup you switch to: its settings go over yours{}, and\n  `mochi bento use mine` switches back to your own, as you left it.",
+            if bento.widgets.is_empty() {
+                ""
+            } else {
+                ", its widgets replace yours"
+            }
+        );
+    } else {
+        eprintln!("  It's kept as a setup to switch to with `mochi bento use {id}`.");
+    }
     if !context.ask(&format!("Add {id}?")) {
         eprintln!("Skipped {id}");
         return Ok(());
-    }
-
-    // What it replaces, the first time only, so an update still goes back
-    // to before.
-    let home = bento_dir(&id)?;
-    let before = home.join("before");
-    let changes_file = Changes::path(&context.config_file);
-    let widgets_file = context
-        .config_file
-        .with_file_name(mochi_module_widgets::FILE);
-    if !again {
-        let _ = std::fs::remove_dir_all(&before);
-        std::fs::create_dir_all(&before).map_err(|error| error.to_string())?;
-        for file in [&changes_file, &widgets_file] {
-            if file.exists() {
-                let name = file.file_name().expect("a file name");
-                std::fs::copy(file, before.join(name)).map_err(|error| error.to_string())?;
-            }
-        }
     }
 
     // Themes and plugins first, so the settings can use them; undone if
@@ -453,12 +484,7 @@ fn add_bento(
             }
             done_plugins.push(plugin.clone());
         }
-        let mut store = context.store()?;
-        store.change(&Op::Merge(Changes {
-            config: bento.config.clone(),
-            theme: bento.theme.clone(),
-        }))?;
-        Ok(())
+        profiles::keep(&fetched.dir, &id)
     })();
     if let Err(error) = result {
         for theme_id in &done_themes {
@@ -477,40 +503,12 @@ fn add_bento(
             let _ = context.save(&installed);
         }
         if !again {
-            let _ = std::fs::remove_dir_all(&home);
+            let _ = std::fs::remove_dir_all(profiles::folder(Some(&id))?);
         }
         return Err(format!("{error}; nothing changed"));
     }
 
-    if !bento.widgets.is_empty() {
-        let mut layout = Layout::default();
-        for widget in &bento.widgets {
-            let mut widget = widget.clone();
-            if let Some(name) =
-                screens::parse_role(&widget.output).and_then(|index| screens.get(index))
-            {
-                widget.output = name.clone();
-            }
-            layout.widgets.push(widget);
-        }
-        layout
-            .save(&widgets_file)
-            .map_err(|error| format!("cannot write {}: {error}", widgets_file.display()))?;
-    }
-
-    if let Some(file) = &bento.bento.wallpaper {
-        let from = fetched.dir.join(file);
-        let name = Path::new(file)
-            .file_name()
-            .expect("checked inside the bento");
-        let to = home.join(name);
-        match std::fs::copy(&from, &to) {
-            Ok(_) => set_wallpaper(&to),
-            Err(error) => eprintln!("No wallpaper: cannot copy {}: {error}", from.display()),
-        }
-    }
-
-    installed = context.installed()?;
+    let mut installed = context.installed()?;
     installed.bentos.insert(
         id.clone(),
         Entry {
@@ -521,11 +519,29 @@ fn add_bento(
         },
     );
     context.save(&installed)?;
-    eprintln!(
-        "Added {}. `mochi bento remove {id}` takes it out.",
-        bento.bento.name
-    );
-    client::reload();
+    if active {
+        // An update of the setup in use: its new settings over the ones in
+        // place.
+        profiles::lay(context, &id)?;
+        client::reload();
+    } else {
+        // What it became last time was for the old version.
+        profiles::forget(&id)?;
+        if use_it {
+            profiles::switch(context, Some(&id))?;
+        }
+    }
+    if active || use_it {
+        eprintln!(
+            "Added {}. `mochi bento use mine` switches back to your own setup, and `mochi bento remove {id}` takes it out.",
+            bento.bento.name
+        );
+    } else {
+        eprintln!(
+            "Added {}. `mochi bento use {id}` switches to it.",
+            bento.bento.name
+        );
+    }
     Ok(())
 }
 
@@ -607,7 +623,7 @@ fn check(dir: &Path, bento: &Bento, brought: &[(String, PathBuf)]) -> Result<(),
 
 /// Sets the wallpaper with awww or swww when one runs; says where it is
 /// otherwise.
-fn set_wallpaper(path: &Path) {
+pub(super) fn set_wallpaper(path: &Path) {
     for program in ["awww", "swww"] {
         let set = std::process::Command::new(program)
             .arg("img")
@@ -764,12 +780,30 @@ pub fn remove(config_file: &Path, id: &str, yes: bool) -> Result<(), String> {
 
 fn remove_bento(context: &Context, id: &str) -> Result<(), String> {
     let installed = context.installed()?;
-    let themes: Vec<String> = by(&installed.themes, id);
-    let plugins: Vec<String> = by(&installed.plugins, id);
-    eprintln!(
-        "Removing the bento {id} puts back your settings and widgets as they were before it,"
-    );
-    eprintln!("dropping changes made since.");
+    // What another bento installed still needs stays.
+    let mut needed = std::collections::BTreeSet::new();
+    for other in installed.bentos.keys().filter(|other| *other != id) {
+        let dir = profiles::stored(other)?;
+        if let Ok(bento) = Bento::load(&dir) {
+            needed.extend(bento.plugins.keys().cloned());
+        }
+        for (theme, _) in bento_themes(&dir).unwrap_or_default() {
+            needed.insert(theme);
+        }
+    }
+    let themes: Vec<String> = by(&installed.themes, id)
+        .into_iter()
+        .filter(|theme| !needed.contains(theme))
+        .collect();
+    let plugins: Vec<String> = by(&installed.plugins, id)
+        .into_iter()
+        .filter(|plugin| !needed.contains(plugin))
+        .collect();
+    let active = installed.active.as_deref() == Some(id);
+    if active {
+        eprintln!("{id} is in use: removing it switches back to your own setup, as you left it.");
+    }
+    eprintln!("Removing {id} forgets what its setup became.");
     if !themes.is_empty() {
         eprintln!("  removes the themes {}", themes.join(", "));
     }
@@ -779,27 +813,8 @@ fn remove_bento(context: &Context, id: &str) -> Result<(), String> {
     if !context.ask(&format!("Remove {id}?")) {
         return Ok(());
     }
-    let home = bento_dir(id)?;
-    let before = home.join("before");
-    for file in [
-        Changes::path(&context.config_file),
-        context
-            .config_file
-            .with_file_name(mochi_module_widgets::FILE),
-    ] {
-        let kept = before.join(file.file_name().expect("a file name"));
-        let restored = if kept.exists() {
-            std::fs::copy(&kept, &file).map(drop)
-        } else {
-            std::fs::remove_file(&file).or_else(|error| {
-                if error.kind() == std::io::ErrorKind::NotFound {
-                    Ok(())
-                } else {
-                    Err(error)
-                }
-            })
-        };
-        restored.map_err(|error| format!("cannot put back {}: {error}", file.display()))?;
+    if active {
+        profiles::switch(context, None)?;
     }
     for theme in &themes {
         remove_theme(theme)?;
@@ -814,7 +829,7 @@ fn remove_bento(context: &Context, id: &str) -> Result<(), String> {
         .retain(|plugin, _| !plugins.contains(plugin));
     installed.bentos.remove(id);
     context.save(&installed)?;
-    let _ = std::fs::remove_dir_all(&home);
+    let _ = std::fs::remove_dir_all(profiles::folder(Some(id))?);
     eprintln!("Removed {id}");
     client::reload();
     Ok(())
@@ -833,6 +848,9 @@ pub fn list(config_file: &Path) -> Result<(), String> {
     let locations = Locations::beside(config_file);
     let installed = Installed::load(&locations.bento).map_err(|error| error.to_string())?;
     let lock = mochi_plugins::Lock::load(&locations.lock).unwrap_or_default();
+    if installed.active.is_none() && !installed.bentos.is_empty() {
+        println!("Your own setup is in use.");
+    }
     if installed.plugins.is_empty() && installed.themes.is_empty() && installed.bentos.is_empty() {
         println!("Bento installed nothing yet: `mochi bento add <source>` does.");
         return Ok(());
@@ -857,7 +875,12 @@ pub fn list(config_file: &Path) -> Result<(), String> {
                 .as_ref()
                 .map(|by| format!(", with {by}"))
                 .unwrap_or_default();
-            println!("  {id}{version}  {}{with}", entry.source);
+            let using = if kind == "bentos" && installed.active.as_deref() == Some(id.as_str()) {
+                ", in use"
+            } else {
+                ""
+            };
+            println!("  {id}{version}  {}{with}{using}", entry.source);
             // What the registry withdrew, by the index last downloaded.
             let commit = match kind {
                 "plugins" => lock
@@ -1111,7 +1134,7 @@ pub fn update(config_file: &Path, ids: &[String], yes: bool) -> Result<(), Strin
                     Ok(true)
                 }
                 (Kind::Bento, Package::Bento(bento)) => {
-                    add_bento(&context, &source, &fetched, &bento)?;
+                    add_bento(&context, &source, &fetched, &bento, false)?;
                     Ok(true)
                 }
                 _ => Err(format!("{} holds something else now", entry.source)),

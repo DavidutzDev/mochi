@@ -132,6 +132,22 @@ pub struct Config {
     pub island: IslandConfig,
     #[serde(default)]
     pub bubbles: BubblesConfig,
+    #[serde(default)]
+    pub bento: BentoConfig,
+}
+
+/// The key that turns Bento on, long so nobody sets it without reading it.
+pub const BENTO_CONSENT: &str =
+    "i_really_understand_that_bento_can_harm_and_contain_malicious_content";
+
+/// `[bento]`: off until the user says they understand what it installs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct BentoConfig {
+    /// Turn Bento on, knowing that what it installs can harm your computer
+    /// and contain malicious content.
+    #[serde(rename = "i_really_understand_that_bento_can_harm_and_contain_malicious_content")]
+    pub on: bool,
 }
 
 /// `[island]`.
@@ -281,6 +297,7 @@ impl Default for Config {
             module: BTreeMap::new(),
             island: IslandConfig::default(),
             bubbles: BubblesConfig::default(),
+            bento: BentoConfig::default(),
         }
     }
 }
