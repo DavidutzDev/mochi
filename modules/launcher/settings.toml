@@ -5,6 +5,10 @@
 # terminal = []
 # The most results to list.
 # max_results = 50
+# How results are listed: "comfortable", two lines each, the name and its
+# description, or "compact", one line each, with the description only on the
+# selected one.
+# layout = "comfortable"
 
 # Providers: where results come from. The built-ins are "apps", "calculator"
 # (prefix "=", and plain math like 2+2 without it), "commands" (prefix ">";

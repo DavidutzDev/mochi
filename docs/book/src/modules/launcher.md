@@ -4,6 +4,8 @@ Grows the island into a search box. Your most used apps come first; typing searc
 
 Apps and commands start through `uwsm app` in a uwsm session, otherwise through `systemd-run`, so they never belong to `mochid`.
 
+Each result takes two lines by default: its name, and its description under it. With `layout = "compact"`, each takes one line, the icon and the name, and nine fit where seven did; only the selected result shows its description, at the end of its line.
+
 ## Providers
 
 Results come from providers. These are built in:

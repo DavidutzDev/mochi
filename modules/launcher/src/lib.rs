@@ -74,9 +74,31 @@ struct Settings {
     #[schemars(extend("x-suggest" = [["kitty"], ["foot"], ["alacritty"], ["ghostty"], ["wezterm", "start"], ["konsole"], ["gnome-terminal", "--"], ["xterm"]]))]
     terminal: Vec<String>,
     max_results: usize,
+    layout: Layout,
     providers: BTreeMap<String, ProviderSettings>,
     engines: BTreeMap<String, Engine>,
     files: FilesSettings,
+}
+
+/// How the results are listed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "lowercase")]
+enum Layout {
+    /// Two lines per result: the name, and its description under it.
+    #[default]
+    Comfortable,
+    /// One line per result, the icon and the name; the selected one shows
+    /// its description at the end of its line.
+    Compact,
+}
+
+impl Layout {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Comfortable => "comfortable",
+            Self::Compact => "compact",
+        }
+    }
 }
 
 impl Default for Settings {
@@ -84,6 +106,7 @@ impl Default for Settings {
         Self {
             terminal: Vec::new(),
             max_results: 50,
+            layout: Layout::Comfortable,
             providers: BTreeMap::new(),
             engines: BTreeMap::new(),
             files: FilesSettings::default(),
@@ -182,6 +205,7 @@ impl Module for Launcher {
                     settings.terminal.clone()
                 },
                 max_results: settings.max_results,
+                layout: settings.layout,
                 method,
                 history: History::default_path()
                     .map(History::load)
@@ -249,6 +273,7 @@ struct Answer {
 struct State {
     terminal: Vec<String>,
     max_results: usize,
+    layout: Layout,
     method: Method,
     history: History,
     settings: BTreeMap<String, ProviderSettings>,
@@ -641,6 +666,7 @@ impl State {
             // Only the island on this monitor takes the keyboard.
             "output": ctx.compositor().state().focused_output,
             "query": self.query,
+            "layout": self.layout.as_str(),
             "results": results,
             // Headings only help when there is more than one kind.
             "sections": sections > 1,

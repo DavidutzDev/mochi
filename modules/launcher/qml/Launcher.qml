@@ -7,7 +7,9 @@ import qs.island
 // answer. The selection lives here: arrows or Tab move it, Enter picks it,
 // Shift+Enter does the other thing a result offers (runs a command in a
 // terminal, copies an emoji, opens a file's folder), Escape closes, the pointer
-// selects on hover and picks on click.
+// selects on hover and picks on click. The `compact` layout lists more
+// results, one line each, with the description only on the selected one,
+// at the end of its line.
 Item {
     id: root
 
@@ -15,8 +17,10 @@ Item {
     // Results only count for what is typed now; older answers still on the
     // way are ignored.
     property var results: []
-    readonly property int rows: 7
-    readonly property int rowHeight: 50
+    readonly property bool compact: payload.layout === "compact"
+    readonly property int rows: compact ? 9 : 7
+    readonly property int rowHeight: compact ? 36 : 50
+    readonly property int iconSize: compact ? 22 : 32
     // The headings among the rows that fit, so the list makes room for them.
     readonly property int headings: {
         if (!(payload.sections ?? false))
@@ -177,14 +181,27 @@ Item {
                 flat: true
                 marker: true
                 selected: ListView.isCurrentItem
-                leadingSize: 32
+                leadingSize: root.iconSize
                 title: modelData.title
-                subtitle: modelData.subtitle ?? ""
+                subtitle: root.compact ? "" : modelData.subtitle ?? ""
                 onHoveredChanged: {
                     if (hovered)
                         list.currentIndex = index;
                 }
                 onClicked: root.pick(index, false)
+
+                // Compact: the description at the end of the line, on the
+                // selected row only, given at most half the row.
+                trailing: Text {
+                    visible: root.compact && row.selected && text !== ""
+                    width: Math.min(implicitWidth, row.width / 2)
+                    text: row.modelData.subtitle ?? ""
+                    elide: Text.ElideRight
+                    textFormat: Text.PlainText
+                    color: Theme.muted
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
+                }
 
                 leading: Item {
                     anchors.fill: parent
@@ -193,8 +210,8 @@ Item {
                     Rectangle {
                         anchors.centerIn: parent
                         visible: row.modelData.color != null
-                        width: 26
-                        height: 26
+                        width: root.iconSize - 6
+                        height: root.iconSize - 6
                         radius: height / 2
                         color: row.modelData.color ?? "transparent"
                         border.width: 1
@@ -207,7 +224,7 @@ Item {
                         visible: row.modelData.glyph != null && row.modelData.color == null
                         text: row.modelData.glyph ?? ""
                         color: Theme.foreground
-                        font.pixelSize: Theme.textHeadline
+                        font.pixelSize: root.compact ? Theme.textTitle : Theme.textHeadline
                         font.family: Theme.fontFamily
                     }
 
@@ -217,7 +234,7 @@ Item {
                         anchors.fill: parent
                         visible: row.modelData.glyph == null && row.modelData.color == null
                         // Actions get a smaller icon, a step in.
-                        anchors.margins: row.modelData.small ? Theme.spaceSmall : 0
+                        anchors.margins: row.modelData.small ? (root.compact ? Theme.spaceTiny : Theme.spaceSmall) : 0
                         source: {
                             const name = row.modelData.icon ?? "";
                             if (name.startsWith("/"))
@@ -234,7 +251,7 @@ Item {
                     // the settings' "palette", on a plain tile.
                     Rectangle {
                         anchors.fill: parent
-                        anchors.margins: Theme.spaceTiny
+                        anchors.margins: root.compact ? 0 : Theme.spaceTiny
                         visible: row.modelData.glyph == null && row.modelData.color == null && icon.status !== Image.Ready
                         radius: Theme.radiusControl
                         color: Theme.raised
@@ -243,7 +260,7 @@ Item {
                             anchors.centerIn: parent
                             visible: (row.modelData.icon ?? "") !== "" && !row.modelData.icon.startsWith("/")
                             name: row.modelData.icon ?? ""
-                            size: Theme.textTitle + Theme.spaceTiny
+                            size: root.compact ? Theme.textBody : Theme.textTitle + Theme.spaceTiny
                             color: Theme.foreground
                         }
                     }
