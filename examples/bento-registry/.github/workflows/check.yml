@@ -23,8 +23,11 @@ jobs:
           ref: ${{ github.base_ref }}
           path: base
       - uses: cachix/install-nix-action@v31
+      # Mochi from its flake, without running its own tests.
       - name: Install Mochi
-        run: nix profile install github:DavidutzDev/mochi#mochi
+        run: |
+          # shellcheck disable=SC2016 # Nix's ${...}, not the shell's.
+          nix profile install --impure --expr '(builtins.getFlake "github:DavidutzDev/mochi").packages.${builtins.currentSystem}.mochi.overrideAttrs { doCheck = false; }'
 
       - name: What changed
         id: diff

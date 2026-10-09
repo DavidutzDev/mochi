@@ -24,8 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: cachix/install-nix-action@v31
+      # Mochi from its flake, without running its own tests.
       - name: Install Mochi
-        run: nix profile install github:DavidutzDev/mochi#mochi
+        run: |
+          # shellcheck disable=SC2016 # Nix's ${...}, not the shell's.
+          nix profile install --impure --expr '(builtins.getFlake "github:DavidutzDev/mochi").packages.${builtins.currentSystem}.mochi.overrideAttrs { doCheck = false; }'
       - name: Send the release to the registry
         env:
           GH_TOKEN: ${{ secrets.BENTO_TOKEN }}
