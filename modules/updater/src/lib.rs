@@ -17,6 +17,7 @@
 
 mod install;
 mod releases;
+mod tour;
 
 use std::path::PathBuf;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -163,9 +164,11 @@ impl Module for Updater {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        vec![ContributionSpec::new(
+        let mut offers = vec![ContributionSpec::new(
             "settings", "section", "updates", "Page", "Updates",
-        )]
+        )];
+        offers.extend(tour::steps());
+        offers
     }
 
     fn settings_example(&self) -> &'static str {

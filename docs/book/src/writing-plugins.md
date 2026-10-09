@@ -124,7 +124,7 @@ A flake is for a build Mochi's builder can't guess, like extra native libraries.
 
 A flake for a plugin in another language works too, as long as its default package has the backend at the manifest's `exec`, or in `bin/` by the same name.
 
-The `mochi-sdk` dependency must be a `git` one, like `mochi-sdk = { git = "https://github.com/DavidutzDev/mochi", tag = "v0.0.8" }`, not a `path` to your own checkout, or the plugin only builds on your machine.
+The `mochi-sdk` dependency must be a `git` one, like `mochi-sdk = { git = "https://github.com/DavidutzDev/mochi", tag = "v0.0.9" }`, not a `path` to your own checkout, or the plugin only builds on your machine.
 
 ## Publishing a release
 

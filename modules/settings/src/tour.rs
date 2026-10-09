@@ -42,5 +42,17 @@ pub fn steps() -> Vec<ContributionSpec> {
                     "option": ""
                 }
             })),
+        ContributionSpec::new("tour", "step", "about", "Panel", "About")
+            .icon("info")
+            .order(13)
+            .options(json!({
+                "chapter": "settings",
+                "since": "0.0.9",
+                "caption": "About says which Mochi runs, on what system, and how it's doing. Copy details puts it all in a bug report.",
+                "payload": {
+                    "section": "about",
+                    "option": ""
+                }
+            })),
     ]
 }

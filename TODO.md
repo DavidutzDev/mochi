@@ -663,6 +663,7 @@ Later:
 - [x] Release 0.0.6: widgets and notes, emoji and colors, launcher providers, notices on one monitor, `mochi dismiss`
 - [x] Release 0.0.7: the settings panel, shares that survive a restart, notification markup and replies, the mixer's apps and meters, plugins built by Nix, the design scale
 - [x] Release 0.0.8: Bento, themes as packages, brightness, privacy, night light, keep awake, drop, switching screens while recording, WPA Enterprise and hidden networks, the tray's keyboard and XEmbed, an island per monitor, clicks and scrolls that pass through
+- [x] Release 0.0.9: an updater with the changelog and an update for each way of installing, the universal installer, an About page, the hub renamed to the control center, one shell per session with mochid --dev taking over, presets that replace the file's colors
 - [x] Documentation site with mdBook in `docs/book`: installing, getting started, configuration, bubbles, theme, a page per module that includes its `settings.toml`, writing views and the protocol. `nix build .#docs`, part of `nix flake check`; `.github/workflows/docs.yml` publishes it to GitHub Pages
 - [ ] Publish the site once the repository is on GitHub
 - [ ] `docs/architecture.md`
