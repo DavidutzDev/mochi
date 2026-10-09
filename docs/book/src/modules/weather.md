@@ -1,8 +1,8 @@
 # Weather
 
-The weather where you are, from [Open-Meteo](https://open-meteo.com), which needs no account or key: the sky and the temperature now, the next 24 hours and the next 7 days. The [control center](control-center.md) has a card with the weather now, the place and a strip of the next hours, and the [desktop](widgets.md) a Weather widget in [four looks](#the-widgets-looks).
+The weather where you are, from [Open-Meteo](https://open-meteo.com), which needs no account or key: the sky and the temperature now, the next 24 hours and the next 7 days. The [control center](control-center.md) has a card with the weather now, the place and a strip of the next hours, a page with all of it, and the [desktop](widgets.md) a Weather widget in [four looks](#the-widgets-looks).
 
-Nothing is sent until you set a place. Until then, the card and the widget say so, and their **Set a place** button opens the setting. A place Open-Meteo doesn't know gets **Change the place**, and a fetch that failed **Try again**. Set `place` to a city or a town, like `"Lyon"`, or `"Lyon, France"` or `"Springfield, Illinois"` for the one in that country or region. Mochi looks the name up once with Open-Meteo's geocoding, and keeps where it is. Set `latitude` and `longitude` instead to skip the lookup: they count once both are set, and `place` then only names them on the card.
+Nothing is sent until you set a place. Until then, the cards, the page and the widget say so, and their **Set a place** button opens the setting. A place Open-Meteo doesn't know gets **Change the place**, and a fetch that failed **Try again**. Set `place` to a city or a town, like `"Lyon"`, or `"Lyon, France"` or `"Springfield, Illinois"` for the one in that country or region. Mochi looks the name up once with Open-Meteo's geocoding, and keeps where it is. Set `latitude` and `longitude` instead to skip the lookup: they count once both are set, and `place` then only names them on the card.
 
 The forecast comes again every `refresh_minutes`, 30 by default. When a fetch fails, as before the network is up, the next try waits a minute, then two, then four, up to `refresh_minutes`; a place Open-Meteo doesn't know waits for you to change it. `$XDG_STATE_HOME/mochi/weather.json` keeps where the place is and the last forecast, so after a restart the weather shows at once and comes again only when it's due. A forecast older than six hours isn't shown. Changing the settings applies at once, without a restart.
 
@@ -12,6 +12,12 @@ Open-Meteo gets the place's name when it's looked up, then its coordinates with 
 |---|---|
 | `refresh` | Fetches the forecast now |
 | `status` | Prints the weather now and today's low and high, like `Lyon: 15°C, overcast, feels like 13°C; today 10°C to 16°C. Updated 9 minutes ago` |
+
+## In the control center
+
+The Weather card is two columns wide: the sky's icon, the temperature, the sky in words and the place, with the next hours beside them, as many as fit. Weather now is the same in one column, without the hours. It's spare: it waits under "More cards" until you put it on the home, with the pencil or `mochi ipc control-center arrange`. Keep either, or both; the pencil's minus takes the other off.
+
+A click on either card's heading opens the Weather page, also in the navbar and at `mochi ipc control-center open weather/page`. At the top, the place, how old the forecast is while it's stale, a button that fetches it again and one that changes the place. Then the weather now: the sky in a cookie, the temperature, the sky in words and today's low and high, with what it feels like, the humidity, the wind and where it comes from, the UV index with the WHO's word for it (Low, Moderate, High, Very high, Extreme), and today's sunrise and sunset at the place. Beside it, the next 7 days as the Forecast look draws them, and under both, the next 24 hours as the Hours look's curve. A value the forecast lacks is left out.
 
 ## The widget's looks
 

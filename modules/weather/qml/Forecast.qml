@@ -5,7 +5,9 @@ import qs.island
 // with its weekday, its sky, the chance of rain or snow when it's likely,
 // and its low and high on either side of a bar. The bars share one scale,
 // from the week's lowest to its highest, so a cold day sits to the left and
-// a warm one to the right; today's has a dot at the temperature now.
+// a warm one to the right; today's has a dot at the temperature now. The
+// control center's page shows it too, without the age, which it shows
+// itself.
 Item {
     id: root
 
@@ -13,13 +15,16 @@ Item {
     property var settings: ({})
     property string instance: ""
     property string variant: ""
+    // Whether it says how old a stale forecast is.
+    property bool showAge: true
     readonly property var current: payload?.current ?? null
     readonly property var days: payload?.daily ?? []
+    readonly property bool aged: age.stale && showAge
     // A row is at least this high, and the age takes one while it shows.
     readonly property real least: 22
-    readonly property int rows: Math.max(1, Math.min(days.length, Math.floor(height / least) - (age.stale ? 1 : 0)))
+    readonly property int rows: Math.max(1, Math.min(days.length, Math.floor(height / least) - (aged ? 1 : 0)))
     readonly property var shown: days.slice(0, rows)
-    readonly property real row: (height - (age.stale ? age.height + Theme.spaceSmall : 0)) / rows
+    readonly property real row: (height - (aged ? age.height + Theme.spaceSmall : 0)) / rows
     readonly property real pixel: Math.max(Theme.textBody, Math.min(row * 0.42, Theme.textHeadline))
     // The week's range, with today's temperature now in it.
     readonly property real low: Math.min(...shown.map(day => day.min), current?.temperature ?? Infinity)
@@ -192,7 +197,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        visible: stale && root.current !== null
+        visible: root.aged && root.current !== null
         payload: root.payload
     }
 }

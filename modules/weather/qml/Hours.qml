@@ -7,7 +7,9 @@ import qs.island
 // its sky and time under it. The first column is now: a dot on the line,
 // the temperature now and "Now". The line is drawn between the coldest and
 // the warmest hour, at least a few degrees apart so a steady day stays
-// flat. Where the columns get narrow, every other one has its labels.
+// flat. Where the columns get narrow, every other one has its labels. The
+// control center's page draws it too, over 24 hours and without the age,
+// which it shows itself.
 Item {
     id: root
 
@@ -15,8 +17,12 @@ Item {
     property var settings: ({})
     property string instance: ""
     property string variant: ""
+    // How many hours it draws, and whether it says how old a stale
+    // forecast is.
+    property int count: 12
+    property bool showAge: true
     readonly property var current: payload?.current ?? null
-    readonly property var hours: (payload?.hourly ?? []).slice(0, 12)
+    readonly property var hours: (payload?.hourly ?? []).slice(0, count)
     // The running hour has the temperature now rather than the hour's.
     readonly property var temperatures: hours.map((hour, index) => index === 0 && current ? current.temperature : hour.temperature)
     readonly property real column: hours.length > 0 ? width / hours.length : width
@@ -32,7 +38,7 @@ Item {
     readonly property real upper: above + dot / 2 + Theme.spaceTiny
     readonly property real lower: height - footer - below - dot / 2 - Theme.spaceSmall
     // While the forecast is stale, how old it is, under the hours.
-    readonly property real footer: age.stale ? age.height + Theme.spaceTiny : 0
+    readonly property real footer: age.stale && showAge ? age.height + Theme.spaceTiny : 0
     // The degrees the line spans, at least 4.
     readonly property real coldest: Math.min(...temperatures)
     readonly property real warmest: Math.max(...temperatures)
@@ -199,7 +205,7 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        visible: stale && root.current !== null
+        visible: stale && root.current !== null && root.showAge
         payload: root.payload
     }
 }

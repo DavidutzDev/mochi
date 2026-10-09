@@ -9,8 +9,8 @@
 //! days, fetched again every `refresh_minutes`.
 //!
 //! The module's state has all of it, for any view to share: the control
-//! center's card and the desktop widget here, and a clock or a lock screen
-//! elsewhere. Its settings apply without a restart.
+//! center's cards and page and the desktop widget here, and a clock or a
+//! lock screen elsewhere. Its settings apply without a restart.
 //!
 //! Settings in `config.toml`, all optional:
 //!
@@ -365,6 +365,15 @@ impl Module for Weather {
                 .icon("partly_cloudy_day")
                 .order(50)
                 .options(json!({ "span": 2, "rows": 1 })),
+            // The same in one column, for a home that has no room for the
+            // wide one: it waits under More cards until it's put there.
+            ContributionSpec::new("control-center", "card", "now", "Now", "Weather now")
+                .icon("partly_cloudy_day")
+                .order(51)
+                .options(json!({ "span": 1, "rows": 1, "spare": true })),
+            ContributionSpec::new("control-center", "page", "page", "Page", "Weather")
+                .icon("partly_cloudy_day")
+                .order(50),
             // Its looks: the first is the one placed widgets had before
             // there were others.
             ContributionSpec::new("widgets", "widget", "current", "Widget", "Weather")
