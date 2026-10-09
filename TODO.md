@@ -673,7 +673,7 @@ Later:
 - [x] Release 0.0.9: an updater with the changelog and an update for each way of installing, the universal installer, an About page, the hub renamed to the control center, one shell per session with mochid --dev taking over, presets that replace the file's colors
 - [x] Documentation site with mdBook in `docs/book`: installing, getting started, configuration, bubbles, theme, a page per module that includes its `settings.toml`, writing views and the protocol. `nix build .#docs`, part of `nix flake check`; `.github/workflows/docs.yml` publishes it to GitHub Pages
 - [x] Publish the site: https://davidutzdev.github.io/mochi/
-- [ ] `docs/architecture.md`
+- [x] `docs/architecture.md`: the crates, the daemon loop, the UI, contributions, settings, plugins, sessions, tests and releases, for contributors
 
 ## Later
 
