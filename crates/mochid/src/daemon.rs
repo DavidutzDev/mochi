@@ -271,8 +271,8 @@ impl Daemon {
         let reload = added || updated || overrides != self.overrides;
         self.shell = wanted.clone();
         self.overrides = overrides;
-        if reload && let Some(supervisor) = &self.supervisor {
-            supervisor.reload();
+        if reload {
+            self.reload_ui();
         }
 
         for id in &wanted {
@@ -1252,6 +1252,19 @@ impl Daemon {
                 .collect(),
             workspaces: state.workspaces.len(),
             focused: state.focused_output,
+        }
+    }
+
+    /// Has the UI read the shell directory again. A running one reloads in
+    /// place, keeping its windows, and says hello again; one that doesn't
+    /// within the handshake's time, or none at all, gets a fresh Quickshell.
+    fn reload_ui(&mut self) {
+        if self.ui_connected() {
+            tracing::info!("reloading the UI for new views");
+            self.broadcast(&DaemonMessage::ReloadViews);
+            self.handshake_deadline = Some(Instant::now() + HANDSHAKE_TIMEOUT);
+        } else if let Some(supervisor) = &self.supervisor {
+            supervisor.reload();
         }
     }
 

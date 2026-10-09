@@ -73,7 +73,8 @@ impl Daemon {
         let mut command = Command::new(BINARY);
         command
             // As an installed shell runs, also in a debug build.
-            .args(["--no-dev", "--modules", modules, "--quickshell"])
+            .arg("--no-dev")
+            .arg("--quickshell")
             .arg(&quickshell)
             // Private runtime, config, data and state dirs, so a daemon
             // already running in the session and the user's files don't
@@ -92,6 +93,10 @@ impl Daemon {
             let runtime = std::env::var_os("XDG_RUNTIME_DIR").expect("XDG_RUNTIME_DIR is set");
             let display = std::env::var_os("WAYLAND_DISPLAY").expect("a Wayland session");
             command.env("WAYLAND_DISPLAY", Path::new(&runtime).join(display));
+        }
+        // No list: config.toml says which modules run.
+        if !modules.is_empty() {
+            command.args(["--modules", modules]);
         }
         prepare(&dir, &mut command);
         let child = command.spawn().unwrap();

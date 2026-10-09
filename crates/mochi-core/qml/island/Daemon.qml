@@ -180,6 +180,11 @@ Singleton {
                 console.warn(`mochi: the daemon speaks api ${message.api}, the UI speaks ${api}`);
             ready = true;
             break;
+        // New modules: their views load in place, the windows stay, and
+        // this connection starts over with the new generation.
+        case "reload_views":
+            Quickshell.reload(false);
+            break;
         case "modules":
             modules = message.modules;
             break;

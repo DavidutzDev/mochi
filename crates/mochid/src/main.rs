@@ -362,6 +362,7 @@ async fn run(args: Args) -> anyhow::Result<daemon::Outcome> {
             program: args.quickshell,
             shell_dir,
             socket: socket.clone(),
+            watch: dev,
         },
         ui_sender,
     )?);

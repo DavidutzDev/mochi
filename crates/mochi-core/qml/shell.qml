@@ -4,6 +4,25 @@ import Quickshell.Wayland
 import qs.island
 
 ShellRoot {
+    // Views reload as they change only for `mochid --dev`. Otherwise the
+    // daemon says when, once it has written all of them, so a module
+    // turned on reloads the shell once and without a popup.
+    settings.watchFiles: Quickshell.env("MOCHI_WATCH") === "1"
+
+    Connections {
+        target: Quickshell
+
+        function onReloadCompleted(): void {
+            Quickshell.inhibitReloadPopup();
+        }
+
+        function onReloadFailed(error: string): void {
+            console.warn(`mochi: the views didn't reload: ${error}`);
+            if (Quickshell.env("MOCHI_WATCH") !== "1")
+                Quickshell.inhibitReloadPopup();
+        }
+    }
+
     // The same island on every screen, and the space it keeps free.
     Variants {
         model: Daemon.screens

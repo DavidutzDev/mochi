@@ -110,6 +110,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `status` | `status`: `version`, `api`, `ui_connected`, `modules`, `compositor` (`backend`, `outputs`, `workspaces`), `plugins` (each `id`, `state` and an optional `message`; left out without plugins) | control |
 | `actions` | `modules`: list of `{module, actions}` | control |
 | `error` | `code`, `message` | everyone |
+| `reload_views` | | UI: a module was turned on and the shell directory has its views. The UI reloads them in place, keeping its windows, then connects and says `hello` again. One that doesn't within a few seconds gets a fresh Quickshell. |
 
 ### Activity
 

@@ -452,3 +452,48 @@ fn process_exists(pid: u32) -> bool {
         Err(_) => false,
     }
 }
+
+#[test]
+fn a_module_turned_on_reloads_the_views_in_place() {
+    let daemon = Daemon::start_prepared("hotswap", "", None, |dir, _| {
+        let config = dir.join("config/mochi");
+        std::fs::create_dir_all(&config).unwrap();
+        std::fs::write(config.join("config.toml"), "modules = [\"idle\"]\n").unwrap();
+    });
+    let config = daemon.dir.join("config/mochi/config.toml");
+    let mut ui = daemon.client(Role::Ui);
+    let mut ctl = daemon.client(Role::Ctl);
+    ui.wait_for_view("idle", "Pill");
+    daemon.wait_for(|| daemon.quickshell_starts().len() == 1, "quickshell");
+
+    // A new module: the UI reloads its views itself, and Quickshell keeps
+    // running.
+    std::fs::write(&config, "modules = [\"idle\", \"demo\"]\n").unwrap();
+    ctl.send(&ClientMessage::Reload);
+    assert_eq!(ctl.recv(), DaemonMessage::Ok);
+    loop {
+        if ui.recv() == DaemonMessage::ReloadViews {
+            break;
+        }
+    }
+    drop(ui);
+    let mut ui = daemon.client(Role::Ui);
+    ui.wait_for_view("idle", "Pill");
+    thread::sleep(Duration::from_secs(6));
+    assert_eq!(daemon.quickshell_starts().len(), 1, "{}", daemon.log());
+
+    // A UI that never comes back from the reload gets a fresh Quickshell.
+    std::fs::write(&config, "modules = [\"idle\", \"demo\", \"osd\"]\n").unwrap();
+    ctl.send(&ClientMessage::Reload);
+    assert_eq!(ctl.recv(), DaemonMessage::Ok);
+    loop {
+        if ui.recv() == DaemonMessage::ReloadViews {
+            break;
+        }
+    }
+    daemon.wait_long(
+        || daemon.quickshell_starts().len() == 2,
+        "a fresh quickshell",
+        Duration::from_secs(10),
+    );
+}

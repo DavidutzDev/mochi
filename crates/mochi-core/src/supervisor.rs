@@ -31,6 +31,9 @@ pub struct UiCommand {
     pub program: OsString,
     pub shell_dir: PathBuf,
     pub socket: PathBuf,
+    /// Quickshell reloads by itself when a view changes, for `mochid --dev`.
+    /// Otherwise only the daemon's `reload` does, once the shell is written.
+    pub watch: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -205,6 +208,7 @@ fn start(command: &UiCommand) -> io::Result<Child> {
         .arg(&command.shell_dir)
         .arg("--no-color")
         .env(mochi_protocol::SOCKET_ENV, &command.socket)
+        .env("MOCHI_WATCH", if command.watch { "1" } else { "0" })
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());

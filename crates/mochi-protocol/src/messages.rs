@@ -138,6 +138,10 @@ pub enum DaemonMessage {
     Actions { modules: Vec<ModuleActions> },
     /// A request failed, or a message could not be handled.
     Error { code: ErrorCode, message: String },
+    /// Reload the views in place, keeping the windows: the shell directory
+    /// has a module it didn't have. The UI says hello again once it has.
+    /// UI only.
+    ReloadViews,
 }
 
 /// The activity the island shows.

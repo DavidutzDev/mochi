@@ -6,6 +6,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- Turning a module on no longer restarts Quickshell: the UI reloads its views in place and keeps its windows, so the island, the bubbles and the widgets stay on screen. Quickshell also stops reloading by itself while mochid writes the views, which it only does now for `mochid --dev`. A UI that doesn't come back from the reload still gets a fresh Quickshell.
 - The installer restarts the running mochid only when it's the one it just updated. Installing into another prefix used to restart a mochid from a package or Nix too.
 
 ## 0.0.9 - 2026-10-09
