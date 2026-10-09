@@ -3,15 +3,20 @@ import QtQuick.Shapes
 
 // A filled shape to set one thing apart, like today's date on a calendar
 // or the icon of a weather widget: a circle, a pentagon with round corners,
-// a cookie with soft lobes, a four-lobed clover, or a burst with soft
-// points. It's an accent: one per widget, behind the thing that matters.
-// What's put inside sits on top, centered if it anchors so. The shape fills
-// the largest square that fits, with a lobe or a point at the top; `angle`
-// turns it, and leaves what's inside upright.
+// a cookie with soft lobes, a four-lobed clover, a burst with soft points,
+// a hexagon or an octagon with round corners, a squircle (a square with
+// soft sides), or a pill. It's an accent: one per widget, behind the thing
+// that matters. What's put inside sits on top, centered if it anchors so,
+// and fits in `roomWidth` by `roomHeight`. The shape fills the largest
+// square that fits, with a lobe or a point at the top, or a flat side for
+// the hexagon and the octagon; a pill takes the whole width, and up to
+// 0.62 of it in height. `angle` turns the shape, and leaves what's inside
+// upright.
 Item {
     id: root
 
-    // "circle", "pentagon", "cookie", "clover" or "burst".
+    // "circle", "pentagon", "cookie", "clover", "burst", "hexagon",
+    // "octagon", "squircle" or "pill".
     property string shape: "cookie"
     property real size: 40
     property color color: Theme.accent
@@ -21,6 +26,30 @@ Item {
     property real angle: 0
 
     readonly property real side: Math.min(width, height)
+    // A pill's height.
+    readonly property real pillHeight: Math.min(height, width * 0.62)
+
+    // The box in the middle where what's put inside fits, in pixels.
+    readonly property real roomWidth: shape === "pill" ? width - pillHeight * 0.4 : side * (({
+                "circle": 0.7,
+                "pentagon": 0.6,
+                "cookie": 0.66,
+                "clover": 0.56,
+                "burst": 0.6,
+                "hexagon": 0.72,
+                "octagon": 0.74,
+                "squircle": 0.8
+            })[shape] ?? 0.6)
+    readonly property real roomHeight: shape === "pill" ? pillHeight * 0.72 : side * (({
+                "circle": 0.7,
+                "pentagon": 0.52,
+                "cookie": 0.66,
+                "clover": 0.56,
+                "burst": 0.6,
+                "hexagon": 0.6,
+                "octagon": 0.74,
+                "squircle": 0.8
+            })[shape] ?? 0.6)
 
     implicitWidth: size
     implicitHeight: size
@@ -46,6 +75,9 @@ Item {
             return 1 - depth * soft(Math.sin(angle * lobes / 2));
         case "cookie":
             return 1 - depth * (1 - soft(Math.cos(angle * lobes / 2)));
+        case "squircle":
+            // |x|^4 + |y|^4 = 1, which reaches the square's sides.
+            return Math.pow(Math.pow(Math.abs(Math.sin(angle)), 4) + Math.pow(Math.abs(Math.cos(angle)), 4), -0.25);
         default:
             return 1;
         }
@@ -68,12 +100,13 @@ Item {
         return path + " Z";
     }
 
-    // A regular polygon pointing up with round corners, worked out at a
-    // radius of 1, then scaled and moved so its outline fills the square.
-    function polygon(sides: int, rounding: real): string {
+    // A regular polygon with round corners, pointing up, or with a flat
+    // side up when `flat`, worked out at a radius of 1, then scaled and
+    // moved so its outline fills the square.
+    function polygon(sides: int, rounding: real, flat: bool): string {
         const corners = [];
         for (let i = 0; i < sides; i++) {
-            const angle = -Math.PI / 2 + i * 2 * Math.PI / sides;
+            const angle = -Math.PI / 2 + (flat ? Math.PI / sides : 0) + i * 2 * Math.PI / sides;
             corners.push([Math.cos(angle), Math.sin(angle)]);
         }
         const half = Math.PI / 2 - Math.PI / sides;
@@ -118,7 +151,17 @@ Item {
         if (side <= 0)
             return "";
         if (shape === "pentagon")
-            return polygon(5, 0.3);
+            return polygon(5, 0.3, false);
+        if (shape === "hexagon")
+            return polygon(6, 0.24, true);
+        if (shape === "octagon")
+            return polygon(8, 0.18, true);
+        if (shape === "pill") {
+            const r = pillHeight / 2;
+            const top = height / 2 - r;
+            const bottom = height / 2 + r;
+            return `M ${r} ${top} L ${width - r} ${top} A ${r} ${r} 0 0 1 ${width - r} ${bottom} L ${r} ${bottom} A ${r} ${r} 0 0 1 ${r} ${top} Z`;
+        }
         if (shape === "circle") {
             const r = side / 2;
             return `M ${width / 2 - r} ${height / 2} A ${r} ${r} 0 1 1 ${width / 2 + r} ${height / 2} A ${r} ${r} 0 1 1 ${width / 2 - r} ${height / 2} Z`;

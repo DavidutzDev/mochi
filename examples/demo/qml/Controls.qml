@@ -189,14 +189,18 @@ Item {
                         color: Theme.muted
                     }
                 }
+            }
+
+            // Every shape, the day's date in each.
+            Row {
+                spacing: Theme.spaceMedium
 
                 Repeater {
-                    model: ["circle", "pentagon", "cookie", "clover", "burst"]
+                    model: ["circle", "pentagon", "cookie", "clover", "burst", "hexagon", "octagon", "squircle", "pill"]
 
                     Column {
                         required property string modelData
 
-                        anchors.verticalCenter: parent.verticalCenter
                         spacing: Theme.spaceTiny
 
                         ExpressiveShape {

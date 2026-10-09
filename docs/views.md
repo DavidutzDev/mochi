@@ -62,7 +62,7 @@ A test in `mochi-core` (`tests/design.rs`) reads every view and rejects new raw 
 | `Slider` | a value from 0 to 1; thick with an icon, or thin as a seek bar | `value`, `icon`, `thickness`, `reset` (where a double click puts it), `level` (a sound's level, drawn in the fill like a meter; off below 0), `moved(value)`, `released(value)` |
 | `ProgressBar` | how far along, not interactive | `value`, `fill` |
 | `Switch` | on or off | `checked`, `toggled(checked)` |
-| `Segmented` | one choice out of a few | `options` (`[{value, label, icon}]`), `current`, `picked(value)` |
+| `Segmented` | one choice out of a few; with `keyboard`, Tab reaches it and Left and Right pick | `options` (`[{value, label, icon}]`), `current`, `keyboard`, `picked(value)` |
 | `Tile` | a control-center tile, vertical for actions, horizontal for toggles | `icon`, `title`, `subtitle`, `checked`, `tone`, `vertical`, `clicked()` |
 | `ListRow` | a row with something at the start and controls at the end | `icon` or `image` or `leading`, `title`, `subtitle` (`subtitleFormat: Text.StyledText` for markup, with `linkActivated(link)`), `trailing`, `selected`, `flat`, `marker`, `clicked()` |
 | `Badge` | a count in an accent circle | `count` |
@@ -75,12 +75,28 @@ A test in `mochi-core` (`tests/design.rs`) reads every view and rejects new raw 
 | `EdgeLight` | a light along the top edge of a panel or tile: faint, toward the pointer on hover, sweeping while `working`, and `flash()` when something finishes | `radius`, `working`, `color`, `flash()` |
 | `WavyProgress` | how far along, as a line that waves and drifts forward while `playing` and lies flat when it stops, like a track's progress, or stays flat with `wavy` off; seeks like a thin `Slider`, or only shows with `interactive` off | `value`, `playing`, `wavy`, `interactive`, `thickness`, `fill`, `trackColor`, `moved(value)`, `released(value)` |
 | `WavyRing` | how full, as a ring filling clockwise from the top, wavy or flat, with what's put inside in its middle | `value`, `size`, `thickness`, `wavy`, `waves`, `color`, `trackColor` |
-| `ExpressiveShape` | a filled shape behind one thing a widget sets apart, like today's date: `circle`, `pentagon`, `cookie`, `clover` or `burst`, with what's put inside on top | `shape`, `size`, `color`, `lobes` (a cookie's lobes or a burst's points), `angle` (turns the shape, not what's inside) |
+| `ExpressiveShape` | a filled shape behind one thing a widget sets apart, like today's date or a clock, with what's put inside on top. See the shapes below | `shape`, `size`, `color`, `lobes` (a cookie's lobes or a burst's points), `angle` (turns the shape, not what's inside), `roomWidth` and `roomHeight` (read-only: the box in its middle where what's inside fits) |
 | `StackedTime` | a big clock's hour above its minutes in the display font, sized from the box, with a line under them; the digits roll | `hours`, `minutes`, `date`, `color`, `dateColor`, `weight`, `horizontalAlignment`, `pixelSize` (read-only) |
 | `ClockTime` | the time now in parts, here or in a time zone, for clocks; not drawn. A module reads zones' offsets with `mochi_core::zones` and publishes them as `zones` and `unknownZones`, which `payload` takes | `payload`, `zone`, `seconds`, `ticking`, `now`, `parts`, `known`, `unknown`, `city`, `half`, `hour(twelve)`, `time(twelve, seconds)`, `date(short)` |
 
 Controls report what the user did and leave the state to the owner: a `Switch` sends `toggled`, and the view sets `checked` once the module confirms. `mochi ipc demo controls` shows them all.
 
 `WavyProgress`, `WavyRing` and `ExpressiveShape` are accents. A widget uses one of them, on the thing it sets apart, like the playing track's progress or today's date, and draws the rest plainly. The theme's `waves = false` in `[motion]` keeps both wavy pieces flat, whatever their `wavy` says, so a plugin needs no setting of its own for it.
+
+`ExpressiveShape` fills the largest square in its box, except the pill, which takes the box's width and up to 0.62 of it in height. Its shapes:
+
+| `shape` | What it is | Room inside |
+|---|---|---|
+| `circle` | a circle | 0.7 of the side |
+| `pentagon` | a pentagon with round corners, a point up | 0.6 by 0.52 |
+| `cookie` | soft lobes all around, 9 by default (`lobes`) | 0.66 |
+| `clover` | four round lobes | 0.56 |
+| `burst` | soft points all around, 12 by default (`lobes`) | 0.6 |
+| `hexagon` | a hexagon with round corners, a flat side up | 0.72 by 0.6 |
+| `octagon` | an octagon with round corners, a flat side up | 0.74 |
+| `squircle` | a square with soft sides, between a square and a circle | 0.8 |
+| `pill` | a wide pill with round ends | the width less 0.4 of the height, by 0.72 of the height |
+
+A view sizes what goes inside from `roomWidth` and `roomHeight` rather than from the side, so the same text fits whichever shape a setting picks. The clock widget and the clock panel's Today tab let users pick the shape, or none. `mochi ipc demo controls` shows every shape.
 
 Icons come from Material Symbols Rounded, which Mochi's packages bring. `Symbol` takes Mochi's names: home, bell, music, clock, grid, moon, search, play, pause, next, previous, note, volume, volume-0 to volume-3, volume-muted, mic, mic-muted, headset, speakers, display, caps-lock, num-lock, keyboard, wifi, wifi-1, wifi-2, wifi-off, ethernet, offline, airplane, bluetooth, power, lock, logout, reboot, snow, chip, memory, gpu, disk, temperature, leaf, bolt, scale, camera, video, record, stop, region, window, copy, clipboard, palette, edit, pin, trash, folder, close, check, chevron, plus, minus, tray, dot. It also takes any [Material Symbols](https://fonts.google.com/icons) name, like `timer` or `wb_sunny`. Without the font, Mochi's names are drawn instead. Any other name, like an app's, is looked up in the icon theme. `filled` fills the outlined ones, for an active state.
