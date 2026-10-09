@@ -10,6 +10,7 @@ Widgets are small views on the desktop, under your windows, from any module or p
 - Drag its round corner handle to resize it, within the sizes it allows.
 - While you drag or resize, thin accent lines show where the widget's edges or middle line up with another widget's edges or middle, or with the middle of the screen. Within 6 pixels of such a line, the widget snaps to it instead of the nearest grid cell. Positions are saved as whole cells from the widget's anchor, so it only snaps to lines it can be saved on: a widget whose middle is in the middle third of the screen counts its cells from the screen's middle, so it can center on the screen but not always line up its edge with a widget on the left.
 - Click it, or its pencil, to open its settings, a form made from the settings it declares. Changes apply at once. Its trash button removes it.
+- With more than one monitor, its settings end with a choice of monitor, left to right. Pick another to send the widget there: it keeps its anchor and its offsets, moved in only as far as it takes to stay on that screen, and arranging moves to that monitor with the widget's settings open.
 - Where widgets overlap, the one on the higher layer is on top. The arrows over a widget move it a layer up or down.
 - Click the island to open the drawer under it: every widget the running modules and plugins offer, a search box, and a filter per module. Drag one onto the screen to add it; the drawer folds out of the way as you drag, and when the pointer leaves it.
 - Copy, at the bottom of the drawer, copies the layout as `widgets.toml`; its arrow has "Copy as Nix", for home-manager.
@@ -93,7 +94,7 @@ Each to-do list and note keeps its own content, in the [notes](notes.md) module.
 
 | Action | What it does |
 |---|---|
-| `edit [on\|off\|toggle]` | Starts or stops arranging, on the focused monitor |
+| `edit [on\|off\|toggle] [output] [id]` | Starts or stops arranging, on the focused monitor or the one named, with a widget's settings open |
 | `add <module> <widget> [output] [anchor] [x] [y]` | Places a widget; prints its id |
 | `move <id> <output> <anchor> <x> <y>` | Moves one |
 | `resize <id> <width> <height>` | Resizes one, in cells, within its limits |

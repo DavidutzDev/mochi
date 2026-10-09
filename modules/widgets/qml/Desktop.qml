@@ -64,10 +64,14 @@ Item {
     onPlacedChanged: Place.sync(widgets, placed.map(widget => widget.id))
     Component.onCompleted: Place.sync(widgets, placed.map(widget => widget.id))
     onEditingChanged: {
-        if (!editing)
+        if (!editing) {
             selected = "";
-        else
-            Qt.callLater(() => keys.forceActiveFocus());
+            return;
+        }
+        // A widget just sent here from another monitor keeps its settings
+        // open.
+        selected = layout?.selected ?? "";
+        Qt.callLater(() => keys.forceActiveFocus());
     }
 
     function refreshShapes(): void {

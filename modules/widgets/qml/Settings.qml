@@ -1,9 +1,11 @@
 import QtQuick
 import qs.island
+import "Place.js" as Place
 
 // The selected widget's settings, as a form made from what it declares:
 // a switch for an on-off setting, a choice for a few, a field otherwise.
-// Each change goes to the module at once.
+// Each change goes to the module at once. With more than one monitor, a
+// choice of monitor sends the widget to another one.
 Rectangle {
     id: root
 
@@ -14,6 +16,20 @@ Rectangle {
     readonly property var widget: frame?.widget ?? null
     readonly property var spec: widget ? desktop.catalog.find(entry => entry.module === widget.module && entry.widget === widget.widget) : null
     readonly property var fields: spec?.settings ?? []
+    // The monitors as they're laid out, left to right.
+    readonly property var screens: Daemon.screens.slice().sort((a, b) => a.x - b.x || a.y - b.y)
+
+    // Sends the widget to another monitor with its anchor and offsets,
+    // moved in as far as it takes to be all on that screen, and arranging
+    // follows it there with its settings open.
+    function send(output: string): void {
+        const screen = screens.find(screen => screen.name === output);
+        if (!screen || !widget || output === widget.output)
+            return;
+        const spot = Place.onScreen(widget, desktop.cell, screen.width, screen.height);
+        Daemon.command("widgets", "move", [widget.id, output, spot.anchor, `${spot.x}`, `${spot.y}`]);
+        Daemon.command("widgets", "edit", ["on", output, widget.id]);
+    }
 
     visible: frame !== null && desktop.editing
     width: 300
@@ -162,6 +178,46 @@ Rectangle {
                         }
                     }
                 }
+            }
+        }
+
+        Column {
+            visible: root.screens.length > 1
+            width: parent.width
+            spacing: Theme.spaceSmall
+
+            Column {
+                width: parent.width
+                spacing: 2
+
+                Text {
+                    text: "monitor"
+                    color: Theme.foreground
+                    font.pixelSize: Theme.textBody
+                    font.family: Theme.fontFamily
+                    font.weight: Theme.weightTitle
+                }
+
+                Text {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: "The screen it's on; pick another to send it there"
+                    color: Theme.muted
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
+                }
+            }
+
+            Segmented {
+                width: parent.width
+                height: 34
+                color: Theme.raised
+                options: root.screens.map(screen => ({
+                            "value": screen.name,
+                            "label": screen.name
+                        }))
+                current: root.widget?.output ?? ""
+                onPicked: value => root.send(value)
             }
         }
 

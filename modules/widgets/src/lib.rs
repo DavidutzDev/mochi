@@ -5,8 +5,9 @@
 //! [`layout`].
 //!
 //! `mochi ipc widgets edit` raises them over the windows on the focused
-//! monitor: drag a widget to move it, drag its corner to resize it, open
-//! its settings, or drag a new one from the drawer. Each change rewrites
+//! monitor, or the one named: drag a widget to move it, drag its corner to
+//! resize it, open its settings, send it to another monitor from there, or
+//! drag a new one from the drawer. Each change rewrites
 //! `widgets.toml` at once, and editing the file applies as soon as it's
 //! saved.
 //!
@@ -152,10 +153,13 @@ impl Module for Widgets {
         let id = || ArgSpec::string("id", "The widget's id, like w1");
         let anchor = || ArgSpec::choice("anchor", "The point it's placed from", Anchor::ALL);
         vec![
-            ActionSpec::new("edit", "Arrange the widgets, or stop").arg(
-                ArgSpec::choice("state", "Start, stop, or flip it", ["on", "off", "toggle"])
-                    .optional(),
-            ),
+            ActionSpec::new("edit", "Arrange the widgets, or stop")
+                .arg(
+                    ArgSpec::choice("state", "Start, stop, or flip it", ["on", "off", "toggle"])
+                        .optional(),
+                )
+                .arg(ArgSpec::string("output", "The monitor; the focused one without").optional())
+                .arg(ArgSpec::string("widget", "A widget there whose settings open").optional()),
             ActionSpec::new("add", "Place a widget a module offers")
                 .arg(ArgSpec::string("module", "The module offering it"))
                 .arg(ArgSpec::string("widget", "Which of its widgets"))
@@ -223,6 +227,7 @@ impl Module for Widgets {
                 error: None,
                 specs: Vec::new(),
                 editing: None,
+                selected: None,
                 banner: None,
                 drawer: false,
                 zones: BTreeMap::new(),
@@ -288,6 +293,9 @@ struct State {
     specs: Vec<Spec>,
     /// The monitor being arranged on.
     editing: Option<String>,
+    /// The widget whose settings open as arranging starts, like one just
+    /// sent there from another monitor.
+    selected: Option<String>,
     /// The notice on the island while arranging.
     banner: Option<ActivityId>,
     /// Whether the drawer is open.
@@ -303,12 +311,8 @@ impl State {
         let id = || args.str("id").unwrap_or_default().to_owned();
         let result = match command.action.as_str() {
             "edit" => {
-                let on = match args.str("state") {
-                    Some("on") => true,
-                    Some("off") => false,
-                    _ => self.editing.is_none(),
-                };
-                self.editing = on.then(|| focused(ctx));
+                (self.editing, self.selected) =
+                    arranging(args, self.editing.is_some(), || focused(ctx));
                 self.drawer = false;
                 self.announce(ctx);
                 Ok(None)
@@ -619,6 +623,7 @@ impl State {
             "editing": self.editing.is_some(),
             "drawer": self.drawer,
             "output": self.editing,
+            "selected": self.selected,
             "file": self.path,
             "error": self.error,
             "widgets": widgets,
@@ -673,6 +678,28 @@ impl State {
             _ => {}
         }
     }
+}
+
+/// What `edit` asks for: the monitor to arrange on, or `None` to stop, and
+/// the widget whose settings open there.
+fn arranging(
+    args: &mochi_core::Args,
+    editing: bool,
+    focused: impl FnOnce() -> String,
+) -> (Option<String>, Option<String>) {
+    let on = match args.str("state") {
+        Some("on") => true,
+        Some("off") => false,
+        _ => !editing,
+    };
+    if !on {
+        return (None, None);
+    }
+    let output = args
+        .str("output")
+        .filter(|output| !output.is_empty())
+        .map_or_else(focused, str::to_owned);
+    (Some(output), args.str("widget").map(str::to_owned))
 }
 
 fn focused(ctx: &ModuleCtx) -> String {
@@ -748,6 +775,40 @@ mod tests {
         assert_eq!(parse_offset("-0330"), Some(-12600));
         assert_eq!(parse_offset("0200"), None);
         assert_eq!(parse_offset("+02"), None);
+    }
+
+    #[test]
+    fn arranges_on_the_monitor_asked_for() {
+        let args = |words: &[(&str, &str)]| -> mochi_core::Args {
+            words
+                .iter()
+                .map(|(name, value)| {
+                    (
+                        (*name).to_owned(),
+                        mochi_core::ArgValue::String((*value).to_owned()),
+                    )
+                })
+                .collect()
+        };
+        let focused = || "DP-1".to_owned();
+        assert_eq!(
+            arranging(&args(&[]), false, focused),
+            (Some("DP-1".into()), None)
+        );
+        assert_eq!(arranging(&args(&[]), true, focused), (None, None));
+        // Sent to another monitor: arranging follows, with its settings open.
+        assert_eq!(
+            arranging(
+                &args(&[("state", "on"), ("output", "HDMI-A-1"), ("widget", "w2")]),
+                true,
+                focused
+            ),
+            (Some("HDMI-A-1".into()), Some("w2".into()))
+        );
+        assert_eq!(
+            arranging(&args(&[("state", "off"), ("widget", "w2")]), true, focused),
+            (None, None)
+        );
     }
 
     #[test]

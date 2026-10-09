@@ -40,6 +40,25 @@ function place(x, y, w, h, cell, width, height) {
     };
 }
 
+// The anchor and offsets for a widget sent to a screen `width` by `height`:
+// the same anchor, and the same offsets where the whole widget fits, else
+// the nearest ones that keep it on the screen. One bigger than the screen
+// starts at its left or top edge.
+function onScreen(widget, cell, width, height) {
+    const [across, down] = factors(widget.anchor ?? "top-left");
+    const clamp = (offset, factor, size, length) => {
+        const room = size - length;
+        const lowest = Math.ceil(-factor * room / cell);
+        const highest = Math.floor((1 - factor) * room / cell);
+        return Math.max(lowest, Math.min(highest, offset));
+    };
+    return {
+        anchor: widget.anchor ?? "top-left",
+        x: clamp(widget.x, across, width, widget.width * cell),
+        y: clamp(widget.y, down, height, widget.height * cell)
+    };
+}
+
 // To the nearest cell.
 function snap(value, cell) {
     return Math.round(value / cell) * cell;
