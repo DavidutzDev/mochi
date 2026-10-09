@@ -548,6 +548,47 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [x] Alignment guides while dragging
 - [ ] Moving a widget to another monitor from its settings
 
+## Bento
+
+Sharing plugins, themes and whole configs, and a reviewed registry of them. Designed on 2026-10-09. Three kinds of package: plugins (`mochi-plugin.toml`, code), themes (`mochi-theme.toml`) and bentos (`mochi-bento.toml`, a whole config). Themes and bentos hold only TOML and images, so they install without review; a bento lists the plugins it needs and asks once. Every manifest declares the oldest Mochi it works with. The registry is index-only: entries pin reviewed commits, the code stays in the authors' repositories, and a person reviews every plugin and every plugin update.
+
+Phase 1, without a registry:
+
+- [ ] `mochi-theme.toml`: dark and light palettes; the builtin presets become bundled themes, and `preset = "<id>"` also finds themes installed in `~/.local/share/mochi/themes/<id>/`
+- [ ] `mochi-bento.toml`: modules and their settings, island and bubbles, the hub's arrangement, widgets with screen roles (`primary`, `secondary`) instead of output names, a theme, a wallpaper, the plugins it needs
+- [ ] `bento.toml` next to `config.toml`, written by Bento and laid over `plugins.toml`, so installing works when home-manager owns the config; Copy as Nix includes it
+- [ ] `mochi bento share`: turns the running config into a bento, leaving out device names, paths under `$HOME` and values that look like secrets, and listing them
+- [ ] `mochi bento add` and `mochi bento remove` from a path, a git URL or a gist
+- [ ] `mochi bento try`: a theme or bento as a preview, with Keep and Drop on the island
+
+Phase 2, the registry:
+
+- [ ] The registry repository: one file per package, with releases pinning commits and the oldest Mochi each works with
+- [ ] Its CI: strict manifest parsing, Nix builds of plugins, `mochi config check` on bentos, a file allowlist on themes and bentos, theme contrast checks, a screenshot from a headless sway, `index.json` on GitHub Pages
+- [ ] Plugins merge after a person reviews the diff between the pinned commits; themes and bentos merge once CI passes
+- [ ] `bento:<id>` sources, picking the newest release the running Mochi supports; `plugins.lock` records the index revision
+- [ ] `mochi bento search`, `info` and `update`
+- [ ] Yanked and malicious releases: a warning, or disabling the package
+
+Phase 3, the Bento category in the settings:
+
+- [ ] Discover: cards with screenshots, search, filters for themes, plugins, widgets and bentos, a live preview of themes on hover
+- [ ] A package's page: screenshots, version, what a plugin runs and reads, the plugins a bento needs, Try and Install
+- [ ] Installed, with updates and Remove; Share, with what was left out
+- [ ] `mochi://bento/add/<id>` links
+
+Phase 4, publishing:
+
+- [ ] `mochi bento publish`: checks the package and opens the registry pull request with `gh`
+- [ ] A bot that opens update pull requests when authors tag a release
+- [ ] CODEOWNERS for maintainers
+
+Later:
+
+- [ ] Adopting packages into a community organization
+- [ ] A registry flake and `programs.mochi.bento` in home-manager
+- [ ] Sandboxing plugin backends
+
 ## Emoji and colors
 
 - [x] Emoji module: grid panel with search, groups and recents; paste or copy through the clipboard module; `:` provider
