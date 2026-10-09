@@ -135,7 +135,24 @@ impl Module for BatteryModule {
                     "min": [12, 5],
                     "max": [30, 16],
                     "category": "System",
-                    "description": "The battery's level, the time left and the power profiles",
+                    // The card first: widgets placed before there were
+                    // looks have it.
+                    "variants": [
+                        {
+                            "id": "card",
+                            "title": "Card",
+                            "description": "The battery's level, the time left and the power profiles",
+                        },
+                        {
+                            "id": "ring",
+                            "title": "Ring",
+                            "description": "The level as a ring, and what it's doing under",
+                            "view": "Ring",
+                            "size": [9, 10],
+                            "min": [7, 8],
+                            "max": [20, 22],
+                        },
+                    ],
                 })),
         ];
         offers.extend(tour::steps());

@@ -223,6 +223,13 @@ pub fn payload(snapshot: &Snapshot, levels: &Levels) -> Value {
                 "low": battery.state == State::Discharging && level <= levels.warning,
                 "critical": battery.state == State::Discharging && level <= levels.critical,
                 "state": state(battery),
+                // Until full while charging, or until empty, when UPower
+                // knows: the ring look puts it on a line of its own.
+                "time": match battery.state {
+                    State::Charging => battery.time_to_full.map(duration),
+                    State::Discharging => battery.time_to_empty.map(duration),
+                    State::Full => None,
+                },
             })
         }
         None => json!({ "present": false }),
@@ -435,6 +442,15 @@ mod tests {
             ..Snapshot::default()
         };
         assert_eq!(payload(&snapshot, &levels)["state"], "Charging");
+        let charging = Battery {
+            time_to_full: Some(Duration::from_secs(40 * 60)),
+            ..charging
+        };
+        let snapshot = Snapshot {
+            display: Some(charging),
+            ..Snapshot::default()
+        };
+        assert_eq!(payload(&snapshot, &levels)["time"], "40 min");
         assert_eq!(payload(&Snapshot::default(), &levels)["present"], false);
     }
 

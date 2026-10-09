@@ -14,6 +14,8 @@ The control center has a card with the level and the time until empty or full. U
 
 `mochi ipc battery status` prints each battery and device with its level.
 
+On the [desktop](widgets.md), the card is a widget too, and so is a ring: the level as a ring with the percent inside, and under it "Charging", "Fully charged", "Plugged in" or "On battery", with how long until full or empty when UPower knows. The ring waves while the battery charges, and turns red when it's low.
+
 ## Bluetooth devices
 
 UPower lists Bluetooth devices that report a battery too, so a Bluetooth mouse shows on this card and on the [Bluetooth](bluetooth.md) page. The card is the one list of every battery; the Bluetooth page shows the level next to the device you connect or forget. Only this module says when a battery gets low, so a device gets one notice. When UPower finds one device twice, through the kernel and through BlueZ, the card lists it once.
