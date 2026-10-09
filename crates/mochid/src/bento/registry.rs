@@ -39,7 +39,9 @@ pub fn search(config_file: &Path, query: &str, kind: Option<&str>) -> Result<(),
             if here { "  (installed)" } else { "" }
         );
     }
-    if found == 0 {
+    if found == 0 && index.packages.is_empty() {
+        println!("The registry lists nothing yet.");
+    } else if found == 0 {
         println!("Nothing in the registry matches {query:?}.");
     }
     Ok(())

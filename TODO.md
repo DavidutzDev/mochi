@@ -570,7 +570,8 @@ Phase 2, the registry:
 - [x] `bento:<id>` sources, picking the newest release the running Mochi supports; `plugins.lock` records the commit
 - [x] `mochi bento search`, `info` and `update`
 - [x] Yanked and malicious releases: a warning, or refusing to install and to start the plugin
-- [ ] Create the registry's repository from the template, turn on Pages, auto-merge and the required check, and run its workflows for real
+- [x] Create the registry's repository, github.com/DavidutzDev/bento, from the template; Publish runs and Pages serves `index.json`
+- [ ] Run Check and Merge on a first real pull request, and list the first packages
 - [ ] A screenshot of each theme and bento from a headless sway in the registry's CI
 - [ ] Prebuilt plugin releases in the registry, with their asset's hash, for machines without build tools or Nix
 
