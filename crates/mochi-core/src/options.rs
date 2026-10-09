@@ -75,6 +75,9 @@ pub enum Kind {
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Choice {
     pub value: String,
+    /// What the menu shows; the value, in words, without one.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub label: String,
     #[serde(skip_serializing_if = "String::is_empty")]
     pub description: String,
     /// Swatches to show beside it, like a theme preset's colors.
@@ -396,6 +399,7 @@ fn choices(schema: &Json) -> Option<Vec<Choice>> {
             .map(|value| {
                 Some(Choice {
                     value: value.as_str()?.to_owned(),
+                    label: String::new(),
                     description: description.to_owned(),
                     colors: Vec::new(),
                 })
@@ -415,6 +419,7 @@ fn choices(schema: &Json) -> Option<Vec<Choice>> {
         match (branch.get("const"), branch.get("enum")) {
             (Some(Json::String(value)), _) => out.push(Choice {
                 value: value.clone(),
+                label: String::new(),
                 description: description.to_owned(),
                 colors: Vec::new(),
             }),

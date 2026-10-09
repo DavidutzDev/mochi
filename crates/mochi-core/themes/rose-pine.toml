@@ -1,0 +1,36 @@
+[theme]
+id = "rose-pine"
+name = "Rosé Pine"
+version = "1.0.0"
+mochi = "0.0.7"
+description = "Rosé Pine, and Dawn when light"
+authors = ["Mochi"]
+homepage = "https://rosepinetheme.com"
+
+[dark]
+background = "#f5191724"
+surface    = "#1f1d2e"
+raised     = "#26233a"
+highlight  = "#403d52"
+foreground = "#e0def4"
+muted      = "#908caa"
+accent     = "#c4a7e7"
+on_accent  = "#191724"
+danger     = "#eb6f92"
+success    = "#9ccfd8"
+border     = "#0dffffff"
+shadow     = "#59000000"
+
+[light]
+background = "#f5faf4ed"
+surface    = "#fffaf3"
+raised     = "#f2e9e1"
+highlight  = "#dfdad9"
+foreground = "#575279"
+muted      = "#797593"
+accent     = "#907aa9"
+on_accent  = "#faf4ed"
+danger     = "#b4637a"
+success    = "#56949f"
+border     = "#1a000000"
+shadow     = "#26000000"

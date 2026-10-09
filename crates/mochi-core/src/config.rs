@@ -108,6 +108,16 @@ pub fn state_dir() -> Option<PathBuf> {
     Some(state.join("mochi"))
 }
 
+/// `$XDG_DATA_HOME/mochi`, falling back to `~/.local/share/mochi`: what
+/// gets installed, like plugins and themes.
+pub fn data_dir() -> Option<PathBuf> {
+    let data = env::var_os("XDG_DATA_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|home| Path::new(&home).join(".local/share")))?;
+    Some(data.join("mochi"))
+}
+
 /// `config.toml`.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]

@@ -1,0 +1,36 @@
+[theme]
+id = "gruvbox"
+name = "Gruvbox"
+version = "1.0.0"
+mochi = "0.0.7"
+description = "Warm retro browns with an orange accent"
+authors = ["Mochi"]
+homepage = "https://github.com/morhetz/gruvbox"
+
+[dark]
+background = "#f51d2021"
+surface    = "#282828"
+raised     = "#3c3836"
+highlight  = "#504945"
+foreground = "#ebdbb2"
+muted      = "#928374"
+accent     = "#fe8019"
+on_accent  = "#1d2021"
+danger     = "#fb4934"
+success    = "#b8bb26"
+border     = "#0dffffff"
+shadow     = "#59000000"
+
+[light]
+background = "#f5f9f5d7"
+surface    = "#fbf1c7"
+raised     = "#ebdbb2"
+highlight  = "#d5c4a1"
+foreground = "#3c3836"
+muted      = "#7c6f64"
+accent     = "#af3a03"
+on_accent  = "#fbf1c7"
+danger     = "#9d0006"
+success    = "#79740e"
+border     = "#1a000000"
+shadow     = "#26000000"

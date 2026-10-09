@@ -1,5 +1,5 @@
-//! Theme presets: named palettes, each in a dark and a light version, and
-//! one made from the wallpaper. A preset gives every color role; what
+//! Theme presets: a theme's palette, in its dark or light version, or one
+//! made from the wallpaper. A preset gives every color role; what
 //! `theme.toml` sets in `[colors]` goes over it.
 
 use std::path::{Path, PathBuf};
@@ -9,223 +9,7 @@ use std::time::{Duration, Instant, SystemTime};
 
 use toml::{Table, Value};
 
-/// The presets, in the order the settings list them. `wallpaper` is made
-/// from the current wallpaper instead.
-pub const PRESETS: [&str; 7] = [
-    "obsidian",
-    "catppuccin",
-    "nord",
-    "gruvbox",
-    "rose-pine",
-    "tokyo-night",
-    "wallpaper",
-];
-
-/// The roles, in the order of a palette below.
-const ROLES: [&str; 12] = [
-    "background",
-    "surface",
-    "raised",
-    "highlight",
-    "foreground",
-    "muted",
-    "accent",
-    "on_accent",
-    "danger",
-    "success",
-    "border",
-    "shadow",
-];
-
-type Palette = [&'static str; 12];
-
-/// Each preset's dark and light palettes, in the order of [`ROLES`]. The
-/// background is slightly see-through, like the default.
-fn palettes(preset: &str) -> Option<(Palette, Palette)> {
-    Some(match preset {
-        "obsidian" => (
-            [
-                "#f5000000",
-                "#1c1c1e",
-                "#2c2c2e",
-                "#3a3a3c",
-                "#ffffff",
-                "#8e8e93",
-                "#ff9f0a",
-                "#000000",
-                "#ff453a",
-                "#30d158",
-                "#0dffffff",
-                "#59000000",
-            ],
-            [
-                "#f5f5f5f7",
-                "#ffffff",
-                "#e5e5ea",
-                "#d1d1d6",
-                "#000000",
-                "#6e6e73",
-                "#ff9500",
-                "#000000",
-                "#ff3b30",
-                "#34c759",
-                "#1a000000",
-                "#26000000",
-            ],
-        ),
-        "catppuccin" => (
-            [
-                "#f511111b",
-                "#1e1e2e",
-                "#313244",
-                "#45475a",
-                "#cdd6f4",
-                "#7f849c",
-                "#cba6f7",
-                "#11111b",
-                "#f38ba8",
-                "#a6e3a1",
-                "#0dffffff",
-                "#59000000",
-            ],
-            [
-                "#f5eff1f5",
-                "#e6e9ef",
-                "#ccd0da",
-                "#bcc0cc",
-                "#4c4f69",
-                "#8c8fa1",
-                "#8839ef",
-                "#eff1f5",
-                "#d20f39",
-                "#40a02b",
-                "#1a000000",
-                "#26000000",
-            ],
-        ),
-        "nord" => (
-            [
-                "#f52e3440",
-                "#3b4252",
-                "#434c5e",
-                "#4c566a",
-                "#eceff4",
-                "#a3abb9",
-                "#88c0d0",
-                "#2e3440",
-                "#bf616a",
-                "#a3be8c",
-                "#0dffffff",
-                "#59000000",
-            ],
-            [
-                "#f5eceff4",
-                "#e5e9f0",
-                "#d8dee9",
-                "#c8d0dc",
-                "#2e3440",
-                "#4c566a",
-                "#5e81ac",
-                "#eceff4",
-                "#bf616a",
-                "#6f8f55",
-                "#1a000000",
-                "#26000000",
-            ],
-        ),
-        "gruvbox" => (
-            [
-                "#f51d2021",
-                "#282828",
-                "#3c3836",
-                "#504945",
-                "#ebdbb2",
-                "#928374",
-                "#fe8019",
-                "#1d2021",
-                "#fb4934",
-                "#b8bb26",
-                "#0dffffff",
-                "#59000000",
-            ],
-            [
-                "#f5f9f5d7",
-                "#fbf1c7",
-                "#ebdbb2",
-                "#d5c4a1",
-                "#3c3836",
-                "#7c6f64",
-                "#af3a03",
-                "#fbf1c7",
-                "#9d0006",
-                "#79740e",
-                "#1a000000",
-                "#26000000",
-            ],
-        ),
-        "rose-pine" => (
-            [
-                "#f5191724",
-                "#1f1d2e",
-                "#26233a",
-                "#403d52",
-                "#e0def4",
-                "#908caa",
-                "#c4a7e7",
-                "#191724",
-                "#eb6f92",
-                "#9ccfd8",
-                "#0dffffff",
-                "#59000000",
-            ],
-            [
-                "#f5faf4ed",
-                "#fffaf3",
-                "#f2e9e1",
-                "#dfdad9",
-                "#575279",
-                "#797593",
-                "#907aa9",
-                "#faf4ed",
-                "#b4637a",
-                "#56949f",
-                "#1a000000",
-                "#26000000",
-            ],
-        ),
-        "tokyo-night" => (
-            [
-                "#f516161e",
-                "#1a1b26",
-                "#292e42",
-                "#414868",
-                "#c0caf5",
-                "#787c99",
-                "#7aa2f7",
-                "#16161e",
-                "#f7768e",
-                "#9ece6a",
-                "#0dffffff",
-                "#59000000",
-            ],
-            [
-                "#f5e1e2e7",
-                "#d5d6db",
-                "#c4c8da",
-                "#b6bbd2",
-                "#343b58",
-                "#6a6f8e",
-                "#2e7de9",
-                "#e1e2e7",
-                "#f52a65",
-                "#587539",
-                "#1a000000",
-                "#26000000",
-            ],
-        ),
-        _ => return None,
-    })
-}
+use crate::themes::ROLES;
 
 fn table(palette: &[String]) -> Table {
     ROLES
@@ -235,32 +19,29 @@ fn table(palette: &[String]) -> Table {
         .collect()
 }
 
-/// A preset's colors, as `[colors]` in `theme.toml` would set them. For
-/// `wallpaper`, `wallpaper` names the image, or `auto` for the one the
-/// wallpaper daemon shows; it fails when there's none to read.
+/// A preset's colors, as `[colors]` in `theme.toml` would set them: a
+/// theme's, or for `wallpaper`, made from `wallpaper`, the image, or `auto`
+/// for the one the wallpaper daemon shows; it fails when there's none to
+/// read.
 pub fn colors(preset: &str, light: bool, wallpaper: &str) -> Result<Table, String> {
     if preset == "wallpaper" {
         let source = cached_source(wallpaper)?;
         return Ok(table(&cached_palette(&source, light)?));
     }
-    let (dark, bright) = palettes(preset).ok_or_else(|| {
-        format!(
-            "unknown preset {preset:?}, expected one of {}",
-            PRESETS.join(", ")
-        )
-    })?;
-    let palette = if light { bright } else { dark };
-    Ok(table(&palette.map(str::to_owned)))
+    Ok(crate::themes::find(preset)?.colors(light))
 }
 
-/// Each preset's swatches, for the settings: its background, surface,
-/// accent and foreground.
+/// A theme's swatches, for the settings: its background, surface, accent
+/// and foreground.
 pub fn swatches(preset: &str, light: bool) -> Vec<String> {
-    palettes(preset)
-        .map(|(dark, bright)| if light { bright } else { dark })
-        .map(|palette| [palette[0], palette[1], palette[6], palette[4]])
-        .map(|colors| colors.iter().map(|color| (*color).to_owned()).collect())
-        .unwrap_or_default()
+    let Ok(theme) = crate::themes::find(preset) else {
+        return Vec::new();
+    };
+    let colors = theme.colors(light);
+    ["background", "surface", "accent", "foreground"]
+        .iter()
+        .filter_map(|role| colors.get(*role)?.as_str().map(str::to_owned))
+        .collect()
 }
 
 /// How long a wallpaper found with `auto` counts as current: settings
@@ -559,7 +340,7 @@ mod tests {
 
     #[test]
     fn every_preset_has_both_palettes_and_reads_well() {
-        for preset in PRESETS.iter().filter(|preset| **preset != "wallpaper") {
+        for preset in crate::themes::bundled_ids() {
             for light in [false, true] {
                 let colors = colors(preset, light, "").unwrap();
                 assert_eq!(colors.len(), 12, "{preset}");

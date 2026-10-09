@@ -1,0 +1,35 @@
+[theme]
+id = "obsidian"
+name = "Obsidian"
+version = "1.0.0"
+mochi = "0.0.7"
+description = "Mochi's own: a black island that disappears into the bezel, graphite cards and an orange accent"
+authors = ["Mochi"]
+
+[dark]
+background = "#f5000000"
+surface    = "#1c1c1e"
+raised     = "#2c2c2e"
+highlight  = "#3a3a3c"
+foreground = "#ffffff"
+muted      = "#8e8e93"
+accent     = "#ff9f0a"
+on_accent  = "#000000"
+danger     = "#ff453a"
+success    = "#30d158"
+border     = "#0dffffff"
+shadow     = "#59000000"
+
+[light]
+background = "#f5f5f5f7"
+surface    = "#ffffff"
+raised     = "#e5e5ea"
+highlight  = "#d1d1d6"
+foreground = "#000000"
+muted      = "#6e6e73"
+accent     = "#ff9500"
+on_accent  = "#000000"
+danger     = "#ff3b30"
+success    = "#34c759"
+border     = "#1a000000"
+shadow     = "#26000000"

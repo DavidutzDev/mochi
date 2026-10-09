@@ -4,9 +4,9 @@
 #
 # Colors are #rrggbb or #aarrggbb (aa is the opacity, ff for opaque).
 
-# A named palette for every color: obsidian, catppuccin, nord, gruvbox,
-# rose-pine, tokyo-night, or wallpaper, made from your wallpaper. What
-# [colors] sets below goes over it.
+# A theme: obsidian, catppuccin, nord, gruvbox, rose-pine, tokyo-night, one
+# installed in ~/.local/share/mochi/themes, or wallpaper, made from your
+# wallpaper. What [colors] sets below goes over it.
 # preset = "obsidian"
 # "dark" or "light", or "auto" to follow the system's preference.
 # appearance = "dark"

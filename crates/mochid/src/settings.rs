@@ -648,9 +648,24 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
     .collect();
     for field in &mut look {
         if field.path == "theme.preset" {
-            for choice in &mut field.choices {
-                choice.colors = mochi_core::palette::swatches(&choice.value, false);
-            }
+            // The themes Mochi brings and the installed ones, then the
+            // wallpaper's.
+            field.choices = mochi_core::themes::list()
+                .into_iter()
+                .map(|theme| options::Choice {
+                    colors: mochi_core::palette::swatches(&theme.theme.id, false),
+                    value: theme.theme.id,
+                    label: theme.theme.name,
+                    description: theme.theme.description,
+                })
+                .chain(
+                    field
+                        .choices
+                        .iter()
+                        .filter(|choice| choice.value == "wallpaper")
+                        .cloned(),
+                )
+                .collect();
         }
     }
     for (id, title, icon, schema) in appearance {

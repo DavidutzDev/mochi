@@ -1,0 +1,36 @@
+[theme]
+id = "nord"
+name = "Nord"
+version = "1.0.0"
+mochi = "0.0.7"
+description = "Arctic blues and frost"
+authors = ["Mochi"]
+homepage = "https://www.nordtheme.com"
+
+[dark]
+background = "#f52e3440"
+surface    = "#3b4252"
+raised     = "#434c5e"
+highlight  = "#4c566a"
+foreground = "#eceff4"
+muted      = "#a3abb9"
+accent     = "#88c0d0"
+on_accent  = "#2e3440"
+danger     = "#bf616a"
+success    = "#a3be8c"
+border     = "#0dffffff"
+shadow     = "#59000000"
+
+[light]
+background = "#f5eceff4"
+surface    = "#e5e9f0"
+raised     = "#d8dee9"
+highlight  = "#c8d0dc"
+foreground = "#2e3440"
+muted      = "#4c566a"
+accent     = "#5e81ac"
+on_accent  = "#eceff4"
+danger     = "#bf616a"
+success    = "#6f8f55"
+border     = "#1a000000"
+shadow     = "#26000000"

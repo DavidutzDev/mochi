@@ -1,0 +1,36 @@
+[theme]
+id = "catppuccin"
+name = "Catppuccin"
+version = "1.0.0"
+mochi = "0.0.7"
+description = "Catppuccin Mocha, and Latte when light"
+authors = ["Mochi"]
+homepage = "https://catppuccin.com"
+
+[dark]
+background = "#f511111b"
+surface    = "#1e1e2e"
+raised     = "#313244"
+highlight  = "#45475a"
+foreground = "#cdd6f4"
+muted      = "#7f849c"
+accent     = "#cba6f7"
+on_accent  = "#11111b"
+danger     = "#f38ba8"
+success    = "#a6e3a1"
+border     = "#0dffffff"
+shadow     = "#59000000"
+
+[light]
+background = "#f5eff1f5"
+surface    = "#e6e9ef"
+raised     = "#ccd0da"
+highlight  = "#bcc0cc"
+foreground = "#4c4f69"
+muted      = "#8c8fa1"
+accent     = "#8839ef"
+on_accent  = "#eff1f5"
+danger     = "#d20f39"
+success    = "#40a02b"
+border     = "#1a000000"
+shadow     = "#26000000"

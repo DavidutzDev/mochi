@@ -20,6 +20,8 @@ pub mod palette;
 pub mod process;
 pub mod quality;
 pub mod supervisor;
+pub mod themes;
+pub mod version;
 
 // Protocol types modules need, so a module only depends on this crate.
 /// Compositor state and actions, from [`ModuleCtx::compositor`].

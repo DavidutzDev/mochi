@@ -6,11 +6,23 @@ The defaults are "Obsidian": a black island that disappears into the screen's be
 
 ## Presets and light mode
 
-`preset` picks a palette for every color role: `obsidian`, `catppuccin`, `nord`, `gruvbox`, `rose-pine` or `tokyo-night`. Each has a dark and a light version, which `appearance` picks: `"dark"`, `"light"`, or `"auto"` to follow the system's preference through the desktop portal, switching as it changes. What `[colors]` sets goes over the preset, so you can keep a preset and change only the accent.
+`preset` picks a theme, a color for every role: `obsidian`, `catppuccin`, `nord`, `gruvbox`, `rose-pine`, `tokyo-night`, or one you installed, see [Theme packages](#theme-packages). Each has a dark and a light version, which `appearance` picks: `"dark"`, `"light"`, or `"auto"` to follow the system's preference through the desktop portal, switching as it changes. What `[colors]` sets goes over the preset, so you can keep a preset and change only the accent.
 
 `preset = "wallpaper"` makes the palette from your wallpaper: the accent from its most colorful hue, and the backgrounds from the same hue nearly grey, with lightness chosen so text stays readable. `wallpaper = "auto"` reads the image, or the plain color, that awww, swww or hyprpaper shows; a path reads that image. `mochi reload` reads it again after the wallpaper changes.
 
 The settings panel lists the presets with their colors, and applies them as you pick.
+
+## Theme packages
+
+A theme is a directory with a `mochi-theme.toml`. Installed ones live in `~/.local/share/mochi/themes/<id>/` (`$XDG_DATA_HOME/mochi/themes`), and `preset = "<id>"` picks one like the themes Mochi brings, which are written the same way:
+
+```toml
+{{#include ../../../crates/mochi-core/themes/nord.toml}}
+```
+
+`[theme]` says what it is. `id` is lowercase letters, digits, `-` and `_`, starting with a letter, and must match the directory's name. `name` is what the settings panel shows, and `mochi` is the oldest Mochi it works with: a newer one is refused, and `mochi config check` says so. `description`, `authors` and `homepage` are optional.
+
+`[dark]` and `[light]` give each role a color, the roles of `[colors]` below. A theme with only one of them uses it for both appearances, and a role it leaves out takes Obsidian's, so a theme can be as short as an accent. A theme holds colors only, no fonts or views, so it can't run anything. A typo, like an unknown role or a color that isn't `#rrggbb` or `#aarrggbb`, is an error naming the key.
 
 ## Motion
 
