@@ -1003,7 +1003,7 @@ mod tests {
 
     #[test]
     fn every_source_is_one_the_panel_knows() {
-        const KNOWN: [&str; 8] = [
+        const KNOWN: [&str; 9] = [
             "command",
             "module",
             "app",
