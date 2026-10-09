@@ -8,6 +8,7 @@
 //! `mochi ipc settings open colors`. The launcher finds sections and
 //! options by name.
 
+mod bento;
 mod tour;
 
 use include_dir::{Dir, include_dir};
@@ -36,6 +37,12 @@ impl Module for Settings {
 
     fn actions(&self) -> Vec<ActionSpec> {
         let path = || ArgSpec::string("path", "From the file, like theme.colors.accent");
+        let source = || {
+            ArgSpec::string(
+                "source",
+                "An id in the registry, a directory, or a repository",
+            )
+        };
         vec![
             ActionSpec::new("toggle", "Open the settings, or close them when open"),
             ActionSpec::new("open", "Open the settings").arg(
@@ -94,6 +101,28 @@ impl Module for Settings {
             .arg(ArgSpec::string("query", "What to look for").optional().rest()),
             ActionSpec::new("pick-result", "Open what the launcher listed")
                 .arg(ArgSpec::string("id", "A section or an option's path")),
+            ActionSpec::new(
+                "bento-catalog",
+                "Read Bento's registry and what it installed, for the Bento pages",
+            )
+            .arg(ArgSpec::choice("refresh", "Download the registry again", ["refresh"]).optional()),
+            ActionSpec::new("bento-plan", "Say what installing something would do")
+                .arg(source()),
+            ActionSpec::new("bento-show", "Open the Bento page on something to install")
+                .arg(source()),
+            ActionSpec::new("bento-add", "Install a bento, a theme or a plugin")
+                .arg(source())
+                .arg(ArgSpec::string("at", "The commit its plan showed").optional()),
+            ActionSpec::new("bento-remove", "Take out what Bento installed")
+                .arg(ArgSpec::string("id", "Its id")),
+            ActionSpec::new("bento-update", "Move what Bento installed to newer releases")
+                .arg(ArgSpec::string("id", "Only this").optional()),
+            ActionSpec::new("bento-try", "Try a theme or a bento's look").arg(source()),
+            ActionSpec::new("bento-share", "Make a bento of this setup")
+                .arg(ArgSpec::string("dir", "The directory to write"))
+                .arg(ArgSpec::bool("wallpaper", "Bring the wallpaper").optional())
+                .arg(ArgSpec::string("name", "What it's called").optional().rest()),
+            ActionSpec::new("bento-forget", "Close what the Bento pages show about a plan or a share"),
         ]
     }
 
@@ -124,8 +153,21 @@ impl Module for Settings {
                 Ok(snapshot) => panel.snapshot = snapshot,
                 Err(error) => tracing::warn!(%error, "no settings to show"),
             }
+            let (done, mut answers) = tokio::sync::mpsc::unbounded_channel();
+            panel.done = Some(done.clone());
             panel.publish(&ctx);
-            while let Some(event) = ctx.next_event().await {
+            loop {
+                let event = tokio::select! {
+                    event = ctx.next_event() => match event {
+                        Some(event) => event,
+                        None => break,
+                    },
+                    Some(answer) = answers.recv() => {
+                        panel.bento.finished(&ctx, &done, answer);
+                        panel.publish(&ctx);
+                        continue;
+                    }
+                };
                 match event {
                     ModuleEvent::Command(command) => panel.command(&ctx, command).await,
                     // A snapshot is large, and every view parses it, so it
@@ -163,6 +205,9 @@ struct Panel {
     editor: Option<Value>,
     /// The published state is older than the snapshot.
     stale: bool,
+    bento: bento::Bento,
+    /// Where Bento's commands send their answers.
+    done: Option<tokio::sync::mpsc::UnboundedSender<bento::Done>>,
 }
 
 impl Panel {
@@ -281,6 +326,33 @@ impl Panel {
                 self.open(ctx, args.str("id"));
                 Ok(())
             }
+            action if action.starts_with("bento-") => {
+                let text = |name: &str| args.str(name).unwrap_or_default().to_owned();
+                let words: Vec<String> = match action {
+                    "bento-catalog" => vec![text("refresh")],
+                    "bento-add" => vec![text("source"), text("at")],
+                    "bento-remove" | "bento-update" => vec![text("id")],
+                    "bento-share" => vec![
+                        text("dir"),
+                        args.bool("wallpaper").unwrap_or(false).to_string(),
+                        text("name"),
+                    ],
+                    _ => vec![text("source")],
+                };
+                // From a link: the Bento page, on what it names.
+                let action = if action == "bento-show" {
+                    self.open(ctx, Some("bento"));
+                    "bento-plan"
+                } else {
+                    action
+                };
+                let result = match &self.done {
+                    Some(done) => self.bento.command(ctx, done, action, &words),
+                    None => Err("the settings aren't ready".to_owned()),
+                };
+                self.publish(ctx);
+                result
+            }
             other => Err(format!("settings has no action {other}")),
         };
         command.reply(result);
@@ -335,6 +407,7 @@ impl Panel {
         }
         state["error"] = self.error.clone().unwrap_or(Value::Null);
         state["editor"] = self.editor.clone().unwrap_or(Value::Null);
+        state["bento"] = self.bento.state();
         ctx.publish_state(state);
     }
 }

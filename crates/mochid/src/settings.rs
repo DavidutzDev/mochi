@@ -128,7 +128,8 @@ impl Store {
     /// Reads the files again, for `mochi reload`. Changes they now say go
     /// away.
     pub fn reload(&mut self) -> Result<Loaded, ConfigError> {
-        let (store, loaded) = Self::load(&self.config_file, self.modules.take())?;
+        // A copy: a reload that fails keeps `--modules` for the next one.
+        let (store, loaded) = Self::load(&self.config_file, self.modules.clone())?;
         *self = store;
         Ok(loaded)
     }
@@ -840,6 +841,39 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
             fields: options::fields(&schema, "config", &table, &comments, &config_defaults),
         });
     }
+    // Bento's pages, which the panel draws itself: the registry, what Bento
+    // installed, and sharing this setup.
+    for (id, title, icon, description) in [
+        (
+            "bento",
+            "Discover",
+            "storefront",
+            "Plugins, themes and whole setups from Bento's registry, each release checked before it's listed.",
+        ),
+        (
+            "bento-installed",
+            "Installed",
+            "inventory_2",
+            "What Bento installed, with newer releases and what the registry withdrew.",
+        ),
+        (
+            "bento-share",
+            "Share",
+            "ios_share",
+            "Make a bento of this setup: its settings, theme, widgets and plugins, without what belongs to this machine or to you.",
+        ),
+    ] {
+        out.push(Section {
+            id: id.to_owned(),
+            path: id.to_owned(),
+            title: title.to_owned(),
+            description: description.to_owned(),
+            group: Group::Bento,
+            icon: icon.to_owned(),
+            module: None,
+            fields: Vec::new(),
+        });
+    }
     out
 }
 
@@ -1152,6 +1186,19 @@ mod tests {
             "the changes should be gone"
         );
         assert_eq!(store.snapshot()["changes"], json!(false));
+        std::fs::remove_dir_all(config.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn a_failed_reload_keeps_the_modules_flag() {
+        let config = temp("modules-flag");
+        let (mut store, _) = Store::load(&config, Some(vec!["idle".into()])).unwrap();
+        std::fs::write(&config, "modules = [\"nope\"]\n").unwrap();
+        assert!(store.reload().is_ok(), "--modules replaces the list");
+        std::fs::write(&config, "this isn't toml").unwrap();
+        assert!(store.reload().is_err());
+        std::fs::write(&config, "").unwrap();
+        assert_eq!(store.reload().unwrap().config.modules, ["idle"]);
         std::fs::remove_dir_all(config.parent().unwrap()).unwrap();
     }
 

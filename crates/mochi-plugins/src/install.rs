@@ -547,7 +547,8 @@ fn check_manifest_id(id: &str, manifest: &Manifest) -> Result<(), InstallError> 
 /// is installed but the build's tools or the programs the plugin needs
 /// aren't, or there's no backend and nothing to build it with; else with
 /// its build command.
-fn how_to_build(manifest: &Manifest, dir: &Path) -> Option<Build> {
+/// How a plugin in `dir` would be built, for showing before it is.
+pub fn how_to_build(manifest: &Manifest, dir: &Path) -> Option<Build> {
     let backend = manifest.backend.as_ref()?;
     let nix = crate::on_path("nix");
     if dir.join("flake.nix").is_file() && nix {

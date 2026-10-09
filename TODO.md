@@ -575,10 +575,12 @@ Phase 2, the registry:
 
 Phase 3, the Bento category in the settings:
 
-- [ ] Discover: cards with screenshots, search, filters for themes, plugins, widgets and bentos, a live preview of themes on hover
-- [ ] A package's page: screenshots, version, what a plugin runs and reads, the plugins a bento needs, Try and Install
-- [ ] Installed, with updates and Remove; Share, with what was left out
-- [ ] `mochi://bento/add/<id>` links
+- [x] Discover: cards with screenshots, search, filters for themes, plugins, widgets and bentos
+- [x] A package's page: screenshots, version, what a plugin runs and reads, the plugins a bento needs, Try and Install, shown before anything installs
+- [x] Installed, with updates and Remove; Share, with what was left out
+- [x] `mochi://bento/<id>` links, `mochi open-url` and `mochi-links.desktop`
+- [ ] A live preview of a theme on hover, before it's installed: the index would need its colors
+- [ ] GitHub stars on the cards
 
 Phase 4, publishing:
 

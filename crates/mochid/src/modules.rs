@@ -218,6 +218,8 @@ pub struct Runner {
     pub paths: Paths,
     /// Where `config.toml` is, for modules that keep files next to it.
     pub config_dir: PathBuf,
+    /// `config.toml` itself.
+    pub config_file: PathBuf,
     pub mode: Mode,
     pub compositor: Compositor,
     pub ids: ActivityIds,
@@ -238,6 +240,7 @@ impl Runner {
     ) -> Self {
         Self {
             config_dir: paths.config_dir.clone(),
+            config_file: paths.config_file(),
             paths,
             mode,
             compositor,
@@ -302,7 +305,9 @@ impl Runner {
             self.paths.session_dir(id),
             self.requests.clone(),
         );
-        let ctx = ctx.with_config_dir(self.config_dir.clone());
+        let ctx = ctx
+            .with_config_dir(self.config_dir.clone())
+            .with_daemon(self.config_file.clone(), self.paths.socket());
         self.generation += 1;
         let slot = ModuleSlot {
             contributions: contributions(module.as_ref()),

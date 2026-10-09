@@ -275,6 +275,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
     if let Some(dir) = config_file.parent() {
         runner.config_dir = dir.to_owned();
     }
+    runner.config_file.clone_from(&config_file);
 
     let files = Files {
         config: config_file,

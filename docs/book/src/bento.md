@@ -15,6 +15,29 @@ mochi bento update                       # move to newer releases
 
 `add`, `try` and `remove` work for all three kinds: a directory with a `mochi-bento.toml` is a bento, one with a `mochi-theme.toml` a [theme](theme.md#theme-packages), and one with a `mochi-plugin.toml` a [plugin](plugins.md). Themes and bentos hold only TOML and images, so they run nothing; a plugin is code, and asks before it installs, as `mochi plugins install` does.
 
+## In the settings
+
+The [settings panel](modules/settings.md) has a Bento group at the bottom of its sidebar, with three pages. `mochi ipc settings open bento` opens it.
+
+- **Discover** lists the registry: a card per package, with its first screenshot, a search, and filters for plugins, widgets (plugins tagged `widget`), themes and bentos. A card opens the package's page: its screenshots, who looks after it, its license and repository, then **Install** and, for themes and bentos, **Try**. Under the cards, a field takes anything else `add` takes, like a repository or a gist.
+- **Install** first shows what it will do, the same as the terminal's question: what a plugin builds, starts, runs and reads; a theme's colors; a bento's settings, themes, widgets and wallpaper, and the plugins it needs with what each runs. Nothing happens until you press Install again. A bento whose settings don't check, or that needs a plugin that can't be installed, can't be installed.
+- **Installed** lists what Bento installed, with **Update** where the registry has a newer release, **Update all**, and **Remove**, which asks once more. What a bento brought follows its bento. A release the registry withdrew says so in red.
+- **Share** makes a bento of this setup in a directory you name, with or without the wallpaper, and lists what it wrote and what it left out.
+
+The panel runs `mochid bento` for each of these, so it does exactly what the terminal does, and stays usable while a plugin builds.
+
+## Links
+
+`mochi://bento/<id>` links open the Discover page on what installing that package does, so a web page can offer an Install button. The id can be anything `add` takes, with its `/` written `%2F`: `mochi://bento/github.com%2Fsomeone%2Fcozy`. A link never installs anything by itself.
+
+The Nix and Arch packages install `mochi-links.desktop`, which hands `mochi://` links to `mochi open-url`. If your browser doesn't offer it, make it the handler:
+
+```sh
+xdg-mime default mochi-links.desktop x-scheme-handler/mochi
+```
+
+or with home-manager, `xdg.mimeApps.defaultApplications."x-scheme-handler/mochi" = "mochi-links.desktop";`.
+
 ## Where from
 
 `add` and `try` take:

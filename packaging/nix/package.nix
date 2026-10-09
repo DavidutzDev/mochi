@@ -36,6 +36,7 @@ rustPlatform.buildRustPackage {
       ../../crates
       ../../examples
       ../../modules
+      ../../share
       ../../systemd
     ];
   };
@@ -67,6 +68,10 @@ rustPlatform.buildRustPackage {
   postInstall = ''
     install -Dm644 systemd/mochid.service $out/lib/systemd/user/mochid.service
     substituteInPlace $out/lib/systemd/user/mochid.service \
+      --replace-fail /usr/bin/ $out/bin/
+    # mochi:// links, like a Bento install button on a web page.
+    install -Dm644 share/applications/mochi-links.desktop -t $out/share/applications
+    substituteInPlace $out/share/applications/mochi-links.desktop \
       --replace-fail /usr/bin/ $out/bin/
   ''
   + lib.optionalString (stdenv.buildPlatform.canExecute stdenv.hostPlatform) ''

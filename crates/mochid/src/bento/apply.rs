@@ -128,9 +128,13 @@ impl Context {
 
 /// What `text` names: where from, its files, and what they hold. A
 /// registry's package must be what the registry says it is.
-fn get(context: &Context, text: &str) -> Result<(Source, Fetched, Package), String> {
+fn get(
+    context: &Context,
+    text: &str,
+    at: Option<&str>,
+) -> Result<(Source, Fetched, Package), String> {
     let source = fetch::parse(text)?;
-    let fetched = fetch::fetch(&source, &context.locations)?;
+    let fetched = fetch::fetch(&source, &context.locations, at)?;
     let package = detect(&fetched.dir)?;
     if let Some((kind, release)) = &fetched.listed {
         let found = match &package {
@@ -151,9 +155,9 @@ fn get(context: &Context, text: &str) -> Result<(Source, Fetched, Package), Stri
 }
 
 /// `mochi bento add`.
-pub fn add(config_file: &Path, text: &str, yes: bool) -> Result<(), String> {
+pub fn add(config_file: &Path, text: &str, at: Option<&str>, yes: bool) -> Result<(), String> {
     let context = Context::new(config_file, yes)?;
-    let (source, fetched, package) = get(&context, text)?;
+    let (source, fetched, package) = get(&context, text, at)?;
     match package {
         Package::Theme(theme) => {
             add_theme(&context, &source, &fetched, &theme, None)?;
@@ -626,7 +630,7 @@ fn set_wallpaper(path: &Path) {
 /// without keeping them, until Keep or Drop in the settings.
 pub fn try_it(config_file: &Path, text: &str) -> Result<(), String> {
     let context = Context::new(config_file, true)?;
-    let (source, fetched, package) = get(&context, text)?;
+    let (source, fetched, package) = get(&context, text, None)?;
     let tried = match package {
         Package::Plugin(_) => {
             return Err(
@@ -1095,7 +1099,7 @@ pub fn update(config_file: &Path, ids: &[String], yes: bool) -> Result<(), Strin
                 .source
                 .parse()
                 .map_err(|error| format!("bento.toml: {error}"))?;
-            let fetched = fetch::fetch(&source, &context.locations)?;
+            let fetched = fetch::fetch(&source, &context.locations, None)?;
             if fetched.revision.is_some() && fetched.revision == entry.revision {
                 eprintln!("{id} is up to date");
                 return Ok(false);
@@ -1130,6 +1134,136 @@ pub fn update(config_file: &Path, ids: &[String], yes: bool) -> Result<(), Strin
         1 => Err(format!("{} didn't update", failed[0])),
         _ => Err(format!("{} didn't update", failed.join(", "))),
     }
+}
+
+/// `mochi bento plan`: what `add` would do, as JSON, changing nothing. The
+/// settings panel shows it before asking, as the terminal shows the same
+/// before its question; `add --at` then installs the commit it showed.
+pub fn plan(config_file: &Path, text: &str) -> Result<(), String> {
+    let context = Context::new(config_file, true)?;
+    let (source, fetched, package) = get(&context, text, None)?;
+    let mut out = serde_json::json!({
+        "source": source.to_string(),
+        "at": fetched.revision,
+    });
+    let about =
+        |kind: &str, id: &str, name: &str, version: &str, description: &str, authors: &[String]| {
+            serde_json::json!({
+                "kind": kind,
+                "id": id,
+                "name": name,
+                "version": version,
+                "description": description,
+                "authors": authors,
+            })
+        };
+    let details = match package {
+        Package::Plugin(manifest) => {
+            let info = &manifest.plugin;
+            let mut details = about(
+                "plugin",
+                &info.id,
+                &info.name,
+                &info.version,
+                &info.description,
+                &info.authors,
+            );
+            details["plugin"] = plugin_json(&manifest, &fetched.dir, &source);
+            details
+        }
+        Package::Theme(theme) => {
+            let info = &theme.theme;
+            let mut details = about(
+                "theme",
+                &info.id,
+                &info.name,
+                &info.version,
+                &info.description,
+                &info.authors,
+            );
+            details["theme"] = serde_json::json!({
+                "dark": theme.colors(false),
+                "light": theme.colors(true),
+            });
+            details
+        }
+        Package::Bento(bento) => {
+            let info = &bento.bento;
+            let mut details = about(
+                "bento",
+                &info.id,
+                &info.name,
+                &info.version,
+                &info.description,
+                &info.authors,
+            );
+            let brought = bento_themes(&fetched.dir)?;
+            let problem = check(&fetched.dir, &bento, &brought).err();
+            let mut plugins = Vec::new();
+            for (id, plugin_source) in bento.sources()? {
+                let described =
+                    fetch::fetch(&plugin_source, &context.locations, None).and_then(|plugin| {
+                        match detect(&plugin.dir)? {
+                            Package::Plugin(manifest) => {
+                                Ok(plugin_json(&manifest, &plugin.dir, &plugin_source))
+                            }
+                            _ => Err(format!("{plugin_source} isn't a plugin")),
+                        }
+                    });
+                plugins.push(match described {
+                    Ok(plan) => serde_json::json!({ "id": id, "source": plugin_source.to_string(), "plan": plan }),
+                    Err(error) => serde_json::json!({ "id": id, "source": plugin_source.to_string(), "problem": error }),
+                });
+            }
+            let mut settings = Vec::new();
+            share::leaves(&bento.config, &mut Vec::new(), &mut settings);
+            let mut look = Vec::new();
+            share::leaves(&bento.theme, &mut Vec::new(), &mut look);
+            let screens = bento
+                .widgets
+                .iter()
+                .filter_map(|widget| screens::parse_role(&widget.output))
+                .max()
+                .map_or(0, |most| most + 1);
+            details["bento"] = serde_json::json!({
+                "settings": settings.len(),
+                "theme_settings": look.len(),
+                "themes": brought.iter().map(|(id, _)| id).collect::<Vec<_>>(),
+                "plugins": plugins,
+                "widgets": bento.widgets.len(),
+                "screens": screens,
+                "screens_here": screens::connected().len(),
+                "wallpaper": bento.bento.wallpaper.is_some(),
+                "installed": context.installed()?.bentos.contains_key(&info.id),
+                "problem": problem,
+            });
+            details
+        }
+    };
+    if let (Some(out), Some(details)) = (out.as_object_mut(), details.as_object()) {
+        out.extend(details.clone());
+    }
+    println!("{out}");
+    Ok(())
+}
+
+/// What a plugin will run and read, as the terminal's question shows it.
+fn plugin_json(manifest: &Manifest, dir: &Path, source: &Source) -> serde_json::Value {
+    let runs = match source {
+        Source::GitRelease { .. } => None,
+        _ => mochi_plugins::install::how_to_build(manifest, dir).map(|build| build.to_string()),
+    };
+    let backend = manifest.backend.as_ref();
+    serde_json::json!({
+        "runs": runs,
+        "downloads": matches!(source, Source::GitRelease { .. }),
+        "starts": backend.map(|backend| backend.exec.clone()),
+        "needs": backend.map(|backend| backend.needs.clone()).unwrap_or_default(),
+        "missing": manifest.missing_needs(),
+        "reads": manifest.uses.state,
+        "replaces": manifest.views.overrides,
+        "actions": manifest.actions.iter().map(|action| action.name.clone()).collect::<Vec<_>>(),
+    })
 }
 
 #[cfg(test)]

@@ -89,8 +89,8 @@ impl Drop for Fetched {
 /// Gets a source's files: a directory in place, or a clone. A release's
 /// repository is cloned at its tag, for its manifest; the plugin installer
 /// downloads the release itself. A registry's package is cloned at the
-/// commit of the release it picks.
-pub fn fetch(source: &Source, locations: &Locations) -> Result<Fetched, String> {
+/// commit of the release it picks. `at` pins a commit, the one `plan` showed.
+pub fn fetch(source: &Source, locations: &Locations, at: Option<&str>) -> Result<Fetched, String> {
     let mut listed = None;
     let (url, reference) = match source {
         Source::Path(dir) => {
@@ -101,10 +101,13 @@ pub fn fetch(source: &Source, locations: &Locations) -> Result<Fetched, String> 
                 scratch: None,
             });
         }
-        Source::Git { url, reference } => (url.clone(), reference.clone()),
-        Source::GitRelease { owner, repo, tag } => {
-            (format!("https://github.com/{owner}/{repo}"), tag.clone())
+        Source::Git { url, reference } => {
+            (url.clone(), at.map(str::to_owned).or(reference.clone()))
         }
+        Source::GitRelease { owner, repo, tag } => (
+            format!("https://github.com/{owner}/{repo}"),
+            at.map(str::to_owned).or(tag.clone()),
+        ),
         Source::Registry {
             registry,
             id,
@@ -113,7 +116,18 @@ pub fn fetch(source: &Source, locations: &Locations) -> Result<Fetched, String> 
             let registry = registry::registry(locations, registry.as_deref())?;
             let index = registry::load(&registry, &registry::cache_dir(), false)?;
             let package = index.get(id)?;
-            let release = package.pick(version.as_deref())?;
+            let release = match at {
+                Some(at) => {
+                    let release = package
+                        .at(at)
+                        .ok_or_else(|| format!("the registry lists no release of {id} at {at}"))?;
+                    if let Some(why) = release.malicious.as_ref().or(release.yanked.as_ref()) {
+                        return Err(format!("{id} {} was withdrawn: {why}", release.version));
+                    }
+                    release
+                }
+                None => package.pick(version.as_deref())?,
+            };
             listed = Some((package.kind, release.clone()));
             (package.repository.clone(), Some(release.commit.clone()))
         }

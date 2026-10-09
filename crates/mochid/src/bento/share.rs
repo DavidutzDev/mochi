@@ -41,6 +41,8 @@ pub struct Options {
     pub force: bool,
     /// Print the manifest instead of writing a directory.
     pub print: bool,
+    /// Say what was written and left out as JSON, for the settings panel.
+    pub json: bool,
 }
 
 /// What was left out, and why, for the user to check.
@@ -223,6 +225,20 @@ pub fn share(config_file: &Path, dir: &Path, options: &Options) -> Result<(), St
         print!("{}", bento.to_toml());
     } else {
         write(dir, &bento, &themes, wallpaper.as_ref())?;
+        if options.json {
+            let dir = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_owned());
+            println!(
+                "{}",
+                serde_json::json!({
+                    "dir": dir,
+                    "id": bento.bento.id,
+                    "manifest": dir.join(FILE),
+                    "summary": summary(&bento, themes.len()).lines().map(|line| line.split_whitespace().collect::<Vec<_>>().join(" ")).collect::<Vec<_>>(),
+                    "left": left,
+                })
+            );
+            return Ok(());
+        }
         eprintln!("Wrote {}:", dir.display());
         eprintln!("{}", summary(&bento, themes.len()));
     }
@@ -398,7 +414,7 @@ fn looks_secret(text: &str) -> bool {
 }
 
 /// Every value that isn't a table, by path. Lists count as one value.
-fn leaves(table: &Table, prefix: &mut Vec<String>, out: &mut Vec<Vec<String>>) {
+pub(super) fn leaves(table: &Table, prefix: &mut Vec<String>, out: &mut Vec<Vec<String>>) {
     for (key, value) in table {
         prefix.push(key.clone());
         match value {

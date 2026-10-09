@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Mochi links
+Comment=Opens mochi:// links, like a Bento install button, in Mochi's settings
+Exec=/usr/bin/mochi open-url %u
+MimeType=x-scheme-handler/mochi;
+NoDisplay=true
+Terminal=false

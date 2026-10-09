@@ -25,6 +25,8 @@ pub mod themes;
 // Protocol types modules need, so a module only depends on this crate.
 /// Compositor state and actions, from [`ModuleCtx::compositor`].
 pub use mochi_compositor as compositor;
+/// The variable naming the daemon's socket, for commands modules run.
+pub use mochi_protocol::SOCKET_ENV;
 /// Mochi's version, and the oldest one a package works with.
 pub use mochi_protocol::version;
 pub use mochi_protocol::{ActionSpec, ActivityId, Area, ArgSpec, BubbleId, Contribution};

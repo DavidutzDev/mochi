@@ -27,6 +27,8 @@ Item {
     property bool editing: false
 
     readonly property var current: sections.find(entry => entry.id === section) ?? sections[0] ?? null
+    // Bento's pages, which aren't options.
+    readonly property bool bentoPage: current?.group === "bento"
     readonly property var error: settings.error ?? null
 
     implicitWidth: 960
@@ -145,7 +147,7 @@ Item {
     // The sidebar: a heading per group, then its sections' ids. While
     // searching, only the sections with a match.
     readonly property string sidebarKey: {
-        const groups = [["appearance", "Appearance"], ["shell", "Shell"], ["modules", "Modules"], ["plugins", "Plugins"]];
+        const groups = [["appearance", "Appearance"], ["shell", "Shell"], ["modules", "Modules"], ["plugins", "Plugins"], ["bento", "Bento"]];
         const found = needle === "" ? null : layout.map(block => block.section);
         const rows = [];
         for (const [group, title] of groups) {
@@ -505,7 +507,7 @@ Item {
                 }
 
                 Button {
-                    visible: !content.searching && root.current !== null && root.current.id !== "modules"
+                    visible: !content.searching && root.current !== null && root.current.id !== "modules" && !root.bentoPage
                     text: root.editing ? "Options" : "TOML"
                     icon: root.editing ? "tune" : "code"
                     tone: root.editing ? "neutral" : "ghost"
@@ -513,6 +515,7 @@ Item {
                 }
 
                 CopyButton {
+                    visible: !root.bentoPage
                     width: 120
                     module: "settings"
                     down: true
@@ -604,6 +607,13 @@ Item {
                     width: body.width
                     spacing: Theme.spaceLarge
 
+                    // Bento's pages.
+                    Bento {
+                        visible: !content.searching && root.bentoPage
+                        width: parent.width
+                        page: root.bentoPage ? root.current.id : ""
+                    }
+
                     // The Modules page: a switch per module.
                     Column {
                         visible: !content.searching && root.current?.id === "modules"
@@ -661,7 +671,7 @@ Item {
                     }
 
                     Text {
-                        visible: !content.searching && root.current !== null && root.current.id !== "modules" && root.current.fields.length === 0
+                        visible: !content.searching && root.current !== null && root.current.id !== "modules" && root.current.fields.length === 0 && !root.bentoPage
                         width: parent.width
                         leftPadding: Theme.spaceMedium
                         text: "Nothing to set here."

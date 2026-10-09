@@ -50,6 +50,7 @@ package() {
   cd "$pkgname-$pkgver"
   install -Dm755 target/release/mochid target/release/mochi -t "$pkgdir/usr/bin/"
   install -Dm644 systemd/mochid.service -t "$pkgdir/usr/lib/systemd/user/"
+  install -Dm644 share/applications/mochi-links.desktop -t "$pkgdir/usr/share/applications/"
   # The fonts the shell loads: Inter from inter-font, and the icons.
   install -Dm644 "$srcdir/MaterialSymbolsRounded.ttf" -t "$pkgdir/usr/share/mochi/fonts/"
   ln -s /usr/share/fonts/inter/InterVariable.ttf "$pkgdir/usr/share/mochi/fonts/InterVariable.ttf"

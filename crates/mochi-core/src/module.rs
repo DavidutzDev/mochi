@@ -363,6 +363,8 @@ pub struct ModuleCtx {
     data_dir: PathBuf,
     session_dir: PathBuf,
     config_dir: Option<PathBuf>,
+    config_file: Option<PathBuf>,
+    socket: Option<PathBuf>,
     requests: mpsc::UnboundedSender<ModuleRequest>,
     events: mpsc::UnboundedReceiver<ModuleEvent>,
 }
@@ -388,6 +390,8 @@ impl ModuleCtx {
             data_dir,
             session_dir,
             config_dir: None,
+            config_file: None,
+            socket: None,
             requests,
             events,
         };
@@ -400,6 +404,27 @@ impl ModuleCtx {
     pub fn with_config_dir(mut self, dir: PathBuf) -> Self {
         self.config_dir = Some(dir);
         self
+    }
+
+    /// Sets the daemon's `config.toml` and socket, for modules that run
+    /// `mochid` or `mochi` commands.
+    #[must_use]
+    pub fn with_daemon(mut self, config_file: PathBuf, socket: PathBuf) -> Self {
+        self.config_file = Some(config_file);
+        self.socket = Some(socket);
+        self
+    }
+
+    /// The `config.toml` the daemon reads, also when `mochid --config` names
+    /// another file. `None` in tests.
+    pub fn config_file(&self) -> Option<&Path> {
+        self.config_file.as_deref()
+    }
+
+    /// The daemon's socket, for commands a module runs to reach it, as
+    /// `MOCHI_SOCKET`. `None` in tests.
+    pub fn socket(&self) -> Option<&Path> {
+        self.socket.as_deref()
     }
 
     /// The directory `config.toml` is in, like `~/.config/mochi`, also when

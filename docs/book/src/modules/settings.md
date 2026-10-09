@@ -1,6 +1,6 @@
 # Settings
 
-A panel with every option: the theme, the island, the bubbles, which modules run, each module's settings and each plugin's. A change applies as you make it. Theme options apply while you drag. A module's own options apply 400 ms after you stop, since the module restarts to read them.
+A panel with every option: the theme, the island, the bubbles, which modules run, each module's settings and each plugin's. A change applies as you make it. Theme options apply while you drag. A module's own options apply 400 ms after you stop, since the module restarts to read them. Its Bento pages install plugins, themes and whole setups from the registry, and share yours: see [Bento](../bento.md#in-the-settings).
 
 `mochi ipc settings open` opens it, and `mochi ipc settings open osd` opens a section: a module's id, `colors`, `text`, `layout`, `motion`, `island`, `bubbles` or `modules`. An option's path, like `theme.colors.accent`, opens its section and points at it. The hub's gear opens the panel at the page you're on, and the launcher finds "Settings", each section and each option by name.
 
@@ -30,6 +30,8 @@ When `changes.toml` has an option that no longer fits, after an update renamed i
 | `discard` | Drops every change. |
 | `preview <path> <json>`, `keep`, `drop` | Tries an option without keeping it, then keeps or drops what's being tried. |
 | `try <json>` | Tries whole tables of settings, like `{"config": {...}, "theme": {...}}`, in place of what was being tried; `mochi bento try` sends it. |
+| `bento-catalog [refresh]`, `bento-plan <source>`, `bento-show <source>` | Read Bento's registry and what it installed, or say what installing something does; `show` opens the Discover page on it, as `mochi://bento/` links do. See [Bento](../bento.md#in-the-settings). |
+| `bento-add <source> [commit]`, `bento-remove <id>`, `bento-update [id]`, `bento-try <source>`, `bento-share <dir> [wallpaper] [name]` | What the Bento pages' buttons run, with `mochid bento`. `bento-forget` closes what a plan or a share shows. |
 | `text <path>`, `edit <path> <toml>` | A section as TOML, and replacing it. |
 | `export [nix\|toml]`, `copy [nix\|toml]` | Prints, or copies, every option that isn't at its default. |
 

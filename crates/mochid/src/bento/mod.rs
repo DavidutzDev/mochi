@@ -42,15 +42,30 @@ pub enum Action {
         /// Print the manifest instead, to paste somewhere like a gist.
         #[arg(long)]
         print: bool,
+        /// Say what was written and left out as JSON.
+        #[arg(long)]
+        json: bool,
     },
     /// Install a bento, a theme or a plugin: a directory, a git repository
     /// like `github.com/<user>/<repo>`, a gist's URL, or any source
     /// plugins.toml takes.
     Add {
         source: String,
+        /// Install this commit of a git or registry source, the one `plan`
+        /// showed.
+        #[arg(long)]
+        at: Option<String>,
         /// Don't ask.
         #[arg(long, short)]
         yes: bool,
+    },
+    /// Say what `add` would do, as JSON, changing nothing.
+    Plan { source: String },
+    /// The registry's packages and what Bento installed, as JSON.
+    Catalog {
+        /// Download the registry's index again, however recent the copy.
+        #[arg(long)]
+        refresh: bool,
     },
     /// Apply a theme, or a bento's settings and theme, without keeping
     /// them: Keep or Drop them in the settings.
@@ -139,6 +154,7 @@ pub fn run(action: &Action, config_file: &Path) -> Result<(), String> {
             wallpaper,
             force,
             print,
+            json,
         } => share::share(
             config_file,
             dir,
@@ -147,9 +163,12 @@ pub fn run(action: &Action, config_file: &Path) -> Result<(), String> {
                 wallpaper: *wallpaper,
                 force: *force,
                 print: *print,
+                json: *json,
             },
         ),
-        Action::Add { source, yes } => apply::add(config_file, source, *yes),
+        Action::Add { source, at, yes } => apply::add(config_file, source, at.as_deref(), *yes),
+        Action::Plan { source } => apply::plan(config_file, source),
+        Action::Catalog { refresh } => registry::catalog(config_file, *refresh),
         Action::Try { source } => apply::try_it(config_file, source),
         Action::Remove { id, yes } => apply::remove(config_file, id, *yes),
         Action::List => apply::list(config_file),

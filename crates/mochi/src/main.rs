@@ -108,6 +108,12 @@ enum Command {
         #[arg(long, value_name = "FILE")]
         config: Option<PathBuf>,
     },
+    /// Open a mochi:// link, as a browser does through the desktop entry.
+    ///
+    /// `mochi://bento/<source>` opens the settings' Bento page on what
+    /// installing it would do, without installing anything: an id in the
+    /// registry, or a repository like `github.com/someone/cozy`.
+    OpenUrl { url: String },
     /// Print a completion script for a shell.
     ///
     /// For example, `mochi completions fish > ~/.config/fish/completions/mochi.fish`.
@@ -221,6 +227,7 @@ fn run(command: Command, json: bool) -> Result<(), String> {
         }
         Command::Config { args } => mochid(&["config".into()], &args),
         Command::Bento { args } => mochid(&["bento".into()], &args),
+        Command::OpenUrl { url } => open_url(&url),
         Command::Doctor { config } => {
             let mut before: Vec<String> = Vec::new();
             if let Some(config) = config {
@@ -586,4 +593,67 @@ fn socket() -> Result<PathBuf, String> {
 
 fn unexpected(message: &DaemonMessage) -> String {
     format!("the daemon sent an unexpected answer: {message:?}")
+}
+
+/// `mochi://bento/<source>`, or `mochi://bento/add/<source>`: the Bento
+/// page on that source, which shows what installing it does and asks.
+fn open_url(url: &str) -> Result<(), String> {
+    let rest = url
+        .strip_prefix("mochi://")
+        .ok_or_else(|| format!("{url:?} isn't a mochi:// link"))?;
+    let source = rest
+        .strip_prefix("bento/add/")
+        .or_else(|| rest.strip_prefix("bento/"))
+        .map(decode)
+        .filter(|source| !source.trim().is_empty())
+        .ok_or_else(|| format!("{url:?} names nothing Mochi opens: mochi://bento/<id> does"))?;
+    match request(ClientMessage::Command {
+        module: "settings".into(),
+        action: "bento-show".into(),
+        args: vec![source],
+    })? {
+        DaemonMessage::Ok | DaemonMessage::Output { .. } => Ok(()),
+        other => Err(unexpected(&other)),
+    }
+}
+
+/// `%2F` and the like back into what they stand for.
+fn decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        let hex = bytes
+            .get(index + 1..index + 3)
+            .and_then(|pair| std::str::from_utf8(pair).ok())
+            .and_then(|pair| u8::from_str_radix(pair, 16).ok());
+        match (bytes[index], hex) {
+            (b'%', Some(byte)) => {
+                out.push(byte);
+                index += 3;
+            }
+            (byte, _) => {
+                out.push(byte);
+                index += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out)
+        .trim_end_matches('/')
+        .to_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn links_decode() {
+        assert_eq!(decode("cozy"), "cozy");
+        assert_eq!(
+            decode("github.com%2Fsomeone%2Fcozy/"),
+            "github.com/someone/cozy"
+        );
+        assert_eq!(decode("100%"), "100%");
+    }
 }

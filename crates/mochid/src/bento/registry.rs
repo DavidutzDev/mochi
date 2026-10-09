@@ -91,6 +91,119 @@ pub fn info(config_file: &Path, id: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// `mochi bento catalog`: the registry's packages and what Bento
+/// installed, as JSON, for the settings panel. A registry that can't be
+/// reached gives an `error` and the installed list still.
+pub fn catalog(config_file: &Path, refresh: bool) -> Result<(), String> {
+    let locations = Locations::beside(config_file);
+    let installed = mochi_plugins::bento::Installed::load(&locations.bento)
+        .map_err(|error| error.to_string())?;
+    let lock = mochi_plugins::Lock::load(&locations.lock).unwrap_or_default();
+    let loaded = registry::registry(&locations, None)
+        .and_then(|registry| registry::load(&registry, &registry::cache_dir(), refresh));
+    let (index, error) = match loaded {
+        Ok(index) => (Some(index), None),
+        Err(error) => (None, Some(error)),
+    };
+    let here = |id: &str| {
+        installed.plugins.contains_key(id)
+            || installed.themes.contains_key(id)
+            || installed.bentos.contains_key(id)
+    };
+    let packages: Vec<serde_json::Value> = index
+        .iter()
+        .flat_map(|index| &index.packages)
+        .map(|(id, package)| {
+            let picked = package.pick(None);
+            serde_json::json!({
+                "id": id,
+                "kind": package.kind.as_str(),
+                "name": package.name,
+                "description": package.description,
+                "repository": package.repository,
+                "maintainers": package.maintainers,
+                "license": package.license,
+                "tags": package.tags,
+                "homepage": package.homepage,
+                "screenshots": package.screenshots,
+                "version": picked.as_ref().ok().map(|release| release.version.clone()),
+                "problem": picked.err(),
+                "installed": here(id),
+            })
+        })
+        .collect();
+    let mut list = Vec::new();
+    for (kind, entries) in [
+        ("bento", &installed.bentos),
+        ("theme", &installed.themes),
+        ("plugin", &installed.plugins),
+    ] {
+        for (id, entry) in entries {
+            let locked = lock.plugins.get(id);
+            let (version, commit) = if kind == "plugin" {
+                (
+                    locked.and_then(|locked| locked.version.clone()),
+                    locked.and_then(|locked| locked.commit.clone()),
+                )
+            } else {
+                (entry.version.clone(), entry.revision.clone())
+            };
+            let source = entry.source.parse::<mochi_plugins::Source>().ok();
+            let (withdrawn, harmful) = match (&source, &commit) {
+                (Some(source), Some(commit)) => {
+                    match registry::withdrawn(&locations, source, commit) {
+                        Ok(note) => (note, false),
+                        Err(note) => (Some(note), true),
+                    }
+                }
+                _ => (None, false),
+            };
+            // A newer release, for what came from the registry. What a bento
+            // brought follows its bento.
+            let listed = match &source {
+                _ if entry.by.is_some() => None,
+                Some(mochi_plugins::Source::Registry {
+                    id: package,
+                    version,
+                    ..
+                }) => index
+                    .as_ref()
+                    .and_then(|index| index.packages.get(package))
+                    .map(|package| (package, version.clone())),
+                _ => None,
+            };
+            let update = listed.and_then(|(package, pinned)| {
+                let newest = package.pick(pinned.as_deref()).ok()?;
+                (commit.as_deref() != Some(newest.commit.as_str())).then(|| newest.version.clone())
+            });
+            let name = index
+                .as_ref()
+                .and_then(|index| index.packages.get(id))
+                .map_or_else(|| id.clone(), |package| package.name.clone());
+            list.push(serde_json::json!({
+                "id": id,
+                "kind": kind,
+                "name": name,
+                "version": version,
+                "source": entry.source,
+                "by": entry.by,
+                "withdrawn": withdrawn,
+                "harmful": harmful,
+                "update": update,
+            }));
+        }
+    }
+    println!(
+        "{}",
+        serde_json::json!({
+            "error": error,
+            "packages": packages,
+            "installed": list,
+        })
+    );
+    Ok(())
+}
+
 fn parse_kind(text: &str) -> Result<Kind, String> {
     match text {
         "plugin" | "plugins" | "widget" | "widgets" => Ok(Kind::Plugin),
