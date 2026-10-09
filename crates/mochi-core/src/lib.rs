@@ -14,6 +14,7 @@ pub mod config;
 pub mod contributions;
 pub mod desktop;
 pub mod examples;
+pub mod host;
 pub mod islands;
 pub mod module;
 pub mod nix;

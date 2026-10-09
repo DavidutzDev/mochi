@@ -246,13 +246,50 @@ impl Module for Performance {
                     "min": [12, 5],
                     "max": [50, 40],
                     "category": "System",
-                    "description": "CPU, memory and GPU, each over the last two minutes",
+                    // The graphs first: widgets placed before there were
+                    // looks have them.
+                    "variants": [
+                        {
+                            "id": "graphs",
+                            "title": "Graphs",
+                            "description": "CPU, memory and GPU, each over the last two minutes",
+                        },
+                        {
+                            "id": "rings",
+                            "title": "Rings",
+                            "description": "CPU, memory and disk as rings, the percent inside",
+                            "view": "Rings",
+                            "size": [18, 8],
+                            "min": [13, 6],
+                            "max": [40, 16],
+                            "settings": [],
+                        },
+                        {
+                            "id": "meters",
+                            "title": "Meters",
+                            "description": "A bar for each reading, with what it uses",
+                            "view": "Meters",
+                            "size": [16, 10],
+                            "min": [12, 7],
+                            "max": [40, 20],
+                            "settings": [],
+                        },
+                    ],
                     "settings": GRAPHS.map(|(name, title, default)| json!({
                         "name": name,
                         "kind": "bool",
                         "default": default,
                         "description": format!("Show the {title} graph"),
                     })),
+                })),
+            ContributionSpec::new("widgets", "widget", "system", "System", "System info")
+                .icon("display")
+                .options(json!({
+                    "size": [20, 12],
+                    "min": [14, 8],
+                    "max": [40, 20],
+                    "category": "System",
+                    "description": "The system, the kernel, the uptime, the CPU and memory",
                 })),
         ];
         offers.extend(tour::steps());
@@ -359,6 +396,11 @@ struct State {
     bubble: Option<BubbleId>,
     /// The critical readings the bubble shows, to tell news from new values.
     critical_shown: Vec<Value>,
+    /// The filesystem the home directory is on, and how full it is.
+    home: std::path::PathBuf,
+    space: Option<sample::Space>,
+    /// What the computer is, for the system info widget, read once.
+    system: Value,
 }
 
 impl State {
@@ -392,6 +434,9 @@ impl State {
             detail_until: None,
             bubble: None,
             critical_shown: Vec::new(),
+            home: std::env::var_os("HOME").map_or_else(|| "/".into(), Into::into),
+            space: None,
+            system: system(),
         };
         // The first reading then has counts to compare with.
         state.traffic(Instant::now());
@@ -489,6 +534,7 @@ impl State {
         self.reading.memory =
             sample::memory(&std::fs::read_to_string("/proc/meminfo").unwrap_or_default());
         self.reading.cpu_temperature = self.cpu_sensor.as_deref().and_then(sample::temperature);
+        self.space = sample::space(&self.home);
         self.reading.gpu = match (&self.amd, &self.nvidia) {
             (Some(amd), _) => amd.read(),
             (None, Some(nvidia)) => nvidia.borrow().clone(),
@@ -705,6 +751,13 @@ impl State {
             },
             "gpu": gpu,
             "disk": flow(&self.disk),
+            // How full the home directory's filesystem is.
+            "storage": self.space.map(|space| json!({
+                "percent": space.percent().round(),
+                "used": bytes(space.used),
+                "total": bytes(space.total()),
+            })),
+            "system": self.system,
             "network": flow(&self.network),
             "sort": self.sort.name(),
             "processes": self.top.iter().map(|row| json!({
@@ -775,6 +828,32 @@ fn gigabytes(kibibytes: u64) -> String {
     }
 }
 
+/// `512 MB`, `476.9 GB`, `1.8 TB`, from bytes.
+fn bytes(bytes: u64) -> String {
+    let terabytes = bytes as f64 / (1024.0 * 1024.0 * 1024.0 * 1024.0);
+    if terabytes >= 1.0 {
+        format!("{terabytes:.1} TB")
+    } else {
+        gigabytes(bytes / 1024)
+    }
+}
+
+/// What the computer is, for the system info widget: its distribution,
+/// kernel, CPU, the compositor, Mochi's version, and when it started, in
+/// seconds since the epoch, for the uptime. None of it changes while the
+/// daemon runs.
+fn system() -> Value {
+    json!({
+        "os": mochi_core::host::os(),
+        "kernel": mochi_core::host::kernel(),
+        "cpu": mochi_core::host::cpu(),
+        "cores": std::thread::available_parallelism().map(std::num::NonZero::get).ok(),
+        "compositor": mochi_core::host::compositor(),
+        "mochi": mochi_core::version::VERSION,
+        "booted": mochi_core::host::booted(),
+    })
+}
+
 #[cfg(test)]
 mod settings_example {
     #[test]
@@ -793,6 +872,17 @@ mod settings_example {
         assert!(super::Settings::load(&table("cpu = { warning = 70 }")).is_err());
         assert_eq!(super::gigabytes(512 * 1024), "512 MB");
         assert_eq!(super::gigabytes(3 * 1024 * 1024 + 100 * 1024), "3.1 GB");
+        assert_eq!(super::bytes(512 * 1024 * 1024), "512 MB");
+        assert_eq!(super::bytes(2 * 1024 * 1024 * 1024 * 1024), "2.0 TB");
+    }
+
+    #[test]
+    fn says_what_the_computer_is() {
+        let system = super::system();
+        assert_eq!(system["mochi"], mochi_core::version::VERSION);
+        // Linux always has these.
+        assert!(system["kernel"].is_string());
+        assert!(system["booted"].as_u64().is_some_and(|booted| booted > 0));
     }
 
     #[test]

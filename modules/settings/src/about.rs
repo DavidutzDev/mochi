@@ -48,10 +48,10 @@ pub async fn gather(socket: Option<PathBuf>, config: Option<PathBuf>) -> Value {
             "socket": socket.map(|path| path.display().to_string()),
         },
         "system": {
-            "os": os(),
-            "kernel": read_trimmed("/proc/sys/kernel/osrelease"),
+            "os": mochi_core::host::os(),
+            "kernel": mochi_core::host::kernel(),
             "arch": std::env::consts::ARCH,
-            "cpu": cpu(),
+            "cpu": mochi_core::host::cpu(),
             "cores": std::thread::available_parallelism().map(|n| n.get()).ok(),
             "memory": meminfo("MemTotal"),
         },
@@ -139,29 +139,6 @@ fn read_trimmed(path: &str) -> Option<String> {
         .ok()
         .map(|text| text.trim().to_owned())
         .filter(|text| !text.is_empty())
-}
-
-/// The distribution's name, from os-release.
-fn os() -> Option<String> {
-    let text = std::fs::read_to_string("/etc/os-release")
-        .or_else(|_| std::fs::read_to_string("/usr/lib/os-release"))
-        .ok()?;
-    let field = |key: &str| {
-        text.lines()
-            .find_map(|line| line.strip_prefix(key)?.strip_prefix('='))
-            .map(|value| value.trim_matches('"').to_owned())
-    };
-    field("PRETTY_NAME").or_else(|| field("NAME"))
-}
-
-fn cpu() -> Option<String> {
-    let text = std::fs::read_to_string("/proc/cpuinfo").ok()?;
-    text.lines()
-        .find_map(|line| {
-            let (key, value) = line.split_once(':')?;
-            matches!(key.trim(), "model name" | "Model" | "Hardware").then(|| value.trim())
-        })
-        .map(|name| name.split_whitespace().collect::<Vec<_>>().join(" "))
 }
 
 /// A `/proc/meminfo` line, in bytes.

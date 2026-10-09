@@ -89,6 +89,50 @@ pub fn memory(meminfo: &str) -> Memory {
     }
 }
 
+/// How full a filesystem is, in bytes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Space {
+    pub used: u64,
+    /// What a user can still write, without the part kept for root.
+    pub free: u64,
+}
+
+impl Space {
+    /// The share used of what users can have, as `df` counts it.
+    pub fn percent(&self) -> f64 {
+        let usable = self.used + self.free;
+        if usable == 0 {
+            return 0.0;
+        }
+        self.used as f64 / usable as f64 * 100.0
+    }
+
+    pub fn total(&self) -> u64 {
+        self.used + self.free
+    }
+}
+
+/// The filesystem `path` is on, from statvfs.
+// Its fields are 32 bits wide on some systems.
+#[allow(clippy::useless_conversion)]
+pub fn space(path: &Path) -> Option<Space> {
+    use std::os::unix::ffi::OsStrExt;
+
+    let path = std::ffi::CString::new(path.as_os_str().as_bytes()).ok()?;
+    // SAFETY: the struct is plain integers, for which zero is a value.
+    let mut stat: libc::statvfs = unsafe { std::mem::zeroed() };
+    // SAFETY: statvfs only writes into the struct it's given, and reads
+    // the path, a NUL-terminated string that lives through the call.
+    if unsafe { libc::statvfs(path.as_ptr(), &mut stat) } != 0 {
+        return None;
+    }
+    let unit = u64::from(stat.f_frsize);
+    Some(Space {
+        used: u64::from(stat.f_blocks).saturating_sub(u64::from(stat.f_bfree)) * unit,
+        free: u64::from(stat.f_bavail) * unit,
+    })
+}
+
 /// The CPU's temperature sensor: AMD's k10temp or zenpower, Intel's
 /// coretemp, or an ARM board's.
 pub fn cpu_sensor() -> Option<PathBuf> {
@@ -410,6 +454,21 @@ mod tests {
         assert_eq!(memory.used, 750);
         assert_eq!(memory.percent(), 75.0);
         assert_eq!(memory.swap_used, 60);
+    }
+
+    #[test]
+    fn counts_space_like_df() {
+        // What's kept for root counts neither as used nor as free.
+        let three_quarters = Space {
+            used: 300,
+            free: 100,
+        };
+        assert_eq!(three_quarters.percent(), 75.0);
+        assert_eq!(three_quarters.total(), 400);
+        assert_eq!(Space::default().percent(), 0.0);
+        let root = space(Path::new("/")).unwrap();
+        assert!(root.total() > 0);
+        assert!(space(Path::new("/no/such/place")).is_none());
     }
 
     #[test]

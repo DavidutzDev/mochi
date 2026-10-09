@@ -20,4 +20,4 @@ The CPU's temperature comes from hwmon (k10temp or zenpower on AMD, coretemp on 
 
 Disk speeds add up the whole disks in `/proc/diskstats` that have a `device` link in `/sys/block`. That leaves out partitions, which the disk already counts, and loop, RAM, zram, device-mapper and RAID devices, which pass their traffic on to a disk. Network speeds add up the interfaces in `/proc/net/dev` that have a `device` link in `/sys/class/net`: wired and wireless cards. That leaves out loopback, bridges, containers' virtual cards and VPN tunnels, whose traffic crosses a card anyway.
 
-The [performance widget](widgets.md) shows the same graphs, each turned on or off in its settings.
+The [performance widget](widgets.md) shows the same graphs, each turned on or off in its settings, or CPU, memory and disk as rings, or a bar for each reading. The disk there is the filesystem that holds your home directory, as full as `df` says. The module offers a system info widget too: the distribution, the kernel, the uptime, Mochi's version, the compositor, the CPU and the memory in use. It reads what the computer is once, when it starts.
