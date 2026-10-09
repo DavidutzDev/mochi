@@ -20,6 +20,8 @@
 //! the offering module runs with an instance's id when it's removed, to
 //! drop what it kept for it. `category` groups it in the drawer, under its
 //! module's name without one; `description` is one line on what it shows.
+//! A text setting with `source = "timezone"` offers the system's time
+//! zones as you type in its field.
 //!
 //! `variants` are the widget's looks, each with its own title, one-line
 //! description, sizes and `frame`, which default to the widget's. A
@@ -59,6 +61,10 @@ pub struct Setting {
     pub default: Value,
     #[serde(default)]
     pub description: String,
+    /// Where a text's values come from, for a menu beside the field, as
+    /// in the settings: `timezone` lists the system's time zones.
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 fn string_kind() -> Kind {
@@ -100,6 +106,7 @@ impl Setting {
             "choices": self.choices,
             "default": self.default,
             "description": self.description,
+            "source": self.source,
         })
     }
 }
@@ -478,7 +485,7 @@ mod tests {
             { "name": "hours", "kind": "choice", "choices": ["24", "12"] },
             { "name": "seconds", "kind": "bool" },
             { "name": "count", "kind": "int" },
-            { "name": "zone" },
+            { "name": "zone", "source": "timezone" },
         ] })))
         .unwrap();
         let parse =
@@ -491,6 +498,13 @@ mod tests {
         assert_eq!(
             parse("zone", "Europe/Paris"),
             Ok(toml::Value::String("Europe/Paris".into()))
+        );
+        // A menu of the system's zones beside the field.
+        let zone = spec.setting("zone").unwrap();
+        assert_eq!(zone.to_json()["source"], "timezone");
+        assert_eq!(
+            spec.setting("count").unwrap().to_json()["source"],
+            Value::Null
         );
         assert!(
             parse("color", "red")

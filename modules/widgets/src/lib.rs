@@ -22,7 +22,7 @@ mod tour;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use include_dir::{Dir, include_dir};
 use mochi_core::zones::{self, Offsets};
@@ -168,6 +168,7 @@ impl Module for Widgets {
                             "name": "timezone",
                             "default": "",
                             "description": "A zone like Europe/Paris; empty for this computer's",
+                            "source": "timezone",
                         },
                         {
                             "name": "hours",
@@ -192,6 +193,7 @@ impl Module for Widgets {
                             "name": "zones",
                             "default": zones::DEFAULT.join(", "),
                             "description": "Up to four zones, with commas between",
+                            "source": "timezone",
                         },
                         {
                             "name": "shape",
@@ -481,6 +483,9 @@ struct State {
     drawer: bool,
     /// The clocks' time zones, as the system knows them.
     zones: Offsets,
+    /// The system's time zones for the settings' zone picker, while
+    /// arranging, and when they were read.
+    zone_choices: Option<(Instant, Value)>,
     published: Value,
 }
 
@@ -504,6 +509,7 @@ impl State {
             banner: None,
             drawer: false,
             zones: Offsets::default(),
+            zone_choices: None,
             published: Value::Null,
         };
         state.reload();
@@ -1053,6 +1059,21 @@ impl State {
             })
             .collect();
         let (zones, unknown_zones) = self.zones.fields();
+        // Only while arranging, where a clock's settings show: read again
+        // after a while, for daylight saving.
+        if self.editing.is_none() {
+            self.zone_choices = None;
+        } else if self
+            .zone_choices
+            .as_ref()
+            .is_none_or(|(read, _)| read.elapsed() > zones::REFRESH)
+        {
+            let now = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |elapsed| elapsed.as_secs() as i64);
+            let choices: Value = zones::system(now).iter().map(zones::Zone::choice).collect();
+            self.zone_choices = Some((Instant::now(), choices));
+        }
         let state = json!({
             "grid": self.grid,
             "editing": self.editing.is_some(),
@@ -1065,6 +1086,7 @@ impl State {
             "catalog": self.specs.iter().map(Spec::to_json).collect::<Vec<_>>(),
             "zones": zones,
             "unknownZones": unknown_zones,
+            "timezones": self.zone_choices.as_ref().map_or(Value::Null, |(_, choices)| choices.clone()),
             // The saved layouts, and the one on the desktop.
             "layouts": layouts,
             "layout": self.layout.name,

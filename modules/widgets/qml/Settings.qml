@@ -189,6 +189,16 @@ Rectangle {
                     Daemon.command("widgets", "set", [root.widget.id, modelData.name, value]);
                 }
 
+                // Puts a time zone from the menu in place of what's typed
+                // after the last comma, and saves.
+                function pickZone(zone: string): void {
+                    const parts = input.text.split(",").map(part => part.trim());
+                    parts[parts.length - 1] = zone;
+                    const text = parts.filter(part => part !== "").join(", ");
+                    input.text = text;
+                    set(text);
+                }
+
                 Item {
                     width: parent.width
                     height: Math.max(label.implicitHeight, toggle.visible ? toggle.height : 0)
@@ -318,6 +328,7 @@ Rectangle {
                     TextInput {
                         id: input
 
+                        activeFocusOnTab: true
                         anchors.fill: parent
                         anchors.leftMargin: Theme.spaceSmall
                         anchors.rightMargin: Theme.spaceSmall
@@ -332,6 +343,93 @@ Rectangle {
                         onEditingFinished: {
                             if (text !== `${field.value ?? ""}`)
                                 field.set(text);
+                        }
+                        onTextChanged: zones.current = 0
+                        // Up and Down move in the zones' menu, and Enter
+                        // takes the one marked.
+                        Keys.onDownPressed: zones.current = Math.min(zones.current + 1, zones.matches.length - 1)
+                        Keys.onUpPressed: zones.current = Math.max(zones.current - 1, 0)
+                        Keys.onReturnPressed: event => {
+                            if (zones.matches.length > 0)
+                                field.pickZone(zones.matches[zones.current].value);
+                            else
+                                event.accepted = false;
+                        }
+                    }
+                }
+
+                // The system's time zones matching what's typed after the
+                // last comma, for a setting whose values come from
+                // `timezone`, like the world clock's. Typing a zone by hand
+                // still works.
+                Column {
+                    id: zones
+
+                    readonly property bool zoned: (field.modelData.source ?? "") === "timezone"
+                    readonly property string typed: {
+                        const parts = input.text.split(",");
+                        return parts[parts.length - 1].trim().toLowerCase();
+                    }
+                    readonly property var matches: {
+                        if (!zoned || !input.activeFocus || typed === "")
+                            return [];
+                        const all = Daemon.state("widgets")?.timezones ?? [];
+                        if (all.some(zone => zone.value.toLowerCase() === typed))
+                            return [];
+                        return all.filter(zone => `${zone.label} ${zone.value} ${zone.detail}`.toLowerCase().includes(typed)).slice(0, 5);
+                    }
+                    property int current: 0
+
+                    visible: matches.length > 0
+                    width: parent.width
+
+                    Repeater {
+                        model: zones.matches
+
+                        Rectangle {
+                            id: zoneRow
+
+                            required property var modelData
+                            required property int index
+                            readonly property bool marked: index === zones.current || zoneArea.containsMouse
+
+                            width: zones.width
+                            height: 40
+                            radius: Theme.radiusControl
+                            color: marked ? Theme.highlight : "transparent"
+
+                            Column {
+                                x: Theme.spaceSmall
+                                width: parent.width - Theme.spaceSmall * 2
+                                anchors.verticalCenter: parent.verticalCenter
+
+                                Text {
+                                    width: parent.width
+                                    elide: Text.ElideRight
+                                    text: zoneRow.modelData.label
+                                    color: Theme.foreground
+                                    font.pixelSize: Theme.textBody
+                                    font.family: Theme.fontFamily
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    elide: Text.ElideRight
+                                    text: zoneRow.modelData.detail ?? ""
+                                    color: Theme.muted
+                                    font.pixelSize: Theme.textCaption
+                                    font.family: Theme.fontFamily
+                                }
+                            }
+
+                            MouseArea {
+                                id: zoneArea
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: field.pickZone(zoneRow.modelData.value)
+                            }
                         }
                     }
                 }

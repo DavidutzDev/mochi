@@ -245,6 +245,11 @@ struct Panel {
     reading: bool,
     /// Where reading the About page sends what it found.
     read: Option<tokio::sync::mpsc::UnboundedSender<Value>>,
+    /// The system's time zones, as the `timezone` source's menu lists
+    /// them: `{value, label, detail}`.
+    zones: Value,
+    /// When the zones were read, for their offsets.
+    zones_read: Option<std::time::Instant>,
 }
 
 impl Panel {
@@ -438,7 +443,14 @@ impl Panel {
             return;
         }
         ctx.close_other_panels();
-        if self.stale {
+        // The time zones' offsets move with daylight saving.
+        let zones_old = self
+            .zones_read
+            .is_none_or(|read| read.elapsed() > mochi_core::zones::REFRESH);
+        if zones_old {
+            self.read_zones();
+        }
+        if self.stale || zones_old {
             self.publish(ctx);
         }
         let spec = ActivitySpec::new("Panel")
@@ -481,7 +493,20 @@ impl Panel {
         state["bento"] = self.bento.state();
         state["about"] = self.about.clone().unwrap_or(Value::Null);
         state["about_reading"] = Value::Bool(self.reading);
+        state["timezones"] = self.zones.clone();
         ctx.publish_state(state);
+    }
+
+    /// Reads the system's time zones, each with its offset now. A few
+    /// hundred small files, read in a few milliseconds.
+    fn read_zones(&mut self) {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |elapsed| elapsed.as_secs() as i64);
+        let zones = mochi_core::zones::system(now);
+        tracing::debug!(zones = zones.len(), "read the time zones");
+        self.zones = zones.iter().map(mochi_core::zones::Zone::choice).collect();
+        self.zones_read = Some(std::time::Instant::now());
     }
 }
 

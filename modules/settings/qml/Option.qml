@@ -11,10 +11,10 @@ import qs.island
 //
 // A text or a list whose values come from somewhere, its `source`, picks them
 // from a menu, with a search and room to type another: apps, audio devices,
-// tray apps, players, control center cards, modules. A command, like the idle
-// clock's click, picks a module, then one of its actions, then its arguments. A
-// command line with ready-made ones, like the lock, offers those that are
-// installed.
+// tray apps, players, control center cards, modules, time zones. A command,
+// like the idle clock's click, picks a module, then one of its actions, then
+// its arguments. A command line with ready-made ones, like the lock, offers
+// those that are installed.
 Item {
     id: root
 
@@ -454,6 +454,10 @@ Item {
                         "detail": app.id,
                         "icon": app.icon
                     }));
+        case "timezone":
+            // Read when the panel opens, west to east, like "Tokyo, Asia"
+            // with "UTC+9 · Japan" under it.
+            return Daemon.state("settings")?.timezones ?? [];
         case "player":
             return (Daemon.state("media")?.players ?? []).map(player => ({
                         "value": player.name,

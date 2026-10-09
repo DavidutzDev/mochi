@@ -108,7 +108,8 @@ pub struct Field {
     /// as a menu: `x-source` in the schema. `command` is a module's action
     /// and its arguments; `app`, `audio-device`, `tray-app`, `player`,
     /// `control-center-card` and `control-center-page` come from what runs
-    /// now. Typing anything else still works.
+    /// now, and `timezone` from the system's zone database. Typing anything
+    /// else still works.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
     /// Ready-made values for a command, like `["hyprlock"]`: `x-suggest` in

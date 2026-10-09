@@ -183,6 +183,7 @@ struct Settings {
     /// The tab the panel opens on.
     tab: Tab,
     /// The time zones on the World tab, like "Europe/Paris", up to 8.
+    #[schemars(extend("x-source" = "timezone"))]
     zones: Vec<String>,
     /// A 24-hour or a 12-hour clock.
     hours: Hours,

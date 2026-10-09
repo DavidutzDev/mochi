@@ -1012,6 +1012,7 @@ mod tests {
             "player",
             "control-center-card",
             "control-center-page",
+            "timezone",
         ];
         let catalog = modules::catalog(Path::new("/nonexistent/config.toml")).unwrap();
         let mut found = 0;

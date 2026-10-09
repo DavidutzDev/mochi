@@ -29,7 +29,7 @@ A builtin module returns the same as a `ContributionSpec` from `Module::contribu
 | `size` | `[12, 8]` | The size it's added at, in grid cells |
 | `min`, `max` | `[2, 2]`, `[200, 120]` | How small and large users can make it |
 | `frame` | `true` | Whether Mochi draws the card behind it. `false` for a widget that floats on the wallpaper |
-| `settings` | `[]` | What users can set for each instance: `name`, `kind` (`string`, `int`, `float`, `bool` or `choice` with `choices`), `default` and `description`. The editor makes a form from them |
+| `settings` | `[]` | What users can set for each instance: `name`, `kind` (`string`, `int`, `float`, `bool` or `choice` with `choices`), `default` and `description`. The editor makes a form from them. A text setting with `source = "timezone"` gets a menu of the system's time zones as users type in it |
 | `forget` | | An action the module runs with an instance's id when the user removes it, to drop what it kept for it |
 | `category` | the module's name | What the drawer groups it under, like `Clock` or `System`. Widgets of several modules can share one |
 | `description` | | One line on what users see, for the drawer's card, like "The cover beside the track, with its controls". Plain words, under about 50 characters, so it fits two lines |
