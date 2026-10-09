@@ -71,6 +71,7 @@ Control clients send one request at a time and read exactly one answer before se
 | `{"type":"reload"}` | `ok` or `error` |
 | `{"type":"dismiss"}` | `ok`: closes what the island shows, as a right click does |
 | `{"type":"list_actions"}` or `{"type":"list_actions","module":"osd"}` | `actions` |
+| `{"type":"step_aside","pid":1234}` | `ok`, then the daemon stops its shell and modules, waits for process 1234 to end and starts again. `mochid --dev` sends it to take over the session |
 
 Command arguments are always strings, as typed on the command line. The daemon checks them against the action's declared arguments before the module sees them, and answers `invalid_args` with a usage line when they don't fit.
 
@@ -90,6 +91,7 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `reload` | | control |
 | `dismiss` | | control |
 | `list_actions` | `module` (optional) | control |
+| `step_aside` | `pid` | control |
 
 ### Daemon to client
 

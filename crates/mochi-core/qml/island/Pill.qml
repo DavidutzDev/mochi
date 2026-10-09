@@ -202,7 +202,8 @@ Item {
 
                         // Changes only when the view does: payloads go in
                         // place through the binding below.
-                        readonly property string url: slot.bubble ? `root:/modules/${slot.bubble.module}/${slot.bubble.view}.qml` : ""
+                        // Mochi's own bubbles, like the dev one, are in island/.
+                        readonly property string url: !slot.bubble ? "" : slot.bubble.module === "mochi" ? `root:/island/${slot.bubble.view}.qml` : `root:/modules/${slot.bubble.module}/${slot.bubble.view}.qml`
 
                         anchors.centerIn: parent
                         onUrlChanged: {

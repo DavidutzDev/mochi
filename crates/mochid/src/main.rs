@@ -8,6 +8,7 @@ mod doctor;
 mod ipc;
 mod modules;
 mod plugins;
+mod session;
 mod settings;
 #[cfg(test)]
 mod views_check;
@@ -33,7 +34,8 @@ use crate::settings::Store;
 #[command(version, about)]
 struct Args {
     /// Link the QML to the source tree instead of copying it, so edits
-    /// hot-reload.
+    /// hot-reload, and take over from the shell already running, which
+    /// starts again when this one stops. A bubble shows the revision.
     #[arg(long)]
     dev: bool,
 
@@ -110,8 +112,32 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
-    match runtime.block_on(run(args)) {
-        Ok(()) => ExitCode::SUCCESS,
+    let outcome = match runtime.block_on(run(args)) {
+        Ok(outcome) => outcome,
+        Err(error) => {
+            tracing::error!("{error:#}");
+            return ExitCode::FAILURE;
+        }
+    };
+    let daemon::Outcome::SteppedAside(pid) = outcome else {
+        return ExitCode::SUCCESS;
+    };
+    // Every module task, D-Bus connection and child goes with the runtime,
+    // so nothing of this daemon stands in the other's way while it waits.
+    runtime.shutdown_timeout(std::time::Duration::from_secs(2));
+    let parked = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .map_err(anyhow::Error::from)
+        .and_then(|runtime| runtime.block_on(session::park(pid)));
+    match parked {
+        Ok(session::Parked::Resume) => {
+            tracing::info!("the other daemon stopped, starting again");
+            let error = session::restart();
+            tracing::error!(%error, "could not start again");
+            ExitCode::FAILURE
+        }
+        Ok(session::Parked::Stop) => ExitCode::SUCCESS,
         Err(error) => {
             tracing::error!("{error:#}");
             ExitCode::FAILURE
@@ -232,8 +258,11 @@ fn config_command(action: &ConfigAction, config: Option<PathBuf>) -> anyhow::Res
     Ok(())
 }
 
-async fn run(args: Args) -> anyhow::Result<()> {
+async fn run(args: Args) -> anyhow::Result<daemon::Outcome> {
     let mut paths = Paths::from_env()?;
+    // One shell per Wayland session, whatever --runtime-dir says.
+    let display = std::env::var("WAYLAND_DISPLAY").ok();
+    let lock = session::lock_path(&paths.runtime_dir, display.as_deref());
     if let Some(dir) = args.runtime_dir {
         paths.runtime_dir = dir;
     }
@@ -249,12 +278,34 @@ async fn run(args: Args) -> anyhow::Result<()> {
     let config_file = args.config.unwrap_or_else(|| paths.config_file());
     let (store, loaded) = Store::load(&config_file, args.modules)?;
 
-    // Claim the socket before touching anything a running daemon uses.
+    // Claim the session and the socket before touching anything a running
+    // daemon uses. --dev takes over from a running daemon until it stops.
+    let holder = session::Holder {
+        pid: std::process::id(),
+        socket: paths.socket(),
+        version: env!("CARGO_PKG_VERSION").to_owned(),
+        dev: args.dev,
+    };
+    let (session, took_over) = session::Session::acquire(&lock, &holder, args.dev).await?;
     std::fs::create_dir_all(&paths.runtime_dir)
         .with_context(|| format!("cannot create {}", paths.runtime_dir.display()))?;
-    let listener = ipc::bind(&paths.socket())
-        .await
-        .with_context(|| format!("cannot listen on {}", paths.socket().display()))?;
+    let listener = match ipc::bind(&paths.socket()).await {
+        // A daemon from before sessions had locks, on the same socket.
+        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse && args.dev => {
+            session::step_aside(&paths.socket(), holder.pid)
+                .await
+                .with_context(|| {
+                    format!(
+                        "the mochid on {} didn't step aside",
+                        paths.socket().display()
+                    )
+                })?;
+            session::bind_when_free(&paths.socket()).await?
+        }
+        result => {
+            result.with_context(|| format!("cannot listen on {}", paths.socket().display()))?
+        }
+    };
 
     supervisor::check_version(&args.quickshell)?;
 
@@ -282,6 +333,9 @@ async fn run(args: Args) -> anyhow::Result<()> {
     };
     let config = loaded.config.clone();
     let mut daemon = Daemon::new(runner, files, store, loaded);
+    if args.dev {
+        daemon.show_dev(session::dev_payload(took_over.as_ref()));
+    }
     daemon.apply(&config)?;
     tracing::info!(modules = ?config.modules, "started modules");
 
@@ -306,5 +360,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
         .await;
 
     let _ = std::fs::remove_file(socket);
+    // Only now, with the socket gone, may another daemon take the session.
+    drop(session);
     result
 }

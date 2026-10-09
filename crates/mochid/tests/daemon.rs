@@ -424,7 +424,7 @@ fn a_second_daemon_refuses_to_start() {
         .unwrap();
     assert!(!second.status.success());
     let stderr = String::from_utf8_lossy(&second.stderr);
-    assert!(stderr.contains("another mochid is running"), "{stderr}");
+    assert!(stderr.contains("already runs this session"), "{stderr}");
 }
 
 fn process_exists(pid: u32) -> bool {

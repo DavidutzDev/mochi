@@ -133,6 +133,17 @@ pub struct Daemon {
     handshake_deadline: Option<Instant>,
     /// The list of an area's hidden bubbles, while the island has it.
     hidden_list: Option<(ActivityId, Area)>,
+    /// The process this daemon steps aside for, once asked.
+    step_aside: Option<u32>,
+}
+
+/// How the daemon's loop ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Outcome {
+    /// SIGINT or SIGTERM.
+    Stopped,
+    /// It stopped for another daemon, `mochid --dev`, with this pid.
+    SteppedAside(u32),
 }
 
 /// Where the daemon reads its configuration from.
@@ -171,7 +182,20 @@ impl Daemon {
             notices: Notices::default(),
             handshake_deadline: None,
             hidden_list: None,
+            step_aside: None,
         }
+    }
+
+    /// Shows the bubble that says this daemon runs from the source tree,
+    /// with `payload` for its view.
+    pub fn show_dev(&mut self, payload: Value) {
+        let spec = mochi_core::BubbleSpec::new(DEV_VIEW)
+            .key("dev")
+            .area(Area::Left)
+            .priority(Priority::URGENT)
+            .payload(payload);
+        let id = mochi_protocol::BubbleId(self.runner.ids.next().0);
+        self.bubbles.show(id, CORE_ID, spec);
     }
 
     pub fn attach(&mut self, supervisor: Supervisor) {
@@ -378,7 +402,7 @@ impl Daemon {
     }
 
     /// Runs until SIGINT or SIGTERM.
-    pub async fn run(mut self, mut inputs: Inputs) -> anyhow::Result<()> {
+    pub async fn run(mut self, mut inputs: Inputs) -> anyhow::Result<Outcome> {
         let mut terminate =
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
         let mut monitors = self.compositor.subscribe();
@@ -444,6 +468,9 @@ impl Daemon {
                 }
             }
             self.apply_effects();
+            if self.step_aside.is_some() {
+                break;
+            }
         }
 
         tracing::info!("shutting down");
@@ -466,7 +493,9 @@ impl Daemon {
         if finished.is_err() {
             tracing::warn!("some modules didn't stop in time");
         }
-        Ok(())
+        Ok(self
+            .step_aside
+            .map_or(Outcome::Stopped, Outcome::SteppedAside))
     }
 
     fn on_connection(&mut self, event: ConnectionEvent) {
@@ -591,6 +620,11 @@ impl Daemon {
                     self.islands.dismiss(shown.id, Instant::now());
                 }
                 self.reply(id, DaemonMessage::Ok);
+            }
+            (Some(_), ClientMessage::StepAside { pid }) => {
+                tracing::info!(pid, "stepping aside for mochid --dev");
+                self.reply(id, DaemonMessage::Ok);
+                self.step_aside = Some(pid);
             }
         }
     }
@@ -1247,6 +1281,8 @@ const PASS_ON_DELAY: Duration = Duration::from_millis(80);
 
 /// The core view that lists an area's hidden bubbles, `island/<view>.qml`.
 const HIDDEN_VIEW: &str = "HiddenBubbles";
+/// `island/DevBubble.qml`, the bubble of `mochid --dev`.
+const DEV_VIEW: &str = "DevBubble";
 
 fn hidden_payload(area: Area, bubbles: &[mochi_protocol::Bubble]) -> Value {
     serde_json::json!({ "area": area, "bubbles": bubbles })

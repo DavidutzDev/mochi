@@ -89,6 +89,8 @@ cargo run -p mochid -- --dev    # the shell, with views that reload as you edit 
 cargo test --workspace          # the tests
 ```
 
+Only one Mochi runs per session. `--dev` takes over from the one already running, which starts again by itself when you stop the dev one. A bubble on the left shows the revision the dev shell runs.
+
 `TODO.md` has the plan, `CHANGELOG.md` what each release brought, and `RELEASING.md` how to make one.
 
 ## Credits

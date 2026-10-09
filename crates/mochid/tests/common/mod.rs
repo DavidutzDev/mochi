@@ -117,6 +117,15 @@ impl Daemon {
             .collect()
     }
 
+    pub fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
+    /// Whether the process still runs, under any program it execs.
+    pub fn running(&mut self) -> bool {
+        self.child.try_wait().unwrap().is_none()
+    }
+
     pub fn log(&self) -> String {
         fs::read_to_string(self.dir.join("mochid.log")).unwrap_or_default()
     }

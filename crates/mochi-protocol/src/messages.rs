@@ -73,6 +73,11 @@ pub enum ClientMessage {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         module: Option<String>,
     },
+    /// Asks the daemon to give the session to the daemon with process
+    /// `pid`, as `mochid --dev` does: it stops its shell and its modules,
+    /// waits for that process to end, then starts again. Answered with `ok`
+    /// before it stops.
+    StepAside { pid: u32 },
 }
 
 /// Sent by the daemon.

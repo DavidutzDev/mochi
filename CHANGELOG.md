@@ -8,8 +8,11 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 - A universal installer: `curl -fsSL https://raw.githubusercontent.com/DavidutzDev/mochi/main/install.sh | sh` installs the latest release into `~/.local`, checked against its sum, and updates it when run again, restarting a running mochid. `--prefix`, `--version`, `--enable` and `--uninstall` change what it does, and `MOCHI_FROM_SOURCE=1` builds the release with cargo instead, or `main` with `MOCHI_FROM_SOURCE=main`. Mochi installed by Nix, pacman, apt or rpm is left to them.
 
+- `mochid --dev` takes over from the shell already running, which stops its island and modules, waits, and starts again by itself when the dev daemon stops. A bubble on the left says the dev shell runs, with its revision and the shell it took over from. The running shell has to be this version or newer to step aside.
+
 ### Changed
 
+- One Mochi per Wayland session: a second `mochid` refuses to start, also with another `--runtime-dir`, instead of drawing a second island over the first.
 - A preset picked in the settings panel replaces the colors `theme.toml`'s `[colors]` sets, and the ones picked in the panel before it. Picking one used to change nothing when the file set every color. Copy then gives the preset without those colors.
 
 ## 0.0.8 - 2026-10-09

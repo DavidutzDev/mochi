@@ -60,7 +60,7 @@ Item {
                 Loader {
                     id: view
 
-                    readonly property string url: `root:/modules/${row.modelData.module}/${row.modelData.view}.qml`
+                    readonly property string url: row.modelData.module === "mochi" ? `root:/island/${row.modelData.view}.qml` : `root:/modules/${row.modelData.module}/${row.modelData.view}.qml`
 
                     x: 12
                     anchors.verticalCenter: parent.verticalCenter
