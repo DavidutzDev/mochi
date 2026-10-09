@@ -5,7 +5,7 @@ A release is a version tag pushed to GitHub. `.github/workflows/release.yml` doe
 ## Before tagging
 
 1. Set the version in `Cargo.toml`'s `[workspace.package]`, and run `cargo build` so `Cargo.lock` follows.
-2. Change the other places that name it: `README.md` (its summary and its flake URL), `docs/book/src/installing.md`, `docs/book/src/sdk.md`, `docs/book/src/writing-plugins.md`, `docs/book/src/custom-sdks.md`, `docs/protocol.md`, the `hello` examples in `crates/mochi-protocol/src/messages.rs` and `plugin.rs`, and the `mochi-sdk` lines in `examples/plugins/*/Cargo.toml`. `grep -rn "<old version>"` finds them.
+2. Change the other places that name it: `README.md` (its summary), `docs/book/src/installing.md`, `docs/book/src/sdk.md`, `docs/book/src/writing-plugins.md`, `docs/book/src/custom-sdks.md`, `docs/protocol.md`, the `hello` examples in `crates/mochi-protocol/src/messages.rs` and `plugin.rs`, and the `mochi-sdk` lines in `examples/plugins/*/Cargo.toml`. `grep -rn "<old version>"` finds them.
 3. Rename `## Unreleased` in `CHANGELOG.md` to `## <version> - <date>`. The release's notes are that section.
 4. Tag the steps a new feature brings in the tour with `"since": "<version>"`, so people who update see them.
 5. Add a line for the release to `TODO.md`.

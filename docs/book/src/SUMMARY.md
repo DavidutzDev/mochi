@@ -1,6 +1,7 @@
 # Summary
 
 [Introduction](introduction.md)
+[How it works](how-it-works.md)
 
 # Using Mochi
 
