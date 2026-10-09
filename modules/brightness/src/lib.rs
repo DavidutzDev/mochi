@@ -1,10 +1,13 @@
-//! Brightness: the laptop's backlight and external monitors over DDC/CI.
+//! Brightness: the laptop's backlight, the keyboard's, and external monitors
+//! over DDC/CI.
 //!
-//! The backlight comes from `/sys/class/backlight` and changes through logind;
-//! a change from elsewhere, like a key the firmware handles, shows the OSD too.
-//! Monitors come from `ddcutil`, found once at the start and again on `mochi
-//! ipc brightness refresh`. The control center has a card with a slider for
-//! each, and `up`, `down` and `set` change them from keybinds.
+//! The backlight comes from `/sys/class/backlight` and the keyboard's from
+//! `/sys/class/leds`, and both change through logind; a change from
+//! elsewhere, like a key the firmware handles, shows the OSD too. Monitors
+//! come from `ddcutil`, found once at the start and again on `mochi ipc
+//! brightness refresh`. The control center has a card with a slider for
+//! each, and `up`, `down` and `set` change them from keybinds. `all` means
+//! every display; the keyboard changes only when named.
 //!
 //! Settings in `config.toml`, all optional:
 //!
@@ -19,6 +22,7 @@ mod backlight;
 mod ddc;
 mod tour;
 
+use std::path::Path;
 use std::time::{Duration, Instant};
 
 use include_dir::{Dir, include_dir};
@@ -36,10 +40,10 @@ use crate::backlight::Backlight;
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
 const OSD_TIMEOUT: Duration = Duration::from_millis(1500);
-/// How often the backlight is read for changes made elsewhere.
+/// How often the backlights are read for changes made elsewhere.
 const POLL: Duration = Duration::from_millis(500);
-/// After setting the backlight, how long a different value read back is
-/// ours still settling rather than someone else's change.
+/// After setting a backlight, how long a different value read back is ours
+/// still settling rather than someone else's change.
 const SETTLING: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Default)]
@@ -125,7 +129,7 @@ impl Module for Brightness {
         let display = || {
             ArgSpec::string(
                 "display",
-                "all, backlight, external, or a monitor's output or model; all by default",
+                "all, backlight, keyboard, external, or a monitor's output or model; all displays by default, without the keyboard",
             )
             .optional()
             .source("brightness-display")
@@ -140,7 +144,10 @@ impl Module for Brightness {
                 ))
                 .arg(display()),
             ActionSpec::new("refresh", "Look for monitors again"),
-            ActionSpec::new("status", "Print each display's brightness"),
+            ActionSpec::new(
+                "status",
+                "Print each display's brightness, and the keyboard's",
+            ),
         ]
     }
 
@@ -154,14 +161,16 @@ impl Module for Brightness {
                 osd: settings.osd,
                 external: settings.external,
                 logind: Connection::system().await.ok(),
-                backlight: backlight::find(std::path::Path::new(backlight::SYSFS)),
-                settled: Instant::now(),
+                backlight: backlight::find(Path::new(backlight::SYSFS)),
+                keyboard: backlight::find_keyboard(Path::new(backlight::LEDS)),
+                settled: [Instant::now(); 2],
                 monitors: Vec::new(),
                 detecting: false,
                 found,
             };
             state.detect();
             state.publish(&ctx);
+            let polled = state.backlight.is_some() || state.keyboard.is_some();
             let mut poll = tokio::time::interval(POLL);
             poll.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
@@ -182,7 +191,10 @@ impl Module for Brightness {
                         }
                         state.publish(&ctx);
                     }
-                    _ = poll.tick(), if state.backlight.is_some() => state.poll(&ctx),
+                    _ = poll.tick(), if polled => {
+                        state.poll(&ctx, Which::Backlight);
+                        state.poll(&ctx, Which::Keyboard);
+                    }
                 }
             }
         })
@@ -220,10 +232,11 @@ impl Monitor {
     }
 }
 
-/// A display a command names.
+/// A display a command names, or the keyboard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Which {
     Backlight,
+    Keyboard,
     Monitor(usize),
 }
 
@@ -234,8 +247,10 @@ struct State {
     external: bool,
     logind: Option<Connection>,
     backlight: Option<Backlight>,
-    /// Until when the backlight may still read back an older value of ours.
-    settled: Instant,
+    keyboard: Option<Backlight>,
+    /// Until when the backlight, then the keyboard's, may still read back an
+    /// older value of ours.
+    settled: [Instant; 2],
     monitors: Vec<Monitor>,
     detecting: bool,
     found: mpsc::UnboundedSender<Result<Vec<ddc::Found>, String>>,
@@ -283,19 +298,25 @@ impl State {
     /// Sets `display` to `level`, then shows the first display changed.
     async fn change(&mut self, ctx: &ModuleCtx, display: &str, level: &str) -> Result<(), String> {
         let targets = self.targets(display)?;
+        let moved = level.trim_start().starts_with(['+', '-']);
         let mut shown = None;
         for which in targets {
             let now = self.percent(which);
             let percent = parse_level(level, now)?;
             match which {
-                Which::Backlight => {
-                    let Some(backlight) = self.backlight.as_mut() else {
+                Which::Backlight | Which::Keyboard => {
+                    let logind = self.logind.clone();
+                    let Some(light) = self.light_mut(which) else {
                         continue;
                     };
-                    let value = backlight.value_for(percent);
-                    backlight::set(self.logind.as_ref(), backlight, value).await?;
-                    backlight.value = value;
-                    self.settled = Instant::now() + SETTLING;
+                    let value = if moved {
+                        light.value_moved_to(percent)
+                    } else {
+                        light.value_for(percent)
+                    };
+                    backlight::set(logind.as_ref(), light, value).await?;
+                    light.value = value;
+                    *self.settled_mut(which) = Instant::now() + SETTLING;
                 }
                 Which::Monitor(index) => self.monitors[index].set(percent),
             }
@@ -308,13 +329,29 @@ impl State {
         Ok(())
     }
 
-    /// The displays `name` stands for.
+    fn light_mut(&mut self, which: Which) -> Option<&mut Backlight> {
+        match which {
+            Which::Backlight => self.backlight.as_mut(),
+            Which::Keyboard => self.keyboard.as_mut(),
+            Which::Monitor(_) => None,
+        }
+    }
+
+    fn settled_mut(&mut self, which: Which) -> &mut Instant {
+        &mut self.settled[usize::from(which == Which::Keyboard)]
+    }
+
+    /// The displays `name` stands for, or the keyboard.
     fn targets(&self, name: &str) -> Result<Vec<Which>, String> {
         let backlight = self.backlight.iter().map(|_| Which::Backlight);
         let monitors = (0..self.monitors.len()).map(Which::Monitor);
         let targets: Vec<Which> = match name.to_lowercase().as_str() {
             "all" | "" => backlight.chain(monitors).collect(),
             "backlight" | "builtin" | "internal" => backlight.collect(),
+            "keyboard" | "kbd" => match self.keyboard {
+                Some(_) => vec![Which::Keyboard],
+                None => return Err("no keyboard backlight".to_owned()),
+            },
             "external" | "monitors" | "ddc" => monitors.collect(),
             lower => monitors
                 .filter(|which| {
@@ -342,24 +379,26 @@ impl State {
     fn percent(&self, which: Which) -> u32 {
         match which {
             Which::Backlight => self.backlight.as_ref().map_or(0, Backlight::percent),
+            Which::Keyboard => self.keyboard.as_ref().map_or(0, Backlight::percent),
             Which::Monitor(index) => self.monitors[index].percent(),
         }
     }
 
-    /// Reads the backlight for a change made elsewhere.
-    fn poll(&mut self, ctx: &ModuleCtx) {
-        let Some(backlight) = self.backlight.as_mut() else {
+    /// Reads the backlight or the keyboard's for a change made elsewhere.
+    fn poll(&mut self, ctx: &ModuleCtx, which: Which) {
+        let settled = *self.settled_mut(which);
+        let Some(light) = self.light_mut(which) else {
             return;
         };
-        let Some(value) = backlight.read() else {
+        let Some(value) = light.read() else {
             return;
         };
-        if value == backlight.value || Instant::now() < self.settled {
+        if value == light.value || Instant::now() < settled {
             return;
         }
-        backlight.value = value;
+        light.value = value;
         self.publish(ctx);
-        self.show(ctx, Which::Backlight);
+        self.show(ctx, which);
     }
 
     fn show(&self, ctx: &ModuleCtx, which: Which) {
@@ -368,6 +407,7 @@ impl State {
         }
         let (name, icon) = match which {
             Which::Backlight => ("Built-in".to_owned(), "light_mode"),
+            Which::Keyboard => ("Keyboard".to_owned(), "keyboard"),
             Which::Monitor(index) => (self.monitors[index].found.model.clone(), "desktop_windows"),
         };
         let spec = ActivitySpec::new("Osd")
@@ -390,6 +430,7 @@ impl State {
     fn id(&self, which: Which) -> String {
         match which {
             Which::Backlight => "backlight".to_owned(),
+            Which::Keyboard => "keyboard".to_owned(),
             Which::Monitor(index) => self.monitors[index].id(),
         }
     }
@@ -412,8 +453,21 @@ impl State {
                 "percent": self.percent(Which::Monitor(index)),
             }));
         }
+        // Apart from the displays, as `all` leaves it alone.
+        let keyboard = self.keyboard.as_ref().map(|keyboard| {
+            json!({
+                "id": "keyboard",
+                "name": "Keyboard",
+                "icon": "keyboard",
+                "percent": keyboard.percent(),
+                // Its levels past off, often two or three, for the slider
+                // to stop at.
+                "levels": keyboard.max,
+            })
+        });
         json!({
             "displays": displays,
+            "keyboard": keyboard,
             "detecting": self.detecting,
             "step": self.step,
         })
@@ -445,6 +499,15 @@ impl State {
         }
         if lines.is_empty() {
             lines.push("no backlight, and no monitor answers DDC/CI".to_owned());
+        }
+        if let Some(keyboard) = &self.keyboard {
+            lines.push(format!(
+                "keyboard ({}): {}%, level {} of {}",
+                keyboard.name,
+                keyboard.percent(),
+                keyboard.value,
+                keyboard.max
+            ));
         }
         lines.join("\n")
     }
@@ -481,6 +544,65 @@ mod tests {
         assert_eq!(parse_level("+20", 95), Ok(100));
         assert_eq!(parse_level("250", 0), Ok(100));
         assert!(parse_level("bright", 0).is_err());
+    }
+
+    /// A laptop from fake sysfs directories, with a keyboard backlight of
+    /// two levels at the first.
+    fn laptop(root: &Path) -> State {
+        for (dir, name, value, max) in [
+            ("backlight", "intel_backlight", 600, 1200),
+            ("leds", "tpacpi::kbd_backlight", 1, 2),
+            ("leds", "input3::capslock", 0, 1),
+        ] {
+            let path = root.join(dir).join(name);
+            std::fs::create_dir_all(&path).unwrap();
+            std::fs::write(path.join("brightness"), format!("{value}\n")).unwrap();
+            std::fs::write(path.join("max_brightness"), format!("{max}\n")).unwrap();
+        }
+        std::fs::write(root.join("backlight/intel_backlight/type"), "raw\n").unwrap();
+        State {
+            step: 5,
+            osd: true,
+            external: false,
+            logind: None,
+            backlight: backlight::find(&root.join("backlight")),
+            keyboard: backlight::find_keyboard(&root.join("leds")),
+            settled: [Instant::now(); 2],
+            monitors: Vec::new(),
+            detecting: false,
+            found: mpsc::unbounded_channel().0,
+        }
+    }
+
+    #[test]
+    fn the_keyboard_changes_only_when_named() {
+        let root = std::env::temp_dir().join(format!("mochi-brightness-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let state = laptop(&root);
+        assert_eq!(state.targets("all"), Ok(vec![Which::Backlight]));
+        assert_eq!(state.targets("keyboard"), Ok(vec![Which::Keyboard]));
+        assert_eq!(state.targets("kbd"), Ok(vec![Which::Keyboard]));
+        let payload = state.payload();
+        assert_eq!(payload["displays"].as_array().unwrap().len(), 1);
+        assert_eq!(payload["keyboard"]["percent"], 50);
+        assert_eq!(payload["keyboard"]["levels"], 2);
+        assert_eq!(
+            state.status(),
+            "backlight (intel_backlight): 50%\nkeyboard (tpacpi::kbd_backlight): 50%, level 1 of 2"
+        );
+        std::fs::remove_dir_all(&root).unwrap();
+        let state = laptop(&root.join("none"));
+        std::fs::remove_dir_all(root.join("none/leds")).unwrap();
+        let desktop = State {
+            keyboard: backlight::find_keyboard(&root.join("none/leds")),
+            ..state
+        };
+        assert_eq!(
+            desktop.targets("keyboard"),
+            Err("no keyboard backlight".to_owned())
+        );
+        assert_eq!(desktop.payload()["keyboard"], Value::Null);
+        std::fs::remove_dir_all(&root).unwrap();
     }
 
     #[test]

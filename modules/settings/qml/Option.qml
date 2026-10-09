@@ -356,6 +356,11 @@ Item {
                     "value": "external",
                     "label": "External",
                     "detail": "Monitors over DDC/CI"
+                },
+                {
+                    "value": "keyboard",
+                    "label": "Keyboard",
+                    "detail": "The keyboard's backlight"
                 }
             ].concat((Daemon.state("brightness")?.displays ?? []).filter(display => display.id !== "backlight").map(display => ({
                         "value": display.id,

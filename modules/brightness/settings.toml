@@ -1,4 +1,5 @@
-# Brightness: the laptop's backlight and external monitors over DDC/CI.
+# Brightness: the laptop's backlight, the keyboard's, and external monitors
+# over DDC/CI.
 [module.brightness]
 # The percent that `mochi ipc brightness up` and `down` move.
 # step = 5

@@ -1,8 +1,8 @@
 import QtQuick
 import qs.island
 
-// A display's brightness, like the volume's OSD. Scrolling on it changes
-// that display by the module's step.
+// A display's brightness, or the keyboard's, like the volume's OSD.
+// Scrolling on it changes that display by the module's step.
 Item {
     id: root
 
@@ -35,9 +35,10 @@ Item {
         anchors.centerIn: parent
         spacing: Theme.spaceMedium
 
+        // The keyboard's own symbol; a screen's sun grows with the level.
         Symbol {
             anchors.verticalCenter: parent.verticalCenter
-            name: root.percent < 34 ? "brightness_low" : root.percent < 67 ? "brightness_medium" : "brightness_high"
+            name: root.payload.display === "keyboard" ? "keyboard" : root.percent < 34 ? "brightness_low" : root.percent < 67 ? "brightness_medium" : "brightness_high"
         }
 
         ProgressBar {
