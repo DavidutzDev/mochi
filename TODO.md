@@ -140,6 +140,9 @@ Supervisor
 - [x] Claim the socket before writing assets, and refuse to start when another daemon is running
 - [x] Clean shutdown on SIGTERM: dismiss everything, stop Quickshell and plugins
 - [x] `systemd/mochid.service` with `Restart=on-failure`, bound to `graphical-session.target`, `ExecReload` running `mochi reload`
+- [x] One shell per Wayland session: a lock in the runtime dir, so a second daemon refuses to start, also with another `--runtime-dir`
+- [x] Dev mode, the default of a debug build: `cargo run -p mochid` takes over from the running shell, which steps aside and starts again when the dev one stops; a bubble shows the revision. Release builds refuse `--dev`
+- [x] A module turned on reloads the views in place, with Quickshell's soft reload, instead of restarting Quickshell; Quickshell watches its files only in dev mode
 
 ## CLI (`mochi`)
 
@@ -193,8 +196,8 @@ Mochi must work on any compositor that speaks the standard protocols (Hyprland, 
 - [x] Type scale in `[text]`: caption 11, label 12, body 13, subtitle 14, title 16, headline 20, display 42, and `family` (empty keeps the system font); every view uses it
 - [x] Motion: `fast_ms` for colors and hovers, `move_ms` with Material 3's expressive curve (`0.38, 1.21, 0.22, 1`) for things that move, on the navbar, the power profiles and the workspace pill
 - [x] Every view moved to roles: no raw colors or sizes outside the demo module
-- [ ] Colors generated from the wallpaper, as an option of the same roles (see Polish and features)
-- [ ] Light variant of the palette (see Polish and features)
+- [x] Colors generated from the wallpaper: `preset = "wallpaper"`
+- [x] Light variant of the palette: every theme has a dark and a light version, which `appearance` picks
 - [x] Built-in controls in the core: `Button`, `IconButton`, `Slider`, `ProgressBar`, `Switch`, `Segmented`, `Tile`, `ListRow`, `Badge`, `SectionLabel`, all drawn from theme roles. Media, notifications, the OSD, power and the launcher use them; their private buttons and icon sets are gone, and every icon lives in `Symbol`. `mochi ipc demo controls` shows them all; `docs/views.md` describes them
 
 ## Layout
@@ -226,7 +229,7 @@ ear_radius = 10
 - [x] Tested on Hyprland: top, bottom, both bottom corners, island and notch, the morph, expanding and collapsing by click
 - [ ] Switching the anchor jumps instead of moving, since the layer surface changes edge
 - [ ] Under another layer surface with an exclusive zone, like a bar, the notch attaches to that surface's edge, not the screen's. Matching the bar's color makes them look like one piece; a `[layout.notch] color` could help
-- [ ] Per-output layout once per-output islands exist
+- [ ] Per-output layout: each monitor has its own island now, but `[layout]` is one for all; needs a config design (which keys can differ per monitor, and how a monitor is named)
 - [x] `[island] panels = "focus" | "pointer" | "all"`: the daemon gives a panel (a modal activity without an overlay) an `output`, the focused monitor or the one under the pointer (Hyprland's `cursorpos`), and the islands on other monitors keep what they showed. Each island reports events for the activity it shows
 
 ## Bubbles
@@ -356,7 +359,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] The file index follows changes as they happen (inotify) instead of rebuilding after 15 seconds
 - [ ] Watch the application directories instead of reading them on every open, if opening ever feels slow
 
-### Hub
+### Control center (was the hub)
 
 - [x] A module, not part of the framework: `mochi ipc hub toggle|open [page]|close` grows the island into a modal panel, 640 px wide, as tall as its content
 - [x] Home: cards from `target = "hub", kind = "card"` contributions in a two-column flow, `options.span` columns wide, each a labeled section on a surface, like a control center; card views give their natural height. Pages: `kind = "page"` contributions as tabs in the bottom navbar, also at their natural height
@@ -366,11 +369,12 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] Look, from the controls gallery: no page title, small section labels with an icon, tight spacing, a divider, and a navbar of icon pills like the workspace dots, the current one stretched into a white pill with its name
 - [x] `Symbol`: a built-in icon set in the core (home, bell, music, clock, grid, moon, volume, power, lock, logout, reboot, snow, chip, leaf, bolt, scale), filled or stroked, so contribution icons look the same everywhere; other names come from the icon theme
 - [x] Tested in a private D-Bus session: the three cards, the notifications page opened with `open notifications/history`, and the launcher replacing the hub
-- [ ] Cards spanning two rows, like the tall Now Playing tile in the inspiration
+- [x] Cards spanning two rows, like the tall Now Playing tile in the inspiration: `options.rows`
 - [x] Three columns, cards packed densely with the last of a row stretched over free columns, cards that hide when empty, a height capped to the screen with scrolling and the navbar always shown
 - [x] Cards and pages for network and Bluetooth
 - [x] A Performance page: CPU, memory and GPU with graphs and the busiest processes
-- [ ] More cards and pages: power
+- [x] More cards and pages: power
+- [x] Renamed to the control center, module id `control-center`; `hub` still works in config.toml, commands and plugin manifests, with a warning
 - [x] Clicking a card opens its page: the heading or the card beside its controls, `options.page` to pick
 
 ### Power
@@ -633,6 +637,9 @@ Later:
 - [x] Night light, through wlr-gamma-control itself rather than hyprsunset or wlsunset
 - [ ] A focus timer, built in (the pomodoro example plugin shows the idea)
 - [x] Brightness: the laptop's backlight and external monitors over DDC/CI with ddcutil, with the OSD and a slider tile (replaces "Laptop screen brightness" under OSD)
+- [x] Updates: the updater module looks for a release on GitHub, says so once on the island, and its page in the settings has the changelog and the update the way Mochi was installed
+- [x] An About page in the settings: version, system, session, modules, plugins and processes, to copy into a bug report
+- [x] Bento before Plugins in the settings, and a `section` contribution for a module's own view on its settings page
 
 ### Checks and tools
 
@@ -643,7 +650,7 @@ Later:
 
 - [x] Session setup notes: uwsm and `graphical-session.target`, or starting `mochid` from the compositor's autostart (README)
 - [x] Keybind examples for `mochi ipc`: Hyprland's Lua config, `hyprland.conf`, Sway and niri, on the Getting started page
-- [ ] Decide how the island and Waybar share the top edge, or whether Mochi replaces Waybar
+- [x] Mochi replaces Waybar, as in the author's setup; sharing the top edge with a bar is the notch item under Layout
 - [x] Install instructions (Nix package and cargo)
 - [x] Flake `packages` output: both binaries, the systemd unit, and `mochid` wrapped with the pinned Quickshell
 - [x] `nix flake check` builds the package and runs the test suite
@@ -665,7 +672,7 @@ Later:
 - [x] Release 0.0.8: Bento, themes as packages, brightness, privacy, night light, keep awake, drop, switching screens while recording, WPA Enterprise and hidden networks, the tray's keyboard and XEmbed, an island per monitor, clicks and scrolls that pass through
 - [x] Release 0.0.9: an updater with the changelog and an update for each way of installing, the universal installer, an About page, the hub renamed to the control center, one shell per session with mochid --dev taking over, presets that replace the file's colors
 - [x] Documentation site with mdBook in `docs/book`: installing, getting started, configuration, bubbles, theme, a page per module that includes its `settings.toml`, writing views and the protocol. `nix build .#docs`, part of `nix flake check`; `.github/workflows/docs.yml` publishes it to GitHub Pages
-- [ ] Publish the site once the repository is on GitHub
+- [x] Publish the site: https://davidutzdev.github.io/mochi/
 - [ ] `docs/architecture.md`
 
 ## Later
@@ -677,16 +684,13 @@ Later:
 
 ## Open questions
 
-1. Multiple monitors: one island per output, or only on the focused output?
+1. ~~Multiple monitors: one island per output, or only on the focused output?~~ One per output, and `[island] notices` and `panels` pick where things show.
 2. ~~Can a plugin read state from other modules?~~ Yes: `[uses] state` in the manifest, and `ModuleCtx::watch_state` for builtins.
 3. Is the lock screen a module, or a separate minimal program? A crash in the lock screen is a security problem.
-4. Does the theme control the animation springs, or are they fixed per view?
+4. ~~Does the theme control the animation springs, or are they fixed per view?~~ The theme's `[motion]` does.
 
 ## Suggested order
 
-Done: the spike, phase 1 (protocol, core, daemon, CLI, QML core, the idle module and packaging), the compositor adapter, the layout system, bubbles, and the OSD, workspaces, media, notifications, launcher, hub and power modules.
+Done: the spike, phase 1, the compositor adapter, the layout system, bubbles, and every module so far: capture, share, the control center's pages, plugins, widgets, the settings, Bento, the tour and the updater.
 
-1. Capture: screenshots and recordings
-2. Share: the portal picker and a sharing bubble
-3. Hub pages: audio, network, Bluetooth
-4. ~~Plugins~~ (v1 done)
+Next, open items that need a decision first: the lock screen (open question 3), per-output layout, the notch beside a bar and fused with its bubbles, and how views reveal during a morph.
