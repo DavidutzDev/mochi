@@ -58,7 +58,7 @@ The time here, then in each of the `zones`, two to a row: the city, whether it's
 
 ## In the control center
 
-With the [control center](control-center.md) on, the clock adds a card to its home: the time, then the stopwatch while it has time on it, with a button to pause or resume it, or the next reminder and when it's due. Its heading opens the Clock page, which has the panel's Today, Calendar, Stopwatch and World tabs, the same views, on a row at the top. The focus timer has a card of its own there.
+With the [control center](control-center.md) on, the clock offers a card for its home. It waits under More cards until you put it there, since the control center's own Today card already shows the time. The card has the time, then the stopwatch while it has time on it, with a button to pause or resume it, or the next reminder and when it's due. Its heading opens the Clock page, which has the panel's Today, Calendar, Stopwatch and World tabs, the same views, on a row at the top. The focus timer has a card of its own there.
 
 ## Credit
 

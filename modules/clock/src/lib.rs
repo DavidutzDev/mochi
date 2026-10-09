@@ -327,11 +327,12 @@ impl Module for Clock {
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
             ContributionSpec::new("settings", "section", "credit", "Credit", "Credit"),
-            // After the control center's own Today card.
+            // Spare: it waits under More cards, since the control center's own
+            // Today card already shows the time.
             ContributionSpec::new("control-center", "card", "clock", "Card", "Clock")
                 .icon("clock")
                 .order(4)
-                .options(json!({ "span": 1, "rows": 1, "page": "clock" })),
+                .options(json!({ "span": 1, "rows": 1, "page": "clock", "spare": true })),
             ContributionSpec::new("control-center", "page", "clock", "Page", "Clock")
                 .icon("clock")
                 .order(14),
