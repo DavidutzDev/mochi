@@ -24,7 +24,7 @@ The drawer has the widget under Weather in four looks, and its settings switch b
 | `forecast`, Forecast | 20 by 14 | A row a day from today, as many as fit: the weekday, the sky, the chance of rain or snow from 20%, and the low and high on either side of a bar. The bars share the week's scale, so a warm day sits to the right; today's has a dot at the temperature now |
 | `hours`, Hours | 24 by 10 | The next 12 hours as a curve, with each hour's temperature over it and its sky and hour under it. The first is now, with a dot on the curve. Where the columns get narrow, every other hour has its labels |
 
-Sizes are in grid cells, and every look grows with the widget. Without a forecast, each look says why, with the same button as the card. When the last fetch failed, or the forecast is more than an hour old, each look adds how old it is, like "Updated 2 hours ago".
+Sizes are in grid cells, and every look grows with the widget. Without a forecast, each look says why, with the same button as the card. When the last fetch failed, or the forecast is older than `stale_minutes`, an hour by default, each look adds how old it is, like "Updated 2 hours ago". It's never less than twice `refresh_minutes`, so a forecast waiting for its next fetch doesn't count.
 
 ## The weather in other views
 
@@ -40,6 +40,7 @@ The module's state has the whole forecast, so any view can show it: a plugin, a 
 | `unit` | The units' signs: `temperature` (`°C` or `°F`) and `speed` (`km/h` or `mph`) |
 | `place` | `name`, `region`, `country`, `latitude` and `longitude`, or `null` before the lookup |
 | `updated` | When the forecast came, in seconds since the epoch, or `null` |
+| `stale_after` | How old `updated` gets, in seconds, before the looks say how old it is: `stale_minutes`, or twice `refresh_minutes` when that's longer |
 | `timezone`, `utc_offset` | The place's time zone, like `Europe/Paris`, and its offset from UTC in seconds |
 | `current` | The weather now, or `null` before the first forecast: `temperature`, `feels_like`, `humidity` (%), `wind_speed`, `wind_direction` (degrees, where the wind comes from), `uv_index`, `time` |
 | `hourly` | The next hours, from the one that runs, up to 24: `time` (when the hour starts, in seconds since the epoch), `hour` (0 to 23, at the place), `temperature`, `precipitation` (the chance of rain or snow, %) |

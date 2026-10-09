@@ -19,6 +19,7 @@
 //! place = "Lyon, France"   # or latitude and longitude
 //! units = "metric"         # or "imperial"
 //! refresh_minutes = 30
+//! stale_minutes = 60       # how old before the looks say so
 //! ```
 
 mod codes;
@@ -55,7 +56,14 @@ const STALE: u64 = 6 * 3600;
 /// What the views and `refresh` say while nothing is set.
 const UNSET: &str = "no place set: set `place`, or `latitude` and `longitude`, in [module.weather]";
 /// Every setting applies at once, so none needs a restart.
-const LIVE: [&str; 5] = ["place", "latitude", "longitude", "units", "refresh_minutes"];
+const LIVE: [&str; 6] = [
+    "place",
+    "latitude",
+    "longitude",
+    "units",
+    "refresh_minutes",
+    "stale_minutes",
+];
 
 #[derive(Debug, Default)]
 pub struct Weather;
@@ -78,6 +86,12 @@ struct Settings {
     /// How often to fetch the forecast again, in minutes.
     #[schemars(range(min = 10, max = 360))]
     refresh_minutes: u64,
+    /// How old the forecast gets, in minutes, before the weather looks say
+    /// how old it is, as when the computer was offline. Never less than
+    /// twice `refresh_minutes`, so a forecast waiting for its next fetch
+    /// doesn't count.
+    #[schemars(range(min = 20, max = 360))]
+    stale_minutes: u64,
 }
 
 impl Default for Settings {
@@ -88,6 +102,7 @@ impl Default for Settings {
             longitude: None,
             units: Units::Metric,
             refresh_minutes: 30,
+            stale_minutes: 60,
         }
     }
 }
@@ -115,6 +130,12 @@ impl Settings {
                 settings.refresh_minutes
             ));
         }
+        if !(20..=360).contains(&settings.stale_minutes) {
+            return Err(format!(
+                "stale_minutes is {}; it goes from 20 to 360",
+                settings.stale_minutes
+            ));
+        }
         Ok(settings)
     }
 
@@ -140,6 +161,12 @@ impl Settings {
     /// Seconds between two fetches.
     fn interval(&self) -> u64 {
         self.refresh_minutes.max(1) * 60
+    }
+
+    /// How old the forecast gets before the looks call it stale, in
+    /// seconds.
+    fn stale_after(&self) -> u64 {
+        self.stale_minutes.max(self.refresh_minutes * 2) * 60
     }
 }
 
@@ -652,6 +679,8 @@ impl State {
             },
             "place": self.place(now as u64),
             "updated": shown.map(|last| last.updated),
+            // How old `updated` gets before the looks say so, in seconds.
+            "stale_after": self.settings.stale_after(),
             "timezone": forecast.map(|forecast| &forecast.timezone),
             "utc_offset": forecast.map(|forecast| forecast.utc_offset),
             "current": forecast.map(|forecast| current(&forecast.current)),
@@ -881,6 +910,20 @@ mod tests {
         let mut live = LIVE.to_vec();
         live.sort_unstable();
         assert_eq!(keys, live);
+    }
+
+    #[test]
+    fn the_forecast_goes_stale_after_two_fetches_at_least() {
+        // An hour by default, as before the setting.
+        assert_eq!(settings("").stale_after(), 3600);
+        assert_eq!(settings("stale_minutes = 180").stale_after(), 3 * 3600);
+        // A forecast fetched every two hours isn't stale after one.
+        assert_eq!(settings("refresh_minutes = 120").stale_after(), 4 * 3600);
+        assert!(
+            Settings::load(&mochi_core::toml::from_str("stale_minutes = 5").unwrap())
+                .unwrap_err()
+                .contains("20 to 360")
+        );
     }
 
     #[test]

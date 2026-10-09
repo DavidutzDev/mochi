@@ -13,3 +13,7 @@
 # units = "metric"
 # How often to fetch the forecast again, in minutes.
 # refresh_minutes = 30
+# How old the forecast gets, in minutes, before the weather looks say how
+# old it is, as when the computer was offline. Never less than twice
+# refresh_minutes, so a forecast waiting for its next fetch doesn't count.
+# stale_minutes = 60

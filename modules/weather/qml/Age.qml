@@ -2,8 +2,9 @@ import QtQuick
 import qs.island
 
 // How old the forecast is, for the looks to show in place of a line while
-// it's stale: after the last fetch failed, or once it's over an hour old,
-// as when the computer was offline. `stale` says whether it is.
+// it's stale: after the last fetch failed, or once it's older than the
+// state's `stale_after`, an hour by default, as when the computer was
+// offline. `stale` says whether it is.
 Item {
     id: root
 
@@ -13,7 +14,8 @@ Item {
     property real now: Date.now() / 1000
     readonly property real updated: payload?.updated ?? 0
     readonly property bool failed: payload?.error != null
-    readonly property bool stale: updated > 0 && (failed || now - updated >= 3600)
+    readonly property real staleAfter: payload?.stale_after ?? 3600
+    readonly property bool stale: updated > 0 && (failed || now - updated >= staleAfter)
     readonly property string age: {
         const minutes = Math.max(0, Math.floor((now - updated) / 60));
         if (minutes < 1)
