@@ -23,8 +23,8 @@ provides=('mochi')
 conflicts=('mochi' 'mochi-git')
 source_x86_64=("mochi-$pkgver-x86_64.tar.gz::$url/releases/download/v$pkgver/mochi-x86_64-linux.tar.gz")
 source_aarch64=("mochi-$pkgver-aarch64.tar.gz::$url/releases/download/v$pkgver/mochi-aarch64-linux.tar.gz")
-sha256sums_x86_64=('SKIP')
-sha256sums_aarch64=('SKIP')
+sha256sums_x86_64=('14852dd1b6dbe61ede727b2b39a79060c58b15cce4a881da5cf3eb593d670420')
+sha256sums_aarch64=('26f120eeb570196222730cfc42287760273f1e7215d177d3624e10a99fd2e49e')
 
 package() {
   cd "mochi-$pkgver"
