@@ -584,9 +584,10 @@ Phase 3, the Bento category in the settings:
 
 Phase 4, publishing:
 
-- [ ] `mochi bento publish`: checks the package and opens the registry pull request with `gh`
-- [ ] A bot that opens update pull requests when authors tag a release
-- [ ] CODEOWNERS for maintainers
+- [x] `mochi bento publish`: checks the package and opens the registry pull request with `gh`; `--print` for sending by hand
+- [x] Pull requests on each tagged release: `examples/bento-publish.yml`, run in the package's own repository
+- [x] CODEOWNERS for maintainers, in the registry template
+- [ ] Run `mochi bento publish` against the real registry, once it exists
 
 Later:
 

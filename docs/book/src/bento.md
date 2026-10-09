@@ -142,7 +142,20 @@ friends = "https://friends.example/index.json"
 
 ### Publishing
 
-The registry is a git repository with a file per package, `packages/<id>.toml`, naming its repository, its maintainers, its license and each release's version, commit and oldest Mochi. A pull request adds one. Its README says what's checked and who merges. `mochid bento registry check`, `index` and `diff` are the tools its CI runs, and `mochi bento check` runs the same checks on your package before you send it.
+The registry is a git repository with a file per package, `packages/<id>.toml`, naming its repository, its maintainers, its license and each release's version, commit and oldest Mochi. A pull request adds one, or a release to one. Its README says what's checked and who merges.
+
+`mochi bento publish` sends one for you. Run it in your package's repository, with the release committed, tagged and pushed:
+
+```sh
+git tag v1.0.0 && git push --tags
+mochi bento publish --tag dark --tag purple
+```
+
+It checks the release as the registry's CI will, from your manifest and LICENSE file, writes the package's file or adds the release to the one there, shows it, and with your yes opens the pull request from a fork of the registry, with [gh](https://cli.github.com). A plugin's manifest doesn't say which Mochi it needs, so give it with `--mochi 0.0.8`; it's the running Mochi otherwise. `--print` only prints the file, to send by hand, and `--registry owner/name` sends it to another registry.
+
+To send each release as you tag it, copy `examples/bento-publish.yml` from Mochi's source into your repository's `.github/workflows/`, with a `BENTO_TOKEN` secret that can open pull requests.
+
+`mochid bento registry check`, `index` and `diff` are the tools the registry's CI runs, and `mochi bento check` runs the same checks on your package before you send it.
 
 ## bento.toml
 

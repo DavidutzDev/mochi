@@ -1,0 +1,35 @@
+# A GitHub Actions workflow for a plugin's, a theme's or a bento's
+# repository: pushing a tag like v1.2.0 sends that release to Bento's
+# registry with `mochi bento publish`, which checks it as the registry's CI
+# will and opens the pull request. Copy it to .github/workflows/bento.yml.
+#
+# It needs a secret, BENTO_TOKEN: a GitHub token that can fork the registry
+# and open pull requests on it, like a classic token with `public_repo`.
+# The workflow's own token can't reach another repository.
+#
+# For a plugin, say which Mochi it needs at the least with
+# `--mochi 0.0.8`; themes and bentos say it in their manifest.
+name: Bento
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: Install Mochi
+        run: nix profile install github:DavidutzDev/mochi#mochi
+      - name: Send the release to the registry
+        env:
+          GH_TOKEN: ${{ secrets.BENTO_TOKEN }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mochid bento publish --yes

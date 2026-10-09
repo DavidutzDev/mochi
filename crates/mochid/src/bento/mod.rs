@@ -15,6 +15,7 @@ mod apply;
 mod client;
 mod fetch;
 mod manifest;
+mod publish;
 mod registry;
 mod screens;
 mod share;
@@ -106,6 +107,31 @@ pub enum Action {
         #[arg(default_value = ".")]
         dir: PathBuf,
     },
+    /// Send a release of the package in a directory to the registry: check
+    /// it, write its `packages/<id>.toml`, and open the pull request with
+    /// `gh`. The release is the commit checked out, pushed to `origin`.
+    Publish {
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+        /// The registry's repository, as `owner/name`.
+        #[arg(long)]
+        registry: Option<String>,
+        /// A tag to find it by; repeat for more.
+        #[arg(long = "tag")]
+        tags: Vec<String>,
+        /// Its SPDX license, when the LICENSE file doesn't say.
+        #[arg(long)]
+        license: Option<String>,
+        /// The oldest Mochi a plugin works with; this one without.
+        #[arg(long)]
+        mochi: Option<String>,
+        /// Print the package file instead, to send by hand.
+        #[arg(long)]
+        print: bool,
+        /// Don't ask.
+        #[arg(long, short)]
+        yes: bool,
+    },
     /// Tools for a registry's repository, which its CI runs.
     #[command(subcommand)]
     Registry(RegistryAction),
@@ -168,6 +194,25 @@ pub fn run(action: &Action, config_file: &Path) -> Result<(), String> {
         ),
         Action::Add { source, at, yes } => apply::add(config_file, source, at.as_deref(), *yes),
         Action::Plan { source } => apply::plan(config_file, source),
+        Action::Publish {
+            dir,
+            registry,
+            tags,
+            license,
+            mochi,
+            print,
+            yes,
+        } => publish::publish(
+            dir,
+            &publish::Options {
+                registry: registry.clone(),
+                tags: tags.clone(),
+                license: license.clone(),
+                mochi: mochi.clone(),
+                print: *print,
+                yes: *yes,
+            },
+        ),
         Action::Catalog { refresh } => registry::catalog(config_file, *refresh),
         Action::Try { source } => apply::try_it(config_file, source),
         Action::Remove { id, yes } => apply::remove(config_file, id, *yes),

@@ -12,6 +12,8 @@ The code stays in each package's own repository. This one only lists them, one f
 
 ## Adding a package
 
+In your package's repository, with the release tagged and pushed, `mochi bento publish` checks it, writes its file and opens the pull request; `examples/bento-publish.yml` in Mochi's source does it on each tag. By hand:
+
 1. Make it work with `mochi bento add <your repository>`, and check it with `mochi bento check` in its directory.
 2. Tag the release you want listed, and note its full commit: `git rev-parse v1.0.0`.
 3. Add `packages/<id>.toml`, where `<id>` is the id in its manifest:
