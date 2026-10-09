@@ -2,7 +2,7 @@
 id = "obsidian"
 name = "Obsidian"
 version = "1.0.0"
-mochi = "0.0.7"
+mochi = "0.0.8"
 description = "Mochi's own: a black island that disappears into the bezel, graphite cards and an orange accent"
 authors = ["Mochi"]
 

@@ -2,7 +2,7 @@
 id = "tokyo-night"
 name = "Tokyo Night"
 version = "1.0.0"
-mochi = "0.0.7"
+mochi = "0.0.8"
 description = "Tokyo Night, and Day when light"
 authors = ["Mochi"]
 homepage = "https://github.com/enkia/tokyo-night-vscode-theme"

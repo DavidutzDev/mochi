@@ -2,7 +2,7 @@
 id = "catppuccin"
 name = "Catppuccin"
 version = "1.0.0"
-mochi = "0.0.7"
+mochi = "0.0.8"
 description = "Catppuccin Mocha, and Latte when light"
 authors = ["Mochi"]
 homepage = "https://catppuccin.com"

@@ -232,7 +232,7 @@ Its plugins count as if `plugins.toml` listed them: `mochi plugins install` inst
 id = "cozy"
 name = "Cozy"
 version = "1.0.0"
-mochi = "0.0.7"
+mochi = "0.0.8"
 description = "Warm colors, a clock and notes on the big screen"
 authors = ["someone"]
 homepage = "https://github.com/someone/cozy"

@@ -2,7 +2,7 @@
 id = "rose-pine"
 name = "Rosé Pine"
 version = "1.0.0"
-mochi = "0.0.7"
+mochi = "0.0.8"
 description = "Rosé Pine, and Dawn when light"
 authors = ["Mochi"]
 homepage = "https://rosepinetheme.com"

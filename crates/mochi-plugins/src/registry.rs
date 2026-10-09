@@ -16,7 +16,7 @@
 //! [[release]]
 //! version = "0.3.0"
 //! commit = "4f1c2a9d0e7b5a3c1d2e3f4a5b6c7d8e9f0a1b2c"
-//! mochi = "0.0.7"
+//! mochi = "0.0.8"
 //! ```
 //!
 //! Its CI checks every file and publishes them together as `index.json`,

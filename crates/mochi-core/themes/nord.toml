@@ -2,7 +2,7 @@
 id = "nord"
 name = "Nord"
 version = "1.0.0"
-mochi = "0.0.7"
+mochi = "0.0.8"
 description = "Arctic blues and frost"
 authors = ["Mochi"]
 homepage = "https://www.nordtheme.com"

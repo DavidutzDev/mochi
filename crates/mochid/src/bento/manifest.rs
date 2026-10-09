@@ -8,7 +8,7 @@
 //! id = "cozy"
 //! name = "Cozy"
 //! version = "1.0.0"
-//! mochi = "0.0.7"
+//! mochi = "0.0.8"
 //!
 //! [plugins]
 //! pomodoro = "git:github.com/User/mochi-pomodoro"
