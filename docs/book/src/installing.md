@@ -130,17 +130,35 @@ The `PKGBUILD`s live in `packaging/arch`. When Quickshell in the official reposi
 
 ## From a release
 
-Each release on [GitHub](https://github.com/DavidutzDev/mochi/releases) has Mochi built for x86_64 and aarch64 Linux, with glibc 2.35 or newer: the binaries, the fonts, the systemd unit, the `mochi://` link handler and shell completions, with `install.sh`.
+On a system without a package for Mochi, one command installs it, and updates it when you run it again:
 
 ```sh
-curl -fsSLO https://github.com/DavidutzDev/mochi/releases/latest/download/mochi-x86_64-linux.tar.gz
-tar -xzf mochi-x86_64-linux.tar.gz
-mochi-*/install.sh                          # into ~/.local, for you
-# sudo mochi-*/install.sh --prefix /usr/local   for everyone
-systemctl --user daemon-reload && systemctl --user enable --now mochid
+curl -fsSL https://raw.githubusercontent.com/DavidutzDev/mochi/main/install.sh | sh -s -- --enable
 ```
 
-It needs Quickshell 0.3 and PulseAudio's library, `libpulse`, which PipeWire systems have too, from your distribution. `install.sh --uninstall` removes what it installed. Each archive has a `.sha256` next to it, and `releases/download/v0.0.8/…` gives a given version instead of the latest.
+It downloads the latest release built for your machine, x86_64 or aarch64 Linux with glibc 2.35 or newer, checks it against its published sum, and installs it into `~/.local`: the binaries, the fonts, the systemd unit, the `mochi://` link handler and shell completions. `--enable` starts `mochid` with your session through systemd. Run the same command later to update: it does nothing when the latest is installed, and restarts a running `mochid` after updating.
+
+Options go after `sh -s --`:
+
+| Option | |
+|---|---|
+| `--prefix /usr/local` | Install there, with `sudo sh -s -- --prefix /usr/local`, instead of `~/.local` |
+| `--version 0.0.8` | A given release instead of the latest |
+| `--enable` | Start `mochid` with the session |
+| `--uninstall` | Remove what it installed |
+| `--force` | Install even when the same version is there, or when a package manager installed Mochi |
+
+`MOCHI_FROM_SOURCE=1` builds the release from source with cargo instead of downloading it, and `MOCHI_FROM_SOURCE=main` builds the latest commit, for systems the releases don't cover. That needs `git`, `cargo` with Rust 1.98 or newer, `pkg-config` and `libpulse`'s headers:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/DavidutzDev/mochi/main/install.sh | MOCHI_FROM_SOURCE=1 sh
+```
+
+Mochi installed by Nix, pacman, apt or rpm is left to that package manager: the installer says so and stops, unless `--force`.
+
+Either way, Mochi needs Quickshell 0.3 and PulseAudio's library, `libpulse`, which PipeWire systems have too, from your distribution.
+
+By hand, each release on [GitHub](https://github.com/DavidutzDev/mochi/releases) has `mochi-<arch>-linux.tar.gz` with a `.sha256`; unpack it and run its `install.sh`, which takes `--prefix` and `--uninstall` too.
 
 ## Other systems
 

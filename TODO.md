@@ -653,6 +653,7 @@ Later:
 - [x] Arch packages in `packaging/arch`: `mochi` from the release tarball and `mochi-git` from `main`, both built and installed in an Arch container
 - [ ] Publish `mochi` and `mochi-git` to the AUR; bump `pkgver` and `sha256sums` in `mochi` with each release
 - [x] Releases with binaries: `.github/workflows/release.yml` builds x86_64 and aarch64 archives on a tag, publishes them, and records them for the flake's `mochi-bin` and the Arch `mochi-bin`; `RELEASING.md`
+- [x] A universal installer, `install.sh` at the repository's root: installs and updates the latest release, or builds it with `MOCHI_FROM_SOURCE`, and leaves package managers' Mochi alone
 - [ ] A binary cache for the flake's `mochi`, like Cachix, for Nix users who build from source
 - [x] Release 0.0.1 and `CHANGELOG.md`
 - [x] Release 0.0.2: capture, overlays, gpu-screen-recorder in the Nix package and modules

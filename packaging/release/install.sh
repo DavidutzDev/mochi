@@ -10,7 +10,12 @@
 # PipeWire systems have too), from your distribution.
 set -eu
 
-prefix="$HOME/.local"
+here=$(cd "$(dirname "$0")" && pwd)
+# The copy kept in <prefix>/share/mochi knows its prefix.
+case "$here" in
+*/share/mochi) prefix=${here%/share/mochi} ;;
+*) prefix="$HOME/.local" ;;
+esac
 action=install
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -37,7 +42,6 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-here=$(cd "$(dirname "$0")" && pwd)
 version=$(cat "$here/VERSION")
 # A user's units live in their config; a system prefix has its own.
 if [ "$prefix" = "$HOME/.local" ]; then
@@ -51,7 +55,8 @@ share/mochi/fonts/InterVariable.ttf share/mochi/fonts/MaterialSymbolsRounded.ttf
 share/applications/mochi-links.desktop
 share/bash-completion/completions/mochi share/fish/vendor_completions.d/mochi.fish
 share/zsh/site-functions/_mochi
-share/licenses/mochi/Inter-OFL.txt share/licenses/mochi/MaterialSymbols-Apache-2.0.txt"
+share/licenses/mochi/Inter-OFL.txt share/licenses/mochi/MaterialSymbols-Apache-2.0.txt
+share/mochi/install.sh share/mochi/VERSION"
 
 if [ "$action" = uninstall ]; then
     for file in $files; do
@@ -63,9 +68,16 @@ if [ "$action" = uninstall ]; then
     exit 0
 fi
 
+# This script and the version go along, so the universal installer can
+# update what's here, and `share/mochi/install.sh --uninstall` removes it.
+mkdir -p "$here/share/mochi"
+[ -f "$here/share/mochi/install.sh" ] || cp "$0" "$here/share/mochi/install.sh"
+[ -f "$here/share/mochi/VERSION" ] || cp "$here/VERSION" "$here/share/mochi/VERSION"
+
 for file in $files; do
     mode=644
     case "$file" in bin/*) mode=755 ;; esac
+    case "$file" in share/mochi/install.sh) mode=755 ;; esac
     mkdir -p "$(dirname "$prefix/$file")"
     install -m"$mode" "$here/$file" "$prefix/$file"
 done

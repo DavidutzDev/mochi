@@ -32,6 +32,14 @@ Logs go to stderr. `MOCHI_LOG=debug` shows every activity change.
 
 ## Installing
 
+On most Linux systems, one command installs the latest release, already built, and updates it when you run it again:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/DavidutzDev/mochi/main/install.sh | sh -s -- --enable
+```
+
+`MOCHI_FROM_SOURCE=1` before `sh` builds it from source instead. The [installation page](docs/book/src/installing.md) has its options, and the packages below.
+
 ### Nix
 
 The flake has the `mochi` package, a home-manager module, a NixOS module and an overlay. With home-manager:
