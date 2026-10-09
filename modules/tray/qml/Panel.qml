@@ -47,11 +47,27 @@ Item {
     implicitWidth: columns * tileWidth + (columns - 1) * Theme.spaceSmall + Theme.padding * 2
     implicitHeight: column.implicitHeight + Theme.padding * 2
 
-    // A new menu starts at its top.
+    // A new menu starts at its top. The same menu, changed by its app while
+    // it's open, stays on the submenu shown, or the nearest one above it
+    // that's still there.
     onMenuChanged: {
         if (menu === null || menu.key !== shownKey) {
             path = [];
             current = -1;
+        } else {
+            const kept = [];
+            let level = menu.entries ?? [];
+            for (const id of path) {
+                const entry = level.find(entry => entry.id === id);
+                if (!entry?.submenu)
+                    break;
+                kept.push(id);
+                level = entry.children ?? [];
+            }
+            if (kept.length !== path.length)
+                path = kept;
+            else if (current >= level.length)
+                current = -1;
         }
         shownKey = menu?.key ?? "";
     }

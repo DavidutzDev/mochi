@@ -45,7 +45,7 @@ use tokio::task::JoinHandle;
 use zbus::Connection;
 
 use crate::item::{Input, Item, Status, Update};
-use crate::menu::Entry;
+use crate::menu::{Entry, Relayout};
 use crate::sni::{Address, Change};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
@@ -209,16 +209,19 @@ impl Module for Tray {
             // After the watcher, which the bridge registers its icons with.
             let _xembed = settings.xembed.then(start_xembed).flatten();
             let (updates_sender, mut updates) = mpsc::unbounded_channel();
+            let (relayouts_sender, mut relayouts) = mpsc::unbounded_channel();
             let mut state = State {
                 settings,
                 connection,
                 icons: ctx.data_dir().to_owned(),
                 updates: updates_sender,
+                relayouts: relayouts_sender,
                 items: BTreeMap::new(),
                 drawer: None,
                 pins: HashMap::new(),
                 panel: None,
                 menu: None,
+                menus_opened: 0,
                 attention: false,
             };
             loop {
@@ -235,6 +238,7 @@ impl Module for Tray {
                     },
                     Some(change) = changes.recv() => state.change(&ctx, change),
                     Some(update) = updates.recv() => state.update(&ctx, update),
+                    Some(relayout) = relayouts.recv() => state.relayout(&ctx, relayout),
                 }
             }
         })
@@ -260,6 +264,17 @@ impl Drop for Tracked {
 struct OpenMenu {
     key: String,
     entries: Vec<Entry>,
+    /// Which menu opened this is, so a change read for one closed since
+    /// doesn't land on the next.
+    number: u64,
+    /// Reads the menu again when its app changes it.
+    follow: JoinHandle<()>,
+}
+
+impl Drop for OpenMenu {
+    fn drop(&mut self) {
+        self.follow.abort();
+    }
 }
 
 #[derive(Debug)]
@@ -269,12 +284,15 @@ struct State {
     /// Where pictures from apps' pixels go.
     icons: PathBuf,
     updates: mpsc::UnboundedSender<Update>,
+    relayouts: mpsc::UnboundedSender<Relayout>,
     items: BTreeMap<Address, Tracked>,
     drawer: Option<BubbleId>,
     /// Pinned apps' bubbles, by key.
     pins: HashMap<String, BubbleId>,
     panel: Option<ActivityId>,
     menu: Option<OpenMenu>,
+    /// Numbers the menus opened, see [`OpenMenu::number`].
+    menus_opened: u64,
     /// Whether an app asked for attention at the last refresh.
     attention: bool,
 }
@@ -562,9 +580,42 @@ impl State {
             .into_iter()
             .find(|(_, shown, _)| **shown == address)
             .map_or_else(|| key.to_owned(), |(key, ..)| key);
-        self.menu = Some(OpenMenu { key, entries });
+        self.menus_opened += 1;
+        let follow = tokio::spawn(menu::follow(
+            self.connection.clone(),
+            address.bus.clone(),
+            path.to_owned(),
+            self.menus_opened,
+            self.relayouts.clone(),
+        ));
+        self.menu = Some(OpenMenu {
+            key,
+            entries,
+            number: self.menus_opened,
+            follow,
+        });
         self.open(ctx);
         Ok(())
+    }
+
+    /// The open menu, changed by its app: the view shows the new entries
+    /// where it is.
+    fn relayout(&mut self, ctx: &ModuleCtx, relayout: Relayout) {
+        let Some(open) = &mut self.menu else {
+            return;
+        };
+        if open.number != relayout.menu {
+            return;
+        }
+        let mut entries = relayout.entries;
+        keep_filled(&mut entries, &open.entries);
+        if entries == open.entries {
+            return;
+        }
+        open.entries = entries;
+        if let Some(panel) = self.panel {
+            ctx.update(panel, self.payload());
+        }
     }
 
     async fn fill_submenu(&mut self, ctx: &ModuleCtx, key: &str, entry: i32) -> Result<(), String> {
@@ -616,6 +667,22 @@ impl State {
     }
 }
 
+/// Gives submenus that come back empty the entries `old` had for them.
+/// Some apps fill a submenu only when it opens and leave it out of the
+/// whole menu's layout, so a change elsewhere would empty the page shown.
+fn keep_filled(entries: &mut [Entry], old: &[Entry]) {
+    for entry in entries {
+        let Some(before) = old.iter().find(|before| before.id == entry.id) else {
+            continue;
+        };
+        if entry.submenu && entry.children.is_empty() {
+            entry.children.clone_from(&before.children);
+        } else {
+            keep_filled(&mut entry.children, &before.children);
+        }
+    }
+}
+
 /// An entry anywhere in a menu, by id.
 fn find_entry(entries: &mut [Entry], id: i32) -> Option<&mut Entry> {
     for entry in entries {
@@ -627,6 +694,51 @@ fn find_entry(entries: &mut [Entry], id: i32) -> Option<&mut Entry> {
         }
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(id: i32, label: &str, children: Vec<Entry>) -> Entry {
+        Entry {
+            id,
+            label: label.into(),
+            enabled: true,
+            submenu: !children.is_empty(),
+            children,
+            ..Entry::default()
+        }
+    }
+
+    #[test]
+    fn a_changed_menu_keeps_the_submenus_filled_on_opening() {
+        let old = vec![
+            entry(1, "Open", vec![]),
+            entry(
+                2,
+                "Status",
+                vec![entry(3, "Online", vec![]), entry(4, "Away", vec![])],
+            ),
+        ];
+        // The app renamed an entry; its layout leaves out the submenu it
+        // fills on opening.
+        let mut new = vec![
+            entry(1, "Open Discord", vec![]),
+            Entry {
+                submenu: true,
+                ..entry(2, "Status", vec![])
+            },
+        ];
+        keep_filled(&mut new, &old);
+        assert_eq!(new[0].label, "Open Discord");
+        assert_eq!(new[1].children, old[1].children);
+
+        // A submenu the layout does fill shows what it says now.
+        let mut new = vec![entry(2, "Status", vec![entry(3, "Online", vec![])])];
+        keep_filled(&mut new, &old);
+        assert_eq!(new[0].children.len(), 1);
+    }
 }
 
 #[cfg(test)]

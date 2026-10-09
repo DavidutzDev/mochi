@@ -1,13 +1,31 @@
 //! An app's tray menu, over DBusMenu (`com.canonical.dbusmenu`): the
-//! entries, read when the menu opens, and the clicks.
+//! entries, read when the menu opens and again whenever the app changes
+//! them while it's open, and the clicks.
 
 use std::collections::HashMap;
+use std::time::Duration;
 
+use futures_util::StreamExt;
 use serde_json::{Value, json};
-use zbus::Connection;
+use tokio::sync::mpsc::UnboundedSender;
 use zbus::zvariant::OwnedValue;
+use zbus::{Connection, MatchRule, MessageStream};
 
 const INTERFACE: &str = "com.canonical.dbusmenu";
+/// The signals that say the entries changed: some came or went, or some
+/// changed their label, state or the like.
+const CHANGES: [&str; 2] = ["LayoutUpdated", "ItemsPropertiesUpdated"];
+
+/// An entry in the layout: its id, properties and children.
+type Node = (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>);
+
+/// A menu read again after its app changed it. `menu` tells the module
+/// which open menu it is for.
+#[derive(Debug)]
+pub struct Relayout {
+    pub menu: u64,
+    pub entries: Vec<Entry>,
+}
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Entry {
@@ -52,12 +70,69 @@ pub async fn read(
     let proxy = zbus::Proxy::new(connection, bus, path, INTERFACE).await?;
     // Not every app implements it; a failure changes nothing.
     let _ = proxy.call_method("AboutToShow", &(parent,)).await;
+    layout(&proxy, parent).await
+}
+
+/// The entries under `parent` as the app has them now.
+async fn layout(proxy: &zbus::Proxy<'_>, parent: i32) -> zbus::Result<Vec<Entry>> {
     let reply = proxy
         .call_method("GetLayout", &(parent, -1i32, Vec::<&str>::new()))
         .await?;
-    type Node = (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>);
     let (_revision, (_, _, children)): (u32, Node) = reply.body().deserialize()?;
     Ok(entries(children))
+}
+
+/// Reads the whole menu again after every change its app announces, and
+/// sends it as menu `menu`, until the task is stopped. It never calls
+/// `AboutToShow`: apps may answer that with `LayoutUpdated`, and the two
+/// would go back and forth for good.
+pub async fn follow(
+    connection: Connection,
+    bus: String,
+    path: String,
+    menu: u64,
+    relayouts: UnboundedSender<Relayout>,
+) {
+    let rule = MatchRule::builder()
+        .msg_type(zbus::message::Type::Signal)
+        .sender(bus.as_str())
+        .and_then(|rule| rule.path(path.as_str()))
+        .and_then(|rule| rule.interface(INTERFACE))
+        .map(|rule| rule.build());
+    let stream = match rule {
+        Ok(rule) => MessageStream::for_match_rule(rule, &connection, None).await,
+        Err(error) => Err(error),
+    };
+    let proxy = zbus::Proxy::new(&connection, bus.as_str(), path.as_str(), INTERFACE).await;
+    let (mut stream, proxy) = match (stream, proxy) {
+        (Ok(stream), Ok(proxy)) => (stream, proxy),
+        (Err(error), _) | (_, Err(error)) => {
+            tracing::debug!(%error, bus, "can't follow a tray menu");
+            return;
+        }
+    };
+    let changed = |message: &zbus::Message| {
+        message
+            .header()
+            .member()
+            .is_some_and(|member| CHANGES.contains(&member.as_str()))
+    };
+    while let Some(message) = stream.next().await {
+        if !message.as_ref().is_ok_and(changed) {
+            continue;
+        }
+        // Apps send a burst of signals for one change: read once after it.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        while let Some(Some(_)) = futures_util::FutureExt::now_or_never(stream.next()) {}
+        match layout(&proxy, 0).await {
+            Ok(entries) => {
+                if relayouts.send(Relayout { menu, entries }).is_err() {
+                    return;
+                }
+            }
+            Err(error) => tracing::debug!(%error, bus, "can't read a tray menu again"),
+        }
+    }
 }
 
 /// Clicks an entry.
@@ -75,7 +150,6 @@ fn entries(children: Vec<OwnedValue>) -> Vec<Entry> {
     children
         .into_iter()
         .filter_map(|child| {
-            type Node = (i32, HashMap<String, OwnedValue>, Vec<OwnedValue>);
             // Children are variants: `av`. Some arrive still wrapped.
             let child = match &*child {
                 zbus::zvariant::Value::Value(inner) => inner.try_to_owned().ok()?,
@@ -218,6 +292,165 @@ mod tests {
         assert_eq!(entries[3].children[0].label, "Idle");
         assert!(!entries[3].children[0].enabled);
         assert_eq!(entries[3].to_json()["children"][0]["id"], 6);
+    }
+
+    /// A bus of the test's own, from a config that starts no services.
+    struct Bus {
+        dir: std::path::PathBuf,
+        daemon: std::process::Child,
+        address: String,
+    }
+
+    impl Bus {
+        /// `None` where there's no `dbus-daemon`, like a build sandbox.
+        fn start() -> Option<Self> {
+            if !mochi_core::process::installed("dbus-daemon") {
+                return None;
+            }
+            let dir = std::env::temp_dir().join(format!("mochi-tray-bus-{}", std::process::id()));
+            std::fs::create_dir_all(&dir).unwrap();
+            let socket = dir.join("bus");
+            let config = dir.join("bus.conf");
+            std::fs::write(
+                &config,
+                format!(
+                    "<busconfig>\n<type>session</type>\n<listen>unix:path={}</listen>\n\
+                     <policy context=\"default\">\n<allow send_destination=\"*\" eavesdrop=\"true\"/>\n\
+                     <allow eavesdrop=\"true\"/>\n<allow own=\"*\"/>\n</policy>\n</busconfig>\n",
+                    socket.display()
+                ),
+            )
+            .unwrap();
+            let daemon = std::process::Command::new("dbus-daemon")
+                .arg(format!("--config-file={}", config.display()))
+                .arg("--nofork")
+                .stdout(std::process::Stdio::null())
+                .spawn()
+                .unwrap();
+            let started = std::time::Instant::now();
+            while !socket.exists() && started.elapsed() < Duration::from_secs(5) {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            Some(Self {
+                address: format!("unix:path={}", socket.display()),
+                dir,
+                daemon,
+            })
+        }
+
+        async fn connect(&self) -> Connection {
+            zbus::connection::Builder::address(self.address.as_str())
+                .unwrap()
+                .build()
+                .await
+                .unwrap()
+        }
+    }
+
+    impl Drop for Bus {
+        fn drop(&mut self) {
+            let _ = self.daemon.kill();
+            let _ = self.daemon.wait();
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    /// An app's menu with one entry, whose label the test changes.
+    struct Menu {
+        label: std::sync::Arc<std::sync::Mutex<String>>,
+        about_to_show: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[zbus::interface(name = "com.canonical.dbusmenu")]
+    impl Menu {
+        fn about_to_show(&self, _id: i32) -> bool {
+            self.about_to_show
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            false
+        }
+
+        fn get_layout(&self, _parent: i32, _depth: i32, _properties: Vec<String>) -> (u32, Node) {
+            let label = self.label.lock().unwrap().clone();
+            let child = owned(node(1, &[("label", Value::from(label))], vec![]));
+            (1, (0, HashMap::new(), vec![child]))
+        }
+
+        #[zbus(signal)]
+        async fn layout_updated(
+            emitter: &zbus::object_server::SignalEmitter<'_>,
+            revision: u32,
+            parent: i32,
+        ) -> zbus::Result<()>;
+
+        #[zbus(signal)]
+        async fn items_properties_updated(
+            emitter: &zbus::object_server::SignalEmitter<'_>,
+            updated: Vec<(i32, HashMap<String, OwnedValue>)>,
+            removed: Vec<(i32, Vec<String>)>,
+        ) -> zbus::Result<()>;
+    }
+
+    /// Sends `signal` until the menu is read again: the task subscribes on
+    /// its own time, so the first ones may go unheard.
+    async fn heard<F: Future<Output = zbus::Result<()>>>(
+        relayouts: &mut tokio::sync::mpsc::UnboundedReceiver<Relayout>,
+        signal: impl Fn() -> F,
+    ) -> Relayout {
+        for _ in 0..50 {
+            signal().await.unwrap();
+            if let Ok(Some(relayout)) =
+                tokio::time::timeout(Duration::from_millis(200), relayouts.recv()).await
+            {
+                return relayout;
+            }
+        }
+        panic!("the menu was never read again");
+    }
+
+    #[tokio::test]
+    async fn follows_the_menu_as_the_app_changes_it() {
+        let Some(bus) = Bus::start() else {
+            return;
+        };
+        let label = std::sync::Arc::new(std::sync::Mutex::new("Mute".to_owned()));
+        let about_to_show = std::sync::Arc::default();
+        let app = bus.connect().await;
+        app.object_server()
+            .at(
+                "/MenuBar",
+                Menu {
+                    label: label.clone(),
+                    about_to_show: std::sync::Arc::clone(&about_to_show),
+                },
+            )
+            .await
+            .unwrap();
+        let emitter = zbus::object_server::SignalEmitter::new(&app, "/MenuBar").unwrap();
+        let mochi = bus.connect().await;
+        let (sender, mut relayouts) = tokio::sync::mpsc::unbounded_channel();
+        let task = tokio::spawn(follow(
+            mochi,
+            app.unique_name().unwrap().to_string(),
+            "/MenuBar".into(),
+            7,
+            sender,
+        ));
+
+        *label.lock().unwrap() = "Unmute".into();
+        let relayout = heard(&mut relayouts, || Menu::layout_updated(&emitter, 2, 0)).await;
+        assert_eq!(relayout.menu, 7);
+        assert_eq!(relayout.entries[0].label, "Unmute");
+
+        while relayouts.try_recv().is_ok() {}
+        *label.lock().unwrap() = "Mute".into();
+        let relayout = heard(&mut relayouts, || {
+            Menu::items_properties_updated(&emitter, vec![], vec![])
+        })
+        .await;
+        assert_eq!(relayout.entries[0].label, "Mute");
+        // Reading again never asks the app to get ready to show.
+        assert_eq!(about_to_show.load(std::sync::atomic::Ordering::SeqCst), 0);
+        task.abort();
     }
 
     #[test]
