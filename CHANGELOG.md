@@ -6,6 +6,9 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- The clock's World tab adds any time zone the system has, with a search by city, country or offset and the keyboard; common cities come first. The settings and the widget editor use the same picker.
+- File settings, like the timer's alarm sound and the wallpaper, have a Choose button that opens the desktop's file chooser through the XDG portal, or zenity or kdialog.
+- The clock panel's Timer tab has the alarm: its volume, its sound with Choose and Default, and Play it.
 - Custom timers beside the focus timer: several at once, each with a label, typed like `15m Tea`, `90s` or `1h 30m`, with pause, stop and "+1 min"; a bubble each, or one for the soonest (`timer_bubbles`). When one runs out, the island says so with Again and "+1 min", the alarm plays (`sound`, `sound_file`, `volume`, `sound_command`) and the music pauses (`pause_media`). The clock panel's Timer tab shows them and starts new ones.
 - `:t 10m Pizza` in the launcher starts a timer; `:t sw` starts or pauses the stopwatch.
 - A time zone picker: the clock's `zones`, and the clock widgets' `timezone` and `zones`, list the system's zones with their offset now and a search.
