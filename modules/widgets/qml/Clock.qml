@@ -1,9 +1,13 @@
 import QtQuick
+import QtQuick.Effects
 import qs.island
 
-// The clock widget: the time, big, and the date under it, here or in
-// another time zone. The text grows with the widget, and its digits roll
-// as they change.
+// The clock widget's looks with the time in numerals, here or in another
+// time zone, growing with the widget, their digits rolling as they change:
+// digital, the time big over the date; stacked, the hour over the minutes
+// and the date under; shape, the time inside a cookie in the accent color;
+// and minimal, the time and the date on one line, without a card. The
+// analog and world looks have views of their own.
 Item {
     id: root
 
@@ -11,106 +15,212 @@ Item {
     property var payload: null
     property var settings: ({})
     property string instance: ""
+    property string variant: ""
 
-    readonly property string zone: settings.timezone ?? ""
-    // Seconds from UTC, once the module has read the zone.
-    readonly property var offset: zone !== "" ? payload?.zones?.[zone] : undefined
     readonly property bool twelve: settings.hours === "12"
-    readonly property bool seconds: settings.seconds === true
+    readonly property bool withDate: settings.date !== false
 
-    property date now: new Date()
+    ClockTime {
+        id: time
 
-    Timer {
-        interval: root.seconds ? 1000 : 5000
-        running: true
-        repeat: true
-        triggeredOnStart: true
-        onTriggered: root.now = new Date()
+        payload: root.payload
+        zone: root.settings.timezone ?? ""
+        // Only the digital look has them.
+        seconds: digital.active && root.settings.seconds === true
     }
 
-    // The time's parts here, or in the zone: the zone's time is UTC moved
-    // by its offset, read with the UTC getters.
-    readonly property var parts: {
-        const utc = zone !== "" && offset !== undefined;
-        const time = utc ? new Date(now.getTime() + offset * 1000) : now;
-        return {
-            hours: utc ? time.getUTCHours() : time.getHours(),
-            minutes: utc ? time.getUTCMinutes() : time.getMinutes(),
-            seconds: utc ? time.getUTCSeconds() : time.getSeconds(),
-            day: utc ? time.getUTCDay() : time.getDay(),
-            date: utc ? time.getUTCDate() : time.getDate(),
-            month: utc ? time.getUTCMonth() : time.getMonth()
-        };
+    // The date, and the zone's city when it isn't this computer's.
+    function dated(short: bool): string {
+        const date = time.date(short);
+        if (time.unknown)
+            return `${time.zone}: no such time zone`;
+        return time.zone !== "" ? `${date} · ${time.city}` : date;
     }
 
-    readonly property string time: {
-        const pad = value => `${value}`.padStart(2, "0");
-        let hours = parts.hours;
-        if (twelve)
-            hours = hours % 12 === 0 ? 12 : hours % 12;
-        const text = `${twelve ? hours : pad(hours)}:${pad(parts.minutes)}`;
-        return seconds ? `${text}:${pad(parts.seconds)}` : text;
-    }
+    Loader {
+        id: digital
 
-    Column {
-        anchors.verticalCenter: parent.verticalCenter
-        width: parent.width
-        spacing: 2
+        anchors.fill: parent
+        active: root.variant === "" || root.variant === "digital"
+        sourceComponent: Column {
+            id: block
 
-        Row {
-            spacing: Theme.spaceSmall
+            readonly property string text: time.time(root.twelve, time.seconds)
 
-            RollingText {
-                id: clock
+            y: (root.height - height) / 2
+            width: root.width
+            spacing: 2
 
-                text: root.time
-                family: Theme.displayFamily
-                weight: Theme.weightTitle
-                // As big as the widget allows, by height and by width.
-                // "AM" takes about a digit and a half more, at a third of the size.
-                pixelSize: Math.max(12, Math.min(root.height * (root.settings.date === false ? 0.8 : 0.55), root.width / (root.time.length * 0.62 + (root.twelve ? 0.75 : 0))))
+            Row {
+                spacing: Theme.spaceSmall
+
+                RollingText {
+                    id: clock
+
+                    text: block.text
+                    family: Theme.displayFamily
+                    weight: Theme.weightTitle
+                    // As big as the widget allows, by height and by width.
+                    // "AM" takes about a digit and a half more, at a third
+                    // of the size.
+                    pixelSize: Math.max(12, Math.min(root.height * (root.withDate ? 0.55 : 0.8), root.width / (text.length * 0.62 + (root.twelve ? 0.75 : 0))))
+                }
+
+                Text {
+                    id: half
+
+                    // On the time's baseline.
+                    y: clockMetrics.ascent - halfMetrics.ascent
+                    visible: root.twelve
+                    text: time.half
+                    color: Theme.muted
+                    font.family: Theme.fontFamily
+                    font.weight: Theme.weightTitle
+                    font.pixelSize: Math.max(10, clock.pixelSize * 0.3)
+
+                    FontMetrics {
+                        id: halfMetrics
+
+                        font: half.font
+                    }
+
+                    FontMetrics {
+                        id: clockMetrics
+
+                        font: clock.font
+                    }
+                }
             }
 
             Text {
-                id: half
-
-                // On the time's baseline.
-                y: clockMetrics.ascent - halfMetrics.ascent
-                visible: root.twelve
-                text: root.parts.hours < 12 ? "AM" : "PM"
+                visible: root.withDate
+                width: parent.width
+                elide: Text.ElideRight
+                text: root.dated(false)
                 color: Theme.muted
                 font.family: Theme.fontFamily
-                font.weight: Theme.weightTitle
-                font.pixelSize: Math.max(10, clock.pixelSize * 0.3)
+                font.pixelSize: Math.max(Theme.textCaption, clock.font.pixelSize * 0.24)
+            }
+        }
+    }
 
-                FontMetrics {
-                    id: halfMetrics
+    Loader {
+        anchors.fill: parent
+        active: root.variant === "stacked"
+        sourceComponent: StackedTime {
+            hours: time.hour(root.twelve)
+            minutes: time.pad(time.parts.minutes)
+            date: root.withDate ? root.dated(true) : ""
+        }
+    }
 
-                    font: half.font
+    // The accent is the cookie; the time sits in it in the accent's ink.
+    Loader {
+        anchors.fill: parent
+        active: root.variant === "shape"
+        sourceComponent: ExpressiveShape {
+            id: cookie
+
+            readonly property string text: time.time(root.twelve, false)
+
+            shape: "cookie"
+            color: Theme.accent
+
+            Column {
+                anchors.centerIn: parent
+
+                RollingText {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    text: cookie.text
+                    color: Theme.onAccent
+                    family: Theme.displayFamily
+                    weight: Theme.weightTitle
+                    // Within the cookie's middle, about seven tenths of it.
+                    pixelSize: Math.max(Theme.textCaption, Math.min(cookie.side * 0.3, cookie.side * 0.7 / (cookie.text.length * 0.62)))
                 }
 
-                FontMetrics {
-                    id: clockMetrics
-
-                    font: clock.font
+                Text {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    visible: root.twelve
+                    text: time.half
+                    color: Theme.onAccent
+                    font.family: Theme.fontFamily
+                    font.weight: Theme.weightTitle
+                    font.pixelSize: Math.max(Theme.textCaption, cookie.side * 0.09)
                 }
             }
         }
+    }
 
-        Text {
-            visible: root.settings.date !== false
-            width: parent.width
-            elide: Text.ElideRight
-            text: {
-                const locale = Qt.locale();
-                const day = locale.dayName(root.parts.day, Locale.LongFormat);
-                const month = locale.monthName(root.parts.month, Locale.LongFormat);
-                const date = `${day}, ${root.parts.date} ${month}`;
-                return root.zone !== "" ? `${date} · ${root.zone.split("/").pop().replace(/_/g, " ")}` : date;
+    // No card: a soft halo in the background's color sets the text apart
+    // from the wallpaper, a dark one around light text, or a light one
+    // around dark text in the light appearance.
+    Loader {
+        anchors.fill: parent
+        active: root.variant === "minimal"
+        sourceComponent: Item {
+            id: line
+
+            readonly property string text: time.time(root.twelve, false)
+            readonly property string date: root.withDate ? root.dated(false) : ""
+            // The time as big as the height allows, and smaller when the
+            // line wouldn't fit across: a digit is about 0.6 of the size,
+            // and the date's letters about 0.55 of a third of it.
+            readonly property int size: Math.max(Theme.textCaption, Math.min(height * 0.8, width / (text.length * 0.6 + (root.twelve ? 0.8 : 0) + (date.length * 0.55 + 1) * 0.3)))
+
+            Row {
+                anchors.verticalCenter: parent.verticalCenter
+                width: parent.width
+                spacing: line.size * 0.3
+                // Software rendering has no effects; the text shows there
+                // without its halo.
+                layer.enabled: GraphicsInfo.api !== GraphicsInfo.Software
+                layer.effect: MultiEffect {
+                    shadowEnabled: true
+                    shadowColor: Theme.background
+                    shadowBlur: 0.8
+                    blurMax: 16
+                    shadowOpacity: 1
+                    shadowHorizontalOffset: 0
+                    shadowVerticalOffset: 0
+                }
+
+                RollingText {
+                    id: big
+
+                    text: line.text
+                    family: Theme.displayFamily
+                    weight: Theme.weightBody
+                    pixelSize: line.size
+                }
+
+                // The rest on the time's baseline.
+                Text {
+                    id: rest
+
+                    y: bigMetrics.ascent - smallMetrics.ascent
+                    width: Math.min(implicitWidth, parent.width - big.width - parent.spacing)
+                    visible: text !== ""
+                    elide: Text.ElideRight
+                    text: [root.twelve ? time.half : "", line.date].filter(part => part !== "").join("  ")
+                    color: Theme.foreground
+                    font.family: Theme.fontFamily
+                    font.weight: Theme.weightLabel
+                    font.pixelSize: Math.max(Theme.textCaption, line.size * 0.3)
+
+                    FontMetrics {
+                        id: smallMetrics
+
+                        font: rest.font
+                    }
+
+                    FontMetrics {
+                        id: bigMetrics
+
+                        font: big.font
+                    }
+                }
             }
-            color: Theme.muted
-            font.family: Theme.fontFamily
-            font.pixelSize: Math.max(Theme.textCaption, clock.font.pixelSize * 0.24)
         }
     }
 }

@@ -13,6 +13,8 @@ Item {
     property real cell: 16
 
     readonly property var size: variant?.size ?? entry.size
+    // Whether it has a card: its look's, which can go without.
+    readonly property bool framed: variant?.frame ?? entry.frame
     readonly property real fullWidth: size[0] * cell
     readonly property real fullHeight: size[1] * cell
     readonly property real ratio: Math.min(1, width / fullWidth, height / fullHeight)
@@ -37,7 +39,7 @@ Item {
 
         Rectangle {
             anchors.fill: parent
-            visible: root.entry.frame
+            visible: root.framed
             radius: Theme.radiusSurface
             color: Theme.background
             border.width: 1
@@ -48,7 +50,7 @@ Item {
             id: content
 
             anchors.fill: parent
-            anchors.margins: root.entry.frame ? Theme.padding : 0
+            anchors.margins: root.framed ? Theme.padding : 0
             enabled: false
             Component.onCompleted: setSource(`root:/modules/${root.entry.module}/${root.variant?.view ?? root.entry.view}.qml`, {
                 payload: Daemon.state(root.entry.module),

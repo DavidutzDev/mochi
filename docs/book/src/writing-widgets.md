@@ -59,11 +59,14 @@ options = { size = [14, 7], min = [8, 4], category = "Clock", settings = [
 | `description` | `""` | One line on what users see; the card shows it instead of the widget's |
 | `view` | the widget's | A view of its own, for a look that shares little with the others |
 | `size`, `min`, `max` | the widget's | Its sizes; a widget switched to it takes its `size` |
+| `frame` | the widget's | Whether Mochi draws the card behind it, so one look can float on the wallpaper, like the minimal clock |
 | `settings` | all of them | The names of the widget's settings that apply to it; the form leaves out the others |
 
 The first variant is the default: a widget placed before its widget had variants, or placed with one its widget no longer offers, gets it. So when you add looks to a widget that had one, describe the look it has now first, and add the others after it. A widget with variants keeps one description per variant, and doesn't need its own.
 
-Adding a look is one more entry in `variants` and, when it doesn't name a view of its own, one more branch in the view that reads `variant`.
+Adding a look is one more entry in `variants` and, when it doesn't name a view of its own, one more branch in the view that reads `variant`. A look's settings keep their values when the user switches to another look, so a view reads only the ones its look lists: the stacked clock leaves `seconds` alone even when the digital one had it on.
+
+The builtin looks use pieces from the core, in `qs.island`: `ExpressiveShape`, a circle, pentagon, cookie, clover or burst to set one thing apart; `WavyRing`, how full something is as a ring; `WavyProgress`, a progress line that waves while something plays; and `StackedTime`, a big clock's hour over its minutes. A shape is an accent: one per widget, behind the thing that matters, like today on the calendar.
 
 ## The view
 

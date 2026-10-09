@@ -22,10 +22,10 @@
 //! module's name without one; `description` is one line on what it shows.
 //!
 //! `variants` are the widget's looks, each with its own title, one-line
-//! description and sizes, which default to the widget's. A variant can name
-//! its own `view`, and list the `settings` that apply to it. A placed widget
-//! records its variant, and one without gets the first, so the look a
-//! widget had before it had variants goes first.
+//! description, sizes and `frame`, which default to the widget's. A
+//! variant can name its own `view`, and list the `settings` that apply to
+//! it. A placed widget records its variant, and one without gets the
+//! first, so the look a widget had before it had variants goes first.
 
 use mochi_core::Contribution;
 use serde::Deserialize;
@@ -113,6 +113,9 @@ pub struct Variant {
     pub size: (u32, u32),
     pub min: (u32, u32),
     pub max: (u32, u32),
+    /// Whether Mochi draws the card behind it; the widget's `frame` by
+    /// default.
+    pub frame: bool,
     /// The widget's settings that apply to this look; all of them when
     /// `None`.
     pub settings: Option<Vec<String>>,
@@ -128,6 +131,7 @@ impl Variant {
             "size": [self.size.0, self.size.1],
             "min": [self.min.0, self.min.1],
             "max": [self.max.0, self.max.1],
+            "frame": self.frame,
             "settings": self.settings,
         })
     }
@@ -162,6 +166,7 @@ pub struct Look<'a> {
     pub size: (u32, u32),
     pub min: (u32, u32),
     pub max: (u32, u32),
+    pub frame: bool,
 }
 
 impl Look<'_> {
@@ -196,6 +201,7 @@ struct VariantOptions {
     size: Option<(u32, u32)>,
     min: Option<(u32, u32)>,
     max: Option<(u32, u32)>,
+    frame: Option<bool>,
     settings: Option<Vec<String>>,
 }
 
@@ -207,6 +213,7 @@ impl Spec {
             serde_json::from_value(offer.options.clone()).map_err(|error| error.to_string())?
         };
         let (size, min, max) = sizes(options.size, options.min, options.max);
+        let frame = options.frame.unwrap_or(true);
         let mut variants: Vec<Variant> = Vec::new();
         for variant in options.variants {
             if variant.id.is_empty() || variant.id.contains([':', ' ']) {
@@ -243,6 +250,7 @@ impl Spec {
                 size,
                 min,
                 max,
+                frame: variant.frame.unwrap_or(frame),
                 settings: variant.settings,
             });
         }
@@ -259,7 +267,7 @@ impl Spec {
             size,
             min,
             max,
-            frame: options.frame.unwrap_or(true),
+            frame,
             settings: options.settings,
             forget: options.forget,
             variants,
@@ -279,6 +287,7 @@ impl Spec {
                 size: variant.size,
                 min: variant.min,
                 max: variant.max,
+                frame: variant.frame,
             },
             None => Look {
                 variant: None,
@@ -286,6 +295,7 @@ impl Spec {
                 size: self.size,
                 min: self.min,
                 max: self.max,
+                frame: self.frame,
             },
         }
     }
@@ -485,11 +495,12 @@ mod tests {
                 { "id": "digital", "title": "Digital", "description": "Time over the date" },
                 { "id": "stacked", "title": "Stacked", "size": [9, 12], "min": [6, 6], "settings": ["seconds"] },
                 { "id": "analog", "title": "Analog", "view": "Analog", "size": [10, 10] },
+                { "id": "minimal", "title": "Minimal", "frame": false },
             ],
         })))
         .unwrap();
         assert_eq!(spec.category, "Clock");
-        assert_eq!(spec.variants.len(), 3);
+        assert_eq!(spec.variants.len(), 4);
         // Sizes default to the widget's, and views to its own.
         let digital = spec.look(Some("digital"));
         assert_eq!(
@@ -500,13 +511,16 @@ mod tests {
         assert_eq!((stacked.size, stacked.min), ((9, 12), (6, 6)));
         assert_eq!(stacked.fit((2, 2)), (6, 6));
         assert_eq!(spec.look(Some("analog")).view, "Analog");
+        // A look can go without the card; the others have the widget's.
+        assert!(!spec.look(Some("minimal")).frame);
+        assert!(spec.look(Some("analog")).frame);
         // None, or one that's gone, is the first.
         assert_eq!(spec.look(None).variant.unwrap().id, "digital");
         assert_eq!(spec.look(Some("gone")).variant.unwrap().id, "digital");
         assert!(
             spec.variant("gone")
                 .unwrap_err()
-                .contains("digital, stacked, analog")
+                .contains("digital, stacked, analog, minimal")
         );
 
         let json = spec.to_json();

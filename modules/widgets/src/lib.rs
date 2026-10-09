@@ -112,6 +112,55 @@ impl Module for Widgets {
                             "id": "digital",
                             "title": "Digital",
                             "description": "The time, big, over the date",
+                            "settings": ["timezone", "hours", "seconds", "date"],
+                        },
+                        {
+                            "id": "stacked",
+                            "title": "Stacked",
+                            "description": "The hour over the minutes, the date under",
+                            "size": [10, 13],
+                            "min": [6, 8],
+                            "max": [24, 30],
+                            "settings": ["timezone", "hours", "date"],
+                        },
+                        {
+                            "id": "analog",
+                            "title": "Analog",
+                            "description": "Hands and ticks, a seconds hand if you like",
+                            "view": "Analog",
+                            "size": [12, 12],
+                            "min": [7, 7],
+                            "max": [30, 30],
+                            "settings": ["timezone", "seconds"],
+                        },
+                        {
+                            "id": "shape",
+                            "title": "Shape",
+                            "description": "The time inside a cookie in the accent color",
+                            "size": [11, 11],
+                            "min": [7, 7],
+                            "max": [24, 24],
+                            "settings": ["timezone", "hours"],
+                        },
+                        {
+                            "id": "minimal",
+                            "title": "Minimal",
+                            "description": "The time and the date on one line, no card",
+                            "size": [20, 5],
+                            "min": [12, 3],
+                            "max": [50, 12],
+                            "frame": false,
+                            "settings": ["timezone", "hours", "date"],
+                        },
+                        {
+                            "id": "world",
+                            "title": "World",
+                            "description": "The time in a few cities, and how far ahead",
+                            "view": "World",
+                            "size": [16, 10],
+                            "min": [12, 7],
+                            "max": [32, 22],
+                            "settings": ["zones", "hours"],
                         },
                     ],
                     "settings": [
@@ -137,7 +186,12 @@ impl Module for Widgets {
                             "name": "date",
                             "kind": "bool",
                             "default": true,
-                            "description": "Show the date under the time",
+                            "description": "Show the date",
+                        },
+                        {
+                            "name": "zones",
+                            "default": "Europe/London, America/New_York, Asia/Tokyo",
+                            "description": "Up to four zones, with commas between",
                         },
                     ],
                 })),
@@ -153,6 +207,14 @@ impl Module for Widgets {
                             "id": "month",
                             "title": "Month",
                             "description": "This month as a grid, today marked",
+                        },
+                        {
+                            "id": "week",
+                            "title": "Week",
+                            "description": "This week on a strip, today marked",
+                            "size": [16, 7],
+                            "min": [12, 6],
+                            "max": [40, 12],
                         },
                     ],
                     "settings": [
@@ -409,6 +471,8 @@ struct State {
     drawer: bool,
     /// UTC offsets in seconds, by time zone, for the clocks.
     zones: BTreeMap<String, i64>,
+    /// The zones the system doesn't have.
+    unknown_zones: BTreeSet<String>,
     published: Value,
 }
 
@@ -432,6 +496,7 @@ impl State {
             banner: None,
             drawer: false,
             zones: BTreeMap::new(),
+            unknown_zones: BTreeSet::new(),
             published: Value::Null,
         };
         state.reload();
@@ -901,39 +966,52 @@ impl State {
             .find(|spec| spec.module == placed.module && spec.widget == placed.widget)
     }
 
-    /// The time zones the clocks show.
+    /// The time zones the clocks show: each placed clock's, and the world
+    /// clock's by default, for the drawer's preview.
     fn wanted_zones(&self) -> BTreeSet<String> {
-        self.layout
+        let clock = self
+            .specs
+            .iter()
+            .find(|spec| spec.module == "widgets" && spec.widget == "clock");
+        let placed = self
+            .layout
             .widgets
             .iter()
             .filter(|widget| widget.module == "widgets" && widget.widget == "clock")
-            .filter_map(|widget| widget.settings.get("timezone")?.as_str())
-            .filter(|zone| !zone.is_empty())
-            .map(str::to_owned)
+            .map(|widget| match clock {
+                Some(spec) => spec.settings_for(&widget.settings),
+                None => serde_json::to_value(&widget.settings).unwrap_or_default(),
+            });
+        let defaults = clock.map(|spec| spec.settings_for(&toml::Table::new()));
+        placed
+            .chain(defaults)
+            .flat_map(|settings| clock_zones(&settings))
             .collect()
     }
 
     fn zones_missing(&self) -> bool {
         self.wanted_zones()
             .iter()
-            .any(|zone| !self.zones.contains_key(zone))
+            .any(|zone| !self.zones.contains_key(zone) && !self.unknown_zones.contains(zone))
     }
 
     async fn read_zones(&mut self) {
         let mut zones = BTreeMap::new();
+        let mut unknown = BTreeSet::new();
         for zone in self.wanted_zones() {
             match utc_offset(&zone).await {
                 Some(offset) => {
                     zones.insert(zone, offset);
                 }
-                None => tracing::warn!(%zone, "unknown time zone"),
+                None => {
+                    tracing::warn!(%zone, "unknown time zone");
+                    // Not asked again every turn, and the clocks say so.
+                    unknown.insert(zone);
+                }
             }
         }
-        // Unknown ones aren't asked again every turn.
-        for zone in self.wanted_zones() {
-            zones.entry(zone).or_insert(0);
-        }
         self.zones = zones;
+        self.unknown_zones = unknown;
     }
 
     fn publish(&mut self, ctx: &ModuleCtx) {
@@ -965,7 +1043,8 @@ impl State {
                     ),
                     // Not offered: its module isn't running.
                     "view": look.as_ref().map(|look| look.view),
-                    "frame": spec.is_none_or(|spec| spec.frame),
+                    // Its look's: a variant can go without the card.
+                    "frame": look.as_ref().is_none_or(|look| look.frame),
                     "title": spec.map(|spec| spec.title.clone()),
                     "icon": spec.and_then(|spec| spec.icon.clone()),
                     "min": look.as_ref().map(|look| [look.min.0, look.min.1]),
@@ -994,6 +1073,7 @@ impl State {
             "widgets": widgets,
             "catalog": self.specs.iter().map(Spec::to_json).collect::<Vec<_>>(),
             "zones": self.zones,
+            "unknownZones": self.unknown_zones,
             // The saved layouts, and the one on the desktop.
             "layouts": layouts,
             "layout": self.layout.name,
@@ -1093,6 +1173,39 @@ fn int(value: Option<i64>) -> i32 {
 
 fn cells(value: Option<i64>) -> u32 {
     u32::try_from(value.unwrap_or_default().max(1)).unwrap_or(u32::MAX)
+}
+
+/// The most zones a world clock shows.
+const WORLD: usize = 4;
+
+/// The zones a clock's settings name: its `timezone`, and a world clock's
+/// `zones`, a text with commas or spaces between them, or a list in
+/// `widgets.toml`. The world clock's view reads them the same way.
+fn clock_zones(settings: &Value) -> Vec<String> {
+    let listed: Vec<String> = match &settings["zones"] {
+        Value::String(text) => text
+            .split([',', ' '])
+            .map(str::trim)
+            .filter(|zone| !zone.is_empty())
+            .map(str::to_owned)
+            .collect(),
+        Value::Array(zones) => zones
+            .iter()
+            .filter_map(Value::as_str)
+            .map(str::trim)
+            .filter(|zone| !zone.is_empty())
+            .map(str::to_owned)
+            .collect(),
+        _ => Vec::new(),
+    };
+    let own = settings["timezone"]
+        .as_str()
+        .map(str::trim)
+        .filter(|zone| !zone.is_empty())
+        .map(str::to_owned);
+    own.into_iter()
+        .chain(listed.into_iter().take(WORLD))
+        .collect()
 }
 
 /// A zone's offset from UTC now, in seconds, from `date`. `None` for a
@@ -1323,7 +1436,93 @@ mod tests {
             .collect();
         let specs = catalog::read(&offers);
         assert_eq!(specs.len(), 2);
-        assert_eq!(specs[0].settings.len(), 4);
+        assert_eq!(specs[0].settings.len(), 5);
+        // The digital look stays first, and the minimal one has no card.
+        assert_eq!(specs[0].look(None).variant.unwrap().id, "digital");
+        assert!(!specs[0].look(Some("minimal")).frame);
+        assert_eq!(specs[0].look(Some("world")).view, "World");
+        assert_eq!(specs[1].look(None).variant.unwrap().id, "month");
+    }
+
+    #[tokio::test]
+    async fn asks_the_system_for_offsets() {
+        assert_eq!(utc_offset("Not/A_Zone").await, None);
+        assert_eq!(utc_offset("../../etc/passwd").await, None);
+        // Where the system has a time zone database, as a desktop does.
+        if zone_dirs().any(|dir| dir.join("Asia/Kolkata").is_file()) {
+            assert_eq!(utc_offset("UTC").await, Some(0));
+            // No daylight saving there, and half an hour off the hour.
+            assert_eq!(utc_offset("Asia/Kolkata").await, Some(5 * 3600 + 1800));
+        }
+    }
+
+    #[test]
+    fn reads_the_zones_a_clock_names() {
+        assert_eq!(
+            clock_zones(&json!({ "timezone": "Asia/Tokyo", "zones": "" })),
+            ["Asia/Tokyo"]
+        );
+        assert_eq!(
+            clock_zones(&json!({
+                "timezone": "",
+                "zones": " Europe/London,America/New_York  Asia/Kolkata, ",
+            })),
+            ["Europe/London", "America/New_York", "Asia/Kolkata"]
+        );
+        // A list, written in widgets.toml by hand, and no more than four.
+        assert_eq!(
+            clock_zones(&json!({ "zones": ["UTC", "A/B", "C/D", "E/F", "G/H"] })),
+            ["UTC", "A/B", "C/D", "E/F"]
+        );
+        assert!(clock_zones(&json!({})).is_empty());
+    }
+
+    #[test]
+    fn reads_the_zones_of_placed_clocks_and_the_preview() {
+        let dir = std::env::temp_dir().join(format!("mochi-zones-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut state = State::new(16, Some(dir.clone()));
+        // Before the clock is offered, only what's placed.
+        let mut tokyo = clock("w1");
+        tokyo
+            .settings
+            .insert("timezone".into(), toml::Value::String("Asia/Tokyo".into()));
+        state.layout.widgets.push(tokyo);
+        assert_eq!(state.wanted_zones(), BTreeSet::from(["Asia/Tokyo".into()]));
+
+        // Offered: the world clock's default zones too, for its preview.
+        let offers: Vec<Contribution> = Widgets
+            .contributions()
+            .into_iter()
+            .map(|spec| spec.into_contribution("widgets"))
+            .collect();
+        state.offered(&offers);
+        let mut world = clock("w2");
+        world.variant = Some("world".into());
+        world
+            .settings
+            .insert("zones".into(), toml::Value::String("Europe/Paris".into()));
+        state.layout.widgets.push(world);
+        let wanted = state.wanted_zones();
+        for zone in [
+            "Asia/Tokyo",
+            "Europe/Paris",
+            "Europe/London",
+            "America/New_York",
+        ] {
+            assert!(wanted.contains(zone), "{zone} in {wanted:?}");
+        }
+
+        // Read: an unknown zone isn't asked again every turn.
+        state.zones = wanted
+            .iter()
+            .filter(|zone| *zone != "Europe/Paris")
+            .map(|zone| (zone.clone(), 0))
+            .collect();
+        assert!(state.zones_missing());
+        state.unknown_zones.insert("Europe/Paris".into());
+        assert!(!state.zones_missing());
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
 
