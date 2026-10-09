@@ -8,7 +8,7 @@ use std::time::{Duration, SystemTime};
 
 use zbus::zvariant::{OwnedValue, Value};
 
-use crate::sound::Sound;
+use mochi_core::sound::Sound;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Urgency {

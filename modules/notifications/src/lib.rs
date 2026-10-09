@@ -45,7 +45,6 @@ mod markup;
 mod note;
 mod saved;
 mod server;
-mod sound;
 mod tour;
 
 use std::collections::BTreeMap;
@@ -53,6 +52,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use include_dir::{Dir, include_dir};
+use mochi_core::sound;
 use mochi_core::{
     ActionSpec, ActivityId, ActivitySpec, Area, ArgSpec, Assets, BoxFuture, BubbleId, BubbleSpec,
     ContributionSpec, EndReason, Module, ModuleCommand, ModuleCtx, ModuleError, ModuleEvent,

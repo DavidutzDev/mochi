@@ -1,12 +1,15 @@
-//! The sound a notification asks for: a file (`sound-file`) or a name from
-//! the sound theme (`sound-name`), like `message-new-instant`.
+//! Plays a sound: a file, or a name from the sound theme, like
+//! `message-new-instant`. The notifications module plays the sounds apps
+//! ask for with it, and the timer its alarm.
 //!
 //! Files play through the first of `pw-play` and `paplay` installed. Names
 //! play through `canberra-gtk-play`, which knows the desktop's sound theme,
 //! and without it Mochi finds the file in the theme itself:
 //! `sounds/<theme>/stereo/<name>.oga` in the XDG data directories, then in
-//! the `freedesktop` theme. `sound_command` replaces all of these: it gets
-//! the file, names included.
+//! the `freedesktop` theme. A module's own command, like the notifications'
+//! `sound_command`, replaces all of these: it gets the file, names
+//! included. A volume goes to the players Mochi knows, not to a command of
+//! the user's own.
 //!
 //! A sound never holds the module up: the player runs on its own, gets
 //! [`LONGEST`] at most, and a new sound stops the one still playing, so a
@@ -58,16 +61,18 @@ impl Sound {
 pub fn player() -> Option<&'static str> {
     PLAYERS
         .into_iter()
-        .find(|program| mochi_core::process::installed(program))
+        .find(|program| crate::process::installed(program))
 }
 
 /// Plays sounds, one at a time.
 #[derive(Debug)]
 pub struct Speaker {
-    /// `sound_command`: the program and its options, the file goes last.
-    /// Empty for the defaults.
+    /// A command of the user's own, like `sound_command`: the program and
+    /// its options, the file goes last. Empty for the defaults.
     command: Vec<String>,
     theme: String,
+    /// From 0 to 1, for the players Mochi knows. `None` keeps theirs.
+    volume: Option<f64>,
     playing: Option<JoinHandle<()>>,
 }
 
@@ -76,21 +81,31 @@ impl Speaker {
         Self {
             command,
             theme,
+            volume: None,
             playing: None,
         }
     }
 
+    /// Plays at `volume`, from 0 to 1, rather than at the players' own.
+    pub fn with_volume(mut self, volume: f64) -> Self {
+        self.volume = Some(volume.clamp(0.0, 1.0));
+        self
+    }
+
     /// Starts playing `sound` and returns at once. Stops the sound before.
-    pub fn play(&mut self, sound: &Sound) {
+    /// False when nothing could play it: no player, or a name the sound
+    /// theme doesn't have.
+    pub fn play(&mut self, sound: &Sound) -> bool {
         let Some(argv) = command(
             sound,
             &self.command,
             &self.theme,
-            mochi_core::process::installed,
+            self.volume,
+            crate::process::installed,
             &data_dirs(),
         ) else {
-            tracing::debug!(?sound, "nothing to play a notification's sound with");
-            return;
+            tracing::debug!(?sound, "nothing to play the sound with");
+            return false;
         };
         let (program, args) = argv.split_first().expect("a command has a program");
         let child = tokio::process::Command::new(program)
@@ -103,8 +118,8 @@ impl Speaker {
         let mut child = match child {
             Ok(child) => child,
             Err(error) => {
-                tracing::warn!(%error, program, "can't play a notification's sound");
-                return;
+                tracing::warn!(%error, program, "can't play a sound");
+                return false;
             }
         };
         // Stopping the task drops the child, which kills it.
@@ -114,6 +129,7 @@ impl Speaker {
         if let Some(before) = self.playing.replace(task) {
             before.abort();
         }
+        true
     }
 }
 
@@ -125,26 +141,41 @@ impl Drop for Speaker {
     }
 }
 
-/// What plays `sound`: `custom` with the file, or the defaults. `installed`
-/// says which programs are there, and `dirs` are the data directories to
-/// look for sound themes in. `None` when nothing can play it.
+/// What plays `sound`: `custom` with the file, or the defaults at `volume`.
+/// `installed` says which programs are there, and `dirs` are the data
+/// directories to look for sound themes in. `None` when nothing can play
+/// it.
 fn command(
     sound: &Sound,
     custom: &[String],
     theme: &str,
+    volume: Option<f64>,
     installed: impl Fn(&str) -> bool,
     dirs: &[PathBuf],
 ) -> Option<Vec<String>> {
     let file = match sound {
         Sound::File(path) => path.clone(),
         Sound::Name(name) if custom.is_empty() && installed(CANBERRA) => {
-            return Some(vec![CANBERRA.into(), "-i".into(), name.clone()]);
+            let mut argv = vec![CANBERRA.into(), "-i".into(), name.clone()];
+            // In decibels, down from the full volume.
+            if let Some(volume) = volume {
+                let decibels = 20.0 * volume.max(0.001).log10();
+                argv.extend(["-V".into(), format!("{decibels:.1}")]);
+            }
+            return Some(argv);
         }
         Sound::Name(name) => in_theme(name, theme, dirs)?,
     };
     let mut argv = if custom.is_empty() {
         let player = PLAYERS.into_iter().find(|program| installed(program))?;
-        vec![player.to_owned()]
+        let mut argv = vec![player.to_owned()];
+        match (player, volume) {
+            ("pw-play", Some(volume)) => argv.push(format!("--volume={volume:.2}")),
+            // paplay's full volume is 65536.
+            (_, Some(volume)) => argv.push(format!("--volume={}", (volume * 65536.0).round())),
+            (_, None) => {}
+        }
+        argv
     } else {
         custom.to_vec()
     };
@@ -259,14 +290,24 @@ mod tests {
     fn files_play_through_the_first_player_installed() {
         let ding = Sound::File("/tmp/ding.oga".into());
         assert_eq!(
-            command(&ding, &[], "freedesktop", only(&["paplay", "pw-play"]), &[]),
+            command(
+                &ding,
+                &[],
+                "freedesktop",
+                None,
+                only(&["paplay", "pw-play"]),
+                &[]
+            ),
             Some(strings(&["pw-play", "/tmp/ding.oga"]))
         );
         assert_eq!(
-            command(&ding, &[], "freedesktop", only(&["paplay"]), &[]),
+            command(&ding, &[], "freedesktop", None, only(&["paplay"]), &[]),
             Some(strings(&["paplay", "/tmp/ding.oga"]))
         );
-        assert_eq!(command(&ding, &[], "freedesktop", only(&[]), &[]), None);
+        assert_eq!(
+            command(&ding, &[], "freedesktop", None, only(&[]), &[]),
+            None
+        );
     }
 
     #[test]
@@ -277,10 +318,44 @@ mod tests {
                 &name,
                 &[],
                 "freedesktop",
+                None,
                 only(&["canberra-gtk-play", "pw-play"]),
                 &[]
             ),
             Some(strings(&["canberra-gtk-play", "-i", "message-new-instant"]))
+        );
+    }
+
+    #[test]
+    fn a_volume_goes_to_each_player_its_own_way() {
+        let ding = Sound::File("/tmp/ding.oga".into());
+        let half = Some(0.5);
+        assert_eq!(
+            command(&ding, &[], "freedesktop", half, only(&["pw-play"]), &[]),
+            Some(strings(&["pw-play", "--volume=0.50", "/tmp/ding.oga"]))
+        );
+        assert_eq!(
+            command(&ding, &[], "freedesktop", half, only(&["paplay"]), &[]),
+            Some(strings(&["paplay", "--volume=32768", "/tmp/ding.oga"]))
+        );
+        // Canberra takes decibels: half is about 6 below the full volume.
+        let name = Sound::Name("alarm-clock-elapsed".into());
+        assert_eq!(
+            command(
+                &name,
+                &[],
+                "freedesktop",
+                half,
+                only(&["canberra-gtk-play"]),
+                &[]
+            ),
+            Some(strings(&[
+                "canberra-gtk-play",
+                "-i",
+                "alarm-clock-elapsed",
+                "-V",
+                "-6.0"
+            ]))
         );
     }
 
@@ -301,6 +376,7 @@ mod tests {
                 &Sound::Name(name.into()),
                 &[],
                 theme,
+                None,
                 only(&["pw-play"]),
                 &dirs,
             )
@@ -337,6 +413,7 @@ mod tests {
                 &Sound::File("/tmp/ding.oga".into()),
                 &custom,
                 "freedesktop",
+                Some(0.5),
                 &everything,
                 &[]
             ),
@@ -348,6 +425,7 @@ mod tests {
                 &Sound::Name("bell".into()),
                 &custom,
                 "freedesktop",
+                Some(0.5),
                 &everything,
                 std::slice::from_ref(&themes.0)
             ),
@@ -381,7 +459,7 @@ mod tests {
             "freedesktop".into(),
         );
         let started = Instant::now();
-        speaker.play(&Sound::File("/tmp/first.oga".into()));
+        assert!(speaker.play(&Sound::File("/tmp/first.oga".into())));
         assert!(started.elapsed() < Duration::from_secs(1));
         let wait_for = |file: &str| {
             let path = dir.join(file);
@@ -396,7 +474,7 @@ mod tests {
         let (pid, args) = first.trim().split_once(' ').unwrap();
         assert_eq!(args, "--quiet /tmp/first.oga");
 
-        speaker.play(&Sound::File("/tmp/second.oga".into()));
+        assert!(speaker.play(&Sound::File("/tmp/second.oga".into())));
         let second = wait_for("second.oga");
         assert!(second.ends_with("--quiet /tmp/second.oga\n"), "{second}");
         // Let the aborted task drop the first child.
