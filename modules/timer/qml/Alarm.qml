@@ -3,7 +3,7 @@ import qs.island
 
 // At the top of the timer's page in the settings: a button that plays the
 // alarm at its volume, so `volume` and `sound_file` can be tried before a
-// timer runs out, and where custom timers come from.
+// timer runs out.
 Column {
     id: root
 
@@ -78,14 +78,5 @@ Column {
                 onClicked: Daemon.command("timer", "test-sound", [])
             }
         }
-    }
-
-    Text {
-        width: root.width
-        wrapMode: Text.Wrap
-        text: "Custom timers, their alarm and the launcher's :t come from mochi-clock by Xonex5, github.com/Xonex5/mochi-clock."
-        color: Theme.muted
-        font.pixelSize: Theme.textCaption
-        font.family: Theme.fontFamily
     }
 }

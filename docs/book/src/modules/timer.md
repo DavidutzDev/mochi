@@ -2,7 +2,7 @@
 
 A focus timer, after the pomodoro technique: 25 minutes of focus, then a 5-minute break, and a 15-minute break after every fourth session. Start it from its card in the [control center](control-center.md), or with `mochi ipc timer start`, which you can bind to a key. Custom timers run beside it, like a kitchen timer's: several at once, each with a label.
 
-Inspired by [mochi-clock](https://github.com/Xonex5/mochi-clock) by Xonex5: custom timers, their natural lengths, the alarm and the launcher's `:t` come from it.
+Inspired by [mochi-clock](https://github.com/Xonex5/mochi-clock) by Xonex5: custom timers, their natural lengths, the alarm and the launcher's `:t` come from it. The bottom of the timer's page in the settings says so, and **See repo** there opens it.
 
 While it runs, a bubble by the island counts down: a ring that empties as the time goes, with the minutes left inside it, in the accent color for focus and in green for a break. Rest the pointer on it for the time to the second. A click pauses it or resumes it. With `wide = true` in `[bubbles.timer]`, the bubble shows the time to the second, like 18:42.
 

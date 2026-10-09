@@ -305,9 +305,11 @@ impl Module for Timer {
             ContributionSpec::new("launcher", "provider", "timer", "", "Timers")
                 .icon("hourglass_top")
                 .options(json!({ "prefix": ":t ", "search": "search", "pick": "pick-result" })),
-            // The alarm's test button and the credit, on the timer's page in
-            // the settings.
+            // The alarm's test button on the timer's page in the settings,
+            // and the credit at the bottom of it.
             ContributionSpec::new("settings", "section", "alarm", "Alarm", "Alarm"),
+            ContributionSpec::new("settings", "section", "credit", "Inspired", "Credit")
+                .options(json!({ "place": "bottom" })),
         ];
         offers.extend(tour::steps());
         offers

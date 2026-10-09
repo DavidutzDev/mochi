@@ -66,7 +66,7 @@ With the [control center](control-center.md) on, the clock offers a card for its
 
 ## Credit
 
-The seconds and the day's progress on Today, the stopwatch's tenths and past runs, copying a run, and the list of cities come from [mochi-clock](https://github.com/Xonex5/mochi-clock), a plugin by [Xonex5](https://github.com/Xonex5). The clock's page in the settings says so, and **Open on GitHub** there opens it.
+The seconds and the day's progress on Today, the stopwatch's tenths and past runs, copying a run, and the list of cities come from [mochi-clock](https://github.com/Xonex5/mochi-clock), a plugin by [Xonex5](https://github.com/Xonex5). The bottom of the clock's page in the settings says so, and **See repo** there opens it.
 
 | Action | What it does |
 |---|---|
@@ -84,7 +84,6 @@ The seconds and the day's progress on Today, the stopwatch's tenths and past run
 | `forget-run [run]` | Forgets a past run, or all of them |
 | `add-zone <zone>`, `remove-zone <zone>` | Adds a time zone like `Europe/Paris` to the World tab, or takes one off, in the `zones` setting |
 | `zone-picker <on\|off> [search]` | Opens the World tab's zone picker, with a search typed, or closes it; the World tab shows it while the panel is on that tab |
-| `credit` | Opens mochi-clock's page on GitHub, which inspired the clock |
 
 ```toml
 {{#include ../../../../modules/clock/settings.toml}}

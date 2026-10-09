@@ -97,6 +97,33 @@ Item {
         return sections.find(entry => entry.id === id) ?? null;
     }
 
+    // The views the open module's page offers as a "section": those with
+    // `place: "bottom"` under its options, the others above them.
+    function offered(bottom: bool): var {
+        if (content.searching || !current?.module)
+            return [];
+        return Daemon.offered("settings", "section").filter(entry => entry.module === current.module && (entry.options?.place === "bottom") === bottom);
+    }
+
+    // One offered view, with its module's state as payload.
+    component Offered: Loader {
+        id: offered
+
+        required property var modelData
+
+        width: parent ? parent.width : 0
+        Component.onCompleted: setSource(`root:/modules/${modelData.module}/${modelData.view}.qml`, {
+            payload: Daemon.state(modelData.module) ?? {}
+        })
+
+        Binding {
+            target: offered.item
+            property: "payload"
+            value: Daemon.state(offered.modelData.module) ?? {}
+            when: offered.item !== null
+        }
+    }
+
     // The heading a nested option sits under, like "CPU" for cpu.notice.
     function prefix(path: string): string {
         const parent = fields[path.slice(0, path.lastIndexOf("."))];
@@ -635,25 +662,9 @@ Item {
                     // options, offered as a "section" to the settings,
                     // like the Updates page's status and changelog.
                     Repeater {
-                        model: !content.searching && root.current?.module ? Daemon.offered("settings", "section").filter(entry => entry.module === root.current.module) : []
+                        model: root.offered(false)
 
-                        Loader {
-                            id: offered
-
-                            required property var modelData
-
-                            width: blocks.width
-                            Component.onCompleted: setSource(`root:/modules/${modelData.module}/${modelData.view}.qml`, {
-                                payload: Daemon.state(modelData.module) ?? {}
-                            })
-
-                            Binding {
-                                target: offered.item
-                                property: "payload"
-                                value: Daemon.state(offered.modelData.module) ?? {}
-                                when: offered.item !== null
-                            }
-                        }
+                        Offered {}
                     }
 
                     // The Modules page: a switch per module.
@@ -799,6 +810,14 @@ Item {
                                 }
                             }
                         }
+                    }
+
+                    // A module's credit and other sections offered with
+                    // `place: "bottom"`, under its options.
+                    Repeater {
+                        model: root.offered(true)
+
+                        Offered {}
                     }
                 }
             }

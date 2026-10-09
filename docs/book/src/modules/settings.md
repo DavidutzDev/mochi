@@ -41,7 +41,7 @@ When `changes.toml` has an option that no longer fits, after an update renamed i
 | `text <path>`, `edit <path> <toml>` | A section as TOML, and replacing it. |
 | `export [nix\|toml]`, `copy [nix\|toml]` | Prints, or copies, every option that isn't at its default. |
 | `about`, `about-copy` | Read what the About page shows, and copy it as text for a bug report. |
-| `open-link <page>` | Opens `repository`, `documentation` or `issue` (a new issue on GitHub) in the browser, with `xdg-open`. Nothing else opens. |
+| `open-link <page>` | Opens `repository`, `documentation`, `issue` (a new issue on GitHub) or `mochi-clock` (credited by the clock and the timer) in the browser, with `xdg-open`. Nothing else opens. |
 | `choose-file <path>` | Opens a file chooser for a file option, like `config.module.timer.sound_file`, and sets the option to the file picked; prints the path, or nothing when the chooser was closed. Another one while it's open takes its place. |
 
 The settings module has no settings of its own.

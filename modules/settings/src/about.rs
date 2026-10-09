@@ -11,6 +11,9 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 pub const REPOSITORY: &str = "https://github.com/DavidutzDev/mochi";
 pub const DOCUMENTATION: &str = "https://davidutzdev.github.io/mochi/";
 pub const ISSUES: &str = "https://github.com/DavidutzDev/mochi/issues/new";
+/// mochi-clock, by Xonex5, which inspired the clock's and the timer's
+/// features; their credit opens it.
+pub const MOCHI_CLOCK: &str = "https://github.com/Xonex5/mochi-clock";
 
 /// The links the page may open; nothing else goes to `xdg-open`.
 pub fn link(name: &str) -> Option<&'static str> {
@@ -18,6 +21,7 @@ pub fn link(name: &str) -> Option<&'static str> {
         "repository" => Some(REPOSITORY),
         "documentation" => Some(DOCUMENTATION),
         "issue" => Some(ISSUES),
+        "mochi-clock" => Some(MOCHI_CLOCK),
         _ => None,
     }
 }

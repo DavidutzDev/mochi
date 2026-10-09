@@ -144,7 +144,7 @@ impl Module for Settings {
             ActionSpec::new("about", "Read what the About page shows"),
             ActionSpec::new("about-copy", "Copy the About page as text, for a bug report"),
             ActionSpec::new("open-link", "Open one of Mochi's pages in the browser").arg(
-                ArgSpec::string("page", "repository, documentation or issue"),
+                ArgSpec::string("page", "repository, documentation, issue or mochi-clock"),
             ),
             ActionSpec::new(
                 "choose-file",
@@ -447,7 +447,7 @@ impl Panel {
                     None,
                 ),
                 None => Err(format!(
-                    "no page {:?}: repository, documentation or issue",
+                    "no page {:?}: repository, documentation, issue or mochi-clock",
                     arg("page")
                 )),
             },

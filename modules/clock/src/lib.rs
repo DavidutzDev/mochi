@@ -83,10 +83,6 @@ const LIVE: [&str; 10] = [
     "precision",
     "history",
 ];
-/// mochi-clock, by Xonex5, which inspired the clock's seconds, day
-/// progress, stopwatch runs and city list. The credit on the settings page
-/// opens it, and nothing else.
-const CREDIT: &str = "https://github.com/Xonex5/mochi-clock";
 
 #[derive(Debug, Default)]
 pub struct Clock;
@@ -328,23 +324,14 @@ impl Module for Clock {
                     .optional()
                     .rest(),
             ),
-            ActionSpec::new(
-                "credit",
-                "Open mochi-clock, by Xonex5, which inspired the clock, in the browser",
-            ),
         ]
-    }
-
-    fn needs(&self, _settings: &mochi_core::toml::Table) -> Vec<mochi_core::Need> {
-        vec![mochi_core::Need::new(
-            "xdg-open",
-            "The link to mochi-clock on the clock's settings page",
-        )]
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
-            ContributionSpec::new("settings", "section", "credit", "Credit", "Credit"),
+            // At the bottom of its settings page.
+            ContributionSpec::new("settings", "section", "credit", "Inspired", "Credit")
+                .options(json!({ "place": "bottom" })),
             // Spare: it waits under More cards, since the control center's own
             // Today card already shows the time.
             ContributionSpec::new("control-center", "card", "clock", "Card", "Clock")
@@ -664,23 +651,11 @@ impl State {
                 self.publish(ctx);
                 Ok(None)
             }
-            "credit" => mochi_core::process::spawn_detached(
-                &mochi_core::process::in_app_scope(&["xdg-open".into(), CREDIT.into()]),
-                None,
-            )
-            .map(|()| None),
             other => Err(format!("clock has no action {other}")),
         };
         let changed = !matches!(
             command.action.as_str(),
-            "reminders"
-                | "toggle"
-                | "open"
-                | "close"
-                | "runs"
-                | "copy-run"
-                | "credit"
-                | "zone-picker"
+            "reminders" | "toggle" | "open" | "close" | "runs" | "copy-run" | "zone-picker"
         ) && result.is_ok();
         if changed {
             self.save(ctx);
