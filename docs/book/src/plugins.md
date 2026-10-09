@@ -26,7 +26,7 @@ The source says where the plugin comes from and how it's installed:
 | Source | Installs |
 |---|---|
 | `git:<host>/<user>/<repo>:<ref>` | Clones the repository and builds the plugin with the command in its manifest. `<ref>` is a branch, a tag or a commit; without `:<ref>`, the default branch. A URL with a scheme works too: `git:https://codeberg.org/User/repo:v1`. |
-| `git-release:github.com/<user>/<repo>:<tag>` | Downloads the release asset the plugin's manifest names, already built: nothing to compile. Without `:<tag>`, the latest release. GitHub only for now. |
+| `git-release:<host>/<user>/<repo>:<tag>` | Downloads the release asset the plugin's manifest names, already built: nothing to compile. Without `:<tag>`, the latest release. The host is GitHub, a Forgejo or Gitea like `codeberg.org`, or a GitLab, where `<user>` can be a group and its subgroups: `git-release:gitlab.com/Group/Sub/repo`. Mochi knows github.com, codeberg.org, gitea.com and gitlab.com, and asks another host's API which of them it runs. |
 | `path:<dir>` | Uses the directory where it is, building it in place. For writing a plugin: its views hot-reload. `~` is your home directory, and a relative path starts next to plugins.toml. |
 | `bento:<id>`, `bento:<id>:<version>` | Installs from [Bento's registry](bento.md#the-registry): the newest release this Mochi runs, or the version named, at the commit its reviewers read. `bento:<registry>/<id>` uses another registry. |
 

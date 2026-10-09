@@ -12,6 +12,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+use crate::forge::Releases;
 use crate::manifest::{self, Manifest, ManifestError};
 use crate::{ListError, Locations, Lock, Locked, Source, registry};
 
@@ -153,10 +154,49 @@ pub enum Outcome {
     Declined,
 }
 
+/// How installing reaches the network: [`Curl`], or files in tests.
+pub trait Fetch {
+    /// What `url` holds, as text.
+    fn text(&self, url: &str) -> Result<String, InstallError>;
+    /// Downloads `url` to the file `to`.
+    fn download(&self, url: &str, to: &Path) -> Result<(), InstallError>;
+}
+
+/// Fetches with `curl`, over HTTPS only, redirects included.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Curl;
+
+const CURL: [&str; 5] = ["-fsSL", "--proto", "=https", "--proto-redir", "=https"];
+
+impl Fetch for Curl {
+    fn text(&self, url: &str) -> Result<String, InstallError> {
+        run("curl", CURL.iter().chain([&url]).map(OsStr::new), None)
+            .map_err(|error| naming(url, error))
+    }
+
+    fn download(&self, url: &str, to: &Path) -> Result<(), InstallError> {
+        run(
+            "curl",
+            CURL.iter()
+                .map(OsStr::new)
+                .chain([OsStr::new("-o"), to.as_os_str(), OsStr::new(url)]),
+            None,
+        )
+        .map(drop)
+        .map_err(|error| naming(url, error))
+    }
+}
+
+/// `error` saying which URL it was about.
+fn naming(url: &str, error: InstallError) -> InstallError {
+    InstallError(format!("{url}: {}", error.0))
+}
+
 /// Installs plugins, asking `confirm` before each one does anything.
 pub struct Installer<'a> {
     pub locations: &'a Locations,
     pub confirm: &'a mut dyn FnMut(&Plan) -> bool,
+    pub fetch: &'a dyn Fetch,
 }
 
 impl fmt::Debug for Installer<'_> {
@@ -181,8 +221,8 @@ impl Installer<'_> {
             Source::Git { url, reference } => {
                 self.git(id, source, url, reference.as_deref(), locked, mode)
             }
-            Source::GitRelease { owner, repo, tag } => {
-                self.release(id, source, owner, repo, tag.as_deref(), locked, mode)
+            Source::GitRelease { host, repo, tag } => {
+                self.release(id, source, host, repo, tag.as_deref(), locked, mode)
             }
             Source::Path(_) => self.path(id, source, locked, mode),
             Source::Registry {
@@ -318,7 +358,7 @@ impl Installer<'_> {
         &mut self,
         id: &str,
         source: &Source,
-        owner: &str,
+        host: &str,
         repo: &str,
         tag: Option<&str>,
         locked: Option<Locked>,
@@ -329,22 +369,27 @@ impl Installer<'_> {
             (Some(Locked { tag: Some(tag), .. }), Mode::Install) => Some(tag.clone()),
             _ => tag.map(str::to_owned),
         };
+        // What's installed already, when it's at `tag`.
+        let current = |tag: &str| {
+            locked
+                .as_ref()
+                .filter(|locked| locked.tag.as_deref() == Some(tag) && target.exists())
+                .map(|locked| (locked.clone(), false))
+        };
+        if let Some(current) = pinned.as_deref().and_then(current) {
+            return Ok(Some(current));
+        }
+        let releases = Releases::find(host, repo, self.fetch)?;
         let tag = match pinned {
             Some(tag) => tag,
-            None => latest_release(owner, repo)?,
+            None => releases.latest(self.fetch)?,
         };
-        if let Some(locked) = &locked
-            && locked.tag.as_deref() == Some(tag.as_str())
-            && target.exists()
-        {
-            return Ok(Some((locked.clone(), false)));
+        if let Some(current) = current(&tag) {
+            return Ok(Some(current));
         }
 
-        let raw = format!(
-            "https://raw.githubusercontent.com/{owner}/{repo}/{tag}/{}",
-            manifest::FILE
-        );
-        let text = fetch(&raw)?;
+        let raw = releases.manifest_url(&tag);
+        let text = self.fetch.text(&raw)?;
         let manifest =
             Manifest::parse(&text).map_err(|message| InstallError(format!("{raw}: {message}")))?;
         check_manifest_id(id, &manifest)?;
@@ -359,7 +404,7 @@ impl Installer<'_> {
             .replace("{version}", &manifest.plugin.version)
             .replace("{tag}", &tag)
             .replace("{arch}", std::env::consts::ARCH);
-        let url = format!("https://github.com/{owner}/{repo}/releases/download/{tag}/{asset}");
+        let url = releases.asset_url(&tag, &asset, self.fetch)?;
         let plan = Plan {
             id: id.to_owned(),
             source: source.clone(),
@@ -374,14 +419,7 @@ impl Installer<'_> {
 
         let work = self.scratch(id)?;
         let archive = work.with_extension("download");
-        run(
-            "curl",
-            ["-fsSL", "--proto", "=https", "-o"]
-                .iter()
-                .map(OsStr::new)
-                .chain([archive.as_os_str(), OsStr::new(&url)]),
-            None,
-        )?;
+        self.fetch.download(&url, &archive)?;
         let hash = blake3::hash(&std::fs::read(&archive)?).to_hex().to_string();
         if let Some(Locked {
             tag: Some(locked_tag),
@@ -706,10 +744,10 @@ fn advice(plan: &Plan, command: &str) -> String {
     ));
     if plan.manifest.release.is_some()
         && let Source::Git { url, .. } = &plan.source
-        && let Some(repo) = github_repo(url)
+        && let Some(release) = release_source(url)
     {
         text.push_str(&format!(
-            "\n  - use its prebuilt releases, if it publishes them:\n      {id} = {{ source = \"git-release:github.com/{repo}\" }}"
+            "\n  - use its prebuilt releases, if it publishes them:\n      {id} = {{ source = \"{release}\" }}"
         ));
     }
     if !crate::on_path("nix") {
@@ -742,13 +780,16 @@ fn missing_tools(command: &str) -> Vec<String> {
     missing
 }
 
-/// `owner/repo` from a GitHub clone URL.
-fn github_repo(url: &str) -> Option<String> {
-    let rest = url
-        .strip_prefix("https://github.com/")
-        .or_else(|| url.strip_prefix("git@github.com:"))?;
-    let repo = rest.trim_end_matches('/').trim_end_matches(".git");
-    (repo.split('/').count() == 2).then(|| repo.to_owned())
+/// The `git-release:` source for the repository at a clone URL, when it
+/// can be one.
+fn release_source(url: &str) -> Option<Source> {
+    let location = match url.strip_prefix("https://") {
+        Some(rest) => rest.to_owned(),
+        None => url.strip_prefix("git@")?.replacen(':', "/", 1),
+    };
+    format!("git-release:{}", location.trim_end_matches('/'))
+        .parse()
+        .ok()
 }
 
 fn check_exec(manifest: &Manifest, dir: &Path) -> Result<(), InstallError> {
@@ -816,25 +857,6 @@ fn resolve(repo: &Path, reference: Option<&str>) -> Result<String, InstallError>
         "the repository has no branch, tag or commit {:?}",
         reference.unwrap_or("HEAD")
     )))
-}
-
-fn latest_release(owner: &str, repo: &str) -> Result<String, InstallError> {
-    let url = format!("https://api.github.com/repos/{owner}/{repo}/releases/latest");
-    let text = fetch(&url)?;
-    let release: serde_json::Value =
-        serde_json::from_str(&text).map_err(|error| InstallError(format!("{url}: {error}")))?;
-    release["tag_name"]
-        .as_str()
-        .map(str::to_owned)
-        .ok_or_else(|| InstallError(format!("{url} names no tag")))
-}
-
-fn fetch(url: &str) -> Result<String, InstallError> {
-    run(
-        "curl",
-        ["-fsSL", "--proto", "=https", url].map(OsStr::new),
-        None,
-    )
 }
 
 /// Where the manifest is in an extracted archive: at its root, or in its
@@ -909,8 +931,160 @@ fn run<'a>(
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// Answers for URLs, in place of the network. Any other URL fails like
+    /// a 404.
+    #[derive(Debug, Default)]
+    pub(crate) struct Fixtures(std::collections::HashMap<String, Vec<u8>>);
+
+    impl Fixtures {
+        pub(crate) fn with(mut self, url: &str, body: impl Into<Vec<u8>>) -> Self {
+            self.0.insert(url.to_owned(), body.into());
+            self
+        }
+
+        fn get(&self, url: &str) -> Result<&[u8], InstallError> {
+            self.0
+                .get(url)
+                .map(Vec::as_slice)
+                .ok_or_else(|| InstallError(format!("curl failed: (22) {url}: error 404")))
+        }
+    }
+
+    impl Fetch for Fixtures {
+        fn text(&self, url: &str) -> Result<String, InstallError> {
+            Ok(String::from_utf8_lossy(self.get(url)?).into_owned())
+        }
+
+        fn download(&self, url: &str, to: &Path) -> Result<(), InstallError> {
+            Ok(std::fs::write(to, self.get(url)?)?)
+        }
+    }
+
+    /// A tar.gz of `files` in a directory `top`, as a release packs a
+    /// plugin.
+    pub(crate) fn tarball(root: &Path, top: &str, files: &[(&str, &str)]) -> Vec<u8> {
+        let pack = root.join("pack");
+        let _ = std::fs::remove_dir_all(&pack);
+        for (path, text) in files {
+            let path = pack.join(top).join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, text).unwrap();
+            std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+                .unwrap();
+        }
+        let archive = root.join("pack.tar.gz");
+        let status = Command::new("tar")
+            .arg("-czf")
+            .arg(&archive)
+            .arg("-C")
+            .arg(&pack)
+            .arg(top)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let bytes = std::fs::read(&archive).unwrap();
+        std::fs::remove_dir_all(&pack).unwrap();
+        std::fs::remove_file(&archive).unwrap();
+        bytes
+    }
+
+    fn locations(root: &Path) -> Locations {
+        Locations {
+            list: root.join("plugins.toml"),
+            lock: root.join("plugins.lock"),
+            bento: root.join("bento.toml"),
+            installs: root.join("installs"),
+        }
+    }
+
+    const RELEASED: &str = "[plugin]\nid = \"clock\"\nname = \"Clock\"\nversion = \"1.0.0\"\napi = 1\n[backend]\nexec = \"bin/clock\"\nbuild = \"mochi-no-such-cargo build\"\n[release]\nasset = \"clock-{version}-{arch}.tar.gz\"\n";
+
+    #[test]
+    fn installs_a_release_from_a_forgejo() {
+        let root = scratch("forgejo");
+        let locations = locations(&root);
+        let asset = format!("clock-1.0.0-{}.tar.gz", std::env::consts::ARCH);
+        let download = format!("https://codeberg.org/User/clock/releases/download/v1.0.0/{asset}");
+        let release = |archive: Vec<u8>| {
+            Fixtures::default()
+                .with(
+                    "https://codeberg.org/api/v1/repos/User/clock/releases/latest",
+                    r#"{"tag_name": "v1.0.0"}"#,
+                )
+                .with(
+                    "https://codeberg.org/api/v1/repos/User/clock/raw/mochi-plugin.toml?ref=v1.0.0",
+                    RELEASED,
+                )
+                .with(
+                    "https://codeberg.org/api/v1/repos/User/clock/releases/tags/v1.0.0",
+                    format!(
+                        r#"{{"assets": [{{"name": "{asset}", "browser_download_url": "{download}"}}]}}"#
+                    ),
+                )
+                .with(&download, archive)
+        };
+        let built = [
+            ("mochi-plugin.toml", RELEASED),
+            ("bin/clock", "#!/bin/sh\n"),
+        ];
+        let fetch = release(tarball(&root, "clock", &built));
+        let source: Source = "git-release:codeberg.org/User/clock".parse().unwrap();
+        let mut asked = Vec::new();
+        let mut confirm = |plan: &Plan| {
+            asked.push(plan.to_string());
+            true
+        };
+        let mut installer = Installer {
+            locations: &locations,
+            confirm: &mut confirm,
+            fetch: &fetch,
+        };
+        assert_eq!(
+            installer.run("clock", &source, Mode::Install).unwrap(),
+            Outcome::Installed {
+                revision: Some("v1.0.0".into())
+            }
+        );
+        assert!(locations.installs.join("clock/bin/clock").is_file());
+        let locked = Lock::load(&locations.lock).unwrap().plugins["clock"].clone();
+        assert_eq!(locked.tag.as_deref(), Some("v1.0.0"));
+        assert_eq!(locked.asset.as_deref(), Some(download.as_str()));
+        assert_eq!(locked.source, "git-release:codeberg.org/User/clock");
+
+        // Installed and locked: nothing to fetch.
+        let offline = Fixtures::default();
+        installer.fetch = &offline;
+        assert!(matches!(
+            installer.run("clock", &source, Mode::Install).unwrap(),
+            Outcome::UpToDate { .. }
+        ));
+
+        // The same release with other bytes is refused.
+        std::fs::remove_dir_all(locations.installs.join("clock")).unwrap();
+        let changed = release(tarball(
+            &root,
+            "clock",
+            &[built[0], ("bin/clock", "#!/bin/sh\nexit 1\n")],
+        ));
+        installer.fetch = &changed;
+        let error = installer
+            .run("clock", &source, Mode::Install)
+            .unwrap_err()
+            .0;
+        assert!(
+            error.contains("changed since plugins.lock recorded it"),
+            "{error}"
+        );
+        assert!(
+            asked[0].contains(&format!("fetches {download}")),
+            "{}",
+            asked[0]
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("mochi-install-{name}-{}", std::process::id()));
@@ -984,6 +1158,7 @@ mod tests {
             let mut installer = Installer {
                 locations: &locations,
                 confirm: &mut confirm,
+                fetch: &Fixtures::default(),
             };
 
             let main: Source = format!("git:file://{}:main", repo.display())
@@ -1044,6 +1219,7 @@ mod tests {
         let mut installer = Installer {
             locations: &locations,
             confirm: &mut confirm,
+            fetch: &Fixtures::default(),
         };
         let source: Source = format!("git:file://{}", repo.display()).parse().unwrap();
         assert_eq!(
@@ -1077,15 +1253,26 @@ mod tests {
     }
 
     #[test]
-    fn reads_github_repositories() {
+    fn turns_clone_urls_into_release_sources() {
+        let release = |url: &str| release_source(url).map(|source| source.to_string());
         assert_eq!(
-            github_repo("https://github.com/Xonex5/mochi-clock").unwrap(),
-            "Xonex5/mochi-clock"
+            release("https://github.com/Xonex5/mochi-clock").unwrap(),
+            "git-release:github.com/Xonex5/mochi-clock"
         );
-        assert_eq!(github_repo("https://github.com/a/b.git/").unwrap(), "a/b");
-        assert_eq!(github_repo("git@github.com:a/b.git").unwrap(), "a/b");
-        assert!(github_repo("https://gitlab.com/a/b").is_none());
-        assert!(github_repo("https://github.com/a").is_none());
+        assert_eq!(
+            release("https://github.com/a/b.git/").unwrap(),
+            "git-release:github.com/a/b"
+        );
+        assert_eq!(
+            release("git@github.com:a/b.git").unwrap(),
+            "git-release:github.com/a/b"
+        );
+        assert_eq!(
+            release("https://codeberg.org/a/b").unwrap(),
+            "git-release:codeberg.org/a/b"
+        );
+        assert!(release("https://github.com/a").is_none());
+        assert!(release("file:///tmp/repo").is_none());
     }
 
     #[test]
@@ -1118,6 +1305,7 @@ mod tests {
         let installer = Installer {
             locations: &locations,
             confirm: &mut |_| true,
+            fetch: &Fixtures::default(),
         };
         let error = installer.build(&plan, &root).unwrap_err().0;
         assert!(
@@ -1211,6 +1399,7 @@ mod tests {
         let mut installer = Installer {
             locations: &locations,
             confirm: &mut confirm,
+            fetch: &Fixtures::default(),
         };
         let source: Source = format!("git:file://{}", repo.display()).parse().unwrap();
         let error = installer.run("other", &source, Mode::Install).unwrap_err();

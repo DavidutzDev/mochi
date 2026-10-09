@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
-use mochi_plugins::install::{Installer, Mode, Outcome, Plan};
+use mochi_plugins::install::{Curl, Installer, Mode, Outcome, Plan};
 use mochi_plugins::{Locations, Lock, PluginList};
 use mochi_protocol::{
     API, ActionSpec, ArgKind, ClientMessage, DaemonMessage, ModuleActions, PluginState, Role,
@@ -316,6 +316,7 @@ fn plugins(config: Option<PathBuf>, action: PluginsAction, json: bool) -> Result
             let installer = Installer {
                 locations: &locations,
                 confirm: &mut confirm,
+                fetch: &Curl,
             };
             if installer.remove(&id).map_err(|error| error.to_string())? {
                 println!("removed {id}");
@@ -442,6 +443,7 @@ fn plugins_install(
     let mut installer = Installer {
         locations,
         confirm: &mut confirm,
+        fetch: &Curl,
     };
     let mut changed = false;
     let mut failed = 0;

@@ -13,6 +13,7 @@
 //! release in plugins.lock. mochid only reads: it never fetches or builds.
 
 pub mod bento;
+pub mod forge;
 pub mod install;
 pub mod manifest;
 pub mod registry;
@@ -223,7 +224,8 @@ pub struct Locked {
     /// For `git:`, the commit.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub commit: Option<String>,
-    /// For `git-release:`, the tag, the asset's URL and its BLAKE3 hash.
+    /// For `git-release:`, the tag, the asset's URL and its BLAKE3 hash,
+    /// whichever forge it's on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

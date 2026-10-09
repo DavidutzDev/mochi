@@ -5,7 +5,9 @@
 //!   or a commit; without it, the default branch. A URL with a scheme
 //!   works too: `git:https://codeberg.org/User/Repo:v1`.
 //! - `git-release:github.com/User/Repo:v2` downloads the release asset the
-//!   manifest names, already built. Without a tag, the latest release.
+//!   manifest names, already built. Without a tag, the latest release. The
+//!   host is GitHub, a Forgejo or Gitea like codeberg.org, or a GitLab,
+//!   where a repository can sit in subgroups: `gitlab.com/Group/Sub/Repo`.
 //! - `path:~/code/my-plugin` uses a directory where it is.
 //! - `bento:pomodoro` installs the newest release in Bento's registry that
 //!   this Mochi runs, at the commit a reviewer read. `bento:pomodoro:0.3.0`
@@ -15,6 +17,8 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
+use crate::forge::Forge;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Source {
     Git {
@@ -23,7 +27,10 @@ pub enum Source {
         reference: Option<String>,
     },
     GitRelease {
-        owner: String,
+        /// The forge's host name, like `github.com` or `codeberg.org`.
+        host: String,
+        /// The repository's path on the host: `owner/repo`, or longer with
+        /// a GitLab's subgroups.
         repo: String,
         tag: Option<String>,
     },
@@ -60,19 +67,27 @@ impl FromStr for Source {
         }
         if let Some(rest) = text.strip_prefix("git-release:") {
             let (location, tag) = split_reference(rest);
+            let usage = "git-release: takes <host>/<owner>/<repo>, optionally with :<tag>";
             let parts: Vec<&str> = location.trim_end_matches('/').split('/').collect();
-            return match parts.as_slice() {
-                ["github.com", owner, repo] if !owner.is_empty() && !repo.is_empty() => {
-                    Ok(Self::GitRelease {
-                        owner: (*owner).to_owned(),
-                        repo: repo.trim_end_matches(".git").to_owned(),
-                        tag,
-                    })
-                }
-                _ => Err(error(
-                    "git-release: takes github.com/<owner>/<repo>, optionally with :<tag>",
-                )),
+            let [host, path @ ..] = parts.as_slice() else {
+                return Err(error(usage));
             };
+            if location.contains("://")
+                || !host.contains('.')
+                || path.len() < 2
+                || path.iter().any(|part| part.is_empty())
+            {
+                return Err(error(usage));
+            }
+            // Only a GitLab has subgroups.
+            if path.len() > 2 && Forge::known(host).is_some_and(|forge| forge != Forge::GitLab) {
+                return Err(error(&format!("{host} has no subgroups: {usage}")));
+            }
+            return Ok(Self::GitRelease {
+                host: (*host).to_owned(),
+                repo: path.join("/").trim_end_matches(".git").to_owned(),
+                tag,
+            });
         }
         if let Some(rest) = text.strip_prefix("bento:") {
             let (path, version) = match rest.split_once(':') {
@@ -134,8 +149,8 @@ impl fmt::Display for Source {
                 }
                 Ok(())
             }
-            Self::GitRelease { owner, repo, tag } => {
-                write!(f, "git-release:github.com/{owner}/{repo}")?;
+            Self::GitRelease { host, repo, tag } => {
+                write!(f, "git-release:{host}/{repo}")?;
                 if let Some(tag) = tag {
                     write!(f, ":{tag}")?;
                 }
@@ -245,24 +260,54 @@ mod tests {
         assert_eq!(
             parse("git-release:github.com/User/weather:v0.2.0"),
             Source::GitRelease {
-                owner: "User".into(),
-                repo: "weather".into(),
+                host: "github.com".into(),
+                repo: "User/weather".into(),
                 tag: Some("v0.2.0".into()),
             }
         );
         assert_eq!(
-            parse("git-release:github.com/User/weather"),
+            parse("git-release:github.com/User/weather.git"),
             Source::GitRelease {
-                owner: "User".into(),
-                repo: "weather".into(),
+                host: "github.com".into(),
+                repo: "User/weather".into(),
                 tag: None,
             }
         );
-        assert!(
-            "git-release:gitlab.com/User/weather"
-                .parse::<Source>()
-                .is_err()
+        assert_eq!(
+            parse("git-release:codeberg.org/User/weather:v1"),
+            Source::GitRelease {
+                host: "codeberg.org".into(),
+                repo: "User/weather".into(),
+                tag: Some("v1".into()),
+            }
         );
+        // A GitLab's subgroups, and a host whose forge isn't known yet.
+        assert_eq!(
+            parse("git-release:gitlab.com/Group/Sub/weather"),
+            Source::GitRelease {
+                host: "gitlab.com".into(),
+                repo: "Group/Sub/weather".into(),
+                tag: None,
+            }
+        );
+        assert_eq!(
+            parse("git-release:git.example.org/a/b/c:v2"),
+            Source::GitRelease {
+                host: "git.example.org".into(),
+                repo: "a/b/c".into(),
+                tag: Some("v2".into()),
+            }
+        );
+        for bad in [
+            "git-release:github.com/User",
+            "git-release:github.com/User/weather/extra",
+            "git-release:codeberg.org/a/b/c",
+            "git-release:https://github.com/User/weather",
+            "git-release:localhost/User/weather",
+            "git-release:github.com//weather",
+        ] {
+            assert!(bad.parse::<Source>().is_err(), "{bad}");
+        }
     }
 
     #[test]
@@ -286,6 +331,8 @@ mod tests {
             "git:github.com/User/x",
             "git:file:///tmp/repo:main",
             "git-release:github.com/User/x:v1",
+            "git-release:codeberg.org/User/x",
+            "git-release:gitlab.com/Group/Sub/x:v1",
             "path:~/code/x",
         ] {
             assert_eq!(parse(text).to_string(), text);

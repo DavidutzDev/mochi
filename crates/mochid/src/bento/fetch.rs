@@ -104,8 +104,8 @@ pub fn fetch(source: &Source, locations: &Locations, at: Option<&str>) -> Result
         Source::Git { url, reference } => {
             (url.clone(), at.map(str::to_owned).or(reference.clone()))
         }
-        Source::GitRelease { owner, repo, tag } => (
-            format!("https://github.com/{owner}/{repo}"),
+        Source::GitRelease { host, repo, tag } => (
+            format!("https://{host}/{repo}"),
             at.map(str::to_owned).or(tag.clone()),
         ),
         Source::Registry {

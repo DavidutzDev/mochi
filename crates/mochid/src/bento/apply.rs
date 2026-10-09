@@ -14,7 +14,7 @@ use mochi_core::changes::Changes;
 use mochi_core::themes::{self, ThemeFile};
 use mochi_core::toml::{Table, Value};
 use mochi_plugins::bento::{Entry, Installed};
-use mochi_plugins::install::{Installer, Mode, Outcome, Plan};
+use mochi_plugins::install::{Curl, Installer, Mode, Outcome, Plan};
 use mochi_plugins::registry::Kind;
 use mochi_plugins::{Locations, Manifest, Source};
 
@@ -314,6 +314,7 @@ fn install_plugin(
     let mut installer = Installer {
         locations: &context.locations,
         confirm: &mut confirm,
+        fetch: &Curl,
     };
     let outcome = installer.run(id, source, Mode::Install);
     let fine = matches!(
@@ -346,6 +347,7 @@ fn uninstall_plugin(context: &Context, id: &str) -> Result<(), String> {
     let installer = Installer {
         locations: &context.locations,
         confirm: &mut confirm,
+        fetch: &Curl,
     };
     installer.remove(id).map_err(|error| error.0)?;
     Ok(())
@@ -1080,6 +1082,7 @@ pub fn update(config_file: &Path, ids: &[String], yes: bool) -> Result<(), Strin
     let mut installer = Installer {
         locations: &context.locations,
         confirm: &mut confirm,
+        fetch: &Curl,
     };
     for (id, entry) in &installed.plugins {
         if !wanted(id, entry) {
