@@ -42,12 +42,20 @@ pub const FONT_FILES: [&str; 2] = ["InterVariable.ttf", "MaterialSymbolsRounded.
 const SYSTEM_FONTS: &str = "/usr/share/mochi/fonts";
 
 /// The font files found, by name: in the directories `MOCHI_FONTS` lists
-/// (the Nix package sets it), then in `/usr/share/mochi/fonts`. A missing
-/// one makes the shell fall back to the system's fonts and drawn symbols.
+/// (the Nix package sets it), then in `share/mochi/fonts` beside the
+/// binary's directory, where a release unpacked under a prefix like
+/// `~/.local` has them, then in `/usr/share/mochi/fonts`. A missing one
+/// makes the shell fall back to the system's fonts and drawn symbols.
 pub fn find_fonts() -> Vec<PathBuf> {
     let mut dirs: Vec<PathBuf> = std::env::var_os("MOCHI_FONTS")
         .map(|value| std::env::split_paths(&value).collect())
         .unwrap_or_default();
+    if let Some(prefix) = std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.parent()?.to_owned()))
+    {
+        dirs.push(prefix.join("share/mochi/fonts"));
+    }
     dirs.push(PathBuf::from(SYSTEM_FONTS));
     FONT_FILES
         .iter()

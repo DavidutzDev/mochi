@@ -652,6 +652,8 @@ Later:
 - [x] NixOS and home-manager modules and an overlay in `packaging/nix`. The home-manager module writes `config.toml` and `theme.toml` from Nix, checks them with `mochid config check` at build time, and reloads instead of restarting when they change
 - [x] Arch packages in `packaging/arch`: `mochi` from the release tarball and `mochi-git` from `main`, both built and installed in an Arch container
 - [ ] Publish `mochi` and `mochi-git` to the AUR; bump `pkgver` and `sha256sums` in `mochi` with each release
+- [x] Releases with binaries: `.github/workflows/release.yml` builds x86_64 and aarch64 archives on a tag, publishes them, and records them for the flake's `mochi-bin` and the Arch `mochi-bin`; `RELEASING.md`
+- [ ] A binary cache for the flake's `mochi`, like Cachix, for Nix users who build from source
 - [x] Release 0.0.1 and `CHANGELOG.md`
 - [x] Release 0.0.2: capture, overlays, gpu-screen-recorder in the Nix package and modules
 - [x] Release 0.0.3: the frozen screen no longer stretches when a screenshot opens

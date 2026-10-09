@@ -1,0 +1,46 @@
+# Maintainer: David Gheghea
+#
+# Mochi from its GitHub release, already built: nothing compiles. The
+# release workflow's packaging/release/record.sh sets pkgver and the sums.
+
+pkgname=mochi-bin
+pkgver=0.0.8
+pkgrel=1
+pkgdesc='A desktop shell built around a central island (prebuilt)'
+arch=('x86_64' 'aarch64')
+url='https://github.com/DavidutzDev/mochi'
+license=('MIT')
+# mochid refuses to start with a Quickshell outside 0.3.x; see
+# QUICKSHELL_SERIES in crates/mochi-core/src/supervisor.rs.
+depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder' 'sh')
+optdepends=(
+  'wl-clipboard: copy screenshots'
+  'satty: edit screenshots'
+  'uwsm: start apps from the launcher as units of their own'
+  'xdg-desktop-portal-hyprland: pick what to share with the share module'
+)
+provides=('mochi')
+conflicts=('mochi' 'mochi-git')
+source_x86_64=("mochi-$pkgver-x86_64.tar.gz::$url/releases/download/v$pkgver/mochi-x86_64-linux.tar.gz")
+source_aarch64=("mochi-$pkgver-aarch64.tar.gz::$url/releases/download/v$pkgver/mochi-aarch64-linux.tar.gz")
+sha256sums_x86_64=('SKIP')
+sha256sums_aarch64=('SKIP')
+
+package() {
+  cd "mochi-$pkgver"
+  install -Dm755 bin/mochid bin/mochi -t "$pkgdir/usr/bin/"
+  install -Dm644 lib/systemd/user/mochid.service -t "$pkgdir/usr/lib/systemd/user/"
+  install -Dm644 share/applications/mochi-links.desktop -t "$pkgdir/usr/share/applications/"
+  # The fonts the shell loads: Inter and the icons, from the release.
+  install -Dm644 share/mochi/fonts/* -t "$pkgdir/usr/share/mochi/fonts/"
+  install -Dm644 LICENSE share/licenses/mochi/* -t "$pkgdir/usr/share/licenses/$pkgname/"
+  install -Dm644 share/bash-completion/completions/mochi -t "$pkgdir/usr/share/bash-completion/completions/"
+  install -Dm644 share/fish/vendor_completions.d/mochi.fish -t "$pkgdir/usr/share/fish/vendor_completions.d/"
+  install -Dm644 share/zsh/site-functions/_mochi -t "$pkgdir/usr/share/zsh/site-functions/"
+  # xdg-desktop-portal-hyprland runs one program, without arguments of our
+  # choosing, as its screen-share picker.
+  install -Dm755 /dev/stdin "$pkgdir/usr/bin/mochi-share-picker" <<'SH'
+#!/bin/sh
+exec /usr/bin/mochi share-pick "$@"
+SH
+}

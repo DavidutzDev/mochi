@@ -32,6 +32,16 @@
           mochi = pkgs.callPackage ./packaging/nix/package.nix {
             quickshell = quickshell.packages.${system}.default;
           };
+          # The latest release, already built, once the release workflow has
+          # recorded one in packaging/nix/release.json: nothing compiles.
+          #   programs.mochi.package = inputs.mochi.packages.${system}.mochi-bin;
+        }
+        // nixpkgs.lib.optionalAttrs (builtins.pathExists ./packaging/nix/release.json) {
+          mochi-bin = pkgs.callPackage ./packaging/nix/package-bin.nix {
+            quickshell = quickshell.packages.${system}.default;
+          };
+        }
+        // {
           # The plugin SDK's API documentation: the package's source and
           # vendored crates, with `cargo doc` instead of the build.
           sdk-docs = self.packages.${system}.mochi.overrideAttrs {

@@ -1,0 +1,112 @@
+# Publishes a release when a version tag like v0.0.8 is pushed: mochi and
+# mochid built for x86_64 and aarch64 Linux, packed with the fonts, the
+# systemd unit and install.sh by packaging/release/archive.sh, and a GitHub
+# release with that version's section of CHANGELOG.md as its notes.
+#
+# The binaries are built on Ubuntu 22.04, so they run on any distribution
+# with glibc 2.35 or newer. They need Quickshell and libpulse there.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  # The tag must be the version Cargo.toml says, and CHANGELOG.md must have
+  # a section for it.
+  check:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        run: |
+          version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::the tag is $GITHUB_REF_NAME, but Cargo.toml says $version"
+            exit 1
+          fi
+          if ! grep -q "^## $version " CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: check
+    strategy:
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-22.04
+          - arch: aarch64
+            runner: ubuntu-22.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install the build's libraries
+        run: sudo apt-get update && sudo apt-get install -y libpulse-dev pkg-config
+      - name: Build
+        run: cargo build --release --locked --no-default-features -p mochid -p mochi
+      - name: Pack
+        run: |
+          strip target/release/mochi target/release/mochid
+          sh packaging/release/archive.sh target/release dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mochi-${{ matrix.arch }}
+          path: dist/*
+
+  release:
+    needs: [check, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          # This version's section of the changelog, without its heading.
+          awk -v version="$VERSION" '
+            index($0, "## " version " ") == 1 { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "Mochi $VERSION" \
+            --notes-file notes.md \
+            --verify-tag
+
+  # What the packages read: the flake's mochi-bin and the Arch PKGBUILDs get
+  # the new version and sums, committed to main.
+  record:
+    needs: [check, release]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Record the release
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
+        run: |
+          sh packaging/release/record.sh "$VERSION" dist
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packaging/nix/release.json packaging/arch
+          git commit -m "Record release $VERSION for the packages"
+          git push origin HEAD:main

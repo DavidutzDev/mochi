@@ -69,18 +69,31 @@ programs.gpu-screen-recorder.enable = true;
 
 `inputs.mochi.overlays.default` adds `pkgs.mochi`, for setups that list packages themselves.
 
+### Without building
+
+`mochi` compiles on your machine whenever its input changes. `mochi-bin` is the latest [release](#from-a-release) instead, already built: Nix downloads the archive, patches its binaries to find your libraries, and wraps them like `mochi`, so nothing compiles.
+
+```nix
+programs.mochi.package = inputs.mochi.packages.${pkgs.stdenv.hostPlatform.system}.mochi-bin;
+```
+
+It's the release `packaging/nix/release.json` names, which the release workflow updates on `main` after it publishes. So follow `main`, `github:DavidutzDev/mochi`, rather than a tag: a tag's commit was made before its release existed.
+
 ## Arch Linux
 
-The repository has two packages in `packaging/arch`, with the same files:
+The repository has three packages in `packaging/arch`, with the same files:
 
 - `mochi` builds the latest release.
-- `mochi-git` builds the latest commit on `main`, and conflicts with `mochi`.
+- `mochi-bin` installs the latest release already built, from its archive, so nothing compiles, and needs no `cargo`.
+- `mochi-git` builds the latest commit on `main`.
+
+They conflict with each other: install one.
 
 They aren't on the AUR yet. Until they are, build one from the repository with `makepkg`, which needs `base-devel` and `git`:
 
 ```sh
 git clone https://github.com/DavidutzDev/mochi.git
-cd mochi/packaging/arch/mochi-git    # or mochi, for the latest release
+cd mochi/packaging/arch/mochi-bin    # or mochi to build it, or mochi-git
 makepkg -si
 ```
 
@@ -88,7 +101,7 @@ makepkg -si
 
 Once they're on the AUR, `paru -S mochi` or `yay -S mochi` does the same.
 
-Both depend on `quickshell`, `gpu-screen-recorder` and `inter-font` from the official repositories, and download the Material Symbols icon font from Google's repository, pinned to one commit. The build runs the test suite. They install `mochid`, `mochi`, the systemd user unit and `mochi-share-picker`. Optional dependencies:
+Both depend on `quickshell`, `gpu-screen-recorder` and `inter-font` from the official repositories, and download the Material Symbols icon font from Google's repository, pinned to one commit. The build runs the test suite. They install `mochid`, `mochi`, the systemd user unit and `mochi-share-picker`. `mochi-bin` takes both fonts from the release archive instead, so it doesn't need `inter-font`. Optional dependencies:
 
 - `wl-clipboard`, to copy screenshots.
 - `satty`, the default screenshot editor.
@@ -115,7 +128,23 @@ screencopy {
 
 The `PKGBUILD`s live in `packaging/arch`. When Quickshell in the official repositories moves past the version `mochid` expects, `mochid` refuses to start until a Mochi release follows it.
 
+## From a release
+
+Each release on [GitHub](https://github.com/DavidutzDev/mochi/releases) has Mochi built for x86_64 and aarch64 Linux, with glibc 2.35 or newer: the binaries, the fonts, the systemd unit, the `mochi://` link handler and shell completions, with `install.sh`.
+
+```sh
+curl -fsSLO https://github.com/DavidutzDev/mochi/releases/latest/download/mochi-x86_64-linux.tar.gz
+tar -xzf mochi-x86_64-linux.tar.gz
+mochi-*/install.sh                          # into ~/.local, for you
+# sudo mochi-*/install.sh --prefix /usr/local   for everyone
+systemctl --user daemon-reload && systemctl --user enable --now mochid
+```
+
+It needs Quickshell 0.3 and PulseAudio's library, `libpulse`, which PipeWire systems have too, from your distribution. `install.sh --uninstall` removes what it installed. Each archive has a `.sha256` next to it, and `releases/download/v0.0.8/…` gives a given version instead of the latest.
+
 ## Other systems
+
+Build it yourself:
 
 ```sh
 cargo build --release
