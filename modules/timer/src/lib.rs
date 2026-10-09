@@ -69,8 +69,6 @@ static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 /// The file in the session directory that keeps the timers across
 /// restarts.
 const FILE: &str = "timer.json";
-/// How long the notice at the end of a phase or a timer stays on screen.
-const NOTICE: Duration = Duration::from_secs(30);
 /// The longest phase an action takes, a day.
 const MOST_MINUTES: i64 = 24 * 60;
 /// The alarm without a `sound_file`, from the sound theme.
@@ -79,7 +77,8 @@ const ALARM: &str = "alarm-clock-elapsed";
 const THEME: &str = "freedesktop";
 /// Every setting applies at once or to the next timer, so none needs a
 /// restart.
-const LIVE: [&str; 14] = [
+const LIVE: [&str; 15] = [
+    "notice_seconds",
     "focus_minutes",
     "break_minutes",
     "long_break_minutes",
@@ -143,6 +142,9 @@ struct Settings {
     /// The lengths the clock panel's Timer tab and the launcher offer,
     /// like "5m" or "1h 30m".
     presets: Vec<String>,
+    /// Seconds the notice at the end of a phase or a timer stays on screen.
+    #[schemars(range(min = 5, max = 600))]
+    notice_seconds: u64,
 }
 
 impl Default for Settings {
@@ -164,6 +166,7 @@ impl Default for Settings {
             presets: ["3m", "5m", "10m", "15m", "30m"]
                 .map(str::to_owned)
                 .to_vec(),
+            notice_seconds: 30,
         }
     }
 }
@@ -638,7 +641,7 @@ impl State {
         let spec = ActivitySpec::new("Notice")
             .key("notice")
             .priority(Priority::HIGH)
-            .timeout(NOTICE)
+            .timeout(Duration::from_secs(self.settings.notice_seconds))
             .payload(json!({
                 "finished": ended.finished.name(),
                 "next": ended.next.name(),
@@ -661,7 +664,7 @@ impl State {
             let spec = ActivitySpec::new("Done")
                 .key(format!("done-{}", timer.id))
                 .priority(Priority::HIGH)
-                .timeout(NOTICE)
+                .timeout(Duration::from_secs(self.settings.notice_seconds))
                 .payload(json!({
                     "label": timer.label,
                     "name": timer.name(),

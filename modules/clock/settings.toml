@@ -21,3 +21,6 @@
 # precision = "tenths"
 # How many of the stopwatch's past runs to keep, up to 50; 0 keeps none.
 # history = 10
+# Seconds a reminder's notice stays on screen. A reminder nobody marked done
+# stays due on the Today tab and in the calendar.
+# notice_seconds = 60

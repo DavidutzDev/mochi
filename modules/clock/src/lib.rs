@@ -62,9 +62,6 @@ const TABS: [&str; 5] = ["today", "calendar", "timer", "stopwatch", "world"];
 /// The file in the session directory that keeps the stopwatch across
 /// restarts.
 const STOPWATCH: &str = "stopwatch.json";
-/// How long a reminder's notice stays on screen. A reminder nobody marked
-/// done stays due on the Today tab and in the calendar.
-const NOTICE: Duration = Duration::from_secs(60);
 /// How long the daemon waits at most between two looks at the clock while a
 /// reminder is ahead, so one that came due during a suspend comes up soon
 /// after waking.
@@ -74,7 +71,8 @@ const SNOOZE: i64 = 10;
 /// The most zones the World tab shows.
 const MOST_ZONES: usize = 8;
 /// Every setting is read by the views or the next look at the clock.
-const LIVE: [&str; 9] = [
+const LIVE: [&str; 10] = [
+    "notice_seconds",
     "tab",
     "zones",
     "hours",
@@ -200,6 +198,10 @@ struct Settings {
     /// How many of the stopwatch's past runs to keep, up to 50; 0 keeps
     /// none. Reset keeps a run.
     history: u32,
+    /// Seconds a reminder's notice stays on screen. A reminder nobody marked
+    /// done stays due on the Today tab and in the calendar.
+    #[schemars(range(min = 5, max = 600))]
+    notice_seconds: u64,
 }
 
 impl Default for Settings {
@@ -214,6 +216,7 @@ impl Default for Settings {
             shape: Shape::Cookie,
             precision: Precision::Tenths,
             history: 10,
+            notice_seconds: 60,
         }
     }
 }
@@ -783,7 +786,7 @@ impl State {
             let spec = ActivitySpec::new("Notice")
                 .key(format!("reminder-{}", reminder.id))
                 .priority(Priority::HIGH)
-                .timeout(NOTICE)
+                .timeout(Duration::from_secs(self.settings.notice_seconds))
                 .payload(json!({
                     "id": reminder.id,
                     "text": reminder.text,

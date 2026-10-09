@@ -9,6 +9,8 @@ Item {
 
     property var payload: null
     readonly property bool configured: payload?.configured ?? false
+    // Hidden until a place is set, when `prompt` is off.
+    readonly property bool hidden: !configured && !(payload?.prompt ?? true)
     readonly property var current: payload?.current ?? null
     readonly property var hours: payload?.hourly ?? []
     readonly property string unit: payload?.unit?.temperature ?? "°"

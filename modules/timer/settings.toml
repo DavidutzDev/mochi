@@ -35,3 +35,5 @@
 # The lengths the clock panel's Timer tab and the launcher offer, like
 # "5m" or "1h 30m".
 # presets = ["3m", "5m", "10m", "15m", "30m"]
+# Seconds the notice at the end of a phase or a timer stays on screen.
+# notice_seconds = 30

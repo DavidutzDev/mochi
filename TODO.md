@@ -658,7 +658,7 @@ Later:
 - [x] A time zone picker in the settings and the widget editor
 - [x] Clock shapes as a setting: cookie, circle, pentagon, clover, burst, hexagon, octagon, squircle, pill or none
 - [x] Waves can be turned off for the whole theme or per module; more of the recent choices are settings
-- [ ] Settings still to add for choices that are fixed today: the timer's and the reminder's notice durations, the weather card's "Set a place" prompt or hiding it, the clock panel calendar's accent
+- [x] Settings for the notice durations of the timer and of reminders, and for hiding the weather cards until a place is set
 - [x] Bento before Plugins in the settings, and a `section` contribution for a module's own view on its settings page
 
 ### Checks and tools

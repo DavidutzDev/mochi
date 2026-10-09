@@ -17,6 +17,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 - A Weather page in the control center: the weather now with feels like, humidity, wind, UV index, sunrise and sunset, the next 7 days and the next 24 hours as a curve; and a one-column "Weather now" card under More cards.
 - A Clock page in the control center with the panel's Today, Calendar, Stopwatch and World, and a Clock card under More cards.
 - `[motion] waves = false` in `theme.toml` draws every progress line and ring flat. The media line, the battery ring and the performance rings also have a `wavy` setting of their own.
+- Timer and clock: `notice_seconds` sets how long the end of a timer and a due reminder stay on the island. Weather: `prompt = false` keeps the control center's weather cards hidden until a place is set, instead of saying how to set one.
 - Media: `line_color` draws the progress line in the accent, and `card_seeks` lets the Now Playing card's line seek. Agents: `waiting_ms` and `done_ms` set how long the notices stay. Weather: `stale_minutes` sets how old the forecast gets before the looks say so, never less than twice `refresh_minutes`.
 - The clock and the timer credit [mochi-clock](https://github.com/Xonex5/mochi-clock), by Xonex5, whose ideas their stopwatch, custom timers, alarm and `:t` follow, on their settings pages.
 - Widgets can have several looks: modules declare variants with a title, a one-line description and their own sizes, and the widget's settings switch between them. A look can go without its card.

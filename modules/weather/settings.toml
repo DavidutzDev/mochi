@@ -17,3 +17,6 @@
 # old it is, as when the computer was offline. Never less than twice
 # refresh_minutes, so a forecast waiting for its next fetch doesn't count.
 # stale_minutes = 60
+# Until a place is set, the control center's weather cards say how to set
+# one. Off, they stay hidden until then.
+# prompt = true

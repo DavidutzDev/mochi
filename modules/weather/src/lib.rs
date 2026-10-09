@@ -56,7 +56,8 @@ const STALE: u64 = 6 * 3600;
 /// What the views and `refresh` say while nothing is set.
 const UNSET: &str = "no place set: set `place`, or `latitude` and `longitude`, in [module.weather]";
 /// Every setting applies at once, so none needs a restart.
-const LIVE: [&str; 6] = [
+const LIVE: [&str; 7] = [
+    "prompt",
     "place",
     "latitude",
     "longitude",
@@ -92,6 +93,9 @@ struct Settings {
     /// doesn't count.
     #[schemars(range(min = 20, max = 360))]
     stale_minutes: u64,
+    /// Until a place is set, the control center's weather cards say how to
+    /// set one. Off, they stay hidden until then.
+    prompt: bool,
 }
 
 impl Default for Settings {
@@ -103,6 +107,7 @@ impl Default for Settings {
             units: Units::Metric,
             refresh_minutes: 30,
             stale_minutes: 60,
+            prompt: true,
         }
     }
 }
@@ -690,6 +695,8 @@ impl State {
             "updated": shown.map(|last| last.updated),
             // How old `updated` gets before the looks say so, in seconds.
             "stale_after": self.settings.stale_after(),
+            // Whether the cards show "Set a place" before a place is set.
+            "prompt": self.settings.prompt,
             "timezone": forecast.map(|forecast| &forecast.timezone),
             "utc_offset": forecast.map(|forecast| forecast.utc_offset),
             "current": forecast.map(|forecast| current(&forecast.current)),
