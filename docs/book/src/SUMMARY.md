@@ -40,6 +40,7 @@
 - [Emoji](modules/emoji.md)
 - [Colors](modules/colors.md)
 - [Drop](modules/drop.md)
+- [Clock](modules/clock.md)
 - [Focus timer](modules/timer.md)
 - [Weather](modules/weather.md)
 - [Agents](modules/agents.md)

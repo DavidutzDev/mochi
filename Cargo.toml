@@ -26,6 +26,7 @@ mochi-module-brightness = { path = "modules/brightness" }
 mochi-module-bluetooth = { path = "modules/bluetooth" }
 mochi-module-capture = { path = "modules/capture" }
 mochi-module-clipboard = { path = "modules/clipboard" }
+mochi-module-clock = { path = "modules/clock" }
 mochi-module-demo = { path = "examples/demo" }
 mochi-module-control-center = { path = "modules/control-center" }
 mochi-module-idle = { path = "modules/idle" }

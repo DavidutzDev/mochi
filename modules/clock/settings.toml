@@ -1,0 +1,11 @@
+# Clock: a panel with today, a calendar with reminders, the focus timer, a
+# stopwatch and world clocks. Bind mochi ipc clock toggle to a key.
+[module.clock]
+# The tab it opens on: "today", "calendar", "timer", "stopwatch" or "world".
+# tab = "today"
+# The time zones on the World tab, up to 8.
+# zones = ["Europe/London", "America/New_York", "Asia/Tokyo"]
+# A "24" or a "12" hour clock.
+# hours = "24"
+# The day weeks start on in the calendar: "monday" or "sunday".
+# first_day = "monday"

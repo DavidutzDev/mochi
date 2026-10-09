@@ -95,7 +95,7 @@ pub trait Module: Send + 'static {
 
 /// The modules whose panels take the keyboard, each with a `close` action:
 /// see [`ModuleCtx::close_other_panels`].
-pub const PANELS: [&str; 7] = [
+pub const PANELS: [&str; 8] = [
     "control-center",
     "launcher",
     "clipboard",
@@ -103,6 +103,7 @@ pub const PANELS: [&str; 7] = [
     "tray",
     "emoji",
     "settings",
+    "clock",
 ];
 
 /// A program a module runs, and what for: what `mochi doctor` looks for.

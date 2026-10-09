@@ -3,13 +3,21 @@ import Quickshell
 import qs.island
 
 // The control center's own card: the time, large, with the weekday and the date
-// beside it. Its digits roll as the minutes change.
+// beside it. Its digits roll as the minutes change. With the clock module on,
+// a click opens the clock panel.
 Item {
     id: root
 
     property var payload: null
 
     implicitHeight: time.implicitHeight
+
+    MouseArea {
+        anchors.fill: parent
+        enabled: Daemon.modules.includes("clock")
+        cursorShape: Qt.PointingHandCursor
+        onClicked: Daemon.command("clock", "open", [])
+    }
 
     SystemClock {
         id: clock

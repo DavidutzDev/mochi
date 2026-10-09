@@ -953,6 +953,7 @@ fn icon(module: &str) -> &'static str {
         "bluetooth" => "bluetooth",
         "capture" => "screenshot_region",
         "clipboard" => "content_paste",
+        "clock" => "schedule",
         "colors" => "colorize",
         "drop" => "place_item",
         "emoji" => "mood",

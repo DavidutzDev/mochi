@@ -26,6 +26,7 @@ Mochi doesn't grab keys itself. Bind these in your compositor:
 |---|---|
 | Open or close the launcher | `mochi ipc launcher toggle` |
 | Open or close the control center | `mochi ipc control-center toggle` |
+| Open or close the clock, with the calendar and reminders | `mochi ipc clock toggle` |
 | Play or pause the music | `mochi ipc media play-pause` |
 | Do not disturb | `mochi ipc notifications dnd toggle` |
 | Lock the screen | `mochi ipc power lock` |
@@ -42,6 +43,7 @@ In Hyprland's Lua config:
 ```lua
 hl.bind("SUPER + space", hl.dsp.exec_cmd("mochi ipc launcher toggle"))
 hl.bind("SUPER + C", hl.dsp.exec_cmd("mochi ipc control-center toggle"))
+hl.bind("SUPER + period", hl.dsp.exec_cmd("mochi ipc clock toggle"))
 hl.bind("SUPER + SHIFT + N", hl.dsp.exec_cmd("mochi ipc notifications dnd toggle"))
 hl.bind("Print", hl.dsp.exec_cmd("mochi ipc capture screenshot"))
 hl.bind("ALT + Print", hl.dsp.exec_cmd("mochi ipc capture record"))
@@ -56,6 +58,7 @@ In `hyprland.conf`:
 ```ini
 bind = SUPER, space, exec, mochi ipc launcher toggle
 bind = SUPER, C, exec, mochi ipc control-center toggle
+bind = SUPER, period, exec, mochi ipc clock toggle
 bind = , Print, exec, mochi ipc capture screenshot
 bindl = , XF86AudioPlay, exec, mochi ipc media play-pause
 ```
@@ -65,6 +68,7 @@ In Sway:
 ```
 bindsym $mod+space exec mochi ipc launcher toggle
 bindsym $mod+c exec mochi ipc control-center toggle
+bindsym $mod+period exec mochi ipc clock toggle
 bindsym Print exec mochi ipc capture screenshot
 bindsym --locked XF86AudioPlay exec mochi ipc media play-pause
 ```
@@ -75,6 +79,7 @@ In niri:
 binds {
     Mod+Space { spawn "mochi" "ipc" "launcher" "toggle"; }
     Mod+C { spawn "mochi" "ipc" "control-center" "toggle"; }
+    Mod+Period { spawn "mochi" "ipc" "clock" "toggle"; }
     Print { spawn "mochi" "ipc" "capture" "screenshot"; }
     XF86AudioPlay allow-when-locked=true { spawn "mochi" "ipc" "media" "play-pause"; }
 }

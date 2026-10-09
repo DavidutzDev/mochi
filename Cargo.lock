@@ -977,6 +977,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-clock"
+version = "0.0.9"
+dependencies = [
+ "include_dir",
+ "libc",
+ "mochi-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-colors"
 version = "0.0.9"
 dependencies = [
@@ -1404,6 +1418,7 @@ dependencies = [
  "mochi-module-brightness",
  "mochi-module-capture",
  "mochi-module-clipboard",
+ "mochi-module-clock",
  "mochi-module-colors",
  "mochi-module-control-center",
  "mochi-module-demo",

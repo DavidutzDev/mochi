@@ -1096,26 +1096,27 @@ pub(crate) mod tests {
         }
     }
 
-    const RELEASED: &str = "[plugin]\nid = \"clock\"\nname = \"Clock\"\nversion = \"1.0.0\"\napi = 1\n[backend]\nexec = \"bin/clock\"\nbuild = \"mochi-no-such-cargo build\"\n[release]\nasset = \"clock-{version}-{arch}.tar.gz\"\n";
+    const RELEASED: &str = "[plugin]\nid = \"sundial\"\nname = \"Sundial\"\nversion = \"1.0.0\"\napi = 1\n[backend]\nexec = \"bin/sundial\"\nbuild = \"mochi-no-such-cargo build\"\n[release]\nasset = \"sundial-{version}-{arch}.tar.gz\"\n";
 
     #[test]
     fn installs_a_release_from_a_forgejo() {
         let root = scratch("forgejo");
         let locations = locations(&root);
-        let asset = format!("clock-1.0.0-{}.tar.gz", std::env::consts::ARCH);
-        let download = format!("https://codeberg.org/User/clock/releases/download/v1.0.0/{asset}");
+        let asset = format!("sundial-1.0.0-{}.tar.gz", std::env::consts::ARCH);
+        let download =
+            format!("https://codeberg.org/User/sundial/releases/download/v1.0.0/{asset}");
         let release = |archive: Vec<u8>| {
             Fixtures::default()
                 .with(
-                    "https://codeberg.org/api/v1/repos/User/clock/releases/latest",
+                    "https://codeberg.org/api/v1/repos/User/sundial/releases/latest",
                     r#"{"tag_name": "v1.0.0"}"#,
                 )
                 .with(
-                    "https://codeberg.org/api/v1/repos/User/clock/raw/mochi-plugin.toml?ref=v1.0.0",
+                    "https://codeberg.org/api/v1/repos/User/sundial/raw/mochi-plugin.toml?ref=v1.0.0",
                     RELEASED,
                 )
                 .with(
-                    "https://codeberg.org/api/v1/repos/User/clock/releases/tags/v1.0.0",
+                    "https://codeberg.org/api/v1/repos/User/sundial/releases/tags/v1.0.0",
                     format!(
                         r#"{{"assets": [{{"name": "{asset}", "browser_download_url": "{download}"}}]}}"#
                     ),
@@ -1124,10 +1125,10 @@ pub(crate) mod tests {
         };
         let built = [
             ("mochi-plugin.toml", RELEASED),
-            ("bin/clock", "#!/bin/sh\n"),
+            ("bin/sundial", "#!/bin/sh\n"),
         ];
-        let fetch = release(tarball(&root, "clock", &built));
-        let source: Source = "git-release:codeberg.org/User/clock".parse().unwrap();
+        let fetch = release(tarball(&root, "sundial", &built));
+        let source: Source = "git-release:codeberg.org/User/sundial".parse().unwrap();
         let mut asked = Vec::new();
         let mut confirm = |plan: &Plan| {
             asked.push(plan.to_string());
@@ -1139,35 +1140,35 @@ pub(crate) mod tests {
             fetch: &fetch,
         };
         assert_eq!(
-            installer.run("clock", &source, Mode::Install).unwrap(),
+            installer.run("sundial", &source, Mode::Install).unwrap(),
             Outcome::Installed {
                 revision: Some("v1.0.0".into())
             }
         );
-        assert!(locations.installs.join("clock/bin/clock").is_file());
-        let locked = Lock::load(&locations.lock).unwrap().plugins["clock"].clone();
+        assert!(locations.installs.join("sundial/bin/sundial").is_file());
+        let locked = Lock::load(&locations.lock).unwrap().plugins["sundial"].clone();
         assert_eq!(locked.tag.as_deref(), Some("v1.0.0"));
         assert_eq!(locked.asset.as_deref(), Some(download.as_str()));
-        assert_eq!(locked.source, "git-release:codeberg.org/User/clock");
+        assert_eq!(locked.source, "git-release:codeberg.org/User/sundial");
 
         // Installed and locked: nothing to fetch.
         let offline = Fixtures::default();
         installer.fetch = &offline;
         assert!(matches!(
-            installer.run("clock", &source, Mode::Install).unwrap(),
+            installer.run("sundial", &source, Mode::Install).unwrap(),
             Outcome::UpToDate { .. }
         ));
 
         // The same release with other bytes is refused.
-        std::fs::remove_dir_all(locations.installs.join("clock")).unwrap();
+        std::fs::remove_dir_all(locations.installs.join("sundial")).unwrap();
         let changed = release(tarball(
             &root,
-            "clock",
-            &[built[0], ("bin/clock", "#!/bin/sh\nexit 1\n")],
+            "sundial",
+            &[built[0], ("bin/sundial", "#!/bin/sh\nexit 1\n")],
         ));
         installer.fetch = &changed;
         let error = installer
-            .run("clock", &source, Mode::Install)
+            .run("sundial", &source, Mode::Install)
             .unwrap_err()
             .0;
         assert!(
@@ -1188,19 +1189,19 @@ pub(crate) mod tests {
         let locations = locations(&root);
         let built = tarball(
             &root,
-            "clock-1.0.0",
+            "sundial-1.0.0",
             &[
                 ("mochi-plugin.toml", RELEASED),
-                ("bin/clock", "#!/bin/sh\n"),
+                ("bin/sundial", "#!/bin/sh\n"),
             ],
         );
         let source: Source = format!(
-            "https://example.org/clock-1.0.0.tar.gz#sha256={}",
+            "https://example.org/sundial-1.0.0.tar.gz#sha256={}",
             sha256_hex(&built)
         )
         .parse()
         .unwrap();
-        let fetch = Fixtures::default().with("https://example.org/clock-1.0.0.tar.gz", built);
+        let fetch = Fixtures::default().with("https://example.org/sundial-1.0.0.tar.gz", built);
         let mut asked = Vec::new();
         let mut confirm = |plan: &Plan| {
             asked.push(plan.to_string());
@@ -1212,16 +1213,16 @@ pub(crate) mod tests {
             fetch: &fetch,
         };
         assert_eq!(
-            installer.run("clock", &source, Mode::Install).unwrap(),
+            installer.run("sundial", &source, Mode::Install).unwrap(),
             Outcome::Installed { revision: None }
         );
-        assert!(locations.installs.join("clock/bin/clock").is_file());
-        let locked = Lock::load(&locations.lock).unwrap().plugins["clock"].clone();
+        assert!(locations.installs.join("sundial/bin/sundial").is_file());
+        let locked = Lock::load(&locations.lock).unwrap().plugins["sundial"].clone();
         assert_eq!(locked.source, source.to_string());
         assert_eq!(locked.version.as_deref(), Some("1.0.0"));
         assert_eq!(
             locked.asset.as_deref(),
-            Some("https://example.org/clock-1.0.0.tar.gz")
+            Some("https://example.org/sundial-1.0.0.tar.gz")
         );
         let Source::Archive { sha256, .. } = &source else {
             unreachable!()
@@ -1233,7 +1234,7 @@ pub(crate) mod tests {
         installer.fetch = &offline;
         for mode in [Mode::Install, Mode::Update] {
             assert!(matches!(
-                installer.run("clock", &source, mode).unwrap(),
+                installer.run("sundial", &source, mode).unwrap(),
                 Outcome::UpToDate { .. }
             ));
         }
@@ -1262,17 +1263,17 @@ pub(crate) mod tests {
         let locations = locations(&root);
         let archive = tarball(
             &root,
-            "clock",
+            "sundial",
             &[
                 ("mochi-plugin.toml", RELEASED),
-                ("bin/clock", "#!/bin/sh\n"),
+                ("bin/sundial", "#!/bin/sh\n"),
             ],
         );
         let expected = sha256_hex(b"something else");
-        let source: Source = format!("https://example.org/clock.tar.gz#sha256={expected}")
+        let source: Source = format!("https://example.org/sundial.tar.gz#sha256={expected}")
             .parse()
             .unwrap();
-        let fetch = Fixtures::default().with("https://example.org/clock.tar.gz", archive.clone());
+        let fetch = Fixtures::default().with("https://example.org/sundial.tar.gz", archive.clone());
         let mut confirm = |_: &Plan| panic!("nothing to confirm");
         let mut installer = Installer {
             locations: &locations,
@@ -1280,7 +1281,7 @@ pub(crate) mod tests {
             fetch: &fetch,
         };
         let error = installer
-            .run("clock", &source, Mode::Install)
+            .run("sundial", &source, Mode::Install)
             .unwrap_err()
             .0;
         assert!(
@@ -1472,8 +1473,8 @@ pub(crate) mod tests {
     fn turns_clone_urls_into_release_sources() {
         let release = |url: &str| release_source(url).map(|source| source.to_string());
         assert_eq!(
-            release("https://github.com/Xonex5/mochi-clock").unwrap(),
-            "git-release:github.com/Xonex5/mochi-clock"
+            release("https://github.com/Xonex5/mochi-sundial").unwrap(),
+            "git-release:github.com/Xonex5/mochi-sundial"
         );
         assert_eq!(
             release("https://github.com/a/b.git/").unwrap(),
@@ -1497,13 +1498,13 @@ pub(crate) mod tests {
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(
             root.join(manifest::FILE),
-            "[plugin]\nid = \"clock\"\nname = \"Clock\"\nversion = \"1\"\napi = 1\n[backend]\nexec = \"bin/clock\"\nbuild = \"mochi-no-such-cargo build\"\n[release]\nasset = \"clock-{version}.tar.gz\"\n",
+            "[plugin]\nid = \"sundial\"\nname = \"Sundial\"\nversion = \"1\"\napi = 1\n[backend]\nexec = \"bin/sundial\"\nbuild = \"mochi-no-such-cargo build\"\n[release]\nasset = \"sundial-{version}.tar.gz\"\n",
         )
         .unwrap();
         let manifest = Manifest::load(&root).unwrap();
         let plan = Plan {
-            id: "clock".into(),
-            source: "git:github.com/Someone/mochi-clock:main".parse().unwrap(),
+            id: "sundial".into(),
+            source: "git:github.com/Someone/mochi-sundial:main".parse().unwrap(),
             manifest,
             revision: None,
             download: None,
@@ -1529,11 +1530,11 @@ pub(crate) mod tests {
             "{error}"
         );
         assert!(
-            error.contains("programs.mochi.plugins.clock.src"),
+            error.contains("programs.mochi.plugins.sundial.src"),
             "{error}"
         );
         assert!(
-            error.contains("git-release:github.com/Someone/mochi-clock"),
+            error.contains("git-release:github.com/Someone/mochi-sundial"),
             "{error}"
         );
         assert_eq!(
