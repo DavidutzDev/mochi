@@ -68,6 +68,7 @@ or with home-manager, `xdg.mimeApps.defaultApplications."x-scheme-handler/mochi"
 | `github.com/<user>/<repo>`, `gh:<user>/<repo>` | A GitHub repository, cloned at its default branch. |
 | `https://gist.github.com/<user>/<id>` | A gist, which is a git repository too: one with only a `mochi-bento.toml` is a whole bento. |
 | `git:<url>:<ref>`, `git-release:…` | A source as `plugins.toml` takes it, with a branch, a tag or a commit. |
+| `https://<url>#sha256=<hash>` | A plugin's archive, as `plugins.toml` takes it: downloaded, checked against its hash and unpacked. |
 | `bento:friends/pomodoro` | A package in another registry, see [Other registries](#other-registries). |
 
 A repository is cloned to a scratch directory and read before anything happens; cloning runs none of its code.

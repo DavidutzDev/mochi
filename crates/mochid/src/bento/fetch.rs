@@ -4,18 +4,21 @@
 
 use std::path::{Path, PathBuf};
 
+use mochi_plugins::install::Curl;
 use mochi_plugins::registry::{self, Kind, Release};
 use mochi_plugins::{Locations, Source};
 
 /// What `mochi bento add` was given, as a source plugins.toml would take:
-/// `git:`, `git-release:`, `path:` and `bento:` sources, a directory, a URL
-/// like a gist's, `github.com/<user>/<repo>`, `gh:<user>/<repo>`, or a
-/// package's id in the registry.
+/// `git:`, `git-release:`, `path:` and `bento:` sources, an archive's URL
+/// with `#sha256=`, a directory, a URL like a gist's,
+/// `github.com/<user>/<repo>`, `gh:<user>/<repo>`, or a package's id in the
+/// registry.
 pub fn parse(text: &str) -> Result<Source, String> {
     let text = text.trim();
     if ["git:", "git-release:", "bento:"]
         .iter()
         .any(|prefix| text.starts_with(prefix))
+        || (text.starts_with("https://") && text.contains("#sha256="))
     {
         return text.parse().map_err(|error| format!("{error}"));
     }
@@ -88,7 +91,8 @@ impl Drop for Fetched {
 
 /// Gets a source's files: a directory in place, or a clone. A release's
 /// repository is cloned at its tag, for its manifest; the plugin installer
-/// downloads the release itself. A registry's package is cloned at the
+/// downloads the release itself. An archive is downloaded, checked against
+/// its hash and unpacked. A registry's package is cloned at the
 /// commit of the release it picks. `at` pins a commit, the one `plan` showed.
 pub fn fetch(source: &Source, locations: &Locations, at: Option<&str>) -> Result<Fetched, String> {
     let mut listed = None;
@@ -108,6 +112,21 @@ pub fn fetch(source: &Source, locations: &Locations, at: Option<&str>) -> Result
             format!("https://{host}/{repo}"),
             at.map(str::to_owned).or(tag.clone()),
         ),
+        Source::Archive { url, sha256 } => {
+            let scratch = scratch()?;
+            // Removes the scratch directory when downloading fails, too.
+            let mut fetched = Fetched {
+                dir: scratch.clone(),
+                revision: None,
+                listed: None,
+                scratch: Some(scratch.clone()),
+            };
+            eprintln!("Fetching {url}…");
+            fetched.dir =
+                mochi_plugins::install::fetch_archive(url, sha256, &scratch.join("archive"), &Curl)
+                    .map_err(|error| error.0)?;
+            return Ok(fetched);
+        }
         Source::Registry {
             registry,
             id,
@@ -132,14 +151,8 @@ pub fn fetch(source: &Source, locations: &Locations, at: Option<&str>) -> Result
             (package.repository.clone(), Some(release.commit.clone()))
         }
     };
-    let scratch = std::env::temp_dir().join(format!(
-        "mochi-bento-{}-{}",
-        std::process::id(),
-        SCRATCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    ));
-    let _ = std::fs::remove_dir_all(&scratch);
+    let scratch = scratch()?;
     let clone = scratch.join("repository");
-    std::fs::create_dir_all(&scratch).map_err(|error| error.to_string())?;
     let mut fetched = Fetched {
         dir: clone.clone(),
         revision: None,
@@ -151,6 +164,18 @@ pub fn fetch(source: &Source, locations: &Locations, at: Option<&str>) -> Result
         .map_err(|error| error.0)?;
     fetched.revision = Some(commit);
     Ok(fetched)
+}
+
+/// A new, empty scratch directory.
+fn scratch() -> Result<PathBuf, String> {
+    let scratch = std::env::temp_dir().join(format!(
+        "mochi-bento-{}-{}",
+        std::process::id(),
+        SCRATCH.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    let _ = std::fs::remove_dir_all(&scratch);
+    std::fs::create_dir_all(&scratch).map_err(|error| error.to_string())?;
+    Ok(scratch)
 }
 
 static SCRATCH: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
@@ -176,6 +201,8 @@ mod tests {
             text("git-release:github.com/User/clock:v2"),
             "git-release:github.com/User/clock:v2"
         );
+        let archive = format!("https://example.org/clock.tar.gz#sha256={}", "0".repeat(64));
+        assert_eq!(text(&archive), archive);
         let dir = std::env::temp_dir();
         assert!(matches!(parse(dir.to_str().unwrap()), Ok(Source::Path(_))));
         assert!(

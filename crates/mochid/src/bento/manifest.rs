@@ -114,7 +114,7 @@ impl Bento {
                     .map_err(|error| format!("[plugins] {id}: {error}"))?;
                 if matches!(source, Source::Path(_)) {
                     return Err(format!(
-                        "[plugins] {id}: a bento can't bring a path: plugin, only git: and git-release: ones"
+                        "[plugins] {id}: a bento can't bring a path: plugin, only git:, git-release:, bento: and archive ones"
                     ));
                 }
                 Ok((id.clone(), source))

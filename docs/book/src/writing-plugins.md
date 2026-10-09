@@ -132,6 +132,8 @@ Releases work for the most people: nothing to build, so no compiler, no librarie
 
 For a `git-release:` source, attach an archive to a release on GitHub, on a Forgejo or Gitea like Codeberg, or on a GitLab, named as `[release] asset` says with `{id}`, `{version}`, `{tag}` and `{arch}` (`x86_64` or `aarch64`) filled in. On GitLab, a release's assets are links: give the link that name, and point it at the archive, in the project's package registry for instance. The archive holds the plugin as it should be installed: the manifest, the views and the built `exec`, at its root or in one directory. `mochi plugins install` reads the manifest from the tagged commit first, to show what it will install, then downloads the asset.
 
+The same archive works without a forge too: put it anywhere over HTTPS, and users list it with its hash, as `source = "https://example.org/clock-1.0-x86_64.tar.gz#sha256=<hash>"`, the hash being what `sha256sum` prints for the file. An archive pins one architecture and one version, so `mochi plugins update` never moves it; `git-release:` picks the asset for each machine and finds new releases.
+
 This GitHub Actions workflow does it on every tag: copy it to `.github/workflows/release.yml` in the plugin's repository. It reads the manifest, runs its `build` on x86_64 and aarch64, packs the manifest, `settings.toml`, the views and the built `exec`, and attaches the archive to the tag's release.
 
 ```yaml

@@ -228,10 +228,14 @@ pub struct Locked {
     /// whichever forge it's on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tag: Option<String>,
+    /// The URL a `git-release:` asset or an archive came from.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub asset: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blake3: Option<String>,
+    /// For an archive, the SHA-256 it had, which plugins.toml gives.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
 }
 
 impl Locked {

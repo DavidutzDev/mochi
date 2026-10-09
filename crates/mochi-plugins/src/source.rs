@@ -8,6 +8,9 @@
 //!   manifest names, already built. Without a tag, the latest release. The
 //!   host is GitHub, a Forgejo or Gitea like codeberg.org, or a GitLab,
 //!   where a repository can sit in subgroups: `gitlab.com/Group/Sub/Repo`.
+//! - `https://example.org/plugin.tar.gz#sha256=<hex>` downloads a tar
+//!   archive, checks it has that SHA-256, and installs what it holds like a
+//!   directory.
 //! - `path:~/code/my-plugin` uses a directory where it is.
 //! - `bento:pomodoro` installs the newest release in Bento's registry that
 //!   this Mochi runs, at the commit a reviewer read. `bento:pomodoro:0.3.0`
@@ -33,6 +36,12 @@ pub enum Source {
         /// a GitLab's subgroups.
         repo: String,
         tag: Option<String>,
+    },
+    /// A tar archive at an `https://` URL, and the SHA-256 it must have.
+    Archive {
+        url: String,
+        /// In lowercase hex.
+        sha256: String,
     },
     Path(PathBuf),
     /// A package in a Bento registry.
@@ -118,7 +127,30 @@ impl FromStr for Source {
             };
             return Ok(Self::Git { url, reference });
         }
-        Err(error("start it with git:, git-release:, path: or bento:"))
+        if text.starts_with("http://") {
+            return Err(error("an archive downloads over https:// only"));
+        }
+        if text.starts_with("https://") {
+            // The hash goes in the URL's fragment, which isn't sent.
+            let Some((url, sha256)) = text.rsplit_once("#sha256=") else {
+                return Err(error(
+                    "an archive needs its hash: add #sha256=<hex>, as `sha256sum` prints it",
+                ));
+            };
+            if sha256.len() != 64 || !sha256.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+                return Err(error("the sha256 is 64 hex digits"));
+            }
+            if url == "https://" || url.contains('#') {
+                return Err(error("the archive's URL is empty or has another fragment"));
+            }
+            return Ok(Self::Archive {
+                url: url.to_owned(),
+                sha256: sha256.to_ascii_lowercase(),
+            });
+        }
+        Err(error(
+            "start it with git:, git-release:, path:, bento: or https://",
+        ))
     }
 }
 
@@ -156,6 +188,7 @@ impl fmt::Display for Source {
                 }
                 Ok(())
             }
+            Self::Archive { url, sha256 } => write!(f, "{url}#sha256={sha256}"),
             Self::Path(path) => write!(f, "path:{}", path.display()),
             Self::Registry {
                 registry,
@@ -333,6 +366,7 @@ mod tests {
             "git-release:github.com/User/x:v1",
             "git-release:codeberg.org/User/x",
             "git-release:gitlab.com/Group/Sub/x:v1",
+            "https://example.org/x.tar.gz#sha256=9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
             "path:~/code/x",
         ] {
             assert_eq!(parse(text).to_string(), text);
@@ -340,12 +374,41 @@ mod tests {
     }
 
     #[test]
+    fn archive_sources() {
+        let hash = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
+        assert_eq!(
+            parse(&format!(
+                "https://example.org/files/clock-1.0.tar.gz#sha256={}",
+                hash.to_ascii_uppercase()
+            )),
+            Source::Archive {
+                url: "https://example.org/files/clock-1.0.tar.gz".into(),
+                sha256: hash.into(),
+            }
+        );
+        let error = |text: &str| text.parse::<Source>().unwrap_err().to_string();
+        assert!(
+            error("https://example.org/clock.tar.gz").contains("add #sha256=<hex>"),
+            "{}",
+            error("https://example.org/clock.tar.gz")
+        );
+        assert!(
+            error(&format!("http://example.org/clock.tar.gz#sha256={hash}"))
+                .contains("https:// only")
+        );
+        assert!(error("https://example.org/clock.tar.gz#sha256=abc").contains("64 hex digits"));
+        assert!(
+            error(&format!("https://example.org/a#b#sha256={hash}")).contains("another fragment")
+        );
+    }
+
+    #[test]
     fn unknown_kinds_are_refused() {
-        let error = "https://github.com/User/x".parse::<Source>().unwrap_err();
+        let error = "ftp://example.org/x".parse::<Source>().unwrap_err();
         assert!(
             error
                 .to_string()
-                .contains("git:, git-release:, path: or bento:")
+                .contains("git:, git-release:, path:, bento: or https://")
         );
     }
 }

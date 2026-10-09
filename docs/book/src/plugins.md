@@ -15,6 +15,9 @@ source = "git:github.com/User/mochi-pomodoro:main"
 [plugins.weather]
 source = "git-release:github.com/User/mochi-weather:v0.2.0"
 
+[plugins.clock]
+source = "https://example.org/mochi-clock-1.0.tar.gz#sha256=9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+
 [plugins.mine]
 source = "path:~/code/my-plugin"
 ```
@@ -27,6 +30,7 @@ The source says where the plugin comes from and how it's installed:
 |---|---|
 | `git:<host>/<user>/<repo>:<ref>` | Clones the repository and builds the plugin with the command in its manifest. `<ref>` is a branch, a tag or a commit; without `:<ref>`, the default branch. A URL with a scheme works too: `git:https://codeberg.org/User/repo:v1`. |
 | `git-release:<host>/<user>/<repo>:<tag>` | Downloads the release asset the plugin's manifest names, already built: nothing to compile. Without `:<tag>`, the latest release. The host is GitHub, a Forgejo or Gitea like `codeberg.org`, or a GitLab, where `<user>` can be a group and its subgroups: `git-release:gitlab.com/Group/Sub/repo`. Mochi knows github.com, codeberg.org, gitea.com and gitlab.com, and asks another host's API which of them it runs. |
+| `https://<url>#sha256=<hash>` | Downloads a tar archive, compressed or not, checks its SHA-256, and installs what it holds like a `path:` directory: built with its manifest's command, or as it is when the backend is built already. The hash is required, and `sha256sum` prints it; an archive with another hash is refused. |
 | `path:<dir>` | Uses the directory where it is, building it in place. For writing a plugin: its views hot-reload. `~` is your home directory, and a relative path starts next to plugins.toml. |
 | `bento:<id>`, `bento:<id>:<version>` | Installs from [Bento's registry](bento.md#the-registry): the newest release this Mochi runs, or the version named, at the commit its reviewers read. `bento:<registry>/<id>` uses another registry. |
 
@@ -112,14 +116,14 @@ mochi: chrono: the build failed (exit status: 127): cargo build --release ...
 
 ## Pinning and updating
 
-`install` records what each plugin resolved to in `plugins.lock`, next to plugins.toml: the commit for `git:`, the tag and the asset's hash for `git-release:`. From then on, `install` installs exactly that, on this machine or another one with the same files, until you update:
+`install` records what each plugin resolved to in `plugins.lock`, next to plugins.toml: the commit for `git:`, the tag and the asset's hash for `git-release:`, the URL and its SHA-256 for an archive. From then on, `install` installs exactly that, on this machine or another one with the same files, until you update:
 
 ```sh
 mochi plugins update             # fetch every plugin's branch or latest release again
 mochi plugins update pomodoro
 ```
 
-A release asset that changed since the lock recorded it is refused. Changing a plugin's source in plugins.toml makes the next `install` resolve it again.
+A release asset that changed since the lock recorded it is refused. `update` leaves an archive as it is, since its hash pins it: give another URL and hash to install another one. Changing a plugin's source in plugins.toml makes the next `install` resolve it again.
 
 ## Checking and removing
 

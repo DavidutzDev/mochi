@@ -4,8 +4,9 @@
 //! command with `sh`, or `nix build` when the plugin has a `flake.nix` and
 //! Nix is installed. Nothing runs or lands in place before the caller
 //! confirms the [`Plan`]: a `git:` plugin is cloned to a scratch directory
-//! first, which runs none of its code, and a release's manifest is read
-//! before its asset is downloaded.
+//! first, which runs none of its code, a release's manifest is read before
+//! its asset is downloaded, and an archive is checked against its hash and
+//! unpacked.
 
 use std::ffi::OsStr;
 use std::fmt;
@@ -224,6 +225,7 @@ impl Installer<'_> {
             Source::GitRelease { host, repo, tag } => {
                 self.release(id, source, host, repo, tag.as_deref(), locked, mode)
             }
+            Source::Archive { url, sha256 } => self.archive(id, source, url, sha256, locked),
             Source::Path(_) => self.path(id, source, locked, mode),
             Source::Registry {
                 registry,
@@ -434,19 +436,7 @@ impl Installer<'_> {
                 "{url} changed since plugins.lock recorded it; run `mochi plugins update {id}` if you trust the new one"
             )));
         }
-        std::fs::create_dir_all(&work)?;
-        let extracted = run(
-            "tar",
-            ["-xf"].iter().map(OsStr::new).chain([
-                archive.as_os_str(),
-                OsStr::new("-C"),
-                work.as_os_str(),
-            ]),
-            None,
-        );
-        let _ = std::fs::remove_file(&archive);
-        extracted?;
-        let root = archive_root(&work)?;
+        let root = unpack(&archive, &work)?;
         let manifest = self.manifest_for(id, &root)?;
         check_exec(&manifest, &root)?;
         swap(&root, &target)?;
@@ -460,6 +450,62 @@ impl Installer<'_> {
                 tag: Some(tag),
                 asset: Some(url),
                 blake3: Some(hash),
+                ..Locked::default()
+            },
+            true,
+        )))
+    }
+
+    /// An archive from a URL, checked against its SHA-256, then installed
+    /// like a directory: built when it holds the backend's sources, as it is
+    /// when the backend is built already.
+    fn archive(
+        &mut self,
+        id: &str,
+        source: &Source,
+        url: &str,
+        sha256: &str,
+        locked: Option<Locked>,
+    ) -> Result<Option<(Locked, bool)>, InstallError> {
+        let target = self.locations.installs.join(id);
+        // The source pins the archive's bytes: updating has nothing to move.
+        if let Some(locked) = locked
+            && target.exists()
+        {
+            return Ok(Some((locked, false)));
+        }
+        let work = self.scratch(id)?;
+        let root = fetch_archive(url, sha256, &work, self.fetch)?;
+        let manifest = self.manifest_for(id, &root)?;
+        let built = manifest
+            .backend
+            .as_ref()
+            .is_some_and(|backend| root.join(&backend.exec).is_file());
+        let plan = Plan {
+            id: id.to_owned(),
+            source: source.clone(),
+            revision: None,
+            download: None,
+            build: how_to_build(&manifest, &root)
+                .filter(|_| !built)
+                .map(|build| (build, target.clone())),
+            manifest,
+        };
+        if !(self.confirm)(&plan) {
+            std::fs::remove_dir_all(&work)?;
+            return Ok(None);
+        }
+        self.build(&plan, &root)?;
+        swap(&root, &target)?;
+        if root != work {
+            let _ = std::fs::remove_dir_all(&work);
+        }
+        Ok(Some((
+            Locked {
+                source: source.to_string(),
+                version: Some(plan.manifest.plugin.version),
+                asset: Some(url.to_owned()),
+                sha256: Some(sha256.to_owned()),
                 ..Locked::default()
             },
             true,
@@ -859,6 +905,56 @@ fn resolve(repo: &Path, reference: Option<&str>) -> Result<String, InstallError>
     )))
 }
 
+/// Downloads the archive at `url` and unpacks it into `into`, which mustn't
+/// exist, when it has the SHA-256 `sha256`. Runs none of its code. Returns
+/// where its manifest is.
+pub fn fetch_archive(
+    url: &str,
+    sha256: &str,
+    into: &Path,
+    fetch: &dyn Fetch,
+) -> Result<PathBuf, InstallError> {
+    let archive = into.with_extension("download");
+    let found = fetch
+        .download(url, &archive)
+        .and_then(|()| Ok(sha256_hex(&std::fs::read(&archive)?)));
+    let error = match found {
+        Ok(found) if found == sha256 => return unpack(&archive, into),
+        Ok(found) => InstallError(format!(
+            "{url} isn't the archive plugins.toml names, so nothing was installed:\n  sha256 in plugins.toml {sha256}\n  sha256 downloaded      {found}"
+        )),
+        Err(error) => error,
+    };
+    let _ = std::fs::remove_file(&archive);
+    Err(error)
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::Digest;
+    format!("{:x}", sha2::Sha256::digest(bytes))
+}
+
+/// Unpacks a tar archive, compressed or not, into `into`, and deletes it.
+/// Returns where its manifest is.
+fn unpack(archive: &Path, into: &Path) -> Result<PathBuf, InstallError> {
+    let unpacked = std::fs::create_dir_all(into)
+        .map_err(InstallError::from)
+        .and_then(|()| {
+            run(
+                "tar",
+                ["-xf"].iter().map(OsStr::new).chain([
+                    archive.as_os_str(),
+                    OsStr::new("-C"),
+                    into.as_os_str(),
+                ]),
+                None,
+            )
+        });
+    let _ = std::fs::remove_file(archive);
+    unpacked?;
+    archive_root(into)
+}
+
 /// Where the manifest is in an extracted archive: at its root, or in its
 /// only directory.
 fn archive_root(dir: &Path) -> Result<PathBuf, InstallError> {
@@ -872,7 +968,7 @@ fn archive_root(dir: &Path) -> Result<PathBuf, InstallError> {
     match entries.as_slice() {
         [only] if only.join(manifest::FILE).is_file() => Ok(only.clone()),
         _ => Err(InstallError(format!(
-            "the release asset holds no {}",
+            "the archive holds no {}, at its root or in its only directory",
             manifest::FILE
         ))),
     }
@@ -1084,6 +1180,126 @@ pub(crate) mod tests {
             asked[0]
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn installs_archives_built_or_not() {
+        let root = scratch("archive");
+        let locations = locations(&root);
+        let built = tarball(
+            &root,
+            "clock-1.0.0",
+            &[
+                ("mochi-plugin.toml", RELEASED),
+                ("bin/clock", "#!/bin/sh\n"),
+            ],
+        );
+        let source: Source = format!(
+            "https://example.org/clock-1.0.0.tar.gz#sha256={}",
+            sha256_hex(&built)
+        )
+        .parse()
+        .unwrap();
+        let fetch = Fixtures::default().with("https://example.org/clock-1.0.0.tar.gz", built);
+        let mut asked = Vec::new();
+        let mut confirm = |plan: &Plan| {
+            asked.push(plan.to_string());
+            true
+        };
+        let mut installer = Installer {
+            locations: &locations,
+            confirm: &mut confirm,
+            fetch: &fetch,
+        };
+        assert_eq!(
+            installer.run("clock", &source, Mode::Install).unwrap(),
+            Outcome::Installed { revision: None }
+        );
+        assert!(locations.installs.join("clock/bin/clock").is_file());
+        let locked = Lock::load(&locations.lock).unwrap().plugins["clock"].clone();
+        assert_eq!(locked.source, source.to_string());
+        assert_eq!(locked.version.as_deref(), Some("1.0.0"));
+        assert_eq!(
+            locked.asset.as_deref(),
+            Some("https://example.org/clock-1.0.0.tar.gz")
+        );
+        let Source::Archive { sha256, .. } = &source else {
+            unreachable!()
+        };
+        assert_eq!(locked.sha256.as_ref(), Some(sha256));
+
+        // The hash pins it: neither installing nor updating fetches again.
+        let offline = Fixtures::default();
+        installer.fetch = &offline;
+        for mode in [Mode::Install, Mode::Update] {
+            assert!(matches!(
+                installer.run("clock", &source, mode).unwrap(),
+                Outcome::UpToDate { .. }
+            ));
+        }
+
+        // An archive of sources builds like a directory.
+        let manifest = "[plugin]\nid = \"timer\"\nname = \"Timer\"\nversion = \"2.0.0\"\napi = 1\n[backend]\nexec = \"bin/timer\"\nbuild = \"mkdir -p bin && printf '#!/bin/sh\\\\n' > bin/timer && chmod +x bin/timer\"\n";
+        let sources = tarball(&root, ".", &[("mochi-plugin.toml", manifest)]);
+        let source: Source = format!(
+            "https://example.org/timer.tgz#sha256={}",
+            sha256_hex(&sources)
+        )
+        .parse()
+        .unwrap();
+        let fetch = Fixtures::default().with("https://example.org/timer.tgz", sources);
+        installer.fetch = &fetch;
+        installer.run("timer", &source, Mode::Install).unwrap();
+        assert!(locations.installs.join("timer/bin/timer").is_file());
+        assert!(!asked[0].contains("runs "), "{}", asked[0]);
+        assert!(asked[1].contains("runs    mkdir -p bin"), "{}", asked[1]);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn refuses_an_archive_with_another_hash() {
+        let root = scratch("archive-hash");
+        let locations = locations(&root);
+        let archive = tarball(
+            &root,
+            "clock",
+            &[
+                ("mochi-plugin.toml", RELEASED),
+                ("bin/clock", "#!/bin/sh\n"),
+            ],
+        );
+        let expected = sha256_hex(b"something else");
+        let source: Source = format!("https://example.org/clock.tar.gz#sha256={expected}")
+            .parse()
+            .unwrap();
+        let fetch = Fixtures::default().with("https://example.org/clock.tar.gz", archive.clone());
+        let mut confirm = |_: &Plan| panic!("nothing to confirm");
+        let mut installer = Installer {
+            locations: &locations,
+            confirm: &mut confirm,
+            fetch: &fetch,
+        };
+        let error = installer
+            .run("clock", &source, Mode::Install)
+            .unwrap_err()
+            .0;
+        assert!(
+            error.contains("isn't the archive plugins.toml names"),
+            "{error}"
+        );
+        assert!(error.contains(&expected), "{error}");
+        assert!(error.contains(&sha256_hex(&archive)), "{error}");
+        assert_eq!(std::fs::read_dir(&locations.installs).unwrap().count(), 0);
+        assert!(!locations.lock.exists());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn hashes_with_sha256() {
+        assert_eq!(
+            sha256_hex(b"test"),
+            "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+        );
     }
 
     fn scratch(name: &str) -> PathBuf {

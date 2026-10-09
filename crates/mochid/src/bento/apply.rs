@@ -1276,14 +1276,21 @@ pub fn plan(config_file: &Path, text: &str) -> Result<(), String> {
 
 /// What a plugin will run and read, as the terminal's question shows it.
 fn plugin_json(manifest: &Manifest, dir: &Path, source: &Source) -> serde_json::Value {
-    let runs = match source {
-        Source::GitRelease { .. } => None,
-        _ => mochi_plugins::install::how_to_build(manifest, dir).map(|build| build.to_string()),
-    };
     let backend = manifest.backend.as_ref();
+    // An archive with its backend built installs as it is, like a release.
+    let built = match source {
+        Source::GitRelease { .. } => true,
+        Source::Archive { .. } => backend.is_some_and(|backend| dir.join(&backend.exec).is_file()),
+        _ => false,
+    };
+    let runs = if built {
+        None
+    } else {
+        mochi_plugins::install::how_to_build(manifest, dir).map(|build| build.to_string())
+    };
     serde_json::json!({
         "runs": runs,
-        "downloads": matches!(source, Source::GitRelease { .. }),
+        "downloads": built,
         "starts": backend.map(|backend| backend.exec.clone()),
         "needs": backend.map(|backend| backend.needs.clone()).unwrap_or_default(),
         "missing": manifest.missing_needs(),
