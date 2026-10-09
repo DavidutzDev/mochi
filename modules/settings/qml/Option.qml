@@ -49,6 +49,15 @@ Item {
     // Something not in the menu may be typed too: names that change.
     readonly property bool custom: menuSource !== "" && !["module", "control-center-card", "control-center-page", "settings-section", "power-profile"].includes(menuSource)
 
+    // Measures choices' labels in the segments' font.
+    FontMetrics {
+        id: labels
+
+        font.pixelSize: Theme.textBody
+        font.family: Theme.fontFamily
+        font.weight: Font.DemiBold
+    }
+
     function openMenu(kind: string, anchor: Item): void {
         menu = kind;
         popup("choice", anchor);
@@ -577,7 +586,9 @@ Item {
         id: segmentsControl
 
         Segmented {
-            width: root.choices().length * 76
+            // Each as wide as the widest label needs, like "Foreground",
+            // and at least 76.
+            width: root.choices().length * Math.max(76, Math.max(...root.choices().map(choice => labels.advanceWidth(choice.label ?? ""))) + Theme.spaceLarge * 2)
             height: Theme.controlHeight
             options: root.choices()
             current: root.value ?? ""
