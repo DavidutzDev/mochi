@@ -653,6 +653,12 @@ Later:
 - [x] An About page in the settings: version, system, session, modules, plugins and processes, to copy into a bug report
 - [x] Weather: a built-in module with Open-Meteo (no key), off until a place is set; widgets (current, forecast, 12-hour curve), and one forecast shared with the clock panel and a lock screen
 - [x] A clock panel on the island: Today (time, weather, hourly), Calendar with reminders, Timer and pomodoro (the timer module), Stopwatch with laps, World clocks
+- [x] From mochi-clock (Xonex5), credited on the clock's and the timer's settings pages: custom timers with labels and natural lengths, an alarm with a volume, pausing media, `:t` in the launcher, the stopwatch's tenths, runs and copying, seconds and the day's progress, common cities
+- [x] Weather and clock pages and cards in the control center; navbar pages reordered and hidden like the cards
+- [x] A time zone picker in the settings and the widget editor
+- [x] Clock shapes as a setting: cookie, circle, pentagon, clover, burst, hexagon, octagon, squircle, pill or none
+- [x] Waves can be turned off for the whole theme or per module; more of the recent choices are settings
+- [ ] Settings still to add for choices that are fixed today: the timer's and the reminder's notice durations, the weather card's "Set a place" prompt or hiding it, the clock panel calendar's accent
 - [x] Bento before Plugins in the settings, and a `section` contribution for a module's own view on its settings page
 
 ### Checks and tools

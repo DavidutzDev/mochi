@@ -6,6 +6,19 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- Custom timers beside the focus timer: several at once, each with a label, typed like `15m Tea`, `90s` or `1h 30m`, with pause, stop and "+1 min"; a bubble each, or one for the soonest (`timer_bubbles`). When one runs out, the island says so with Again and "+1 min", the alarm plays (`sound`, `sound_file`, `volume`, `sound_command`) and the music pauses (`pause_media`). The clock panel's Timer tab shows them and starts new ones.
+- `:t 10m Pizza` in the launcher starts a timer; `:t sw` starts or pauses the stopwatch.
+- A time zone picker: the clock's `zones`, and the clock widgets' `timezone` and `zones`, list the system's zones with their offset now and a search.
+- The clock's Today tab can show the seconds and how far through the day it is, as a line or a ring, and its clock can sit in another shape or none.
+- The stopwatch counts in tenths or hundredths, keeps each run that Reset ends, and copies a run with its laps to the clipboard.
+- The clock's World tab adds common cities with a click.
+- New shapes for clocks and widgets: hexagon, octagon, squircle and pill. The clock widget's looks pick one in their settings.
+- The control center's navbar pages can be reordered and hidden: the pencil drags them along the navbar and takes them out, with `pages` and `hidden_pages` settings and `mochi ipc control-center arrange-pages`. A hidden page still opens by name and from its card. `mochi ipc control-center edit` opens it arranging.
+- A Weather page in the control center: the weather now with feels like, humidity, wind, UV index, sunrise and sunset, the next 7 days and the next 24 hours as a curve; and a one-column "Weather now" card under More cards.
+- A Clock page in the control center with the panel's Today, Calendar, Stopwatch and World, and a Clock card under More cards.
+- `[motion] waves = false` in `theme.toml` draws every progress line and ring flat. The media line, the battery ring and the performance rings also have a `wavy` setting of their own.
+- Media: `line_color` draws the progress line in the accent, and `card_seeks` lets the Now Playing card's line seek. Agents: `waiting_ms` and `done_ms` set how long the notices stay. Weather: `stale_minutes` sets how old the forecast gets before the looks say so, never less than twice `refresh_minutes`.
+- The clock and the timer credit [mochi-clock](https://github.com/Xonex5/mochi-clock), by Xonex5, whose ideas their stopwatch, custom timers, alarm and `:t` follow, on their settings pages.
 - Widgets can have several looks: modules declare variants with a title, a one-line description and their own sizes, and the widget's settings switch between them. A look can go without its card.
 - The widget drawer is a panel at the side while arranging: search, category chips, and tabs for Add (a live preview of every look, with how many are placed), On desktop and Layouts. Click a widget to place it in the first free spot, clear of the drawer and the island.
 - Saved widget layouts: keep an arrangement under a name and switch between them, in `widget-layouts/` next to `widgets.toml`.
@@ -42,6 +55,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- The settings panel's segmented choices fit long labels.
 - The world clock found no time zones on NixOS without `TZDIR` set; it reads the zone files' full paths now.
 - Turning a module on no longer restarts Quickshell: the UI reloads its views in place and keeps its windows, so the island, the bubbles and the widgets stay on screen. Quickshell also stops reloading by itself while mochid writes the views, which it only does now for `mochid --dev`. A UI that doesn't come back from the reload still gets a fresh Quickshell.
 - The installer restarts the running mochid only when it's the one it just updated. Installing into another prefix used to restart a mochid from a package or Nix too.
