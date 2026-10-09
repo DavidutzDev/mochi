@@ -36,7 +36,7 @@ mochi ipc clock delete 3
 
 ## Timer
 
-The [focus timer](timer.md)'s countdown in a ring that waves while it runs, with lengths to start focus or a break, and pause, resume and stop while one runs. The timer module does the counting, so its bubble and its notices work as always. With the timer module off, the tab says so and opens its settings.
+On the left, the [focus timer](timer.md)'s countdown in a ring that waves while it runs, with lengths to start focus or a break, and pause, resume and stop while one runs. On the right, the timer module's [custom timers](timer.md#custom-timers): a field that starts one from what you type, like `15m Tea`, `90s` or `1h 30m`, a button for each of its `presets`, and each running timer with its time left, when it ends, "+1 min", pause and stop. Start stays greyed out, with a hint under the field, until what's typed begins with a length. The timer module does the counting, so its bubbles and its notices work as always. With the timer module off, the tab says so and opens its settings.
 
 ## Stopwatch
 
@@ -54,7 +54,7 @@ Lap 2  0:00.8  0:02.1
 
 The time here, then in each of the `zones`, two to a row: the city, whether it's yesterday, today or tomorrow there, how many hours ahead or behind it is, and the time. The zones' offsets come from the system's time zone database, read again every 10 minutes for daylight saving, as for the world clock widget. A zone the system doesn't have says so.
 
-**Add a city** lists common cities from Honolulu to Auckland, west to east: a click adds one, or takes off one that's there, until the tab has its 8. Escape or **Done** goes back to the cards. The list writes the `zones` setting, as the settings panel does, and **Change the zones** opens it there, for any zone the system knows.
+**Add a city** lists common cities from Honolulu to Auckland, west to east: a click adds one, or takes off one that's there, until the tab has its 8. Escape or **Done** goes back to the cards. The list writes the `zones` setting, as the settings panel does, and **Change the zones** opens it there, where the Add menu lists the system's zones with a search, each as its city and region with its offset now and its country, like "Tokyo, Asia" and "UTC+9 · Japan". Typing a zone's name there works too.
 
 ## In the control center
 
