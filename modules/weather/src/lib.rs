@@ -338,9 +338,47 @@ impl Module for Weather {
                 .icon("partly_cloudy_day")
                 .order(50)
                 .options(json!({ "span": 2, "rows": 1 })),
+            // Its looks: the first is the one placed widgets had before
+            // there were others.
             ContributionSpec::new("widgets", "widget", "current", "Widget", "Weather")
                 .icon("partly_cloudy_day")
-                .options(json!({ "size": [16, 6], "min": [10, 5], "max": [40, 20] })),
+                .options(json!({
+                    "size": [16, 6],
+                    "min": [10, 5],
+                    "max": [40, 20],
+                    "category": "Weather",
+                    "variants": [
+                        {
+                            "id": "current",
+                            "title": "Now",
+                            "description": "The sky and the temperature now, with the place",
+                        },
+                        {
+                            "id": "icon",
+                            "title": "Icon",
+                            "description": "The sky's icon in a cookie, the temperature beside",
+                            "size": [16, 8],
+                        },
+                        {
+                            "id": "forecast",
+                            "title": "Forecast",
+                            "description": "The next days, each with its low and high",
+                            "view": "Forecast",
+                            "size": [20, 14],
+                            "min": [18, 8],
+                            "max": [40, 30],
+                        },
+                        {
+                            "id": "hours",
+                            "title": "Hours",
+                            "description": "The next 12 hours as a curve, with their skies",
+                            "view": "Hours",
+                            "size": [24, 10],
+                            "min": [16, 8],
+                            "max": [60, 24],
+                        },
+                    ],
+                })),
         ];
         offers.extend(tour::steps());
         offers
@@ -781,6 +819,23 @@ mod tests {
                 Err("no such fixture")
             };
             Box::pin(async move { answer.map(str::to_owned).map_err(str::to_owned) })
+        }
+    }
+
+    #[test]
+    fn every_view_offered_ships() {
+        for offer in Weather.contributions() {
+            let mut views = vec![offer.view.clone()];
+            for variant in offer.options["variants"].as_array().into_iter().flatten() {
+                views.extend(variant["view"].as_str().map(str::to_owned));
+            }
+            for view in views {
+                assert!(
+                    QML.get_file(format!("{view}.qml")).is_some(),
+                    "{} offers {view}, which isn't in qml/",
+                    offer.id
+                );
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 # Weather
 
-The weather where you are, from [Open-Meteo](https://open-meteo.com), which needs no account or key: the sky and the temperature now, the next 24 hours and the next 7 days. The [control center](control-center.md) has a card with the weather now, the place and a strip of the next hours, and the [desktop](widgets.md) a Weather widget.
+The weather where you are, from [Open-Meteo](https://open-meteo.com), which needs no account or key: the sky and the temperature now, the next 24 hours and the next 7 days. The [control center](control-center.md) has a card with the weather now, the place and a strip of the next hours, and the [desktop](widgets.md) a Weather widget in [four looks](#the-widgets-looks).
 
 Nothing is sent until you set a place. Until then, the card and the widget say so, and their **Set a place** button opens the setting. A place Open-Meteo doesn't know gets **Change the place**, and a fetch that failed **Try again**. Set `place` to a city or a town, like `"Lyon"`, or `"Lyon, France"` or `"Springfield, Illinois"` for the one in that country or region. Mochi looks the name up once with Open-Meteo's geocoding, and keeps where it is. Set `latitude` and `longitude` instead to skip the lookup: they count once both are set, and `place` then only names them on the card.
 
@@ -12,6 +12,19 @@ Open-Meteo gets the place's name when it's looked up, then its coordinates with 
 |---|---|
 | `refresh` | Fetches the forecast now |
 | `status` | Prints the weather now and today's low and high, like `Lyon: 15°C, overcast, feels like 13°C; today 10°C to 16°C. Updated 9 minutes ago` |
+
+## The widget's looks
+
+The drawer has the widget under Weather in four looks, and its settings switch between them. `mochi ipc widgets add weather current:<look>` places one.
+
+| Look | Size | What it shows |
+|---|---|---|
+| `current`, Now | 16 by 6 | The sky's icon, the temperature, the sky in words, and the place with today's low and high |
+| `icon`, Icon | 16 by 8 | The sky's icon in a cookie in the accent color, with the temperature big beside it over the sky in words |
+| `forecast`, Forecast | 20 by 14 | A row a day from today, as many as fit: the weekday, the sky, the chance of rain or snow from 20%, and the low and high on either side of a bar. The bars share the week's scale, so a warm day sits to the right; today's has a dot at the temperature now |
+| `hours`, Hours | 24 by 10 | The next 12 hours as a curve, with each hour's temperature over it and its sky and hour under it. The first is now, with a dot on the curve. Where the columns get narrow, every other hour has its labels |
+
+Sizes are in grid cells, and every look grows with the widget. Without a forecast, each look says why, with the same button as the card. When the last fetch failed, or the forecast is more than an hour old, each look adds how old it is, like "Updated 2 hours ago".
 
 ## The weather in other views
 
