@@ -4,8 +4,8 @@ import "Place.js" as Place
 
 // The selected widget's settings, as a form made from what it declares:
 // its looks, when it has more than one, then a switch for an on-off
-// setting, a choice for a few, a field otherwise, leaving out those its
-// look doesn't use. Each change goes to the module at once. With more than
+// setting, segments for a few choices and chips for more, a field
+// otherwise, leaving out those its look doesn't use. Each change goes to the module at once. With more than
 // one monitor, a choice of monitor sends the widget to another one.
 Rectangle {
     id: root
@@ -180,6 +180,7 @@ Rectangle {
 
                 required property var modelData
                 readonly property var value: root.widget?.settings?.[modelData.name] ?? modelData.default
+                readonly property var choices: modelData.choices ?? []
 
                 width: column.width
                 spacing: Theme.spaceSmall
@@ -229,7 +230,7 @@ Rectangle {
                 }
 
                 Segmented {
-                    visible: field.modelData.kind === "choice"
+                    visible: field.modelData.kind === "choice" && field.choices.length <= 4
                     width: parent.width
                     height: 34
                     color: Theme.raised
@@ -238,7 +239,71 @@ Rectangle {
                                 "label": choice
                             }))
                     current: `${field.value}`
+                    keyboard: true
                     onPicked: value => field.set(value)
+                }
+
+                // More than a row of segments holds: chips that wrap, the
+                // current one filled, like the looks.
+                Flow {
+                    visible: field.modelData.kind === "choice" && field.choices.length > 4
+                    width: parent.width
+                    spacing: Theme.spaceTiny
+
+                    Repeater {
+                        model: field.choices
+
+                        Rectangle {
+                            id: chip
+
+                            required property string modelData
+                            readonly property bool chosen: `${field.value}` === modelData
+
+                            function pick(): void {
+                                if (!chosen)
+                                    field.set(modelData);
+                            }
+
+                            width: chipLabel.implicitWidth + Theme.spaceLarge
+                            height: Theme.controlHeight - Theme.spaceSmall
+                            radius: height / 2
+                            color: chosen ? Theme.foreground : chipArea.containsMouse ? Theme.highlight : Theme.raised
+                            activeFocusOnTab: true
+                            Keys.onReturnPressed: pick()
+                            Keys.onEnterPressed: pick()
+                            Keys.onSpacePressed: pick()
+
+                            Text {
+                                id: chipLabel
+
+                                anchors.centerIn: parent
+                                text: chip.modelData
+                                color: chip.chosen ? Theme.background : Theme.foreground
+                                font.pixelSize: Theme.textCaption
+                                font.family: Theme.fontFamily
+                                font.weight: Theme.weightTitle
+                            }
+
+                            MouseArea {
+                                id: chipArea
+
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: chip.pick()
+                            }
+
+                            Rectangle {
+                                visible: chip.activeFocus
+                                anchors.fill: parent
+                                anchors.margins: -3
+                                radius: height / 2
+                                color: "transparent"
+                                border.width: 2
+                                border.color: Theme.accent
+                            }
+                        }
+                    }
                 }
 
                 Rectangle {

@@ -110,7 +110,8 @@ impl Module for Widgets {
                             "id": "digital",
                             "title": "Digital",
                             "description": "The time, big, over the date",
-                            "settings": ["timezone", "hours", "seconds", "date"],
+                            "settings": ["timezone", "hours", "seconds", "date", "shape"],
+                            "defaults": { "shape": "none" },
                         },
                         {
                             "id": "stacked",
@@ -119,7 +120,8 @@ impl Module for Widgets {
                             "size": [10, 13],
                             "min": [6, 8],
                             "max": [24, 30],
-                            "settings": ["timezone", "hours", "date"],
+                            "settings": ["timezone", "hours", "date", "shape"],
+                            "defaults": { "shape": "none" },
                         },
                         {
                             "id": "analog",
@@ -134,11 +136,11 @@ impl Module for Widgets {
                         {
                             "id": "shape",
                             "title": "Shape",
-                            "description": "The time inside a cookie in the accent color",
+                            "description": "The time inside a shape in the accent color, a cookie or another",
                             "size": [11, 11],
                             "min": [7, 7],
                             "max": [24, 24],
-                            "settings": ["timezone", "hours"],
+                            "settings": ["timezone", "hours", "shape"],
                         },
                         {
                             "id": "minimal",
@@ -190,6 +192,16 @@ impl Module for Widgets {
                             "name": "zones",
                             "default": zones::DEFAULT.join(", "),
                             "description": "Up to four zones, with commas between",
+                        },
+                        {
+                            "name": "shape",
+                            "kind": "choice",
+                            "choices": [
+                                "none", "cookie", "circle", "pentagon", "clover", "burst",
+                                "hexagon", "octagon", "squircle", "pill",
+                            ],
+                            "default": "cookie",
+                            "description": "The shape the time sits in, in the accent color",
                         },
                     ],
                 })),
@@ -974,10 +986,10 @@ impl State {
             .iter()
             .filter(|widget| widget.module == "widgets" && widget.widget == "clock")
             .map(|widget| match clock {
-                Some(spec) => spec.settings_for(&widget.settings),
+                Some(spec) => spec.settings_for(&widget.settings, widget.variant.as_deref()),
                 None => serde_json::to_value(&widget.settings).unwrap_or_default(),
             });
-        let defaults = clock.map(|spec| spec.settings_for(&toml::Table::new()));
+        let defaults = clock.map(|spec| spec.settings_for(&toml::Table::new(), Some("world")));
         placed
             .chain(defaults)
             .flat_map(|settings| clock_zones(&settings))
@@ -1017,7 +1029,7 @@ impl State {
                     "z": widget.z,
                     "settings": spec.map_or_else(
                         || serde_json::to_value(&widget.settings).unwrap_or_default(),
-                        |spec| spec.settings_for(&widget.settings),
+                        |spec| spec.settings_for(&widget.settings, widget.variant.as_deref()),
                     ),
                     // Not offered: its module isn't running.
                     "view": look.as_ref().map(|look| look.view),
@@ -1352,9 +1364,16 @@ mod tests {
             .collect();
         let specs = catalog::read(&offers);
         assert_eq!(specs.len(), 2);
-        assert_eq!(specs[0].settings.len(), 5);
+        assert_eq!(specs[0].settings.len(), 6);
         // The digital look stays first, and the minimal one has no card.
         assert_eq!(specs[0].look(None).variant.unwrap().id, "digital");
+        // The shape look starts in a cookie, the digital one in no shape.
+        let none = toml::Table::new();
+        assert_eq!(
+            specs[0].settings_for(&none, Some("shape"))["shape"],
+            "cookie"
+        );
+        assert_eq!(specs[0].settings_for(&none, None)["shape"], "none");
         assert!(!specs[0].look(Some("minimal")).frame);
         assert_eq!(specs[0].look(Some("world")).view, "World");
         assert_eq!(specs[1].look(None).variant.unwrap().id, "month");

@@ -21,10 +21,11 @@ Item {
     // A view with nothing to show steps aside, like the battery's on a
     // computer without one.
     readonly property bool hidden: content.item?.hidden ?? false
+    // The look's own defaults first.
     readonly property var defaults: {
         const settings = {};
         for (const setting of entry.settings ?? [])
-            settings[setting.name] = setting.default;
+            settings[setting.name] = variant?.defaults?.[setting.name] ?? setting.default;
         return settings;
     }
 

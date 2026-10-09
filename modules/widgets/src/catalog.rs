@@ -23,9 +23,11 @@
 //!
 //! `variants` are the widget's looks, each with its own title, one-line
 //! description, sizes and `frame`, which default to the widget's. A
-//! variant can name its own `view`, and list the `settings` that apply to
-//! it. A placed widget records its variant, and one without gets the
-//! first, so the look a widget had before it had variants goes first.
+//! variant can name its own `view`, list the `settings` that apply to it,
+//! and give some of them `defaults` of its own, like `{ shape = "none" }`
+//! for a look that has the shape setting but starts without one. A placed
+//! widget records its variant, and one without gets the first, so the look
+//! a widget had before it had variants goes first.
 
 use mochi_core::Contribution;
 use serde::Deserialize;
@@ -119,6 +121,8 @@ pub struct Variant {
     /// The widget's settings that apply to this look; all of them when
     /// `None`.
     pub settings: Option<Vec<String>>,
+    /// Settings whose default differs on this look, by name.
+    pub defaults: serde_json::Map<String, Value>,
 }
 
 impl Variant {
@@ -133,6 +137,7 @@ impl Variant {
             "max": [self.max.0, self.max.1],
             "frame": self.frame,
             "settings": self.settings,
+            "defaults": self.defaults,
         })
     }
 }
@@ -203,6 +208,8 @@ struct VariantOptions {
     max: Option<(u32, u32)>,
     frame: Option<bool>,
     settings: Option<Vec<String>>,
+    #[serde(default)]
+    defaults: serde_json::Map<String, Value>,
 }
 
 impl Spec {
@@ -230,6 +237,7 @@ impl Spec {
                 .settings
                 .iter()
                 .flatten()
+                .chain(variant.defaults.keys())
                 .find(|name| !declared(name))
             {
                 return Err(format!(
@@ -252,6 +260,7 @@ impl Spec {
                 max,
                 frame: variant.frame.unwrap_or(frame),
                 settings: variant.settings,
+                defaults: variant.defaults,
             });
         }
         Ok(Self {
@@ -344,11 +353,17 @@ impl Spec {
             })
     }
 
-    /// An instance's settings: the defaults, with what it set on top.
-    pub fn settings_for(&self, set: &toml::Table) -> Value {
+    /// An instance placed with `variant`: the defaults, its look's own
+    /// first, with what it set on top.
+    pub fn settings_for(&self, set: &toml::Table, variant: Option<&str>) -> Value {
+        let look = self.look(variant).variant;
         let mut settings = serde_json::Map::new();
         for setting in &self.settings {
-            settings.insert(setting.name.clone(), setting.default.clone());
+            let default = look.and_then(|look| look.defaults.get(&setting.name));
+            settings.insert(
+                setting.name.clone(),
+                default.unwrap_or(&setting.default).clone(),
+            );
         }
         for (key, value) in set {
             if let Ok(value) = serde_json::to_value(value) {
@@ -452,7 +467,7 @@ mod tests {
         let mut set = toml::Table::new();
         set.insert("seconds".into(), toml::Value::Boolean(true));
         assert_eq!(
-            spec.settings_for(&set),
+            spec.settings_for(&set, None),
             json!({ "seconds": true, "hours": "24" })
         );
     }
@@ -490,9 +505,13 @@ mod tests {
             "size": [14, 8],
             "min": [8, 5],
             "category": "Clock",
-            "settings": [{ "name": "seconds", "kind": "bool" }, { "name": "zones" }],
+            "settings": [
+                { "name": "seconds", "kind": "bool" },
+                { "name": "zones" },
+                { "name": "shape", "default": "cookie" },
+            ],
             "variants": [
-                { "id": "digital", "title": "Digital", "description": "Time over the date" },
+                { "id": "digital", "title": "Digital", "description": "Time over the date", "defaults": { "shape": "none" } },
                 { "id": "stacked", "title": "Stacked", "size": [9, 12], "min": [6, 6], "settings": ["seconds"] },
                 { "id": "analog", "title": "Analog", "view": "Analog", "size": [10, 10] },
                 { "id": "minimal", "title": "Minimal", "frame": false },
@@ -523,7 +542,18 @@ mod tests {
                 .contains("digital, stacked, analog, minimal")
         );
 
+        // A look's own defaults come before the widget's, and under what
+        // was set.
+        let none = toml::Table::new();
+        assert_eq!(spec.settings_for(&none, Some("digital"))["shape"], "none");
+        assert_eq!(spec.settings_for(&none, None)["shape"], "none");
+        assert_eq!(spec.settings_for(&none, Some("stacked"))["shape"], "cookie");
+        let mut set = toml::Table::new();
+        set.insert("shape".into(), toml::Value::String("pill".into()));
+        assert_eq!(spec.settings_for(&set, Some("digital"))["shape"], "pill");
+
         let json = spec.to_json();
+        assert_eq!(json["variants"][0]["defaults"], json!({ "shape": "none" }));
         assert_eq!(json["variants"][1]["size"], json!([9, 12]));
         assert_eq!(json["variants"][1]["settings"], json!(["seconds"]));
         assert_eq!(json["variants"][0]["settings"], Value::Null);
@@ -554,6 +584,14 @@ mod tests {
             { "id": "a", "title": "A", "settings": ["nope"] },
         ] }));
         assert!(Spec::from_offer(&unknown).unwrap_err().contains("nope"));
+        let unknown_default = offer(json!({ "variants": [
+            { "id": "a", "title": "A", "defaults": { "nope": 1 } },
+        ] }));
+        assert!(
+            Spec::from_offer(&unknown_default)
+                .unwrap_err()
+                .contains("nope")
+        );
         let typo = offer(json!({ "variants": [{ "id": "a", "title": "A", "sise": [2, 2] }] }));
         assert!(Spec::from_offer(&typo).is_err());
     }
