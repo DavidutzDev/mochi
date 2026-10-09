@@ -28,11 +28,14 @@ pub fn steps() -> Vec<ContributionSpec> {
                     "can_next": true,
                     "can_play_pause": true,
                     "can_seek": true,
+                    "volume": 70,
+                    "can_volume": true,
                     "players": [
                         {
                             "name": "Spotify",
                             "shown": true,
-                            "playing": true
+                            "playing": true,
+                            "volume": 70
                         }
                     ]
                 }

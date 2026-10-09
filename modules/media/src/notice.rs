@@ -195,6 +195,7 @@ impl Tracker {
                     "name": player.identity,
                     "shown": bus == current,
                     "playing": player.status == Status::Playing,
+                    "volume": volume(player),
                 })
             })
             .collect();
@@ -281,7 +282,14 @@ pub fn payload(player: &Player) -> Value {
         "can_next": player.can_next,
         "can_play_pause": player.can_play || player.can_pause,
         "can_seek": player.can_seek && track.length.is_some(),
+        "volume": volume(player),
+        "can_volume": player.volume.is_some() && player.can_control,
     })
+}
+
+/// The player's own volume in percent, or `None` when it doesn't report one.
+pub fn volume(player: &Player) -> Option<u32> {
+    player.volume.map(|volume| (volume * 100.0).round() as u32)
 }
 
 #[cfg(test)]
@@ -311,6 +319,8 @@ mod tests {
             can_play: true,
             can_pause: true,
             can_seek: true,
+            volume: None,
+            can_control: true,
         }
     }
 
@@ -518,5 +528,45 @@ mod tests {
         assert_eq!(payload["read_at_ms"], 2_000);
         assert_eq!(payload["art"], Value::Null);
         assert_eq!(payload["can_seek"], true);
+        // Without a volume of its own, the views show no slider.
+        assert_eq!(payload["volume"], Value::Null);
+        assert_eq!(payload["can_volume"], false);
+    }
+
+    #[test]
+    fn payload_carries_the_players_volume() {
+        let mut tracker = Tracker::default();
+        let spotify = Player {
+            volume: Some(0.348),
+            ..player("Song", Status::Playing)
+        };
+        tracker.apply(changed(SPOTIFY, spotify.clone()));
+        tracker.apply(changed(FIREFOX, player("Video", Status::Paused)));
+        let payload = tracker.payload();
+        assert_eq!(payload["volume"], 35);
+        assert_eq!(payload["can_volume"], true);
+        assert_eq!(payload["players"][0]["volume"], Value::Null);
+        assert_eq!(payload["players"][1]["volume"], 35);
+
+        // A new volume is a refresh, not a new track.
+        let louder = Player {
+            volume: Some(0.5),
+            ..spotify
+        };
+        assert_eq!(
+            tracker.apply(changed(SPOTIFY, louder.clone())),
+            Some(Notice::Refresh)
+        );
+        assert_eq!(tracker.payload()["volume"], 50);
+
+        // A player that takes no commands reports its volume, but can't
+        // have it changed.
+        let fixed = Player {
+            can_control: false,
+            ..louder
+        };
+        tracker.apply(changed(SPOTIFY, fixed));
+        assert_eq!(tracker.payload()["volume"], 50);
+        assert_eq!(tracker.payload()["can_volume"], false);
     }
 }

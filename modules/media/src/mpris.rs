@@ -45,6 +45,10 @@ trait Player {
     /// Moves to `position` microseconds into `track_id`.
     fn set_position(&self, track_id: &ObjectPath<'_>, position: i64) -> zbus::Result<()>;
 
+    /// Sets the player's own volume, from 0 to 1.
+    #[zbus(property)]
+    fn set_volume(&self, volume: f64) -> zbus::Result<()>;
+
     #[zbus(signal)]
     fn seeked(&self, position: i64) -> zbus::Result<()>;
 }
@@ -95,6 +99,11 @@ pub struct Player {
     pub can_play: bool,
     pub can_pause: bool,
     pub can_seek: bool,
+    /// The player's own volume, from 0 to 1, apart from the app's volume in
+    /// the mixer. `None` for players that don't report one.
+    pub volume: Option<f64>,
+    /// Whether the player takes commands and changes to its volume.
+    pub can_control: bool,
 }
 
 impl Player {
@@ -301,6 +310,8 @@ pub enum Control {
     Previous,
     /// Seek to this position in the current track.
     SeekTo(Duration),
+    /// Set the player's own volume, from 0 to 1.
+    Volume(f64),
 }
 
 /// Sends `control` to the player on `bus`. `player` is its last known state,
@@ -330,6 +341,7 @@ pub async fn send(
                 }
             }
         }
+        Control::Volume(volume) => proxy.set_volume(volume).await,
     }
 }
 
@@ -360,6 +372,13 @@ fn parse(identity: String, values: &HashMap<String, OwnedValue>, read_at: System
         can_play: flag("CanPlay"),
         can_pause: flag("CanPause"),
         can_seek: flag("CanSeek"),
+        volume: get("Volume")
+            .and_then(float)
+            .filter(|volume| volume.is_finite())
+            .map(|volume| volume.max(0.0)),
+        // The spec requires it; a player that leaves it out still gets
+        // asked, and says no if it must.
+        can_control: get("CanControl").and_then(boolean).unwrap_or(true),
     }
 }
 
@@ -477,7 +496,7 @@ mod tests {
 
     #[test]
     fn reads_a_player() {
-        let values = properties(HashMap::from([
+        let mut values = properties(HashMap::from([
             (
                 "mpris:trackid",
                 Value::from(ObjectPath::try_from("/track/1").unwrap()),
@@ -488,11 +507,15 @@ mod tests {
             ("mpris:artUrl", Value::from("https://example.com/a.jpg")),
             ("mpris:length", Value::from(200_000_000_u64)),
         ]));
+        values.insert("Volume".into(), owned(Value::from(0.5)));
+        values.insert("CanControl".into(), owned(Value::from(true)));
         let player = parse("Spotify".into(), &values, SystemTime::UNIX_EPOCH);
 
         assert_eq!(player.status, Status::Playing);
         assert_eq!(player.position, Some(Duration::from_secs(30)));
         assert!(player.can_next && player.can_seek && !player.can_previous);
+        assert_eq!(player.volume, Some(0.5));
+        assert!(player.can_control);
         assert_eq!(
             player.track,
             Track {
@@ -524,6 +547,19 @@ mod tests {
         assert_eq!(empty.status, Status::Stopped);
         assert_eq!(empty.position, None);
         assert_eq!(empty.rate, 1.0);
+        // No volume: the views show no slider.
+        assert_eq!(empty.volume, None);
+
+        // Some players send the volume as an integer, or a negative one.
+        let mut values = properties(HashMap::new());
+        values.insert("Volume".into(), owned(Value::from(1_i32)));
+        values.insert("CanControl".into(), owned(Value::from(false)));
+        let player = parse(String::new(), &values, SystemTime::UNIX_EPOCH);
+        assert_eq!(player.volume, Some(1.0));
+        assert!(!player.can_control);
+        values.insert("Volume".into(), owned(Value::from(-0.2)));
+        let player = parse(String::new(), &values, SystemTime::UNIX_EPOCH);
+        assert_eq!(player.volume, Some(0.0));
     }
 
     #[test]

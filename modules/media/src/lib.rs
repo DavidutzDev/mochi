@@ -11,6 +11,9 @@
 //! them. The one picked stays shown until it stops, even when another starts
 //! a new track.
 //!
+//! Players that report a volume of their own, like Spotify, get a slider for
+//! it, apart from the app's volume in the mixer.
+//!
 //! Settings in `config.toml`, all optional:
 //!
 //! ```toml
@@ -127,6 +130,10 @@ impl Module for Media {
             ActionSpec::new("seek", "Jump to a position in the current track").arg(ArgSpec::float(
                 "position",
                 "Seconds from the start of the track",
+            )),
+            ActionSpec::new("volume", "Set the shown player's own volume").arg(ArgSpec::string(
+                "level",
+                "A percent like 40, or +5 and -5 to move it",
             )),
             ActionSpec::new("next-player", "Show the next player, until it stops"),
             ActionSpec::new(
@@ -315,6 +322,23 @@ fn control(connection: &Connection, tracker: &Tracker, command: ModuleCommand) {
             }
             Control::SeekTo(position)
         }
+        "volume" => {
+            let Some(now) = notice::volume(player) else {
+                command.reply(Err(format!("{} has no volume of its own", player.identity)));
+                return;
+            };
+            if !player.can_control {
+                command.reply(Err(format!("{} takes no commands", player.identity)));
+                return;
+            }
+            match level(command.args.str("level").unwrap_or_default(), now) {
+                Ok(level) => Control::Volume(f64::from(level) / 100.0),
+                Err(error) => {
+                    command.reply(Err(error));
+                    return;
+                }
+            }
+        }
         other => {
             command.reply(Err(format!("unknown action {other}")));
             return;
@@ -330,6 +354,39 @@ fn control(connection: &Connection, tracker: &Tracker, command: ModuleCommand) {
             .map_err(|error| format!("{}: {error}", player.identity));
         command.reply(result);
     });
+}
+
+/// Reads a volume as the audio module does: `40` sets it, `+5` and `-5` move
+/// it from `now`. The result stays within 0 and 100, a player's full volume,
+/// unless the player already went past it.
+fn level(text: &str, now: u32) -> Result<u32, String> {
+    let text = text.trim().trim_end_matches('%');
+    let invalid = || format!("{text} is not a volume; give a percent like 40, +5 or -5");
+    let value = if let Some(up) = text.strip_prefix('+') {
+        now.saturating_add(up.parse().map_err(|_| invalid())?)
+    } else if let Some(down) = text.strip_prefix('-') {
+        now.saturating_sub(down.parse().map_err(|_| invalid())?)
+    } else {
+        text.parse().map_err(|_| invalid())?
+    };
+    Ok(value.min(now.max(100)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::level;
+
+    #[test]
+    fn reads_volumes_and_steps() {
+        assert_eq!(level("40", 10), Ok(40));
+        assert_eq!(level("40%", 10), Ok(40));
+        assert_eq!(level("+5", 98), Ok(100));
+        assert_eq!(level("-5", 3), Ok(0));
+        assert_eq!(level("150", 0), Ok(100));
+        assert_eq!(level("-5", 120), Ok(115));
+        assert!(level("loud", 0).is_err());
+        assert!(level("+", 0).is_err());
+    }
 }
 
 #[cfg(test)]

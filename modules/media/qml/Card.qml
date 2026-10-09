@@ -2,7 +2,8 @@ import QtQuick
 import qs.island
 
 // Now playing, as a control center card and a desktop widget: the cover as tall
-// as the card, the track at the top, and progress and controls at the bottom.
+// as the card, the track at the top, and progress, controls and the player's
+// own volume at the bottom.
 // It fills the size it's given. It reads the media module's state, so it shows
 // whatever the island would.
 Item {
@@ -158,6 +159,19 @@ Item {
                         enabled: root.payload?.can_next ?? false
                         onClicked: Daemon.command("media", "next", [])
                     }
+                }
+
+                // The player's own volume, in the room the controls and the
+                // arrows leave; none when that's too narrow for a slider.
+                PlayerVolume {
+                    anchors.left: controls.right
+                    anchors.leftMargin: Theme.spaceMedium
+                    anchors.right: players.visible ? players.left : parent.right
+                    anchors.rightMargin: players.visible ? Theme.spaceMedium : 0
+                    anchors.verticalCenter: parent.verticalCenter
+                    visible: available && width >= 64
+                    payload: root.payload
+                    percent: false
                 }
 
                 Players {

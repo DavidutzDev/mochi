@@ -2,7 +2,7 @@ import QtQuick
 import qs.island
 
 // The cover, title, artist and player, a progress bar that seeks on click or
-// drag, and the controls.
+// drag, the controls, and the player's own volume when it has one.
 Item {
     id: root
 
@@ -15,6 +15,9 @@ Item {
     // the new position.
     property real seeking: -1
     readonly property real shownPosition: seeking >= 0 ? seeking : position
+    // The width of the times beside the progress bar, and of the volume's
+    // icon and percent, so both bars line up.
+    readonly property real side: Math.max(total.implicitWidth, volume.visible ? volume.percentWidth : 0)
 
     onPayloadChanged: {
         if (!bar.dragging)
@@ -102,7 +105,7 @@ Item {
                 id: elapsed
 
                 anchors.verticalCenter: parent.verticalCenter
-                width: total.implicitWidth
+                width: root.side
                 horizontalAlignment: Text.AlignRight
                 text: root.time(root.shownPosition)
                 color: Theme.muted
@@ -132,6 +135,7 @@ Item {
                 id: total
 
                 anchors.verticalCenter: parent.verticalCenter
+                width: root.side
                 text: root.time(root.length)
                 color: Theme.muted
                 font.pixelSize: Theme.textCaption
@@ -169,6 +173,14 @@ Item {
                 size: 20
                 onClicked: Daemon.command("media", "next", [])
             }
+        }
+
+        PlayerVolume {
+            id: volume
+
+            width: parent.width
+            payload: root.payload
+            side: root.side
         }
     }
 }
