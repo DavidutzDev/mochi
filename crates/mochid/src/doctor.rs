@@ -87,7 +87,10 @@ const PROTOCOLS: [(&[&str], &str, bool); 8] = [
         false,
     ),
     (
-        &["ext_data_control_manager_v1"],
+        &[
+            "ext_data_control_manager_v1",
+            "zwlr_data_control_manager_v1",
+        ],
         "the clipboard history",
         false,
     ),

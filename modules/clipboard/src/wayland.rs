@@ -1,13 +1,17 @@
-//! The clipboard through `ext-data-control-v1`: a Wayland connection of the
-//! module's own, which sees every new selection without focus, reads it,
-//! and can take the selection over to serve an entry from the history.
-//! Pasting types Ctrl+V through `zwp-virtual-keyboard-v1`.
+//! The clipboard through `ext-data-control-v1`, or `wlr-data-control` on
+//! compositors without it: a Wayland connection of the module's own, which
+//! sees every new selection without focus, reads it, and can take the
+//! selection over to serve an entry from the history. Pasting types Ctrl+V
+//! through `zwp-virtual-keyboard-v1`.
+//!
+//! The two protocols differ only in their names, so small enums wrap their
+//! objects and one macro handles the events of both.
 //!
 //! Like the compositor backend, it runs as a tokio task that waits for the
 //! socket or for a request from the module.
 
 use std::io::{ErrorKind, Write};
-use std::os::fd::{AsFd, AsRawFd, FromRawFd, OwnedFd, RawFd};
+use std::os::fd::{AsFd, AsRawFd, BorrowedFd, FromRawFd, OwnedFd, RawFd};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -30,6 +34,12 @@ use wayland_protocols_misc::zwp_virtual_keyboard_v1::client::{
     zwp_virtual_keyboard_manager_v1::ZwpVirtualKeyboardManagerV1,
     zwp_virtual_keyboard_v1::ZwpVirtualKeyboardV1,
 };
+use wayland_protocols_wlr::data_control::v1::client::{
+    zwlr_data_control_device_v1::{self, ZwlrDataControlDeviceV1},
+    zwlr_data_control_manager_v1::ZwlrDataControlManagerV1,
+    zwlr_data_control_offer_v1::{self, ZwlrDataControlOfferV1},
+    zwlr_data_control_source_v1::{self, ZwlrDataControlSourceV1},
+};
 use zeroize::Zeroizing;
 
 use crate::store::{Clip, Kind};
@@ -48,6 +58,9 @@ pub const TEXT: [&str; 5] = [
 ];
 /// How long an app gets to hand over what it copied.
 const READ_TIMEOUT: Duration = Duration::from_secs(5);
+/// Set to `wlr` to use `wlr-data-control` even when the compositor has
+/// `ext-data-control-v1`, to test it.
+const PROTOCOL_VARIABLE: &str = "MOCHI_DATA_CONTROL";
 
 /// The formats of the selection Mochi serves, by MIME type.
 pub type Formats = Vec<(String, Arc<Zeroizing<Vec<u8>>>)>;
@@ -119,9 +132,8 @@ pub fn start(
     let (globals, queue) = registry_queue_init::<Client>(&connection)
         .map_err(|error| format!("cannot read the Wayland globals: {error}"))?;
     let handle = queue.handle();
-    let manager: ExtDataControlManagerV1 = globals
-        .bind(&handle, 1..=1, ())
-        .map_err(|_| "the compositor doesn't support ext-data-control-v1".to_owned())?;
+    let wlr_only = std::env::var(PROTOCOL_VARIABLE).is_ok_and(|value| value == "wlr");
+    let manager = Manager::bind(&globals, &handle, wlr_only)?;
     let seat: wl_seat::WlSeat = globals
         .bind(&handle, 1..=1, ())
         .map_err(|_| "the compositor has no seat".to_owned())?;
@@ -129,7 +141,7 @@ pub fn start(
     // only gains one once the compositor has processed this, and keys sent
     // sooner reach nobody.
     let keyboard = virtual_keyboard(&globals, &seat, &handle);
-    let device = manager.get_data_device(&seat, &handle, ());
+    let device = manager.get_data_device(&seat, &handle);
 
     let (requests, receiver) = mpsc::unbounded_channel();
     let client = Client {
@@ -213,16 +225,133 @@ impl AsRawFd for Socket {
     }
 }
 
+/// The data control manager, of either protocol.
+enum Manager {
+    Ext(ExtDataControlManagerV1),
+    Wlr(ZwlrDataControlManagerV1),
+}
+
+impl Manager {
+    /// The ext protocol when the compositor has it and `wlr_only` is false,
+    /// otherwise the wlr one.
+    fn bind(
+        globals: &wayland_client::globals::GlobalList,
+        handle: &QueueHandle<Client>,
+        wlr_only: bool,
+    ) -> Result<Self, String> {
+        if !wlr_only && let Ok(manager) = globals.bind(handle, 1..=1, ()) {
+            return Ok(Self::Ext(manager));
+        }
+        // Version 2 adds the primary selection, which Mochi ignores.
+        match globals.bind(handle, 1..=2, ()) {
+            Ok(manager) => {
+                tracing::info!("watching the clipboard through wlr-data-control");
+                Ok(Self::Wlr(manager))
+            }
+            Err(_) if wlr_only => Err("the compositor doesn't support wlr-data-control".into()),
+            Err(_) => Err(
+                "the compositor supports neither ext-data-control-v1 nor wlr-data-control".into(),
+            ),
+        }
+    }
+
+    fn get_data_device(&self, seat: &wl_seat::WlSeat, handle: &QueueHandle<Client>) -> Device {
+        match self {
+            Self::Ext(manager) => Device::Ext(manager.get_data_device(seat, handle, ())),
+            Self::Wlr(manager) => Device::Wlr(manager.get_data_device(seat, handle, ())),
+        }
+    }
+
+    fn create_data_source(&self, handle: &QueueHandle<Client>, formats: Arc<Formats>) -> Source {
+        match self {
+            Self::Ext(manager) => Source::Ext(manager.create_data_source(handle, formats)),
+            Self::Wlr(manager) => Source::Wlr(manager.create_data_source(handle, formats)),
+        }
+    }
+}
+
+enum Device {
+    Ext(ExtDataControlDeviceV1),
+    Wlr(ZwlrDataControlDeviceV1),
+}
+
+impl Device {
+    fn set_selection(&self, source: &Source) {
+        match (self, source) {
+            (Self::Ext(device), Source::Ext(source)) => device.set_selection(Some(source)),
+            (Self::Wlr(device), Source::Wlr(source)) => device.set_selection(Some(source)),
+            // A manager only makes sources of its own protocol.
+            _ => {}
+        }
+    }
+}
+
+/// The selection an app offers, with the MIME types it listed.
+#[derive(Clone)]
+enum Offer {
+    Ext(ExtDataControlOfferV1),
+    Wlr(ZwlrDataControlOfferV1),
+}
+
+impl Offer {
+    fn mimes(&self) -> Vec<String> {
+        let mimes = match self {
+            Self::Ext(offer) => offer.data::<Mutex<Vec<String>>>(),
+            Self::Wlr(offer) => offer.data::<Mutex<Vec<String>>>(),
+        };
+        mimes
+            .and_then(|mimes| mimes.lock().ok().map(|mimes| mimes.clone()))
+            .unwrap_or_default()
+    }
+
+    fn receive(&self, mime: String, fd: BorrowedFd) {
+        match self {
+            Self::Ext(offer) => offer.receive(mime, fd),
+            Self::Wlr(offer) => offer.receive(mime, fd),
+        }
+    }
+
+    fn destroy(&self) {
+        match self {
+            Self::Ext(offer) => offer.destroy(),
+            Self::Wlr(offer) => offer.destroy(),
+        }
+    }
+}
+
+/// The selection Mochi serves.
+#[derive(PartialEq)]
+enum Source {
+    Ext(ExtDataControlSourceV1),
+    Wlr(ZwlrDataControlSourceV1),
+}
+
+impl Source {
+    fn offer(&self, mime: String) {
+        match self {
+            Self::Ext(source) => source.offer(mime),
+            Self::Wlr(source) => source.offer(mime),
+        }
+    }
+
+    fn destroy(&self) {
+        match self {
+            Self::Ext(source) => source.destroy(),
+            Self::Wlr(source) => source.destroy(),
+        }
+    }
+}
+
 struct Client {
-    manager: ExtDataControlManagerV1,
-    device: ExtDataControlDeviceV1,
+    manager: Manager,
+    device: Device,
     keyboard: Option<ZwpVirtualKeyboardV1>,
     /// Key events carry milliseconds from here.
     started: Instant,
     /// The current selection's offer.
-    offer: Option<ExtDataControlOfferV1>,
+    offer: Option<Offer>,
     /// What Mochi serves, while it owns the selection.
-    source: Option<ExtDataControlSourceV1>,
+    source: Option<Source>,
     copied: mpsc::UnboundedSender<Clip>,
     listening: Arc<AtomicBool>,
     limit: usize,
@@ -242,7 +371,7 @@ impl Client {
                     source.offer(mime.clone());
                 }
                 source.offer(MARKER.into());
-                self.device.set_selection(Some(&source));
+                self.device.set_selection(&source);
                 if let Some(old) = self.source.replace(source) {
                     old.destroy();
                 }
@@ -265,7 +394,7 @@ impl Client {
 
     /// A new selection: read it, unless it's Mochi's own, skipped, or
     /// nothing worth keeping.
-    fn selection(&mut self, offer: Option<ExtDataControlOfferV1>) {
+    fn selection(&mut self, offer: Option<Offer>) {
         if let Some(old) = std::mem::replace(&mut self.offer, offer.clone()) {
             old.destroy();
         }
@@ -273,10 +402,7 @@ impl Client {
         if !self.listening.load(Ordering::Relaxed) {
             return;
         }
-        let mimes = offer
-            .data::<Mutex<Vec<String>>>()
-            .and_then(|mimes| mimes.lock().ok().map(|mimes| mimes.clone()))
-            .unwrap_or_default();
+        let mimes = offer.mimes();
         // The selection comes right after the copy, so the window with the
         // keyboard is still the one that copied.
         let app = self.compositor.state().focused_app;
@@ -485,96 +611,138 @@ impl Dispatch<wl_seat::WlSeat, ()> for Client {
     }
 }
 
-impl Dispatch<ExtDataControlManagerV1, ()> for Client {
-    fn event(
-        _: &mut Self,
-        _: &ExtDataControlManagerV1,
-        _: <ExtDataControlManagerV1 as Proxy>::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-    }
-}
-
-impl Dispatch<ExtDataControlDeviceV1, ()> for Client {
-    fn event(
-        client: &mut Self,
-        _: &ExtDataControlDeviceV1,
-        event: ext_data_control_device_v1::Event,
-        _: &(),
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        match event {
-            ext_data_control_device_v1::Event::Selection { id } => client.selection(id),
-            ext_data_control_device_v1::Event::PrimarySelection { id: Some(offer) } => {
-                // Highlighted text isn't kept.
-                offer.destroy();
-            }
-            ext_data_control_device_v1::Event::Finished => client.finished = true,
-            _ => {}
+impl Client {
+    /// Someone else copied, so `source` no longer has the selection.
+    fn cancelled(&mut self, source: Source) {
+        if self.source.as_ref() == Some(&source) {
+            self.source = None;
         }
+        source.destroy();
     }
-
-    event_created_child!(Client, ExtDataControlDeviceV1, [
-        ext_data_control_device_v1::EVT_DATA_OFFER_OPCODE => (ExtDataControlOfferV1, Mutex::new(Vec::new())),
-    ]);
 }
 
-impl Dispatch<ExtDataControlOfferV1, Mutex<Vec<String>>> for Client {
-    fn event(
-        _: &mut Self,
-        _: &ExtDataControlOfferV1,
-        event: ext_data_control_offer_v1::Event,
-        mimes: &Mutex<Vec<String>>,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        if let ext_data_control_offer_v1::Event::Offer { mime_type } = event
-            && let Ok(mut mimes) = mimes.lock()
+/// Writes the format an app asked for into `fd`.
+fn send(formats: &Formats, mime_type: &str, fd: OwnedFd) {
+    let data = formats
+        .iter()
+        .find(|(mime, _)| *mime == mime_type)
+        .map(|(_, data)| data.clone());
+    // Writing can wait on the app; off the event loop.
+    tokio::task::spawn_blocking(move || {
+        let mut file = std::fs::File::from(fd);
+        if let Some(data) = data
+            && let Err(error) = file.write_all(&data)
         {
-            mimes.push(mime_type);
+            tracing::debug!(%error, "an app stopped reading the clipboard");
         }
-    }
+    });
 }
 
-impl Dispatch<ExtDataControlSourceV1, Arc<Formats>> for Client {
-    fn event(
-        client: &mut Self,
-        source: &ExtDataControlSourceV1,
-        event: ext_data_control_source_v1::Event,
-        formats: &Arc<Formats>,
-        _: &Connection,
-        _: &QueueHandle<Self>,
-    ) {
-        match event {
-            ext_data_control_source_v1::Event::Send { mime_type, fd } => {
-                let data = formats
-                    .iter()
-                    .find(|(mime, _)| *mime == mime_type)
-                    .map(|(_, data)| data.clone());
-                // Writing can wait on the app; off the event loop.
-                tokio::task::spawn_blocking(move || {
-                    let mut file = std::fs::File::from(fd);
-                    if let Some(data) = data
-                        && let Err(error) = file.write_all(&data)
-                    {
-                        tracing::debug!(%error, "an app stopped reading the clipboard");
-                    }
-                });
+/// The event handlers of one of the two protocols, whose events have the
+/// same names and fields. `$variant` names its arm in the enums above.
+macro_rules! data_control {
+    ($variant:ident, $manager:ty, $device:ty, $device_events:ident, $offer:ty,
+     $offer_events:ident, $source:ty, $source_events:ident) => {
+        impl Dispatch<$manager, ()> for Client {
+            fn event(
+                _: &mut Self,
+                _: &$manager,
+                _: <$manager as Proxy>::Event,
+                _: &(),
+                _: &Connection,
+                _: &QueueHandle<Self>,
+            ) {
             }
-            ext_data_control_source_v1::Event::Cancelled => {
-                // Someone else copied.
-                if client.source.as_ref() == Some(source) {
-                    client.source = None;
-                }
-                source.destroy();
-            }
-            _ => {}
         }
-    }
+
+        impl Dispatch<$device, ()> for Client {
+            fn event(
+                client: &mut Self,
+                _: &$device,
+                event: $device_events::Event,
+                _: &(),
+                _: &Connection,
+                _: &QueueHandle<Self>,
+            ) {
+                match event {
+                    $device_events::Event::Selection { id } => {
+                        client.selection(id.map(Offer::$variant))
+                    }
+                    $device_events::Event::PrimarySelection { id: Some(offer) } => {
+                        // Highlighted text isn't kept.
+                        offer.destroy();
+                    }
+                    $device_events::Event::Finished => client.finished = true,
+                    _ => {}
+                }
+            }
+
+            event_created_child!(Client, $device, [
+                $device_events::EVT_DATA_OFFER_OPCODE => ($offer, Mutex::new(Vec::new())),
+            ]);
+        }
+
+        impl Dispatch<$offer, Mutex<Vec<String>>> for Client {
+            fn event(
+                _: &mut Self,
+                _: &$offer,
+                event: $offer_events::Event,
+                mimes: &Mutex<Vec<String>>,
+                _: &Connection,
+                _: &QueueHandle<Self>,
+            ) {
+                if let $offer_events::Event::Offer { mime_type } = event
+                    && let Ok(mut mimes) = mimes.lock()
+                {
+                    mimes.push(mime_type);
+                }
+            }
+        }
+
+        impl Dispatch<$source, Arc<Formats>> for Client {
+            fn event(
+                client: &mut Self,
+                source: &$source,
+                event: $source_events::Event,
+                formats: &Arc<Formats>,
+                _: &Connection,
+                _: &QueueHandle<Self>,
+            ) {
+                match event {
+                    $source_events::Event::Send { mime_type, fd } => {
+                        send(formats, &mime_type, fd)
+                    }
+                    // Someone else copied.
+                    $source_events::Event::Cancelled => {
+                        client.cancelled(Source::$variant(source.clone()))
+                    }
+                    _ => {}
+                }
+            }
+        }
+    };
 }
+
+data_control!(
+    Ext,
+    ExtDataControlManagerV1,
+    ExtDataControlDeviceV1,
+    ext_data_control_device_v1,
+    ExtDataControlOfferV1,
+    ext_data_control_offer_v1,
+    ExtDataControlSourceV1,
+    ext_data_control_source_v1
+);
+data_control!(
+    Wlr,
+    ZwlrDataControlManagerV1,
+    ZwlrDataControlDeviceV1,
+    zwlr_data_control_device_v1,
+    ZwlrDataControlOfferV1,
+    zwlr_data_control_offer_v1,
+    ZwlrDataControlSourceV1,
+    zwlr_data_control_source_v1
+);
 
 impl Dispatch<ZwpVirtualKeyboardManagerV1, ()> for Client {
     fn event(

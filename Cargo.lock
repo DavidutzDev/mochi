@@ -951,6 +951,7 @@ dependencies = [
  "wayland-client",
  "wayland-protocols",
  "wayland-protocols-misc",
+ "wayland-protocols-wlr",
  "zbus",
  "zeroize",
  "zstd",

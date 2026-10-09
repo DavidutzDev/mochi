@@ -2,7 +2,7 @@
 
 Keeps what you copy, text and images, and pastes it back. `mochi ipc clipboard toggle`, bound to a key like SUPER+V, grows the island into a search over the history, pinned entries first, then the rest newest first. Typing searches the start of each text; images match "image". A pane on the right shows the selected entry in full: the whole text, which Page Up and Page Down scroll, or the image scaled to fit. Enter puts the entry back on the clipboard and pastes it into the window you were in, by typing Ctrl+V for you, or Ctrl+Shift+V in a terminal. Shift+Enter only copies it. Ctrl+P, or the pin button on the selected row, pins or unpins it. Shift+Delete, or the trash button, removes it. Escape closes.
 
-Mochi reads the clipboard through the `ext-data-control-v1` Wayland protocol, which Hyprland and Sway support, and pastes through `zwp-virtual-keyboard-v1`. It replaces `cliphist` and `wl-paste --watch`; nothing else needs to run.
+Mochi reads the clipboard through the `ext-data-control-v1` Wayland protocol, which Hyprland and Sway support, and pastes through `zwp-virtual-keyboard-v1`. On a compositor without `ext-data-control-v1`, it uses the older `wlr-data-control`, which does the same; `mochi doctor` says which your compositor has. Starting `mochid` with `MOCHI_DATA_CONTROL=wlr` uses `wlr-data-control` even when both are there, to test it. It replaces `cliphist` and `wl-paste --watch`; nothing else needs to run.
 
 ## Where the history lives
 
