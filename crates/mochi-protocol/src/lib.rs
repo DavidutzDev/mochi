@@ -15,6 +15,7 @@ mod messages;
 pub mod plugin;
 pub mod spec;
 mod theme;
+pub mod version;
 
 pub use actions::{ActionSpec, ArgKind, ArgSpec, ModuleActions};
 pub use bubbles::{Area, Bubble, BubbleId, Overflow, Stacking};

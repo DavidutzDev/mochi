@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 use crate::manifest::{self, Manifest, ManifestError};
-use crate::{ListError, Locations, Lock, Locked, Source};
+use crate::{ListError, Locations, Lock, Locked, Source, registry};
 
 #[derive(Debug, thiserror::Error)]
 #[error("{0}")]
@@ -185,6 +185,19 @@ impl Installer<'_> {
                 self.release(id, source, owner, repo, tag.as_deref(), locked, mode)
             }
             Source::Path(_) => self.path(id, source, locked, mode),
+            Source::Registry {
+                registry,
+                id: package,
+                version,
+            } => self.registry(
+                id,
+                source,
+                registry.as_deref(),
+                package,
+                version.as_deref(),
+                locked,
+                mode,
+            ),
         };
         // A failure leaves no scratch files behind.
         let work = self.locations.installs.join(format!(".new-{id}"));
@@ -458,6 +471,50 @@ impl Installer<'_> {
 
     /// An empty scratch directory path for a plugin, next to the installs
     /// so the final rename stays on one file system.
+    /// A plugin from a Bento registry: the release the lock pins, or the
+    /// one asked for, or the newest this Mochi runs, cloned at the commit
+    /// the registry lists. One it withdrew as malicious is refused.
+    #[allow(clippy::too_many_arguments)]
+    fn registry(
+        &mut self,
+        id: &str,
+        source: &Source,
+        name: Option<&str>,
+        package_id: &str,
+        version: Option<&str>,
+        locked: Option<Locked>,
+        mode: Mode,
+    ) -> Result<Option<(Locked, bool)>, InstallError> {
+        let registry = registry::registry(self.locations, name).map_err(InstallError)?;
+        let index = registry::load(&registry, &registry::cache_dir(), mode == Mode::Update)
+            .map_err(InstallError)?;
+        let package = index.get(package_id).map_err(InstallError)?;
+        if package.kind != registry::Kind::Plugin {
+            return Err(InstallError(format!(
+                "{package_id} is a {} in the registry, not a plugin: `mochi bento add {package_id}` installs it",
+                package.kind.as_str()
+            )));
+        }
+        let pinned = locked
+            .as_ref()
+            .and_then(|locked| locked.commit.clone())
+            .filter(|_| mode == Mode::Install);
+        let commit = match pinned {
+            Some(commit) => commit,
+            None => package.pick(version).map_err(InstallError)?.commit.clone(),
+        };
+        if let Some(release) = package.at(&commit)
+            && let Some(why) = &release.malicious
+        {
+            return Err(InstallError(format!(
+                "the registry withdrew {package_id} {} as harmful: {why}",
+                release.version
+            )));
+        }
+        let url = package.repository.clone();
+        self.git(id, source, &url, Some(&commit), locked, mode)
+    }
+
     fn scratch(&self, id: &str) -> Result<PathBuf, InstallError> {
         std::fs::create_dir_all(&self.locations.installs)?;
         let work = self.locations.installs.join(format!(".new-{id}"));

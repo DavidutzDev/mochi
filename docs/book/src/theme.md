@@ -22,7 +22,7 @@ A theme is a directory with a `mochi-theme.toml`. Installed ones live in `~/.loc
 
 `[theme]` says what it is. `id` is lowercase letters, digits, `-` and `_`, starting with a letter, and must match the directory's name. `name` is what the settings panel shows, and `mochi` is the oldest Mochi it works with: a newer one is refused, and `mochi config check` says so. `description`, `authors` and `homepage` are optional.
 
-`[dark]` and `[light]` give each role a color, the roles of `[colors]` below. A theme with only one of them uses it for both appearances, and a role it leaves out takes Obsidian's, so a theme can be as short as an accent. A theme holds colors only, no fonts or views, so it can't run anything. A typo, like an unknown role or a color that isn't `#rrggbb` or `#aarrggbb`, is an error naming the key.
+`[dark]` and `[light]` give each role a color, the roles of `[colors]` below. A theme with only one of them uses it for both appearances, so a dark theme stays dark, and a role it leaves out takes Obsidian's of the same version, so a theme can be as short as an accent. A theme holds colors only, no fonts or views, so it can't run anything. A typo, like an unknown role or a color that isn't `#rrggbb` or `#aarrggbb`, is an error naming the key.
 
 `mochi bento add <directory or repository>` installs a theme, and `mochi bento try` tries it until you keep it or drop it: see [Bento](bento.md).
 

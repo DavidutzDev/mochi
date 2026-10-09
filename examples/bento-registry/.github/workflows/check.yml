@@ -1,0 +1,60 @@
+# Checks a pull request to the registry: every package file, then each
+# changed package's newest release, cloned and read as `mochi bento add`
+# would, and each new plugin release built with Nix. The summary lists the
+# changes, with a link to the code between a plugin's releases for its
+# reviewer.
+name: Check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: head
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.base_ref }}
+          path: base
+      - uses: cachix/install-nix-action@v31
+      - name: Install Mochi
+        run: nix profile install github:DavidutzDev/mochi#mochi
+
+      - name: What changed
+        id: diff
+        env:
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          mochid bento registry diff base head --author "$AUTHOR" --json > diff.json
+          jq -r .summary diff.json >> "$GITHUB_STEP_SUMMARY"
+          echo "changed=$(jq -r '.changed | join(",")' diff.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Check every package file
+        run: mochid bento registry check head
+
+      - name: Check the changed releases
+        if: steps.diff.outputs.changed != ''
+        env:
+          CHANGED: ${{ steps.diff.outputs.changed }}
+        run: mochid bento registry check head --fetch --only "$CHANGED"
+
+      - name: Build the new plugin releases
+        run: |
+          jq -c '.builds[]' diff.json | while read -r build; do
+            id=$(jq -r .id <<< "$build")
+            echo "::group::Building $id"
+            git clone --quiet "$(jq -r .repository <<< "$build")" "src-$id"
+            git -C "src-$id" checkout --quiet --detach "$(jq -r .commit <<< "$build")"
+            nix build --impure --no-link --print-build-logs --expr "
+              let
+                mochi = builtins.getFlake \"github:DavidutzDev/mochi\";
+                pkgs = import mochi.inputs.nixpkgs { system = builtins.currentSystem; };
+              in mochi.lib.buildPlugin pkgs { src = $PWD/src-$id; }"
+            echo "::endgroup::"
+          done

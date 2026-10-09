@@ -1,0 +1,5 @@
+# Every package file needs a registry maintainer's review when it brings
+# plugin code; the Merge workflow merges the rest itself. Add a line for
+# your package to look after it with us:
+#   /packages/<id>.toml @DavidutzDev @you
+* @DavidutzDev

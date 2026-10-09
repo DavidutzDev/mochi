@@ -7,6 +7,9 @@
 //! - `git-release:github.com/User/Repo:v2` downloads the release asset the
 //!   manifest names, already built. Without a tag, the latest release.
 //! - `path:~/code/my-plugin` uses a directory where it is.
+//! - `bento:pomodoro` installs the newest release in Bento's registry that
+//!   this Mochi runs, at the commit a reviewer read. `bento:pomodoro:0.3.0`
+//!   picks a release, and `bento:friends/pomodoro` another registry.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -25,6 +28,13 @@ pub enum Source {
         tag: Option<String>,
     },
     Path(PathBuf),
+    /// A package in a Bento registry.
+    Registry {
+        /// The registry's name, the default one without.
+        registry: Option<String>,
+        id: String,
+        version: Option<String>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -64,6 +74,23 @@ impl FromStr for Source {
                 )),
             };
         }
+        if let Some(rest) = text.strip_prefix("bento:") {
+            let (path, version) = match rest.split_once(':') {
+                Some((path, version)) if !version.is_empty() => (path, Some(version.to_owned())),
+                Some((path, _)) => (path, None),
+                None => (rest, None),
+            };
+            let (registry, id) = match path.split_once('/') {
+                Some((registry, id)) => (Some(registry.to_owned()), id),
+                None => (None, path),
+            };
+            crate::manifest::check_id(id).map_err(|message| error(&message))?;
+            return Ok(Self::Registry {
+                registry,
+                id: id.to_owned(),
+                version,
+            });
+        }
         if let Some(rest) = text.strip_prefix("git:") {
             let (location, reference) = split_reference(rest);
             if location.is_empty() {
@@ -76,7 +103,7 @@ impl FromStr for Source {
             };
             return Ok(Self::Git { url, reference });
         }
-        Err(error("start it with git:, git-release: or path:"))
+        Err(error("start it with git:, git-release:, path: or bento:"))
     }
 }
 
@@ -115,6 +142,21 @@ impl fmt::Display for Source {
                 Ok(())
             }
             Self::Path(path) => write!(f, "path:{}", path.display()),
+            Self::Registry {
+                registry,
+                id,
+                version,
+            } => {
+                f.write_str("bento:")?;
+                if let Some(registry) = registry {
+                    write!(f, "{registry}/")?;
+                }
+                f.write_str(id)?;
+                if let Some(version) = version {
+                    write!(f, ":{version}")?;
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -141,6 +183,29 @@ mod tests {
 
     fn parse(text: &str) -> Source {
         text.parse().unwrap()
+    }
+
+    #[test]
+    fn registry_sources() {
+        assert_eq!(
+            parse("bento:pomodoro"),
+            Source::Registry {
+                registry: None,
+                id: "pomodoro".into(),
+                version: None,
+            }
+        );
+        let pinned = parse("bento:friends/pomodoro:0.3.0");
+        assert_eq!(
+            pinned,
+            Source::Registry {
+                registry: Some("friends".into()),
+                id: "pomodoro".into(),
+                version: Some("0.3.0".into()),
+            }
+        );
+        assert_eq!(pinned.to_string(), "bento:friends/pomodoro:0.3.0");
+        assert!("bento:Pomodoro".parse::<Source>().is_err());
     }
 
     #[test]
@@ -230,6 +295,10 @@ mod tests {
     #[test]
     fn unknown_kinds_are_refused() {
         let error = "https://github.com/User/x".parse::<Source>().unwrap_err();
-        assert!(error.to_string().contains("git:, git-release: or path:"));
+        assert!(
+            error
+                .to_string()
+                .contains("git:, git-release:, path: or bento:")
+        );
     }
 }

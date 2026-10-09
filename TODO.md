@@ -563,12 +563,15 @@ Phase 1, without a registry:
 
 Phase 2, the registry:
 
-- [ ] The registry repository: one file per package, with releases pinning commits and the oldest Mochi each works with
-- [ ] Its CI: strict manifest parsing, Nix builds of plugins, `mochi config check` on bentos, a file allowlist on themes and bentos, theme contrast checks, a screenshot from a headless sway, `index.json` on GitHub Pages
-- [ ] Plugins merge after a person reviews the diff between the pinned commits; themes and bentos merge once CI passes
-- [ ] `bento:<id>` sources, picking the newest release the running Mochi supports; `plugins.lock` records the index revision
-- [ ] `mochi bento search`, `info` and `update`
-- [ ] Yanked and malicious releases: a warning, or disabling the package
+- [x] The registry's format: one file per package, with releases pinning commits and the oldest Mochi each works with; a template repository in `examples/bento-registry`
+- [x] Its CI: `mochid bento registry check`, `index` and `diff`; manifests matching the package file, Nix builds of plugins, bentos' settings checked, a file allowlist on themes and bentos, theme contrast checks, `index.json` on GitHub Pages
+- [x] Plugins merge after a person reviews the diff between the pinned commits; themes and bentos merge once CI passes, when new or sent by their maintainers; moves, maintainer changes and removals wait for a review
+- [x] `bento:<id>` sources, picking the newest release the running Mochi supports; `plugins.lock` records the commit
+- [x] `mochi bento search`, `info` and `update`
+- [x] Yanked and malicious releases: a warning, or refusing to install and to start the plugin
+- [ ] Create the registry's repository from the template, turn on Pages, auto-merge and the required check, and run its workflows for real
+- [ ] A screenshot of each theme and bento from a headless sway in the registry's CI
+- [ ] Prebuilt plugin releases in the registry, with their asset's hash, for machines without build tools or Nix
 
 Phase 3, the Bento category in the settings:
 

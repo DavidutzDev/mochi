@@ -42,6 +42,10 @@ pub struct Installed {
     pub themes: BTreeMap<String, Entry>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub bentos: BTreeMap<String, Entry>,
+    /// Registries besides the default one, by name, with their index's URL;
+    /// `bento` here points the default one elsewhere.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub registries: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]

@@ -16,6 +16,7 @@ use mochi_core::toml::{Table, Value};
 use mochi_module_widgets::layout::Layout;
 use mochi_plugins::bento::{Entry, Installed};
 use mochi_plugins::install::{Installer, Mode, Outcome, Plan};
+use mochi_plugins::registry::Kind;
 use mochi_plugins::{Locations, Manifest, Source};
 
 use super::fetch::{self, Fetched};
@@ -125,12 +126,35 @@ impl Context {
     }
 }
 
+/// What `text` names: where from, its files, and what they hold. A
+/// registry's package must be what the registry says it is.
+fn get(context: &Context, text: &str) -> Result<(Source, Fetched, Package), String> {
+    let source = fetch::parse(text)?;
+    let fetched = fetch::fetch(&source, &context.locations)?;
+    let package = detect(&fetched.dir)?;
+    if let Some((kind, release)) = &fetched.listed {
+        let found = match &package {
+            Package::Plugin(_) => Kind::Plugin,
+            Package::Theme(_) => Kind::Theme,
+            Package::Bento(_) => Kind::Bento,
+        };
+        if found != *kind {
+            return Err(format!(
+                "the registry lists {source} {} as a {}, but its files hold a {}",
+                release.version,
+                kind.as_str(),
+                found.as_str()
+            ));
+        }
+    }
+    Ok((source, fetched, package))
+}
+
 /// `mochi bento add`.
 pub fn add(config_file: &Path, text: &str, yes: bool) -> Result<(), String> {
     let context = Context::new(config_file, yes)?;
-    let source = fetch::parse(text)?;
-    let fetched = fetch::fetch(&source)?;
-    match detect(&fetched.dir)? {
+    let (source, fetched, package) = get(&context, text)?;
+    match package {
         Package::Theme(theme) => {
             add_theme(&context, &source, &fetched, &theme, None)?;
             let id = &theme.theme.id;
@@ -602,9 +626,8 @@ fn set_wallpaper(path: &Path) {
 /// without keeping them, until Keep or Drop in the settings.
 pub fn try_it(config_file: &Path, text: &str) -> Result<(), String> {
     let context = Context::new(config_file, true)?;
-    let source = fetch::parse(text)?;
-    let fetched = fetch::fetch(&source)?;
-    let tried = match detect(&fetched.dir)? {
+    let (source, fetched, package) = get(&context, text)?;
+    let tried = match package {
         Package::Plugin(_) => {
             return Err(
                 "a plugin can't be tried: `mochi bento add` installs it, and `mochi bento remove` takes it out"
@@ -803,9 +826,10 @@ fn by(entries: &std::collections::BTreeMap<String, Entry>, id: &str) -> Vec<Stri
 
 /// `mochi bento list`.
 pub fn list(config_file: &Path) -> Result<(), String> {
-    let installed = Installed::load(&Locations::beside(config_file).bento)
-        .map_err(|error| error.to_string())?;
-    if installed == Installed::default() {
+    let locations = Locations::beside(config_file);
+    let installed = Installed::load(&locations.bento).map_err(|error| error.to_string())?;
+    let lock = mochi_plugins::Lock::load(&locations.lock).unwrap_or_default();
+    if installed.plugins.is_empty() && installed.themes.is_empty() && installed.bentos.is_empty() {
         println!("Bento installed nothing yet: `mochi bento add <source>` does.");
         return Ok(());
     }
@@ -830,6 +854,20 @@ pub fn list(config_file: &Path) -> Result<(), String> {
                 .map(|by| format!(", with {by}"))
                 .unwrap_or_default();
             println!("  {id}{version}  {}{with}", entry.source);
+            // What the registry withdrew, by the index last downloaded.
+            let commit = match kind {
+                "plugins" => lock
+                    .plugins
+                    .get(id)
+                    .and_then(|locked| locked.commit.clone()),
+                _ => entry.revision.clone(),
+            };
+            if let (Ok(source), Some(commit)) = (entry.source.parse::<Source>(), commit) {
+                match mochi_plugins::registry::withdrawn(&locations, &source, &commit) {
+                    Ok(None) => {}
+                    Ok(Some(note)) | Err(note) => println!("    {note}"),
+                }
+            }
         }
     }
     Ok(())
@@ -854,4 +892,308 @@ pub fn check_dir(dir: &Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Files a theme or a bento may hold: data and pictures, nothing that
+/// runs.
+const DATA: [&str; 10] = [
+    "toml", "md", "txt", "png", "jpg", "jpeg", "webp", "gif", "svg", "avif",
+];
+
+/// Checks that a theme's or a bento's directory holds only [`DATA`],
+/// besides git's own files and a licence.
+fn data_only(dir: &Path) -> Result<(), String> {
+    let mut queue = vec![dir.to_owned()];
+    while let Some(current) = queue.pop() {
+        let entries = std::fs::read_dir(&current).map_err(|error| error.to_string())?;
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if [".git", ".github", ".gitignore", ".gitattributes"].contains(&name.as_str()) {
+                continue;
+            }
+            let kind = entry.file_type().map_err(|error| error.to_string())?;
+            if kind.is_dir() {
+                queue.push(path);
+                continue;
+            }
+            let extension = path
+                .extension()
+                .map(|extension| extension.to_string_lossy().to_lowercase());
+            let licence = ["LICENSE", "LICENCE", "COPYING"]
+                .iter()
+                .any(|stem| name.starts_with(stem));
+            let fits = kind.is_file()
+                && (licence
+                    || extension.is_some_and(|extension| DATA.contains(&extension.as_str())));
+            if !fits {
+                let shown = path
+                    .strip_prefix(dir)
+                    .unwrap_or(&path)
+                    .display()
+                    .to_string();
+                return Err(format!(
+                    "{shown} isn't data: themes and bentos hold only {} files and a licence",
+                    DATA.join(", ")
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Text on cards and the accent's own text must read well, in both
+/// versions of a theme.
+fn readable(theme: &ThemeFile) -> Result<(), String> {
+    for (light, name) in [(false, "dark"), (true, "light")] {
+        let colors = theme.colors(light);
+        let get = |role: &str| colors.get(role).and_then(Value::as_str).unwrap_or_default();
+        let pairs = [("foreground", "surface", 4.5), ("accent", "on_accent", 3.0)];
+        for (front, back, wanted) in pairs {
+            let ratio = mochi_core::palette::contrast(get(front), get(back)).unwrap_or(0.0);
+            if ratio < wanted {
+                return Err(format!(
+                    "the theme {} ({name}): {front} on {back} has a contrast of {ratio:.1}, below {wanted}",
+                    theme.theme.id
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// For the registry's CI: checks that the files of a release say what its
+/// package file does, and that they're what `add` takes.
+pub fn verify_release(
+    dir: &Path,
+    id: &str,
+    kind: Kind,
+    version: &str,
+    mochi: &str,
+) -> Result<String, String> {
+    let same = |what: &str, found: &str, listed: &str| {
+        if mochi_core::version::parse(found) == mochi_core::version::parse(listed) {
+            Ok(())
+        } else {
+            Err(format!(
+                "its manifest says {what} {found}, the registry {listed}"
+            ))
+        }
+    };
+    let found = detect(dir)?;
+    match (kind, found) {
+        (Kind::Plugin, Package::Plugin(manifest)) => {
+            if manifest.plugin.id != id {
+                return Err(format!("its manifest's id is {:?}", manifest.plugin.id));
+            }
+            same("version", &manifest.plugin.version, version)?;
+            Ok(": build it with Nix and read the code".into())
+        }
+        (Kind::Theme, Package::Theme(theme)) => {
+            if theme.theme.id != id {
+                return Err(format!("its id is {:?}", theme.theme.id));
+            }
+            same("version", &theme.theme.version, version)?;
+            same("mochi", &theme.theme.mochi, mochi)?;
+            data_only(dir)?;
+            readable(&theme)?;
+            Ok(String::new())
+        }
+        (Kind::Bento, Package::Bento(bento)) => {
+            if bento.bento.id != id {
+                return Err(format!("its id is {:?}", bento.bento.id));
+            }
+            same("version", &bento.bento.version, version)?;
+            same("mochi", &bento.bento.mochi, mochi)?;
+            data_only(dir)?;
+            let brought = bento_themes(dir)?;
+            for (_, theme_dir) in &brought {
+                readable(&theme_in(theme_dir)?)?;
+            }
+            check_dir(dir).map(|()| String::new())
+        }
+        (kind, _) => Err(format!(
+            "the registry lists a {}, but its files hold something else",
+            kind.as_str()
+        )),
+    }
+}
+
+/// `mochi bento update`: plugins to their newest release, and themes and
+/// bentos whose source moved on. Without ids, everything Bento installed
+/// from a repository or the registry; a directory only when named. A
+/// bento asks before laying its settings over yours again, and a theme or
+/// a plugin a bento brought follows its bento.
+pub fn update(config_file: &Path, ids: &[String], yes: bool) -> Result<(), String> {
+    let context = Context::new(config_file, yes)?;
+    let installed = context.installed()?;
+    let wanted = |id: &str, entry: &Entry| {
+        if ids.is_empty() {
+            entry.by.is_none() && !entry.source.starts_with("path:")
+        } else {
+            ids.iter().any(|wanted| wanted == id)
+        }
+    };
+    let mut failed = Vec::new();
+    let mut changed = false;
+
+    let yes = context.yes;
+    let mut confirm = |plan: &Plan| {
+        eprintln!();
+        eprint!("{plan}");
+        if yes {
+            return true;
+        }
+        eprint!("Update {}? [y/N] ", plan.id);
+        let _ = std::io::stderr().flush();
+        let mut answer = String::new();
+        let _ = std::io::stdin().read_line(&mut answer);
+        matches!(answer.trim(), "y" | "Y" | "yes")
+    };
+    let mut installer = Installer {
+        locations: &context.locations,
+        confirm: &mut confirm,
+    };
+    for (id, entry) in &installed.plugins {
+        if !wanted(id, entry) {
+            continue;
+        }
+        let source: Source = entry
+            .source
+            .parse()
+            .map_err(|error| format!("bento.toml: {error}"))?;
+        match installer.run(id, &source, Mode::Update) {
+            Ok(Outcome::Installed { revision }) => {
+                changed = true;
+                eprintln!("updated {id} to {}", revision.unwrap_or_default());
+            }
+            Ok(Outcome::UpToDate { .. }) => eprintln!("{id} is up to date"),
+            Ok(Outcome::Declined) => eprintln!("skipped {id}"),
+            Err(error) => {
+                eprintln!("mochi: {id}: {error}");
+                failed.push(id.clone());
+            }
+        }
+    }
+
+    let others = installed
+        .themes
+        .iter()
+        .map(|(id, entry)| (id, entry, Kind::Theme))
+        .chain(
+            installed
+                .bentos
+                .iter()
+                .map(|(id, entry)| (id, entry, Kind::Bento)),
+        );
+    for (id, entry, kind) in others {
+        if !wanted(id, entry) {
+            continue;
+        }
+        let result = (|| -> Result<bool, String> {
+            let source: Source = entry
+                .source
+                .parse()
+                .map_err(|error| format!("bento.toml: {error}"))?;
+            let fetched = fetch::fetch(&source, &context.locations)?;
+            if fetched.revision.is_some() && fetched.revision == entry.revision {
+                eprintln!("{id} is up to date");
+                return Ok(false);
+            }
+            match (kind, detect(&fetched.dir)?) {
+                (Kind::Theme, Package::Theme(theme)) => {
+                    add_theme(&context, &source, &fetched, &theme, None)?;
+                    eprintln!("updated the theme {id} to {}", theme.theme.version);
+                    Ok(true)
+                }
+                (Kind::Bento, Package::Bento(bento)) => {
+                    add_bento(&context, &source, &fetched, &bento)?;
+                    Ok(true)
+                }
+                _ => Err(format!("{} holds something else now", entry.source)),
+            }
+        })();
+        match result {
+            Ok(true) => changed = true,
+            Ok(false) => {}
+            Err(error) => {
+                eprintln!("mochi: {id}: {error}");
+                failed.push(id.clone());
+            }
+        }
+    }
+    if changed {
+        client::reload();
+    }
+    match failed.len() {
+        0 => Ok(()),
+        1 => Err(format!("{} didn't update", failed[0])),
+        _ => Err(format!("{} didn't update", failed.join(", "))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const THEME: &str = r##"
+[theme]
+id = "dusk"
+name = "Dusk"
+version = "0.2.0"
+mochi = "0.0.1"
+
+[dark]
+accent = "#c792ea"
+surface = "#1b1726"
+"##;
+
+    fn dir(name: &str, files: &[(&str, &str)]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("mochi-verify-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        for (path, text) in files {
+            let path = dir.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, text).unwrap();
+        }
+        dir
+    }
+
+    #[test]
+    fn a_release_must_match_the_registry_and_hold_only_data() {
+        let fine = dir("fine", &[(themes::MANIFEST, THEME), ("README.md", "Dusk")]);
+        let verify =
+            |dir: &Path, version: &str| verify_release(dir, "dusk", Kind::Theme, version, "0.0.1");
+        assert_eq!(verify(&fine, "0.2.0"), Ok(String::new()));
+        assert!(
+            verify(&fine, "0.3.0")
+                .unwrap_err()
+                .contains("version 0.2.0")
+        );
+        assert!(
+            verify_release(&fine, "dusk", Kind::Plugin, "0.2.0", "0.0.1")
+                .unwrap_err()
+                .contains("something else")
+        );
+
+        let script = dir(
+            "script",
+            &[(themes::MANIFEST, THEME), ("install.sh", "rm -rf ~")],
+        );
+        assert!(
+            verify(&script, "0.2.0")
+                .unwrap_err()
+                .contains("install.sh isn't data")
+        );
+
+        let dim = dir(
+            "dim",
+            &[(themes::MANIFEST, &THEME.replace("#1b1726", "#ffffff"))],
+        );
+        assert!(verify(&dim, "0.2.0").unwrap_err().contains("contrast"));
+
+        for dir in [fine, script, dim] {
+            std::fs::remove_dir_all(dir).unwrap();
+        }
+    }
 }

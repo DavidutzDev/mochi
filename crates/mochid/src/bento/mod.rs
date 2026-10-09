@@ -15,6 +15,7 @@ mod apply;
 mod client;
 mod fetch;
 mod manifest;
+mod registry;
 mod screens;
 mod share;
 
@@ -62,12 +63,71 @@ pub enum Action {
         #[arg(long, short)]
         yes: bool,
     },
+    /// Look through the registry: packages whose id, name, description or
+    /// tags match, every one without a query.
+    Search {
+        query: Vec<String>,
+        /// Only `plugin`, `theme` or `bento`.
+        #[arg(long)]
+        kind: Option<String>,
+    },
+    /// Show a package in the registry: who looks after it, where its code
+    /// is, and its releases.
+    Info { id: String },
+    /// Move plugins to their newest release, and themes and bentos whose
+    /// source moved on.
+    Update {
+        /// Only these; everything from a repository or the registry
+        /// without any.
+        ids: Vec<String>,
+        /// Don't ask.
+        #[arg(long, short)]
+        yes: bool,
+    },
     /// Show what Bento installed.
     List,
     /// Check a bento, a theme or a plugin in a directory, as `add` would.
     Check {
         #[arg(default_value = ".")]
         dir: PathBuf,
+    },
+    /// Tools for a registry's repository, which its CI runs.
+    #[command(subcommand)]
+    Registry(RegistryAction),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum RegistryAction {
+    /// Check every `packages/<id>.toml`, and with `--fetch` clone each
+    /// package's newest release and read it as `mochi bento add` would.
+    Check {
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+        #[arg(long)]
+        fetch: bool,
+        /// Only these packages, with `--fetch`.
+        #[arg(long, value_delimiter = ',')]
+        only: Vec<String>,
+    },
+    /// Write `index.json` from the package files.
+    Index {
+        #[arg(default_value = ".")]
+        dir: PathBuf,
+        #[arg(long, default_value = "index.json")]
+        out: PathBuf,
+    },
+    /// Say what changed between two checkouts, and whether a person must
+    /// review it.
+    Diff {
+        base: PathBuf,
+        head: PathBuf,
+        /// Who opened the pull request: changes to a package they don't
+        /// look after need a review.
+        #[arg(long)]
+        author: Option<String>,
+        /// Print JSON, for scripts.
+        #[arg(long)]
+        json: bool,
     },
 }
 
@@ -94,5 +154,20 @@ pub fn run(action: &Action, config_file: &Path) -> Result<(), String> {
         Action::Remove { id, yes } => apply::remove(config_file, id, *yes),
         Action::List => apply::list(config_file),
         Action::Check { dir } => apply::check_dir(dir),
+        Action::Search { query, kind } => {
+            registry::search(config_file, &query.join(" "), kind.as_deref())
+        }
+        Action::Info { id } => registry::info(config_file, id),
+        Action::Update { ids, yes } => apply::update(config_file, ids, *yes),
+        Action::Registry(RegistryAction::Check { dir, fetch, only }) => {
+            registry::check(dir, *fetch, only)
+        }
+        Action::Registry(RegistryAction::Index { dir, out }) => registry::index(dir, out),
+        Action::Registry(RegistryAction::Diff {
+            base,
+            head,
+            author,
+            json,
+        }) => registry::diff(base, head, author.as_deref(), *json),
     }
 }

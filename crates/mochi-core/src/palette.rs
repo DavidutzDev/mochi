@@ -282,6 +282,19 @@ fn luminance([r, g, b]: [u8; 3]) -> f64 {
     0.2126 * to_linear(r) + 0.7152 * to_linear(g) + 0.0722 * to_linear(b)
 }
 
+/// The WCAG contrast ratio of two `#rrggbb` or `#aarrggbb` colors, from 1
+/// to 21, ignoring their opacity. Text wants 4.5 or more.
+pub fn contrast(a: &str, b: &str) -> Option<f64> {
+    let rgb = |text: &str| -> Option<[u8; 3]> {
+        let digits = text.strip_prefix('#')?;
+        let digits = digits.get(digits.len().checked_sub(6)?..)?;
+        let value = u32::from_str_radix(digits, 16).ok()?;
+        Some([(value >> 16) as u8, (value >> 8) as u8, value as u8])
+    };
+    let (x, y) = (luminance(rgb(a)?), luminance(rgb(b)?));
+    Some((x.max(y) + 0.05) / (x.min(y) + 0.05))
+}
+
 /// OKLCH: lightness 0 to 1, chroma, hue in degrees.
 fn oklch([r, g, b]: [u8; 3]) -> (f64, f64, f64) {
     let (r, g, b) = (to_linear(r), to_linear(g), to_linear(b));
@@ -327,17 +340,6 @@ fn lch_to_rgb(lightness: f64, chroma: f64, hue: f64) -> [u8; 3] {
 mod tests {
     use super::*;
 
-    fn contrast(a: &str, b: &str) -> f64 {
-        let rgb = |text: &str| {
-            let digits = text.trim_start_matches('#');
-            let digits = &digits[digits.len() - 6..];
-            let value = u32::from_str_radix(digits, 16).unwrap();
-            [(value >> 16) as u8, (value >> 8) as u8, value as u8]
-        };
-        let (x, y) = (luminance(rgb(a)), luminance(rgb(b)));
-        (x.max(y) + 0.05) / (x.min(y) + 0.05)
-    }
-
     #[test]
     fn every_preset_has_both_palettes_and_reads_well() {
         for preset in crate::themes::bundled_ids() {
@@ -345,9 +347,9 @@ mod tests {
                 let colors = colors(preset, light, "").unwrap();
                 assert_eq!(colors.len(), 12, "{preset}");
                 let get = |role: &str| colors[role].as_str().unwrap().to_owned();
-                let text = contrast(&get("foreground"), &get("surface"));
+                let text = contrast(&get("foreground"), &get("surface")).unwrap();
                 assert!(text >= 4.5, "{preset} light={light}: text {text:.1}");
-                let accent = contrast(&get("accent"), &get("on_accent"));
+                let accent = contrast(&get("accent"), &get("on_accent")).unwrap();
                 assert!(accent >= 2.5, "{preset} light={light}: accent {accent:.1}");
             }
         }
@@ -382,12 +384,15 @@ mod tests {
                 [(value >> 16) as u8, (value >> 8) as u8, value as u8]
             });
             assert!((170.0..230.0).contains(&hue), "accent hue {hue}");
-            assert!(contrast(&palette[4], &palette[1]) >= 7.0, "{palette:?}");
+            assert!(
+                contrast(&palette[4], &palette[1]).unwrap() >= 7.0,
+                "{palette:?}"
+            );
             assert!(palette[0].starts_with("#f5"));
         }
         // A plain black wallpaper: grey, with a quiet accent.
         let palette = generate(&[[0, 0, 0]], false);
-        assert!(contrast(&palette[4], &palette[1]) >= 7.0);
+        assert!(contrast(&palette[4], &palette[1]).unwrap() >= 7.0);
     }
 
     #[test]

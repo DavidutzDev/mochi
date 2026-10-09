@@ -15,6 +15,7 @@
 pub mod bento;
 pub mod install;
 pub mod manifest;
+pub mod registry;
 pub mod source;
 
 use std::collections::BTreeMap;

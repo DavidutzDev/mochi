@@ -97,20 +97,21 @@ impl ThemeFile {
     }
 
     /// Its colors as `[colors]` would set them: the light or dark version,
-    /// the other one when it has only one, and Obsidian's for the roles it
-    /// leaves out.
+    /// or the one it has for both, and for the roles it leaves out
+    /// Obsidian's of that version, so a dark-only theme stays dark.
     pub fn colors(&self, light: bool) -> Table {
-        let (wanted, other) = if light {
-            (&self.light, &self.dark)
-        } else {
-            (&self.dark, &self.light)
+        let (palette, light) = match (&self.dark, &self.light) {
+            (_, Some(palette)) if light => (palette, true),
+            (Some(palette), _) => (palette, false),
+            (None, Some(palette)) => (palette, true),
+            (None, None) => unreachable!("parse needs [dark] or [light]"),
         };
         let mut colors = if self.theme.id == "obsidian" {
             Table::new()
         } else {
             bundled("obsidian").colors(light)
         };
-        for (role, color) in wanted.as_ref().or(other.as_ref()).into_iter().flatten() {
+        for (role, color) in palette {
             colors.insert(role.clone(), Value::String(color.clone()));
         }
         colors
@@ -275,10 +276,10 @@ accent = "#3eb489"
         let dark = theme.colors(false);
         assert_eq!(dark["accent"].as_str(), Some("#3eb489"));
         assert_eq!(dark["surface"].as_str(), Some("#1c1c1e"));
-        // Light falls back to its dark colors, over Obsidian's light ones.
+        // A dark-only theme stays dark when the light version is asked for.
         let light = theme.colors(true);
         assert_eq!(light["accent"].as_str(), Some("#3eb489"));
-        assert_eq!(light["surface"].as_str(), Some("#ffffff"));
+        assert_eq!(light["surface"].as_str(), Some("#1c1c1e"));
     }
 
     #[test]

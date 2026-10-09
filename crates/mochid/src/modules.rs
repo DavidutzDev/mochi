@@ -86,14 +86,32 @@ pub fn catalog(config_file: &Path) -> Result<Catalog, ConfigError> {
     let mut modules = builtin();
     let mut plugins = BTreeMap::new();
     let mut listed = Vec::new();
+    let lock = mochi_plugins::Lock::load(&locations.lock).unwrap_or_default();
     for found in found {
-        let checked = found.manifest.and_then(|manifest| {
-            for spec in manifest.actions() {
-                actions::validate(&spec)
-                    .map_err(|error| format!("its manifest declares an invalid action: {error}"))?;
-            }
-            Ok(manifest)
+        // A release the registry withdrew as harmful doesn't run, by what
+        // the last download of its index said.
+        let commit = lock
+            .plugins
+            .get(&found.id)
+            .and_then(|locked| locked.commit.as_deref());
+        let withdrawn = commit.map_or(Ok(None), |commit| {
+            mochi_plugins::registry::withdrawn(&locations, &found.source, commit)
         });
+        if let Ok(Some(note)) = &withdrawn {
+            tracing::warn!(plugin = %found.id, "{note}; `mochi bento update` moves to another release");
+        }
+        let checked = withdrawn
+            .map(drop)
+            .map_err(|harm| format!("{harm}; `mochi bento remove {}` takes it out", found.id))
+            .and(found.manifest)
+            .and_then(|manifest| {
+                for spec in manifest.actions() {
+                    actions::validate(&spec).map_err(|error| {
+                        format!("its manifest declares an invalid action: {error}")
+                    })?;
+                }
+                Ok(manifest)
+            });
         let problem = match checked {
             Ok(manifest) => {
                 let plugin = PluginModule::new(found.dir, manifest);

@@ -21,11 +21,12 @@ pub mod process;
 pub mod quality;
 pub mod supervisor;
 pub mod themes;
-pub mod version;
 
 // Protocol types modules need, so a module only depends on this crate.
 /// Compositor state and actions, from [`ModuleCtx::compositor`].
 pub use mochi_compositor as compositor;
+/// Mochi's version, and the oldest one a package works with.
+pub use mochi_protocol::version;
 pub use mochi_protocol::{ActionSpec, ActivityId, Area, ArgSpec, BubbleId, Contribution};
 /// For [`Module::settings_schema`].
 pub use schemars;

@@ -1,0 +1,37 @@
+# Publishes index.json, every package in one file, to GitHub Pages on each
+# merge. Mochi downloads it from https://<owner>.github.io/<repository>/.
+# Repository settings: Pages built by GitHub Actions.
+name: Publish
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: Install Mochi
+        run: nix profile install github:DavidutzDev/mochi#mochi
+      - name: Write the index
+        run: mochid bento registry index . --out site/index.json
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4

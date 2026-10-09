@@ -1,0 +1,49 @@
+# Merges a pull request on its own once Check passes, when it only touches
+# package files and brings no new plugin code: a new theme or bento, a
+# release of one, or a change to a package's details. A pull request with
+# plugin code waits for a reviewer, which CODEOWNERS asks for.
+#
+# It runs as `pull_request_target`, with the registry's own token, so it
+# never runs anything from the pull request: it reads its package files as
+# data, with the Mochi the registry trusts. Repository settings: allow
+# auto-merge, and require the Check workflow on the main branch.
+name: Merge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: base
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v31
+      - name: Install Mochi
+        run: nix profile install github:DavidutzDev/mochi#mochi
+
+      - name: Merge when it's data only
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          AUTHOR: ${{ github.event.pull_request.user.login }}
+        run: |
+          outside=$(gh pr diff "$PR" --repo "$GITHUB_REPOSITORY" --name-only | grep -cv '^packages/[a-z][a-z0-9_-]*\.toml$' || true)
+          review=$(mochid bento registry diff base head --author "$AUTHOR" --json | jq -r .review)
+          if [ "$outside" = 0 ] && [ "$review" = false ]; then
+            gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --auto --squash
+          else
+            gh label create "needs review" --repo "$GITHUB_REPOSITORY" --color d93f0b 2>/dev/null || true
+            gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --add-label "needs review"
+          fi
