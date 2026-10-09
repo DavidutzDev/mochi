@@ -14,7 +14,7 @@ One bubble next to the island holds a mark for each session, in the order they s
 
 Past four sessions, the rest are counted. Resting the pointer on the bubble lists them, like "mochi-shell needs you". A click opens the list of sessions, with the agent, the project and how long each has been in its state; the cross forgets one, and Clear done forgets the ones that finished. When every session is done, a click on the bubble clears them instead. With `wide = true` in `[bubbles.agents]`, the bubble says what the one session does, or how many do what.
 
-When a session starts waiting, a notice says so, like "Claude Code needs you · mochi-shell", and goes once you answer. When one finishes, a shorter notice says it's done. A click on either opens the list.
+When a session starts waiting, a notice says so, like "Claude Code needs you · mochi-shell", and goes once you answer. When one finishes, a shorter notice says it's done. A click on either opens the list. `waiting_ms` and `done_ms` set how long each stays, 8 and 3 seconds by default, and `waiting_notice` and `done_notice` turn them off.
 
 A session goes when the agent ends it, and after `stale_minutes` without news from it, for an agent that was closed without saying so.
 

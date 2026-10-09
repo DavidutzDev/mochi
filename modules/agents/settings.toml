@@ -9,3 +9,8 @@
 # waiting_notice = true
 # A short notice when a session finishes.
 # done_notice = true
+# How long the notice of a session that needs you stays, in milliseconds,
+# unless you answer first.
+# waiting_ms = 8000
+# How long the notice of a finished session stays, in milliseconds.
+# done_ms = 3000

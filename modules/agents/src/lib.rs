@@ -12,6 +12,8 @@
 //! stale_minutes = 60     # forget a session nothing was heard from since
 //! waiting_notice = true  # a notice when one needs you
 //! done_notice = true     # a short one when one finishes
+//! waiting_ms = 8000      # how long the first stays, unless answered
+//! done_ms = 3000         # how long the second stays
 //! ```
 
 mod sessions;
@@ -33,10 +35,6 @@ use crate::sessions::{Sessions, State};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
-/// How long a session waiting for you shows on the island.
-const WAITING_NOTICE: Duration = Duration::from_secs(8);
-/// How long a finished session shows.
-const DONE_NOTICE: Duration = Duration::from_secs(3);
 /// How long the list stays open, hovering aside.
 const LIST: Duration = Duration::from_secs(10);
 /// How often quiet sessions are looked for.
@@ -44,7 +42,13 @@ const PRUNE_EVERY: Duration = Duration::from_secs(30);
 
 /// The settings `mochi reload` applies without a restart, which would
 /// forget every session.
-const LIVE: [&str; 3] = ["stale_minutes", "waiting_notice", "done_notice"];
+const LIVE: [&str; 5] = [
+    "stale_minutes",
+    "waiting_notice",
+    "done_notice",
+    "waiting_ms",
+    "done_ms",
+];
 
 #[derive(Debug, Default)]
 pub struct Agents;
@@ -61,6 +65,13 @@ struct Settings {
     waiting_notice: bool,
     /// A short notice when a session finishes.
     done_notice: bool,
+    /// How long the notice of a session that needs you stays, in
+    /// milliseconds, unless you answer first.
+    #[schemars(range(min = 1000, max = 60000))]
+    waiting_ms: u64,
+    /// How long the notice of a finished session stays, in milliseconds.
+    #[schemars(range(min = 1000, max = 30000))]
+    done_ms: u64,
 }
 
 impl Default for Settings {
@@ -69,6 +80,8 @@ impl Default for Settings {
             stale_minutes: 60,
             waiting_notice: true,
             done_notice: true,
+            waiting_ms: 8000,
+            done_ms: 3000,
         }
     }
 }
@@ -248,7 +261,7 @@ impl Island {
                 let spec = ActivitySpec::new("Notice")
                     .key(format!("waiting/{id}"))
                     .priority(Priority::HIGH)
-                    .timeout(WAITING_NOTICE)
+                    .timeout(Duration::from_millis(settings.waiting_ms))
                     .payload(sessions::session_payload(session));
                 self.waiting.insert(id.to_owned(), ctx.present(spec));
             }
@@ -258,7 +271,7 @@ impl Island {
                         .key(format!("done/{id}"))
                         .passive()
                         .fleeting()
-                        .timeout(DONE_NOTICE)
+                        .timeout(Duration::from_millis(settings.done_ms))
                         .payload(sessions::session_payload(session)),
                 );
             }
