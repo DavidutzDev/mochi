@@ -59,6 +59,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- Night light said Unavailable while sharing a screen switchably: the share module's virtual screen has no gamma, and its refusal counted as night light failing. Virtual screens are left out now, and a real screen without gamma no longer stops the others from warming.
 - The settings panel's segmented choices fit long labels.
 - The world clock found no time zones on NixOS without `TZDIR` set; it reads the zone files' full paths now.
 - Turning a module on no longer restarts Quickshell: the UI reloads its views in place and keeps its windows, so the island, the bubbles and the widgets stay on screen. Quickshell also stops reloading by itself while mochid writes the views, which it only does now for `mochid --dev`. A UI that doesn't come back from the reload still gets a fresh Quickshell.

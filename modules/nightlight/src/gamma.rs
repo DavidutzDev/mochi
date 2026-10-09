@@ -4,9 +4,11 @@
 //! daylight. Destroying a control gives the output its own gamma back, so
 //! the screens return to normal when Mochi stops, even if it crashes.
 //!
-//! Outputs plugged in later get the same temperature. A compositor gives
-//! one client each output's gamma: with another night light running, like
-//! wlsunset, the control fails and the module says so.
+//! Outputs plugged in later get the same temperature. Virtual outputs,
+//! like the share module's, have no gamma and are left out. A compositor
+//! gives one client each output's gamma: with another night light running,
+//! like wlsunset, the controls fail and the module says so. A screen that
+//! has no gamma of its own is skipped, and the others stay warm.
 //!
 //! Like the clipboard's, it runs as a tokio task that waits for the socket
 //! or for a new temperature.
@@ -118,6 +120,10 @@ async fn run(
                     Some(kelvin) => {
                         client.kelvin = kelvin;
                         client.lost = false;
+                        // Another night light may have let go since.
+                        for output in client.outputs.values_mut() {
+                            output.refused = false;
+                        }
                         client.apply_all(&handle);
                     }
                     // Dropping the controls with the connection restores
@@ -143,6 +149,21 @@ struct Output {
     control: Option<ZwlrGammaControlV1>,
     /// Steps per channel, once the compositor says.
     size: Option<usize>,
+    /// Its connector name, like DP-3, once the compositor says.
+    name: Option<String>,
+    /// The compositor described it, so its name is known when it has one.
+    ready: bool,
+    /// The compositor refused its gamma since the last request.
+    refused: bool,
+}
+
+impl Output {
+    /// A virtual output, like the share module's, has no gamma to set.
+    fn is_virtual(&self) -> bool {
+        self.name
+            .as_deref()
+            .is_some_and(mochi_core::compositor::is_virtual)
+    }
 }
 
 struct Client {
@@ -163,16 +184,23 @@ impl Client {
         version: u32,
         handle: &QueueHandle<Self>,
     ) {
-        let output = registry.bind::<wl_output::WlOutput, _, _>(name, version.min(4), handle, ());
+        let output = registry.bind::<wl_output::WlOutput, _, _>(name, version.min(4), handle, name);
+        // Before version 2 no `done` comes to wait for.
+        let ready = output.version() < 2;
         self.outputs.insert(
             name,
             Output {
                 output,
                 control: None,
                 size: None,
+                name: None,
+                ready,
+                refused: false,
             },
         );
-        self.apply(name, handle);
+        if ready {
+            self.apply(name, handle);
+        }
     }
 
     fn apply_all(&mut self, handle: &QueueHandle<Self>) {
@@ -188,6 +216,9 @@ impl Client {
         let Some(output) = self.outputs.get_mut(&name) else {
             return;
         };
+        if !output.ready || output.is_virtual() || output.refused {
+            return;
+        }
         let Some(kelvin) = self.kelvin.filter(|kelvin| *kelvin < color::NEUTRAL) else {
             if let Some(control) = output.control.take() {
                 control.destroy();
@@ -260,15 +291,27 @@ impl Dispatch<wl_registry::WlRegistry, GlobalListContents> for Client {
     }
 }
 
-impl Dispatch<wl_output::WlOutput, ()> for Client {
+impl Dispatch<wl_output::WlOutput, u32> for Client {
     fn event(
-        _: &mut Self,
+        client: &mut Self,
         _: &wl_output::WlOutput,
-        _: wl_output::Event,
-        _: &(),
+        event: wl_output::Event,
+        global: &u32,
         _: &Connection,
-        _: &QueueHandle<Self>,
+        handle: &QueueHandle<Self>,
     ) {
+        let Some(output) = client.outputs.get_mut(global) else {
+            return;
+        };
+        match event {
+            wl_output::Event::Name { name } => output.name = Some(name),
+            // Described: its name is known, so a virtual one stays out.
+            wl_output::Event::Done if !output.ready => {
+                output.ready = true;
+                client.apply(*global, handle);
+            }
+            _ => {}
+        }
     }
 }
 
@@ -309,10 +352,22 @@ impl Dispatch<ZwlrGammaControlV1, u32> for Client {
                 control.destroy();
                 output.control = None;
                 output.size = None;
-                if !client.lost {
+                output.refused = true;
+                let screen = output.name.clone().unwrap_or_else(|| "a screen".to_owned());
+                // Only a problem when no screen is left to warm.
+                let others = client
+                    .outputs
+                    .values()
+                    .any(|output| output.ready && !output.is_virtual() && !output.refused);
+                if others {
+                    tracing::warn!(
+                        screen,
+                        "the compositor has no gamma for this screen; night light warms the others"
+                    );
+                } else if !client.lost {
                     client.lost = true;
                     let _ = client.problems.send(
-                        "the compositor refused an output's gamma: another night light, like wlsunset or hyprsunset, may hold it, or the output has none to set".to_owned(),
+                        "the compositor refused the screens' gamma: another night light, like wlsunset or hyprsunset, may hold it".to_owned(),
                     );
                 }
             }
