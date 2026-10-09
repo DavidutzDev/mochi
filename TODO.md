@@ -527,7 +527,7 @@ A new module: the apps' tray icons.
 - [x] Restart a plugin whose files changed on `mochi reload`
 - [x] `mochi plugins install|update|remove|list`, showing what a plugin runs and asking first
 - [x] `mochi-sdk` crate
-- [x] Example plugins: pomodoro and weather
+- [x] Example plugins: pomodoro and meteo (the weather example, renamed when weather became a builtin)
 - [x] Plugin docs: Plugins and Writing plugins pages, the plugin protocol in `docs/protocol.md`
 - [x] home-manager `plugins` option
 - [ ] Publish `mochi-sdk` to crates.io
@@ -557,10 +557,11 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [x] Widgets from existing modules: now playing, performance graphs, battery, weather
 - [x] Alignment guides while dragging
 - [x] Moving a widget to another monitor from its settings
-- [ ] Variants: a widget offers several looks (a clock: digital, stacked, analog, in a shape, minimal, world), each with a name, a one-line description and a default size
-- [ ] The drawer as a side panel while arranging: live previews of every variant in a grid, a one-line description each, category chips, tabs for Add, On desktop and Layouts (saved arrangements), "1 on the desktop" counts, drag or click to add
-- [ ] Shared expressive pieces in the core: a few shapes (scallop, pentagon, wavy ring), a wavy progress line for media while it plays, stacked numerals; one shape per widget, as an accent
-- [ ] New looks: clock (stacked, analog, shape, minimal, world), calendar (week strip, coming up), system and battery rings, media (wavy progress card, cover only), timer, fetch
+- [x] Variants: a widget offers several looks (a clock: digital, stacked, analog, in a shape, minimal, world), each with a name, a one-line description and a default size
+- [x] The drawer as a side panel while arranging: live previews of every variant in a grid, a one-line description each, category chips, tabs for Add, On desktop and Layouts (saved arrangements), "1 on the desktop" counts, drag or click to add
+- [x] Shared expressive pieces in the core: a few shapes (scallop, pentagon, wavy ring), a wavy progress line for media while it plays, stacked numerals; one shape per widget, as an accent
+- [x] New looks: clock (stacked, analog, shape, minimal, world), calendar (week strip), system and battery rings, media (wavy progress card, cover only), timer, fetch
+- [ ] A "Coming up" calendar look, once Mochi has an events source (the clock panel's reminders, or a calendar like CalDAV or khal)
 - [ ] Later looks: visualiser bars along the screen edge, photo frame, at a glance, thermals, network graph
 
 ## Bento
@@ -650,8 +651,8 @@ Later:
 - [x] Brightness: the laptop's backlight and external monitors over DDC/CI with ddcutil, with the OSD and a slider tile (replaces "Laptop screen brightness" under OSD)
 - [x] Updates: the updater module looks for a release on GitHub, says so once on the island, and its page in the settings has the changelog and the update the way Mochi was installed
 - [x] An About page in the settings: version, system, session, modules, plugins and processes, to copy into a bug report
-- [ ] Weather: a built-in module with Open-Meteo (no key), off until a place is set; widgets (current, forecast, 12-hour curve), and one forecast shared with the clock panel and a lock screen
-- [ ] A clock panel on the island: Today (time, weather, hourly), Calendar with reminders, Timer and pomodoro (the timer module), Stopwatch with laps, World clocks
+- [x] Weather: a built-in module with Open-Meteo (no key), off until a place is set; widgets (current, forecast, 12-hour curve), and one forecast shared with the clock panel and a lock screen
+- [x] A clock panel on the island: Today (time, weather, hourly), Calendar with reminders, Timer and pomodoro (the timer module), Stopwatch with laps, World clocks
 - [x] Bento before Plugins in the settings, and a `section` contribution for a module's own view on its settings page
 
 ### Checks and tools

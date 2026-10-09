@@ -48,7 +48,11 @@ Most shells you see on [r/unixporn](https://www.reddit.com/r/unixporn/) are some
 - 🧩 Tray icons for apps like Discord and Steam
 - 📦 Files dropped on the island, converted, compressed or extracted
 - 🎨 A color picker for anything on screen, and 😀 an emoji picker
-- 🗒️ Desktop widgets: clocks, a calendar, notes, to-do lists, what's playing
+- 🗒️ Desktop widgets in many looks, from a drawer with live previews: clocks, calendars, weather, notes, to-do lists, what's playing, system rings, and layouts to switch between
+- 🌤️ The weather, from Open-Meteo, with no account
+- 🕰️ A clock panel: today with the weather, a calendar with reminders, a stopwatch and world clocks
+- ⏱️ A focus timer, with breaks
+- 🤖 Your coding agents on the island: working, waiting for you, or done
 - 🔒 Lock, log out, suspend, reboot and shut down
 - ⚙️ A settings panel for every option, applied as you change it
 - 🍱 Bento, to install and share themes, plugins and whole setups

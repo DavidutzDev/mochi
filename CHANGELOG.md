@@ -6,6 +6,15 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- Widgets can have several looks: modules declare variants with a title, a one-line description and their own sizes, and the widget's settings switch between them. A look can go without its card.
+- The widget drawer is a panel at the side while arranging: search, category chips, and tabs for Add (a live preview of every look, with how many are placed), On desktop and Layouts. Click a widget to place it in the first free spot, clear of the drawer and the island.
+- Saved widget layouts: keep an arrangement under a name and switch between them, in `widget-layouts/` next to `widgets.toml`.
+- New widget looks: the clock stacked, analog, in a cookie, minimal without a card, and as a world clock; the calendar's week strip, with today as a pentagon; performance as rings or meters; the battery as a ring; now playing as a tall artwork card or the cover alone.
+- New widgets: system info (distribution, kernel, uptime, Mochi's version, compositor, CPU and memory) and the focus timer.
+- A weather module: the weather now, the next 24 hours and 7 days from Open-Meteo, with no account or key. Set `place` (looked up once) or `latitude` and `longitude`; nothing is sent before. The control center gets a card with the next hours, and the desktop a Weather widget in four looks: now, an icon in a cookie, the next days, and the next 12 hours as a curve. `mochi ipc weather refresh` and `status`; settings apply live.
+- A clock panel on the island, `mochi ipc clock toggle`: today with the weather and the next reminder, a calendar with reminders, the focus timer, a stopwatch with laps, and world clocks. A click on the control center's Today card opens it.
+- Reminders, from the calendar or `mochi ipc clock remind`: the island says when one is due, with Done and Snooze, also after a suspend or a restart.
+- Shared pieces for views in the core: `ExpressiveShape` (circle, pentagon, cookie, clover, burst), `WavyRing`, `WavyProgress`, `StackedTime` and `ClockTime`; see docs/views.md.
 - A focus timer, the `timer` module: a bubble by the island counts down a focus session, and a click pauses it. When focus ends the island offers a break, every fourth one long, and when the break ends, the next session. The control center has a card with the time left and buttons. `mochi ipc timer start`, `break`, `pause`, `resume`, `toggle`, `stop` and `status` drive it. It carries on through a mochid restart, and its settings apply without stopping it.
 - Coding agents on the island, the `agents` module: Claude Code and T3 Code sessions show as working, waiting for you, or done, in one bubble with a mark per session, a notice when one needs you or finishes, and a list on a click. `mochi agents hook`, for Claude Code's hooks, reads the hook's JSON on stdin and always exits 0 quickly, also without a running mochid.
 - Notifications play the sound an app asks for (`sound-file`, `sound-name`) when they pop up, through pw-play or paplay, and canberra-gtk-play or the sound theme for names. `suppress-sound`, do not disturb and `sounds = false` keep them quiet, and `sound_command` picks the player.
@@ -24,6 +33,8 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Changed
 
+- The media progress line waves while a track plays and lies flat when paused, in the island and on the Now Playing card.
+- The example weather plugin is now `meteo`, since `weather` is a builtin id; Bento leaves the weather's `place` out of shared setups.
 - The mixer's app icons come from the apps' desktop entries, found by the stream's Flatpak id, app id, icon, program or name, so Zen, Chromium and Discord calls show their icons.
 - An open tray menu follows the app's changes (`LayoutUpdated`, `ItemsPropertiesUpdated`): checkmarks, labels and new entries update in place.
 - The clipboard history works on compositors without `ext-data-control-v1`, through `wlr-data-control`; `MOCHI_DATA_CONTROL=wlr` forces it.
@@ -31,6 +42,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- The world clock found no time zones on NixOS without `TZDIR` set; it reads the zone files' full paths now.
 - Turning a module on no longer restarts Quickshell: the UI reloads its views in place and keeps its windows, so the island, the bubbles and the widgets stay on screen. Quickshell also stops reloading by itself while mochid writes the views, which it only does now for `mochid --dev`. A UI that doesn't come back from the reload still gets a fresh Quickshell.
 - The installer restarts the running mochid only when it's the one it just updated. Installing into another prefix used to restart a mochid from a package or Nix too.
 
