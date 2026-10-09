@@ -3,10 +3,9 @@
 
 use std::process::Stdio;
 
+use mochi_core::desktop::{App, AppAction, exec_words, installed};
 use mochi_core::process;
 use tokio::process::Command;
-
-use crate::entries::{App, AppAction, installed};
 
 /// How apps get started, best first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,7 +105,7 @@ pub fn spawn(method: Method, argv: &[String], terminal: Option<&[String]>) -> Re
 /// Nothing is opened with the app, so the file and URL codes go away.
 pub fn command_line(exec: &str, app: &App) -> Option<Vec<String>> {
     let mut argv = Vec::new();
-    for word in words(exec)? {
+    for word in exec_words(exec)? {
         match word.as_str() {
             "%f" | "%F" | "%u" | "%U" | "%d" | "%D" | "%n" | "%N" | "%v" | "%m" => {}
             "%i" => {
@@ -140,42 +139,6 @@ fn expand(word: &str, app: &App) -> String {
     out
 }
 
-/// Splits on spaces outside double quotes. Inside quotes, a backslash makes
-/// the next `"`, `` ` ``, `$` or `\` literal. `None` for an unclosed quote.
-fn words(exec: &str) -> Option<Vec<String>> {
-    let mut words = Vec::new();
-    let mut word = String::new();
-    let mut started = false;
-    let mut quoted = false;
-    let mut chars = exec.chars();
-    while let Some(c) = chars.next() {
-        match c {
-            '"' => {
-                quoted = !quoted;
-                started = true;
-            }
-            '\\' if quoted => word.push(chars.next()?),
-            ' ' | '\t' if !quoted => {
-                if started {
-                    words.push(std::mem::take(&mut word));
-                    started = false;
-                }
-            }
-            other => {
-                word.push(other);
-                started = true;
-            }
-        }
-    }
-    if quoted {
-        return None;
-    }
-    if started {
-        words.push(word);
-    }
-    Some(words)
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
@@ -193,6 +156,7 @@ mod tests {
             terminal: false,
             keywords: Vec::new(),
             path: None,
+            wm_class: None,
             actions: Vec::new(),
             file: PathBuf::from("/apps/a.desktop"),
         }

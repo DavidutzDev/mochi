@@ -6,7 +6,8 @@
 //! key, opens the same mixer on the island. The `volume`, `mute`, `output`,
 //! `input` and `move` actions change things from keybinds and scripts.
 //!
-//! The streams of one app share a row. Each slider shows a peak meter while
+//! The streams of one app share a row, with the icon of the app's desktop
+//! entry when one is found, see [`icons`]. Each slider shows a peak meter while
 //! a view of the mixer is open: the view sends `meters on` every few
 //! seconds and `meters off` when it closes, and only then does the audio
 //! thread open its peak-detecting streams. The levels go to the views as
@@ -19,6 +20,7 @@
 //! max_volume = 100   # the top of the sliders and the OSD's bar, up to 300
 //! ```
 
+mod icons;
 mod meter;
 mod mixer;
 mod pulse;

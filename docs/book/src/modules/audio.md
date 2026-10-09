@@ -2,7 +2,7 @@
 
 A volume mixer, like pavucontrol's: the output and the input with their volumes, and a slider and a mute for each app playing sound and each app recording. It shows as the control center's Sound page, and `mochi ipc audio toggle`, bound to a key, opens the same mixer on the island; Escape or a click outside closes it. It needs PipeWire with its PulseAudio server, or PulseAudio.
 
-Click the output's or the input's name to list the other devices, and click one to switch to it. Click an icon to mute or unmute. Apps playing come first; paused ones are dimmed. Streams without a volume of their own, like some system sounds, aren't listed.
+Click the output's or the input's name to list the other devices, and click one to switch to it. Click an icon to mute or unmute. Apps playing come first; paused ones are dimmed. An app's icon is the one the launcher shows for it: Mochi finds the app's desktop entry by what its stream says, its Flatpak id, app id, icon, program or name, so Zen, Chromium and a Discord call get their icons even when the stream names one the icon theme lacks, or none. Streams without a volume of their own, like some system sounds, aren't listed.
 
 The streams of one app share a row, so two browser tabs playing get one Firefox row. Its slider sets every stream to the same level, and its icon mutes them all; the row shows the loudest stream's volume, and shows muted only when all of them are. When an app has more than one stream, click its name to open the row and see each stream with its own slider, mute and output.
 

@@ -69,7 +69,14 @@ Item {
             height: 26
             visible: root.appIcon !== "" && status === Image.Ready
             opacity: root.muted ? 0.35 : 1
-            source: root.appIcon === "" ? "" : Quickshell.iconPath(root.appIcon, true)
+            // A desktop entry can name a picture file instead of an icon.
+            source: {
+                if (root.appIcon === "")
+                    return "";
+                if (root.appIcon.startsWith("/"))
+                    return `file://${root.appIcon.split("/").map(encodeURIComponent).join("/")}`;
+                return Quickshell.iconPath(root.appIcon, true);
+            }
             sourceSize.width: 52
             sourceSize.height: 52
             fillMode: Image.PreserveAspectFit

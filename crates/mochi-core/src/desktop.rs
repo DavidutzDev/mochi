@@ -3,6 +3,9 @@
 //! They live in `applications/` under `$XDG_DATA_HOME` and every
 //! `$XDG_DATA_DIRS` entry. The first file with a given id wins, so a user's
 //! own copy overrides the system one, and a hidden copy hides it.
+//!
+//! The launcher lists them, and [`find`] tells which app a process or a
+//! name belongs to, for its icon.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -21,6 +24,9 @@ pub struct App {
     pub keywords: Vec<String>,
     /// The directory to run it in.
     pub path: Option<PathBuf>,
+    /// `StartupWMClass`: the class or app id its windows have, which is
+    /// often its program's name.
+    pub wm_class: Option<String>,
     pub actions: Vec<AppAction>,
     /// Where it came from, for `%k`.
     pub file: PathBuf,
@@ -79,6 +85,17 @@ impl Locale {
         candidates.push(lang.to_owned());
         Self { candidates }
     }
+}
+
+/// The desktops `OnlyShowIn` and `NotShowIn` name, from
+/// `XDG_CURRENT_DESKTOP`.
+pub fn current_desktops() -> Vec<String> {
+    std::env::var("XDG_CURRENT_DESKTOP")
+        .unwrap_or_default()
+        .split(':')
+        .filter(|desktop| !desktop.is_empty())
+        .map(str::to_owned)
+        .collect()
 }
 
 /// `applications/` in the user's data directory, then in the system ones.
@@ -206,6 +223,7 @@ pub fn parse(
         terminal: flag("Terminal"),
         keywords: names("Keywords"),
         path: get("Path").map(PathBuf::from),
+        wm_class: get("StartupWMClass"),
         actions,
         file: file.to_owned(),
     })
@@ -302,6 +320,129 @@ pub fn installed(program: &str) -> bool {
     }
     std::env::var_os("PATH")
         .is_some_and(|path| std::env::split_paths(&path).any(|dir| dir.join(program).is_file()))
+}
+
+/// Splits `Exec=` on spaces outside double quotes. Inside quotes, a
+/// backslash makes the next `"`, `` ` ``, `$` or `\` literal. `None` for an
+/// unclosed quote.
+pub fn exec_words(exec: &str) -> Option<Vec<String>> {
+    let mut words = Vec::new();
+    let mut word = String::new();
+    let mut started = false;
+    let mut quoted = false;
+    let mut chars = exec.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => {
+                quoted = !quoted;
+                started = true;
+            }
+            '\\' if quoted => word.push(chars.next()?),
+            ' ' | '\t' if !quoted => {
+                if started {
+                    words.push(std::mem::take(&mut word));
+                    started = false;
+                }
+            }
+            other => {
+                word.push(other);
+                started = true;
+            }
+        }
+    }
+    if quoted {
+        return None;
+    }
+    if started {
+        words.push(word);
+    }
+    Some(words)
+}
+
+/// The program an entry runs, without its directory: `firefox` for
+/// `Exec=/usr/bin/firefox %u`, and past `env` and its variables.
+fn program(exec: &str) -> Option<String> {
+    let words = exec_words(exec)?;
+    let mut words = words.iter().map(String::as_str);
+    let base = |word: &str| {
+        Path::new(word)
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(str::to_owned)
+    };
+    let first = words.next()?;
+    if base(first).as_deref() != Some("env") {
+        return base(first);
+    }
+    words
+        .find(|word| !word.contains('=') && !word.starts_with('-'))
+        .and_then(base)
+}
+
+/// The app that one of `names` belongs to, the first name first: what a
+/// process says it is, like a sound stream's app id, program and app name.
+/// Each name is tried, ignoring case, as an entry's id, the last part of a
+/// reverse-DNS id, its `StartupWMClass`, its program and its name. When none
+/// of them matches, each is tried as their first word, so `zen` finds
+/// `zen-beta.desktop` and `chromium` finds `chromium-browser.desktop`.
+pub fn find<'a>(apps: &'a [App], names: &[&str]) -> Option<&'a App> {
+    let names: Vec<String> = names
+        .iter()
+        .map(|name| name.trim().to_lowercase())
+        .filter(|name| !name.is_empty())
+        .collect();
+    let keys: Vec<(&App, Keys)> = apps.iter().map(|app| (app, Keys::of(app))).collect();
+    for exact in [true, false] {
+        for name in &names {
+            if let Some((app, _)) = keys.iter().find(|(_, keys)| keys.matches(name, exact)) {
+                return Some(app);
+            }
+        }
+    }
+    None
+}
+
+/// What [`find`] compares names with, in lowercase.
+struct Keys {
+    /// The id without `.desktop`.
+    id: String,
+    wm_class: Option<String>,
+    program: Option<String>,
+    name: String,
+}
+
+impl Keys {
+    fn of(app: &App) -> Self {
+        Self {
+            id: app
+                .id
+                .strip_suffix(".desktop")
+                .unwrap_or(&app.id)
+                .to_lowercase(),
+            wm_class: app.wm_class.as_deref().map(str::to_lowercase),
+            program: program(&app.exec).map(|program| program.to_lowercase()),
+            name: app.name.to_lowercase(),
+        }
+    }
+
+    fn matches(&self, name: &str, exact: bool) -> bool {
+        let keys = [
+            Some(self.id.as_str()),
+            self.wm_class.as_deref(),
+            self.program.as_deref(),
+            Some(self.name.as_str()),
+        ];
+        let mut keys = keys.into_iter().flatten();
+        if exact {
+            let last = self.id.rsplit('.').next().filter(|_| self.id.contains('.'));
+            last == Some(name) || keys.any(|key| key == name)
+        } else {
+            keys.any(|key| {
+                key.strip_prefix(name)
+                    .is_some_and(|rest| rest.starts_with(['-', '_', '.', ' ']))
+            })
+        }
+    }
 }
 
 #[cfg(test)]
@@ -411,5 +552,63 @@ Exec=firefox --private-window %U
             .collect();
         assert_eq!(found, [("a.desktop", "User A"), ("sub-c.desktop", "C")]);
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    fn entry(id: &str, name: &str, exec: &str, wm_class: Option<&str>) -> App {
+        let text = format!("[Desktop Entry]\nType=Application\nName={name}\nExec={exec}\n");
+        App {
+            wm_class: wm_class.map(str::to_owned),
+            ..parse(id, Path::new("/a"), &text, &Locale::default(), &[]).unwrap()
+        }
+    }
+
+    #[test]
+    fn finds_the_app_a_process_names() {
+        let apps = [
+            entry(
+                "zen-beta.desktop",
+                "Zen Browser (Beta)",
+                "zen-beta --name zen-beta %U",
+                Some("zen-beta"),
+            ),
+            entry("chromium-browser.desktop", "Chromium", "chromium %U", None),
+            entry("discord.desktop", "Discord", "Discord", Some("discord")),
+            entry("com.obsproject.Studio.desktop", "OBS Studio", "obs", None),
+            entry(
+                "com.spotify.Client.desktop",
+                "Spotify",
+                "env LD_PRELOAD=x /opt/spotify/spotify %U",
+                None,
+            ),
+        ];
+        let found = |names: &[&str]| find(&apps, names).map(|app| app.id.as_str());
+        // Zen's streams say `zen` and "Zen": the first word of its id.
+        assert_eq!(found(&["zen", "Zen"]), Some("zen-beta.desktop"));
+        // Chromium names an icon after its id; its program is `chromium`.
+        assert_eq!(
+            found(&["chromium-browser", "chromium"]),
+            Some("chromium-browser.desktop")
+        );
+        assert_eq!(found(&["chromium"]), Some("chromium-browser.desktop"));
+        // A WebRTC stream's name says nothing; its program does.
+        assert_eq!(
+            found(&["", "Discord", "WEBRTC VoiceEngine"]),
+            Some("discord.desktop")
+        );
+        assert_eq!(found(&["obs"]), Some("com.obsproject.Studio.desktop"));
+        assert_eq!(found(&["studio"]), Some("com.obsproject.Studio.desktop"));
+        // Past `env`, and without the directory.
+        assert_eq!(found(&["spotify"]), Some("com.spotify.Client.desktop"));
+        assert_eq!(found(&["firefox", "Firefox"]), None);
+        // A name that matches exactly beats one that starts another.
+        assert_eq!(found(&["zen", "discord"]), Some("discord.desktop"));
+    }
+
+    #[test]
+    fn reads_the_program_an_entry_runs() {
+        assert_eq!(program("/usr/bin/firefox %u").as_deref(), Some("firefox"));
+        assert_eq!(program("env A=1 B=2 foot").as_deref(), Some("foot"));
+        assert_eq!(program(r#""/opt/My App/run" --x"#).as_deref(), Some("run"));
+        assert_eq!(program(""), None);
     }
 }

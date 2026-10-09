@@ -10,8 +10,8 @@
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 
-use crate::entries::App;
 use crate::history::History;
+use mochi_core::desktop::App;
 
 /// One line in the list.
 #[derive(Debug, Clone, PartialEq)]
@@ -105,7 +105,7 @@ mod tests {
     use std::path::PathBuf;
 
     use super::*;
-    use crate::entries::AppAction;
+    use mochi_core::desktop::AppAction;
 
     fn app(id: &str, name: &str, generic: Option<&str>) -> App {
         App {
@@ -118,6 +118,7 @@ mod tests {
             terminal: false,
             keywords: Vec::new(),
             path: None,
+            wm_class: None,
             actions: Vec::new(),
             file: PathBuf::new(),
         }

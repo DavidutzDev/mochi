@@ -36,6 +36,7 @@ use libpulse_binding::proplist::{Proplist, properties};
 use libpulse_binding::volume::{ChannelVolumes, Volume};
 use tokio::sync::mpsc::UnboundedSender;
 
+use crate::icons::{Icons, Identity};
 use crate::meter::{Meters, Peaks};
 
 const FIRST_RETRY: Duration = Duration::from_secs(1);
@@ -179,9 +180,11 @@ impl Inbox {
 
 fn run(reports: &UnboundedSender<Report>, inbox: &Rc<Inbox>, peaks: &Peaks) {
     let mut retry = FIRST_RETRY;
+    // Kept across connections: the apps stay the same.
+    let icons = Rc::new(RefCell::new(Icons::default()));
     loop {
         let started = Instant::now();
-        match session(reports, inbox, peaks) {
+        match session(reports, inbox, peaks, &icons) {
             Ok(()) => return,
             Err(error) => {
                 if started.elapsed() > STABLE {
@@ -217,6 +220,8 @@ struct Link {
     last: RefCell<Snapshot>,
     meters: RefCell<Meters>,
     inbox: Rc<Inbox>,
+    /// The apps' icons, from their desktop entries.
+    icons: Rc<RefCell<Icons>>,
 }
 
 #[derive(Default)]
@@ -235,6 +240,7 @@ fn session(
     reports: &UnboundedSender<Report>,
     inbox: &Rc<Inbox>,
     peaks: &Peaks,
+    icons: &Rc<RefCell<Icons>>,
 ) -> Result<(), String> {
     let mut mainloop = Mainloop::new().ok_or("cannot create a libpulse mainloop")?;
     let mut proplist = Proplist::new().ok_or("cannot create a proplist")?;
@@ -270,6 +276,7 @@ fn session(
         last: RefCell::default(),
         meters: RefCell::new(Meters::new(Arc::clone(peaks))),
         inbox: Rc::clone(inbox),
+        icons: Rc::clone(icons),
     });
 
     let subscribed = Rc::clone(&link);
@@ -398,7 +405,7 @@ fn refresh(link: &Rc<Link>) {
     let streams = Rc::clone(link);
     introspect.get_sink_input_info_list(move |result| match result {
         ListResult::Item(input) => {
-            let Some(stream) = stream(input) else {
+            let Some(stream) = stream(input, &mut streams.icons.borrow_mut()) else {
                 return;
             };
             let mut building = streams.building.borrow_mut();
@@ -413,7 +420,7 @@ fn refresh(link: &Rc<Link>) {
     let recorders = Rc::clone(link);
     introspect.get_source_output_info_list(move |result| match result {
         ListResult::Item(output) => {
-            let Some(recorder) = recorder(output) else {
+            let Some(recorder) = recorder(output, &mut recorders.icons.borrow_mut()) else {
                 return;
             };
             let mut building = recorders.building.borrow_mut();
@@ -566,7 +573,7 @@ fn source_device(source: &SourceInfo) -> Option<Device> {
 
 /// Streams without a volume of their own, like some system sounds, can't
 /// be mixed, so they aren't listed.
-fn stream(input: &SinkInputInfo) -> Option<Stream> {
+fn stream(input: &SinkInputInfo, icons: &mut Icons) -> Option<Stream> {
     if !input.has_volume || !input.volume_writable {
         return None;
     }
@@ -580,12 +587,13 @@ fn stream(input: &SinkInputInfo) -> Option<Stream> {
             input.sink,
             input.name.as_deref(),
             &input.proplist,
+            icons,
         )
     })
 }
 
 /// An app recording, unless it's one of Mochi's meters.
-fn recorder(output: &SourceOutputInfo) -> Option<Stream> {
+fn recorder(output: &SourceOutputInfo, icons: &mut Icons) -> Option<Stream> {
     if output
         .proplist
         .get_str(properties::APPLICATION_ID)
@@ -604,31 +612,36 @@ fn recorder(output: &SourceOutputInfo) -> Option<Stream> {
             output.source,
             output.name.as_deref(),
             &output.proplist,
+            icons,
         )
     })
 }
 
 /// A stream with the app's name, icon and title from its properties, at
 /// full volume.
-fn named(index: u32, device: u32, name: Option<&str>, proplist: &Proplist) -> Stream {
-    let property = |key: &str| {
-        proplist
-            .get_str(key)
-            .filter(|value| !value.trim().is_empty())
-    };
-    let binary = property(properties::APPLICATION_PROCESS_BINARY);
-    let app = property(properties::APPLICATION_NAME)
-        .or_else(|| binary.clone())
+fn named(
+    index: u32,
+    device: u32,
+    name: Option<&str>,
+    proplist: &Proplist,
+    icons: &mut Icons,
+) -> Stream {
+    let identity = Identity::of(proplist);
+    let app = identity
+        .name
+        .clone()
+        .or_else(|| identity.binary.clone())
         .or_else(|| name.map(str::to_owned))
         .unwrap_or_else(|| "Unknown app".to_owned());
-    let title = property(properties::MEDIA_NAME)
+    let title = proplist
+        .get_str(properties::MEDIA_NAME)
+        .filter(|value| !value.trim().is_empty())
         .or_else(|| name.map(str::to_owned))
         .unwrap_or_default();
     Stream {
         index,
         device,
-        icon: property(properties::APPLICATION_ICON_NAME)
-            .or_else(|| binary.map(|binary| binary.to_lowercase())),
+        icon: icons.icon(&identity),
         // Apps often name the stream after themselves; that says nothing.
         title: if title == app { String::new() } else { title },
         app,

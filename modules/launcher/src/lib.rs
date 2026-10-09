@@ -28,7 +28,6 @@
 //! ```
 
 mod calc;
-mod entries;
 mod files;
 mod history;
 mod launch;
@@ -51,11 +50,11 @@ use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
-use crate::entries::{App, Locale};
 use crate::files::FilesSettings;
 use crate::history::History;
 use crate::launch::Method;
 use crate::providers::{Engine, Item, Kind, Provider, ProviderSettings, Verb};
+use mochi_core::desktop::{self, App, Locale};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
@@ -929,21 +928,16 @@ fn picked(ctx: &ModuleCtx, provider: &Provider, id: String) {
 }
 
 async fn read_apps() -> Vec<App> {
-    let desktops: Vec<String> = std::env::var("XDG_CURRENT_DESKTOP")
-        .unwrap_or_default()
-        .split(':')
-        .filter(|desktop| !desktop.is_empty())
-        .map(str::to_owned)
-        .collect();
-    let directories = entries::directories();
-    tokio::task::spawn_blocking(move || entries::scan(&directories, &Locale::from_env(), &desktops))
+    let desktops = desktop::current_desktops();
+    let directories = desktop::directories();
+    tokio::task::spawn_blocking(move || desktop::scan(&directories, &Locale::from_env(), &desktops))
         .await
         .unwrap_or_default()
 }
 
 /// `xdg-terminal-exec` when installed, otherwise `$TERMINAL -e`.
 fn default_terminal() -> Vec<String> {
-    if entries::installed("xdg-terminal-exec") {
+    if desktop::installed("xdg-terminal-exec") {
         return vec!["xdg-terminal-exec".into()];
     }
     match std::env::var("TERMINAL") {

@@ -1,6 +1,7 @@
 //! The daemon's building blocks: the module API, the arbiter that decides
 //! what the island shows, action argument parsing, configuration, the QML
-//! asset writer and the Quickshell supervisor.
+//! asset writer, the Quickshell supervisor, and the desktop entries of
+//! installed apps.
 //!
 //! The UI's core QML lives in this crate's `qml/` directory; see [`QML`].
 
@@ -11,6 +12,7 @@ pub mod bubbles;
 pub mod changes;
 pub mod config;
 pub mod contributions;
+pub mod desktop;
 pub mod examples;
 pub mod islands;
 pub mod module;
