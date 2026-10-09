@@ -1239,18 +1239,18 @@ pub(crate) mod tests {
         }
 
         // An archive of sources builds like a directory.
-        let manifest = "[plugin]\nid = \"timer\"\nname = \"Timer\"\nversion = \"2.0.0\"\napi = 1\n[backend]\nexec = \"bin/timer\"\nbuild = \"mkdir -p bin && printf '#!/bin/sh\\\\n' > bin/timer && chmod +x bin/timer\"\n";
+        let manifest = "[plugin]\nid = \"ticker\"\nname = \"Ticker\"\nversion = \"2.0.0\"\napi = 1\n[backend]\nexec = \"bin/ticker\"\nbuild = \"mkdir -p bin && printf '#!/bin/sh\\\\n' > bin/ticker && chmod +x bin/ticker\"\n";
         let sources = tarball(&root, ".", &[("mochi-plugin.toml", manifest)]);
         let source: Source = format!(
-            "https://example.org/timer.tgz#sha256={}",
+            "https://example.org/ticker.tgz#sha256={}",
             sha256_hex(&sources)
         )
         .parse()
         .unwrap();
-        let fetch = Fixtures::default().with("https://example.org/timer.tgz", sources);
+        let fetch = Fixtures::default().with("https://example.org/ticker.tgz", sources);
         installer.fetch = &fetch;
-        installer.run("timer", &source, Mode::Install).unwrap();
-        assert!(locations.installs.join("timer/bin/timer").is_file());
+        installer.run("ticker", &source, Mode::Install).unwrap();
+        assert!(locations.installs.join("ticker/bin/ticker").is_file());
         assert!(!asked[0].contains("runs "), "{}", asked[0]);
         assert!(asked[1].contains("runs    mkdir -p bin"), "{}", asked[1]);
         std::fs::remove_dir_all(root).unwrap();
@@ -1340,7 +1340,7 @@ pub(crate) mod tests {
         git(&repo, &["init", "--quiet", "--initial-branch=main"]);
         let manifest = |version: &str| {
             format!(
-                "[plugin]\nid = \"timer\"\nname = \"Timer\"\nversion = \"{version}\"\napi = 1\n\n[backend]\nexec = \"bin/timer\"\nbuild = \"mkdir -p bin && printf '#!/bin/sh\\\\n' > bin/timer && chmod +x bin/timer\"\n"
+                "[plugin]\nid = \"ticker\"\nname = \"Ticker\"\nversion = \"{version}\"\napi = 1\n\n[backend]\nexec = \"bin/ticker\"\nbuild = \"mkdir -p bin && printf '#!/bin/sh\\\\n' > bin/ticker && chmod +x bin/ticker\"\n"
             )
         };
         std::fs::write(repo.join(manifest::FILE), manifest("1.0.0")).unwrap();
@@ -1380,44 +1380,44 @@ pub(crate) mod tests {
             let main: Source = format!("git:file://{}:main", repo.display())
                 .parse()
                 .unwrap();
-            let outcome = installer.run("timer", &main, Mode::Install).unwrap();
+            let outcome = installer.run("ticker", &main, Mode::Install).unwrap();
             assert_eq!(
                 outcome,
                 Outcome::Installed {
                     revision: Some(first[..10].to_owned())
                 }
             );
-            assert!(locations.installs.join("timer/bin/timer").is_file());
+            assert!(locations.installs.join("ticker/bin/ticker").is_file());
             let lock = Lock::load(&locations.lock).unwrap();
             assert_eq!(
-                lock.plugins["timer"].commit.as_deref(),
+                lock.plugins["ticker"].commit.as_deref(),
                 Some(first.as_str())
             );
-            assert_eq!(lock.plugins["timer"].version.as_deref(), Some("1.0.0"));
+            assert_eq!(lock.plugins["ticker"].version.as_deref(), Some("1.0.0"));
 
             // Installing again changes nothing and asks nothing.
-            let again = installer.run("timer", &main, Mode::Install).unwrap();
+            let again = installer.run("ticker", &main, Mode::Install).unwrap();
             assert!(matches!(again, Outcome::UpToDate { .. }));
 
             // Another ref is another source: it resolves anew.
             let next: Source = format!("git:file://{}:next", repo.display())
                 .parse()
                 .unwrap();
-            installer.run("timer", &next, Mode::Install).unwrap();
+            installer.run("ticker", &next, Mode::Install).unwrap();
             let lock = Lock::load(&locations.lock).unwrap();
             assert_eq!(
-                lock.plugins["timer"].commit.as_deref(),
+                lock.plugins["ticker"].commit.as_deref(),
                 Some(second.as_str())
             );
-            assert_eq!(lock.plugins["timer"].version.as_deref(), Some("2.0.0"));
+            assert_eq!(lock.plugins["ticker"].version.as_deref(), Some("2.0.0"));
 
-            assert!(installer.remove("timer").unwrap());
-            assert!(!locations.installs.join("timer").exists());
+            assert!(installer.remove("ticker").unwrap());
+            assert!(!locations.installs.join("ticker").exists());
             assert!(Lock::load(&locations.lock).unwrap().plugins.is_empty());
         }
         assert_eq!(asked.len(), 2);
         assert!(asked[0].contains("runs    mkdir -p bin"));
-        assert!(asked[0].contains("starts  bin/timer"));
+        assert!(asked[0].contains("starts  bin/ticker"));
         std::fs::remove_dir_all(root).unwrap();
     }
 
@@ -1439,7 +1439,7 @@ pub(crate) mod tests {
         };
         let source: Source = format!("git:file://{}", repo.display()).parse().unwrap();
         assert_eq!(
-            installer.run("timer", &source, Mode::Install).unwrap(),
+            installer.run("ticker", &source, Mode::Install).unwrap(),
             Outcome::Declined
         );
         assert_eq!(std::fs::read_dir(&locations.installs).unwrap().count(), 0);
@@ -1619,11 +1619,11 @@ pub(crate) mod tests {
         };
         let source: Source = format!("git:file://{}", repo.display()).parse().unwrap();
         let error = installer.run("other", &source, Mode::Install).unwrap_err();
-        assert!(error.0.contains("calls itself \"timer\""), "{error}");
+        assert!(error.0.contains("calls itself \"ticker\""), "{error}");
         let missing: Source = format!("git:file://{}:nope", repo.display())
             .parse()
             .unwrap();
-        let error = installer.run("timer", &missing, Mode::Install).unwrap_err();
+        let error = installer.run("ticker", &missing, Mode::Install).unwrap_err();
         assert!(
             error.0.contains("no branch, tag or commit \"nope\""),
             "{error}"

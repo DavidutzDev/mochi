@@ -184,7 +184,7 @@ Mochi must work on any compositor that speaks the standard protocols (Hyprland, 
 - [ ] The same for mango
 - [ ] Windows (title, app id) in the state, from the toplevel protocol already bound for focus, when a module needs them
 - [x] niri and Sway: the focused output, windows and (niri) screencasts from their IPC
-- [ ] Keyboard layout, which has no standard protocol: per-compositor IPC (Hyprland first) behind the same handle
+- [x] Keyboard layout, which has no standard protocol: per-compositor IPC (Hyprland first) behind the same handle
 - [ ] Fallback for compositors without background effects: apply a runtime rule where possible (Hyprland `hyprctl eval`), otherwise `mochi setup <compositor>` prints the config snippet
 
 ## Design system
@@ -309,7 +309,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [ ] Confirm Caps Lock and Num Lock with a physical key press (a virtual keyboard doesn't change the hardware LEDs)
 - [ ] Check whether headset dials (Arctis Nova 7) report volume through the audio server
 - [x] Laptop screen brightness: in the brightness module, with DDC (polled every 500 ms, as sysfs sends no events for it)
-- [ ] Keyboard backlight
+- [x] Keyboard backlight
 
 ### Media
 
@@ -322,7 +322,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] Click or drag the bar to seek (`SetPosition` with the track id, or a relative `Seek` without one)
 - [x] Actions: `play-pause`, `play`, `pause`, `next`, `previous`, `seek <seconds>`
 - [x] Tested live with VLC: track changes, pause and resume, seek from the CLI and the bar, the buttons, the player quitting
-- [ ] Volume per player
+- [x] Volume per player
 
 ### Notifications
 
@@ -340,7 +340,7 @@ Listens only: it shows changes made anywhere and has no actions.
 - [x] Persist the history across daemon restarts, without the actions
 - [x] Body markup (`body-markup`): sanitize to the subset Qt's styled text handles
 - [x] Inline replies (`inline-reply`)
-- [ ] Sounds (`sound-file`, `sound-name`)
+- [x] Sounds (`sound-file`, `sound-name`)
 
 ### Launcher
 
@@ -439,7 +439,7 @@ After capture, reusing its pickers.
 - [x] A hub card: count, pause, clear
 - [x] A hub page: the history with search, paste, copy, delete, pause and clear
 - [x] Tested end to end: copies, secrets skipped, a restart, disk mode against a private gnome-keyring, and pasting into `wev` in a headless Sway
-- [ ] `wlr-data-control` for compositors without the ext protocol
+- [x] `wlr-data-control` for compositors without the ext protocol
 - [x] Pinned entries
 - [x] Ignored apps, by the focused window's app id, the password manager hint, and a pause
 - [x] A larger preview of the selected image or long text
@@ -456,10 +456,10 @@ A new module, `audio`: the volume mixer. Players stay in the media module and no
 - [x] The mixer is both a hub page (Sound) and an island view (`mochi ipc audio toggle`), with `volume`, `mute`, `output` and `input` actions for keybinds
 - [x] Fleeting activities: the volume and workspace notices never queue behind a panel, so they don't show late once it closes
 - [x] Move an app to another output, like Discord on the headset and Spotify on the speakers
-- [ ] Recording apps: a slider per app using the microphone (source outputs)
+- [x] Recording apps: a slider per app using the microphone (source outputs)
 - [x] Group an app's streams into one row, with a way to open them
 - [x] Peak meters next to the sliders
-- [ ] App icons in the mixer: Chromium, Zen and WebRTC streams name icons the theme lacks; look the app up by its desktop entry or process instead
+- [x] App icons in the mixer: Chromium, Zen and WebRTC streams name icons the theme lacks; look the app up by its desktop entry or process instead
 - [x] Scroll on the OSD to change the volume (there's no volume bubble)
 
 ### Tray
@@ -472,7 +472,7 @@ A new module: the apps' tray icons.
 - [x] Where it lives: a tray bubble that opens a drawer on the island, and a bubble of their own for apps in `pinned`. Attention makes the bubble breathe
 - [x] Tooltips on hover in the drawer and on pinned bubbles
 - [x] Keyboard in the drawer and the menus: arrows, Enter
-- [ ] Follow a menu's changes while it's open (`LayoutUpdated`)
+- [x] Follow a menu's changes while it's open (`LayoutUpdated`)
 - [x] XEmbed tray icons, through a bridge like xembedsniproxy
 
 ### Network
@@ -498,7 +498,7 @@ A new module: the apps' tray icons.
 - [x] UPower's display device: the level, charging, time left
 - [x] Notices when dropping past configurable levels, once per discharge; a warning bubble at or under a level, red at the critical one; notices on plugging in or out; a hub card
 - [x] Power profiles on the card, next to the power module's
-- [ ] Each battery on its own, and peripherals' batteries (mice, controllers) from UPower
+- [x] Each battery on its own, and peripherals' batteries (mice, controllers) from UPower
 
 ### Performance
 
@@ -525,13 +525,13 @@ A new module: the apps' tray icons.
 - [x] Plugin docs: Plugins and Writing plugins pages, the plugin protocol in `docs/protocol.md`
 - [x] home-manager `plugins` option
 - [ ] Publish `mochi-sdk` to crates.io
-- [ ] `git-release:` for Forgejo, Gitea and GitLab
-- [ ] Archive sources (`https://…/plugin.tar.gz` with a hash)
+- [x] `git-release:` for Forgejo, Gitea and GitLab
+- [x] Archive sources (`https://…/plugin.tar.gz` with a hash)
 - [ ] A plugin replacing a builtin module entirely
 - [x] Building plugins with Nix, for declarative setups: home-manager's `plugins.<id>.src` and `package`, `lib.buildPlugin`, and flakes in `mochi plugins install`
 - [x] `lib.buildPlugin` for plugins in other languages than Rust: Node, Python, Go with vendor/, scripts and release archives
 - [ ] Go plugins without vendor/, and Java, in `lib.buildPlugin`: both need a hash Nix can't get from their lock files
-- [ ] Static musl binaries in `examples/plugins/release.yml`, so `git-release:` plugins run on NixOS without nix-ld
+- [x] Static musl binaries in `examples/plugins/release.yml`, so `git-release:` plugins run on NixOS without nix-ld
 - [x] Release workflow template for plugin repositories: `examples/plugins/release.yml`
 - [x] Settings checks for plugins, from their `settings.toml`
 
@@ -550,7 +550,7 @@ Views from any module on the desktop, under the windows, placed by dragging. Des
 - [x] To-do and notes widgets, typed into on the desktop (the notes module)
 - [x] Widgets from existing modules: now playing, performance graphs, battery, weather
 - [x] Alignment guides while dragging
-- [ ] Moving a widget to another monitor from its settings
+- [x] Moving a widget to another monitor from its settings
 
 ## Bento
 
@@ -609,7 +609,7 @@ Later:
 - [x] Emoji module: grid panel with search, groups and recents; paste or copy through the clipboard module; `:` provider
 - [x] Colors module: screen picker with a magnifier, exact pixels from wlr-screencopy at any scale and rotation; island card with HEX, RGB, HSL and OKLCH; history in a hub card and page; `#` provider
 - [x] Skin tones in the emoji grid
-- [ ] Colors: a palette widget for the desktop
+- [x] Colors: a palette widget for the desktop
 
 ## Polish and features
 
@@ -626,16 +626,16 @@ Later:
 - [x] A light mode for every preset (replaces "Light variant of the palette" under Design system)
 - [x] Colors from the wallpaper, with contrast corrected without moving the hue (replaces "Colors generated from the wallpaper" under Design system)
 - [x] Motion settings: reduced motion, which turns animations off, and a speed multiplier for the rest
-- [ ] A one-line launcher layout: icon and name, the description only on the selected row
+- [x] A one-line launcher layout: icon and name, the description only on the selected row
 
 ### Features
 
 - [x] Drop files on the island: it says what was dropped and offers actions that fit, like compress, merge PDFs, convert images, extract an archive or open with
-- [ ] Coding agents' status on the island: working, waiting for you, or done, for T3 Code and Claude Code through their hooks
+- [x] Coding agents' status on the island: working, waiting for you, or done, for T3 Code and Claude Code through their hooks
 - [x] A privacy indicator: a microphone or camera icon by the island while the microphone or camera is in use, with a mic mute; the audio module already sees recording apps
 - [x] Keep awake: a toggle that blocks idle and sleep
 - [x] Night light, through wlr-gamma-control itself rather than hyprsunset or wlsunset
-- [ ] A focus timer, built in (the pomodoro example plugin shows the idea)
+- [x] A focus timer, built in (the pomodoro example plugin shows the idea)
 - [x] Brightness: the laptop's backlight and external monitors over DDC/CI with ddcutil, with the OSD and a slider tile (replaces "Laptop screen brightness" under OSD)
 - [x] Updates: the updater module looks for a release on GitHub, says so once on the island, and its page in the settings has the changelog and the update the way Mochi was installed
 - [x] An About page in the settings: version, system, session, modules, plugins and processes, to copy into a bug report

@@ -4,6 +4,31 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ## Unreleased
 
+### Added
+
+- A focus timer, the `timer` module: a bubble by the island counts down a focus session, and a click pauses it. When focus ends the island offers a break, every fourth one long, and when the break ends, the next session. The control center has a card with the time left and buttons. `mochi ipc timer start`, `break`, `pause`, `resume`, `toggle`, `stop` and `status` drive it. It carries on through a mochid restart, and its settings apply without stopping it.
+- Coding agents on the island, the `agents` module: Claude Code and T3 Code sessions show as working, waiting for you, or done, in one bubble with a mark per session, a notice when one needs you or finishes, and a list on a click. `mochi agents hook`, for Claude Code's hooks, reads the hook's JSON on stdin and always exits 0 quickly, also without a running mochid.
+- Notifications play the sound an app asks for (`sound-file`, `sound-name`) when they pop up, through pw-play or paplay, and canberra-gtk-play or the sound theme for names. `suppress-sound`, do not disturb and `sounds = false` keep them quiet, and `sound_command` picks the player.
+- Players that report a volume of their own, like Spotify, get a volume slider on the island and on the Now Playing card, and `mochi ipc media volume <level>` sets it: `40`, `+5` or `-5`.
+- The mixer lists the apps recording from a microphone under Recording, each with a volume and a mute. `recording:` before an app's name or a stream's id names them in `volume` and `mute`, like `mochi ipc audio mute recording:discord`.
+- The keyboard's backlight in the brightness module: its own slider on the control center's card, the OSD when a key changes it, and `mochi ipc brightness up keyboard`, `down keyboard` and `set <level> keyboard`, which move it at least one level. `all` still means only the displays.
+- The battery card lists each battery of a laptop with two, and every mouse, keyboard, controller, headset or other device that reports its battery to UPower, red when low. One dropping to `[module.battery] peripherals`, 15% by default, shows a notice once until it charges. `mochi ipc battery status` prints them all.
+- The OSD shows the keyboard layout when it switches, on Hyprland, niri and Sway; `layout = false` turns it off. Views read the current layout from the OSD's state, plugins from the compositor state, and `mochi status` shows it.
+- A palette widget from the colors module: the latest colors as swatches on the desktop; click one to copy it, hover to see it.
+- A widget's settings can send it to another monitor, keeping its anchor and offsets, moved in to stay on screen; `widgets edit` takes a monitor and a widget to open.
+- `layout = "compact"` in the launcher: one line per result, the description only on the selected one.
+- `git-release:` sources install from Forgejo, Gitea (Codeberg) and GitLab, including GitLab subgroups; another host's forge is found through its API.
+- Plugins can come from a tar archive over HTTPS with its hash: `https://…/plugin.tar.gz#sha256=<hex>`. A download with another hash is refused.
+- The plugin release workflow builds Rust backends as static musl binaries, so `git-release:` plugins run on NixOS without nix-ld.
+- `docs/architecture.md`, a map of the code for contributors.
+
+### Changed
+
+- The mixer's app icons come from the apps' desktop entries, found by the stream's Flatpak id, app id, icon, program or name, so Zen, Chromium and Discord calls show their icons.
+- An open tray menu follows the app's changes (`LayoutUpdated`, `ItemsPropertiesUpdated`): checkmarks, labels and new entries update in place.
+- The clipboard history works on compositors without `ext-data-control-v1`, through `wlr-data-control`; `MOCHI_DATA_CONTROL=wlr` forces it.
+- curl errors from `mochi plugins` name the URL.
+
 ### Fixed
 
 - Turning a module on no longer restarts Quickshell: the UI reloads its views in place and keeps its windows, so the island, the bubbles and the widgets stay on screen. Quickshell also stops reloading by itself while mochid writes the views, which it only does now for `mochid --dev`. A UI that doesn't come back from the reload still gets a fresh Quickshell.
