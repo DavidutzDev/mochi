@@ -42,7 +42,7 @@ kind = "widget"
 id = "now"
 view = "Card"
 title = "Weather"
-options = { size = [18, 9], min = [14, 7], max = [36, 16] }
+options = { size = [18, 9], min = [14, 7], max = [36, 16], description = "The temperature and the sky now, and the day's low and high" }
 
 # How the settings panel shows the options in settings.toml: kinds and
 # defaults come from there, choices and ranges from here.

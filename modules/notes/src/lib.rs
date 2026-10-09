@@ -43,6 +43,7 @@ impl Module for Notes {
                     "size": [16, 14],
                     "min": [10, 6],
                     "max": [40, 50],
+                    "description": "A list to tick off, typed into on the desktop",
                     "forget": "forget",
                     "settings": [
                         {
@@ -65,6 +66,7 @@ impl Module for Notes {
                     "size": [16, 12],
                     "min": [8, 5],
                     "max": [60, 50],
+                    "description": "Text you type straight onto the desktop",
                     "forget": "forget",
                     "settings": [
                         {

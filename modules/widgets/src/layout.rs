@@ -2,10 +2,13 @@
 //! every change, and the module reads it again when it changes on disk.
 //!
 //! ```toml
+//! layout = "Work"
+//!
 //! [[widget]]
 //! id = "w1"
 //! module = "widgets"
 //! widget = "clock"
+//! variant = "digital"
 //! output = "DP-3"
 //! anchor = "top-left"
 //! x = 2
@@ -20,6 +23,10 @@
 //! Positions and sizes are in grid cells. The widget's `anchor` point sits
 //! at the same point of the screen, moved by `x` and `y` cells, so a widget
 //! anchored bottom-right stays in that corner on any screen size.
+//!
+//! `variant` is the look it has, of those its widget offers; without one,
+//! the first. `layout` names the saved layout this arrangement is, see
+//! [`crate::saved`]: changes go to that one too.
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -75,6 +82,9 @@ pub struct Placed {
     /// The module offering it, and which of its widgets.
     pub module: String,
     pub widget: String,
+    /// Which of the widget's looks, for one that has several.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub variant: Option<String>,
     /// The monitor's name, like `DP-3`.
     pub output: String,
     #[serde(default)]
@@ -100,6 +110,9 @@ fn is_zero(value: &i32) -> bool {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Layout {
+    /// The saved layout this is, which follows its changes.
+    #[serde(default, rename = "layout", skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
     #[serde(default, rename = "widget")]
     pub widgets: Vec<Placed>,
 }
@@ -153,11 +166,18 @@ impl Layout {
             .ok_or_else(|| format!("no widget {id}"))
     }
 
-    /// An id no widget has: `w` and the lowest free number.
-    pub fn new_id(&self) -> String {
+    /// An id no widget has, here or in `others`: `w` and the lowest free
+    /// number. The saved layouts are the others, since a module keeps a
+    /// note's text by its widget's id.
+    pub fn new_id<'a>(&'a self, others: impl IntoIterator<Item = &'a Layout>) -> String {
+        let taken: std::collections::BTreeSet<&str> = std::iter::once(self)
+            .chain(others)
+            .flat_map(|layout| &layout.widgets)
+            .map(|widget| widget.id.as_str())
+            .collect();
         (1..)
             .map(|number| format!("w{number}"))
-            .find(|id| self.widgets.iter().all(|widget| &widget.id != id))
+            .find(|id| !taken.contains(id.as_str()))
             .unwrap_or_default()
     }
 
@@ -179,6 +199,9 @@ impl Layout {
             ];
             for (key, value) in fields {
                 let _ = writeln!(out, "    {key} = {value};");
+            }
+            if let Some(variant) = &widget.variant {
+                let _ = writeln!(out, "    variant = {};", nix::string(variant));
             }
             if widget.z != 0 {
                 let _ = writeln!(out, "    z = {};", widget.z);
@@ -248,9 +271,35 @@ timezone = "Europe/Paris"
     #[test]
     fn new_ids_fill_gaps() {
         let mut layout = Layout::parse(EXAMPLE).unwrap();
-        assert_eq!(layout.new_id(), "w2");
+        assert_eq!(layout.new_id([]), "w2");
         layout.widgets[0].id = "w2".into();
-        assert_eq!(layout.new_id(), "w1");
+        assert_eq!(layout.new_id([]), "w1");
+        // Not one a saved layout has.
+        let saved = Layout::parse(EXAMPLE).unwrap();
+        assert_eq!(layout.new_id([&saved]), "w3");
+    }
+
+    #[test]
+    fn variants_and_names_are_optional() {
+        // A file from before variants reads, and writes back the same.
+        let old = Layout::parse(EXAMPLE).unwrap();
+        assert_eq!(old.widgets[0].variant, None);
+        assert_eq!(old.name, None);
+        assert!(!old.to_toml().contains("variant"));
+        assert!(!old.to_toml().contains("layout ="));
+
+        let new = Layout::parse(&format!(
+            "layout = \"Work\"\n{}",
+            EXAMPLE.replace(
+                "widget = \"clock\"",
+                "widget = \"clock\"\nvariant = \"stacked\""
+            )
+        ))
+        .unwrap();
+        assert_eq!(new.name.as_deref(), Some("Work"));
+        assert_eq!(new.widgets[0].variant.as_deref(), Some("stacked"));
+        assert_eq!(Layout::parse(&new.to_toml()).unwrap(), new);
+        assert!(new.to_nix().contains("variant = \"stacked\";"));
     }
 
     #[test]

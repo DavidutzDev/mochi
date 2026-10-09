@@ -119,7 +119,12 @@ impl Module for Colors {
             })),
             ContributionSpec::new("widgets", "widget", "palette", "Palette", "Colors")
                 .icon("palette")
-                .options(json!({ "size": [16, 7], "min": [8, 5], "max": [40, 30] })),
+                .options(json!({
+                    "size": [16, 7],
+                    "min": [8, 5],
+                    "max": [40, 30],
+                    "description": "The colors you picked last, a click to copy one",
+                })),
         ];
         offers.extend(tour::steps());
         offers

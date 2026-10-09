@@ -3,9 +3,10 @@ import qs.island
 import "Place.js" as Place
 
 // The selected widget's settings, as a form made from what it declares:
-// a switch for an on-off setting, a choice for a few, a field otherwise.
-// Each change goes to the module at once. With more than one monitor, a
-// choice of monitor sends the widget to another one.
+// its looks, when it has more than one, then a switch for an on-off
+// setting, a choice for a few, a field otherwise, leaving out those its
+// look doesn't use. Each change goes to the module at once. With more than
+// one monitor, a choice of monitor sends the widget to another one.
 Rectangle {
     id: root
 
@@ -15,7 +16,9 @@ Rectangle {
 
     readonly property var widget: frame?.widget ?? null
     readonly property var spec: widget ? desktop.catalog.find(entry => entry.module === widget.module && entry.widget === widget.widget) : null
-    readonly property var fields: spec?.settings ?? []
+    readonly property var variants: spec?.variants ?? []
+    readonly property var variant: variants.find(variant => variant.id === widget?.variant) ?? null
+    readonly property var fields: (spec?.settings ?? []).filter(field => !variant?.settings || variant.settings.includes(field.name))
     // The monitors as they're laid out, left to right.
     readonly property var screens: Daemon.screens.slice().sort((a, b) => a.x - b.x || a.y - b.y)
 
@@ -68,6 +71,95 @@ Rectangle {
         PanelHeader {
             width: parent.width
             title: root.spec?.title ?? ""
+        }
+
+        // Its looks: a new one comes at its own size.
+        Column {
+            visible: root.variants.length > 1
+            width: parent.width
+            spacing: Theme.spaceSmall
+
+            Column {
+                width: parent.width
+                spacing: 2
+
+                Text {
+                    text: "look"
+                    color: Theme.foreground
+                    font.pixelSize: Theme.textBody
+                    font.family: Theme.fontFamily
+                    font.weight: Theme.weightTitle
+                }
+
+                Text {
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: root.variant?.description ?? ""
+                    color: Theme.muted
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
+                }
+            }
+
+            Flow {
+                width: parent.width
+                spacing: Theme.spaceSmall
+
+                Repeater {
+                    model: root.variants
+
+                    Rectangle {
+                        id: look
+
+                        required property var modelData
+                        readonly property bool chosen: root.variant?.id === modelData.id
+
+                        function pick(): void {
+                            if (!chosen)
+                                Daemon.command("widgets", "variant", [root.widget.id, modelData.id]);
+                        }
+
+                        width: lookLabel.implicitWidth + Theme.spaceLarge + Theme.spaceTiny
+                        height: Theme.controlHeight - Theme.spaceTiny
+                        radius: height / 2
+                        color: chosen ? Theme.foreground : lookArea.containsMouse ? Theme.highlight : Theme.raised
+                        activeFocusOnTab: true
+                        Keys.onReturnPressed: pick()
+                        Keys.onEnterPressed: pick()
+                        Keys.onSpacePressed: pick()
+
+                        Text {
+                            id: lookLabel
+
+                            anchors.centerIn: parent
+                            text: look.modelData.title
+                            color: look.chosen ? Theme.background : Theme.foreground
+                            font.pixelSize: Theme.textCaption
+                            font.family: Theme.fontFamily
+                            font.weight: Theme.weightTitle
+                        }
+
+                        MouseArea {
+                            id: lookArea
+
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: look.pick()
+                        }
+
+                        Rectangle {
+                            visible: look.activeFocus
+                            anchors.fill: parent
+                            anchors.margins: -3
+                            radius: height / 2
+                            color: "transparent"
+                            border.width: 2
+                            border.color: Theme.accent
+                        }
+                    }
+                }
+            }
         }
 
         Text {

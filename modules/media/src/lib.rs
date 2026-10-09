@@ -114,7 +114,12 @@ impl Module for Media {
             // The same card on the desktop; it steps aside when nothing plays.
             ContributionSpec::new("widgets", "widget", "now-playing", "Card", "Now playing")
                 .icon("music")
-                .options(json!({ "size": [24, 8], "min": [18, 7], "max": [40, 9] })),
+                .options(json!({
+                    "size": [24, 8],
+                    "min": [18, 7],
+                    "max": [40, 9],
+                    "description": "The cover beside the track, with its controls",
+                })),
         ];
         offers.extend(tour::steps());
         offers

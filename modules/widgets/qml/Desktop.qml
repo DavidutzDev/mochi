@@ -92,12 +92,36 @@ Item {
         wantsKeyboard = typing;
     }
 
-    // Escape stops arranging.
+    function takeKeys(): void {
+        keys.forceActiveFocus();
+    }
+
+    // Escape closes the drawer, and then stops arranging.
     Item {
         id: keys
 
         focus: root.editing
-        Keys.onEscapePressed: Daemon.command("widgets", "edit", ["off"])
+        Keys.onEscapePressed: {
+            if (root.layout?.drawer)
+                Daemon.command("widgets", "drawer", ["off"]);
+            else
+                Daemon.command("widgets", "edit", ["off"]);
+        }
+    }
+
+    // How big this monitor is, and what the drawer and the island's strip
+    // cover, for the module to put a widget added with a click in the first
+    // free spot.
+    readonly property var report: {
+        if (!Daemon.ready || output === "" || width <= 0)
+            return null;
+        const top = Theme.anchor === "bottom" ? 0 : hole.height;
+        const bottom = Theme.anchor === "bottom" ? hole.height : 0;
+        return [output, width, height, drawer.coveredLeft, drawer.coveredRight, top, bottom].map(value => typeof value === "string" ? value : `${Math.round(value)}`);
+    }
+    onReportChanged: {
+        if (report)
+            Daemon.command("widgets", "screen", report);
     }
 
     Rectangle {
@@ -136,14 +160,14 @@ Item {
         }
     }
 
-    // A click beside the widgets closes the settings and the drawer.
+    // A click beside the widgets closes the settings; the drawer stays, to
+    // add more.
     MouseArea {
         anchors.fill: parent
         enabled: root.editing
         onClicked: {
             root.selected = "";
-            if (root.layout?.drawer)
-                Daemon.command("widgets", "drawer", ["off"]);
+            root.takeKeys();
         }
     }
 
@@ -201,7 +225,9 @@ Item {
         }
     }
 
+    // Over the drawer: they're what was opened last.
     Settings {
+        z: 3
         desktop: root
         frame: {
             for (let index = 0; index < frames.count; index++) {
@@ -214,6 +240,9 @@ Item {
     }
 
     Drawer {
+        id: drawer
+
+        z: 2
         desktop: root
         visible: root.editing
     }

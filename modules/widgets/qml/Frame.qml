@@ -5,7 +5,8 @@ import "Place.js" as Place
 
 // One placed widget: the card behind it, unless it asks for none, and its
 // module's view, which gets the module's state as `payload`, its own
-// `settings` and its `instance` id. While arranging, dragging it moves it
+// `settings`, its `instance` id and its `variant`, the look it has, when
+// the view declares one. While arranging, dragging it moves it
 // on the grid, the corner handle resizes it, and the buttons open its
 // settings or remove it. Each change goes to the module, which saves it.
 Item {
@@ -210,6 +211,15 @@ Item {
         property: "settings"
         value: root.widget?.settings ?? ({})
         when: content.item !== null && root.widget !== null
+    }
+
+    // For a view that has looks: which one, given to those that declare a
+    // `variant` property.
+    Binding {
+        target: content.item
+        property: "variant"
+        value: root.widget?.variant ?? ""
+        when: content.item !== null && root.widget !== null && "variant" in content.item
     }
 
     // Arranging: an outline, a handle to drag, and buttons.

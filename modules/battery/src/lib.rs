@@ -130,7 +130,13 @@ impl Module for BatteryModule {
             // or a peripheral with one.
             ContributionSpec::new("widgets", "widget", "level", "Card", "Battery")
                 .icon("bolt")
-                .options(json!({ "size": [18, 6], "min": [12, 5], "max": [30, 16] })),
+                .options(json!({
+                    "size": [18, 6],
+                    "min": [12, 5],
+                    "max": [30, 16],
+                    "category": "System",
+                    "description": "The battery's level, the time left and the power profiles",
+                })),
         ];
         offers.extend(tour::steps());
         offers

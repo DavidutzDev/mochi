@@ -2,7 +2,7 @@ import QtQuick
 import qs.island
 
 // On the island while arranging widgets: a click opens the drawer of
-// widgets under it, which closes when the pointer leaves it.
+// widgets at the side of the screen.
 Item {
     property var payload: ({})
     readonly property bool open: Daemon.state("widgets")?.drawer ?? false

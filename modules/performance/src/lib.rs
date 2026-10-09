@@ -245,6 +245,8 @@ impl Module for Performance {
                     "size": [18, 14],
                     "min": [12, 5],
                     "max": [50, 40],
+                    "category": "System",
+                    "description": "CPU, memory and GPU, each over the last two minutes",
                     "settings": GRAPHS.map(|(name, title, default)| json!({
                         "name": name,
                         "kind": "bool",

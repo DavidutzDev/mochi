@@ -7,14 +7,17 @@
 //! `mochi ipc widgets edit` raises them over the windows on the focused
 //! monitor, or the one named: drag a widget to move it, drag its corner to
 //! resize it, open its settings, send it to another monitor from there, or
-//! drag a new one from the drawer. Each change rewrites
-//! `widgets.toml` at once, and editing the file applies as soon as it's
-//! saved.
+//! add one from the drawer, a panel at the side with every look of every
+//! widget, the widgets placed, and the saved layouts, see [`saved`]. Each
+//! change rewrites `widgets.toml` at once, and editing the file applies as
+//! soon as it's saved.
 //!
-//! The module offers a clock itself.
+//! The module offers a clock and a calendar itself.
 
 mod catalog;
 pub mod layout;
+mod place;
+mod saved;
 mod tour;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -95,12 +98,22 @@ impl Module for Widgets {
 
     fn contributions(&self) -> Vec<ContributionSpec> {
         let mut offers = vec![
+            // More looks go in `variants`, after the first, which placed
+            // clocks from before variants have.
             ContributionSpec::new("widgets", "widget", "clock", "Clock", "Clock")
                 .icon("clock")
                 .options(json!({
                     "size": [14, 7],
                     "min": [8, 4],
                     "max": [40, 20],
+                    "category": "Clock",
+                    "variants": [
+                        {
+                            "id": "digital",
+                            "title": "Digital",
+                            "description": "The time, big, over the date",
+                        },
+                    ],
                     "settings": [
                         {
                             "name": "timezone",
@@ -134,6 +147,14 @@ impl Module for Widgets {
                     "size": [16, 15],
                     "min": [11, 10],
                     "max": [40, 38],
+                    "category": "Calendar",
+                    "variants": [
+                        {
+                            "id": "month",
+                            "title": "Month",
+                            "description": "This month as a grid, today marked",
+                        },
+                    ],
                     "settings": [
                         {
                             "name": "first_day",
@@ -162,11 +183,27 @@ impl Module for Widgets {
                 .arg(ArgSpec::string("widget", "A widget there whose settings open").optional()),
             ActionSpec::new("add", "Place a widget a module offers")
                 .arg(ArgSpec::string("module", "The module offering it"))
-                .arg(ArgSpec::string("widget", "Which of its widgets"))
+                .arg(ArgSpec::string(
+                    "widget",
+                    "Which of its widgets, and its look after a colon, like clock:digital",
+                ))
                 .arg(ArgSpec::string("output", "The monitor; the focused one without").optional())
-                .arg(anchor().optional())
+                .arg(
+                    ArgSpec::choice(
+                        "anchor",
+                        "The point it's placed from; the first free spot without",
+                        Anchor::ALL,
+                    )
+                    .optional(),
+                )
                 .arg(ArgSpec::int("x", "Cells from the anchor").optional())
                 .arg(ArgSpec::int("y", "Cells from the anchor").optional()),
+            ActionSpec::new("variant", "Change a widget's look")
+                .arg(id())
+                .arg(ArgSpec::string(
+                    "variant",
+                    "One of the looks its widget offers",
+                )),
             ActionSpec::new("move", "Move a widget")
                 .arg(id())
                 .arg(ArgSpec::string("output", "The monitor"))
@@ -203,6 +240,24 @@ impl Module for Widgets {
                     "One layer up or down, or over or under all the others",
                     ["up", "down", "front", "back"],
                 )),
+            ActionSpec::new("save-layout", "Keep the arrangement under a name")
+                .arg(ArgSpec::string("name", "Its name; one saved under it is replaced").rest()),
+            ActionSpec::new("use-layout", "Put a saved layout in place of this one")
+                .arg(ArgSpec::string("name", "The saved layout").rest()),
+            ActionSpec::new("delete-layout", "Delete a saved layout")
+                .arg(ArgSpec::string("name", "The saved layout").rest()),
+            ActionSpec::new("layouts", "Print the saved layouts"),
+            ActionSpec::new(
+                "screen",
+                "Say how big a monitor is, for finding free spots; the desktop sends this",
+            )
+            .arg(ArgSpec::string("output", "The monitor"))
+            .arg(ArgSpec::int("width", "In logical pixels"))
+            .arg(ArgSpec::int("height", "In logical pixels"))
+            .arg(ArgSpec::int("left", "Pixels the drawer covers at the left edge").optional())
+            .arg(ArgSpec::int("right", "Pixels the drawer covers at the right edge").optional())
+            .arg(ArgSpec::int("top", "Pixels the island covers at the top edge").optional())
+            .arg(ArgSpec::int("bottom", "Pixels the island covers at the bottom edge").optional()),
             ActionSpec::new("export", "Print the layout, for home-manager").arg(
                 ArgSpec::choice("format", "Nix, the default, or TOML", ["nix", "toml"]).optional(),
             ),
@@ -219,21 +274,7 @@ impl Module for Widgets {
                 .config_dir()
                 .map(Path::to_owned)
                 .or_else(default_config_dir);
-            let mut state = State {
-                grid: settings.grid.max(4),
-                path: dir.map(|dir| dir.join(FILE)),
-                layout: Layout::default(),
-                seen: None,
-                error: None,
-                specs: Vec::new(),
-                editing: None,
-                selected: None,
-                banner: None,
-                drawer: false,
-                zones: BTreeMap::new(),
-                published: Value::Null,
-            };
-            state.reload();
+            let mut state = State::new(settings.grid, dir);
             state.read_zones().await;
             state.publish(&ctx);
 
@@ -260,6 +301,9 @@ impl Module for Widgets {
                         if state.changed_on_disk() {
                             state.reload();
                         }
+                        if state.saved_changed_on_disk() {
+                            state.reload_saved();
+                        }
                     }
                     _ = zones.tick() => state.read_zones().await,
                 }
@@ -272,11 +316,65 @@ impl Module for Widgets {
     }
 }
 
+/// The first free spot on `output`, a `screen`, for a widget `size` cells
+/// big: clear of the widgets there, and of what the drawer and the island
+/// cover.
+fn free_spot(
+    layout: &Layout,
+    output: &str,
+    screen: Screen,
+    cell: f64,
+    size: (u32, u32),
+) -> Option<(Anchor, i32, i32)> {
+    if screen.size.0 == 0 || screen.size.1 == 0 {
+        return None;
+    }
+    let (width, height) = (f64::from(screen.size.0), f64::from(screen.size.1));
+    let mut taken: Vec<place::Rect> = layout
+        .widgets
+        .iter()
+        .filter(|widget| widget.output == output)
+        .map(|widget| place::rect(widget, cell, (width, height)))
+        .collect();
+    let [left, right, top, bottom] = screen.covered.map(f64::from);
+    let strip = |x, y, width, height| place::Rect {
+        x,
+        y,
+        width,
+        height,
+    };
+    let strips = [
+        strip(0.0, 0.0, left, height),
+        strip(width - right, 0.0, right, height),
+        strip(0.0, 0.0, width, top),
+        strip(0.0, height - bottom, width, bottom),
+    ];
+    taken.extend(
+        strips
+            .into_iter()
+            .filter(|it| it.width > 0.0 && it.height > 0.0),
+    );
+    place::first_free(&taken, size, cell, (width, height))
+}
+
+fn no_config() -> String {
+    "there is no config directory to keep widgets.toml in".into()
+}
+
 /// `$XDG_CONFIG_HOME/mochi`, for a context that doesn't say.
 fn default_config_dir() -> Option<PathBuf> {
     mochi_core::config::Paths::from_env()
         .ok()
         .map(|paths| paths.config_dir)
+}
+
+/// A monitor, in logical pixels.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+struct Screen {
+    size: (u32, u32),
+    /// How far in from the left, right, top and bottom edges the drawer,
+    /// while it's open, and the island cover it.
+    covered: [u32; 4],
 }
 
 #[derive(Debug)]
@@ -290,7 +388,16 @@ struct State {
     seen: Option<(SystemTime, u64)>,
     /// Why the file couldn't be read, while it can't.
     error: Option<String>,
+    /// `widget-layouts/` next to it.
+    saved_dir: Option<PathBuf>,
+    saved: Vec<saved::Saved>,
+    /// The directory's modification time when last read.
+    saved_seen: Option<SystemTime>,
+    /// Why the last change to the saved layouts didn't happen.
+    layout_error: Option<String>,
     specs: Vec<Spec>,
+    /// Each monitor, as its desktop layer says.
+    screens: BTreeMap<String, Screen>,
     /// The monitor being arranged on.
     editing: Option<String>,
     /// The widget whose settings open as arranging starts, like one just
@@ -306,6 +413,32 @@ struct State {
 }
 
 impl State {
+    /// With the layout in `dir`, read.
+    fn new(grid: u32, dir: Option<PathBuf>) -> Self {
+        let mut state = Self {
+            grid: grid.max(4),
+            path: dir.as_ref().map(|dir| dir.join(FILE)),
+            saved_dir: dir.map(|dir| dir.join(saved::DIR)),
+            layout: Layout::default(),
+            seen: None,
+            error: None,
+            saved: Vec::new(),
+            saved_seen: None,
+            layout_error: None,
+            specs: Vec::new(),
+            screens: BTreeMap::new(),
+            editing: None,
+            selected: None,
+            banner: None,
+            drawer: false,
+            zones: BTreeMap::new(),
+            published: Value::Null,
+        };
+        state.reload();
+        state.reload_saved();
+        state
+    }
+
     fn command(&mut self, ctx: &ModuleCtx, command: ModuleCommand) {
         let args = &command.args;
         let id = || args.str("id").unwrap_or_default().to_owned();
@@ -359,17 +492,61 @@ impl State {
                 })
                 .map(|()| None),
             "resize" => {
-                let spec = self.spec_of(&id()).cloned();
+                let size = (cells(args.int("width")), cells(args.int("height")));
+                let fitted = self
+                    .placed(&id())
+                    .and_then(|placed| self.look_of(placed))
+                    .map_or(size, |look| look.fit(size));
                 self.change(&id(), |widget| {
-                    let size = (cells(args.int("width")), cells(args.int("height")));
-                    (widget.width, widget.height) = match &spec {
-                        Some(spec) => spec.fit(size),
-                        None => size,
-                    };
+                    (widget.width, widget.height) = fitted;
                     Ok(())
                 })
                 .map(|()| None)
             }
+            "variant" => {
+                let wanted = args.str("variant").unwrap_or_default();
+                let size = self
+                    .spec_of(&id())
+                    .ok_or_else(|| format!("{} isn't offered by any running module", id()))
+                    .and_then(|spec| spec.variant(wanted))
+                    .map(|variant| variant.size);
+                size.and_then(|size| {
+                    // A new look comes at its own size, from the same anchor.
+                    self.change(&id(), |widget| {
+                        widget.variant = Some(wanted.to_owned());
+                        (widget.width, widget.height) = size;
+                        Ok(())
+                    })
+                })
+                .map(|()| None)
+            }
+            "screen" => {
+                let pixels =
+                    |name: &str| u32::try_from(args.int(name).unwrap_or_default()).unwrap_or(0);
+                self.screens.insert(
+                    args.str("output").unwrap_or_default().to_owned(),
+                    Screen {
+                        size: (pixels("width"), pixels("height")),
+                        covered: ["left", "right", "top", "bottom"].map(pixels),
+                    },
+                );
+                Ok(None)
+            }
+            "save-layout" => self
+                .save_layout(args.str("name").unwrap_or_default())
+                .map(|()| None),
+            "use-layout" => self
+                .use_layout(args.str("name").unwrap_or_default())
+                .map(|()| None),
+            "delete-layout" => self
+                .delete_layout(args.str("name").unwrap_or_default())
+                .map(|gone| {
+                    for widget in &gone {
+                        self.forget(ctx, widget);
+                    }
+                    None
+                }),
+            "layouts" => Ok(Some(self.list_layouts())),
             "set" | "reset" => {
                 let name = args.str("name").unwrap_or_default().to_owned();
                 let value = match (command.action.as_str(), self.spec_of(&id())) {
@@ -416,7 +593,10 @@ impl State {
 
     fn add(&mut self, ctx: &ModuleCtx, args: &mochi_core::Args) -> Result<String, String> {
         let module = args.str("module").unwrap_or_default();
-        let widget = args.str("widget").unwrap_or_default();
+        let (widget, variant) = match args.str("widget").unwrap_or_default().split_once(':') {
+            Some((widget, variant)) => (widget, Some(variant)),
+            None => (args.str("widget").unwrap_or_default(), None),
+        };
         let spec = self
             .specs
             .iter()
@@ -432,23 +612,37 @@ impl State {
                     offered.join(", ")
                 )
             })?;
-        let id = self.layout.new_id();
+        if let Some(variant) = variant {
+            spec.variant(variant)?;
+        }
+        let look = spec.look(variant);
+        let (variant, size) = (look.variant.map(|variant| variant.id.clone()), look.size);
+        let output = args
+            .str("output")
+            .filter(|output| !output.is_empty())
+            .map_or_else(|| focused(ctx), str::to_owned);
+        let (anchor, x, y) = match args.str("anchor").and_then(Anchor::parse) {
+            Some(anchor) => (anchor, int(args.int("x")), int(args.int("y"))),
+            None => self
+                .free_spot(ctx, &output, size)
+                .unwrap_or((Anchor::Center, 0, 0)),
+        };
+        let id = self
+            .layout
+            .new_id(self.saved.iter().map(|saved| &saved.layout));
         self.layout.widgets.push(Placed {
             id: id.clone(),
             module: module.to_owned(),
             widget: widget.to_owned(),
-            output: args
-                .str("output")
-                .filter(|output| !output.is_empty())
-                .map_or_else(|| focused(ctx), str::to_owned),
-            anchor: args
-                .str("anchor")
-                .and_then(Anchor::parse)
-                .unwrap_or(Anchor::Center),
-            x: int(args.int("x")),
-            y: int(args.int("y")),
-            width: spec.size.0,
-            height: spec.size.1,
+            // Kept even for the first, so it stays if the widget's looks
+            // are put in another order.
+            variant,
+            output,
+            anchor,
+            x,
+            y,
+            width: size.0,
+            height: size.1,
             // On top: later ones draw over earlier ones of the same layer.
             z: self
                 .layout
@@ -472,20 +666,163 @@ impl State {
             .ok_or_else(|| format!("no widget {id}"))?;
         let removed = self.layout.widgets.remove(index);
         self.save()?;
-        // The module may keep things for it, like a note's text.
-        if let Some(forget) = self
-            .spec_of_placed(&removed)
-            .and_then(|spec| spec.forget.clone())
-        {
-            let call = ctx.call(&removed.module, &forget, &[id]);
-            let module = removed.module.clone();
-            tokio::spawn(async move {
-                if let Err(error) = call.await {
-                    tracing::warn!(%error, %module, "could not tell it a widget went");
-                }
-            });
-        }
+        self.forget(ctx, &removed);
         Ok(())
+    }
+
+    /// Tells the module offering a widget that's gone that it can drop
+    /// what it kept for it, like a note's text, unless a saved layout
+    /// still has it.
+    fn forget(&self, ctx: &ModuleCtx, gone: &Placed) {
+        let Some(forget) = self
+            .spec_of_placed(gone)
+            .and_then(|spec| spec.forget.clone())
+            .filter(|_| !self.kept(&gone.id))
+        else {
+            return;
+        };
+        let call = ctx.call(&gone.module, &forget, &[&gone.id]);
+        let module = gone.module.clone();
+        tokio::spawn(async move {
+            if let Err(error) = call.await {
+                tracing::warn!(%error, %module, "could not tell it a widget went");
+            }
+        });
+    }
+
+    /// Whether the arrangement or a saved layout has a widget with this id.
+    fn kept(&self, id: &str) -> bool {
+        std::iter::once(&self.layout)
+            .chain(self.saved.iter().map(|saved| &saved.layout))
+            .flat_map(|layout| &layout.widgets)
+            .any(|widget| widget.id == id)
+    }
+
+    /// The first free spot on a monitor for a widget `size` cells big, on
+    /// the size its desktop layer said, or its mode's, and clear of the
+    /// drawer.
+    fn free_spot(
+        &self,
+        ctx: &ModuleCtx,
+        output: &str,
+        size: (u32, u32),
+    ) -> Option<(Anchor, i32, i32)> {
+        let screen = self.screens.get(output).copied().or_else(|| {
+            let state = ctx.compositor().state();
+            let found = state.outputs.iter().find(|known| known.name == output)?;
+            Some(Screen {
+                size: (found.width, found.height),
+                covered: [0; 4],
+            })
+        })?;
+        free_spot(&self.layout, output, screen, f64::from(self.grid), size)
+    }
+
+    /// Keeps the arrangement as `name`, which it then is.
+    fn save_layout(&mut self, name: &str) -> Result<(), String> {
+        let result = saved::check_name(name).and_then(|name| {
+            self.layout.name = Some(name);
+            self.save()
+        });
+        self.layout_done(result)
+    }
+
+    /// Puts the layout saved as `name` on the desktop. The arrangement it
+    /// replaces is already saved under its own name, or is kept as
+    /// "Unsaved" when it has none and isn't the same as a saved one.
+    fn use_layout(&mut self, name: &str) -> Result<(), String> {
+        let result = self
+            .saved_dir
+            .clone()
+            .ok_or_else(no_config)
+            .and_then(|dir| {
+                let next = saved::load(&dir, name)?;
+                let unsaved = self.layout.name.is_none()
+                    && !self.layout.widgets.is_empty()
+                    && !self
+                        .saved
+                        .iter()
+                        .any(|saved| saved::same(&saved.layout, &self.layout));
+                if unsaved {
+                    saved::save(&dir, saved::UNSAVED, &self.layout)?;
+                }
+                self.layout = next;
+                self.selected = None;
+                self.save()
+            });
+        self.layout_done(result)
+    }
+
+    /// Deletes the layout saved as `name`, and answers its widgets, for
+    /// `forget`.
+    fn delete_layout(&mut self, name: &str) -> Result<Vec<Placed>, String> {
+        let gone = self
+            .saved
+            .iter()
+            .find(|saved| saved.name == name.trim())
+            .map(|saved| saved.layout.widgets.clone())
+            .unwrap_or_default();
+        let result = self
+            .saved_dir
+            .clone()
+            .ok_or_else(no_config)
+            .and_then(|dir| {
+                saved::delete(&dir, name)?;
+                // The arrangement stays on the desktop, without a name.
+                if self.layout.name.as_deref() == Some(name.trim()) {
+                    self.layout.name = None;
+                    self.save()?;
+                }
+                Ok(())
+            });
+        self.layout_done(result).map(|()| gone)
+    }
+
+    fn list_layouts(&self) -> String {
+        if self.saved.is_empty() {
+            return "No saved layouts".into();
+        }
+        let lines: Vec<String> = self
+            .saved
+            .iter()
+            .map(|saved| {
+                let count = saved.layout.widgets.len();
+                let current = self.layout.name.as_deref() == Some(saved.name.as_str());
+                format!(
+                    "{}: {count} {}{}",
+                    saved.name,
+                    if count == 1 { "widget" } else { "widgets" },
+                    if current { ", on the desktop" } else { "" },
+                )
+            })
+            .collect();
+        lines.join("\n")
+    }
+
+    /// Reads the saved layouts again after a change to them, and keeps why
+    /// it failed for the drawer.
+    fn layout_done(&mut self, result: Result<(), String>) -> Result<(), String> {
+        self.layout_error = result.as_ref().err().cloned();
+        self.reload_saved();
+        result
+    }
+
+    fn saved_changed_on_disk(&self) -> bool {
+        let modified = self
+            .saved_dir
+            .as_deref()
+            .and_then(|dir| std::fs::metadata(dir).ok()?.modified().ok());
+        modified != self.saved_seen
+    }
+
+    fn reload_saved(&mut self) {
+        let Some(dir) = &self.saved_dir else {
+            return;
+        };
+        self.saved_seen = std::fs::metadata(dir)
+            .ok()
+            .and_then(|it| it.modified().ok());
+        self.saved = saved::list(dir);
     }
 
     /// Changes one widget and saves.
@@ -498,16 +835,21 @@ impl State {
         self.save()
     }
 
+    /// Writes `widgets.toml`, and the saved layout it is, when it has a
+    /// name.
     fn save(&mut self) -> Result<(), String> {
-        let path = self
-            .path
-            .as_ref()
-            .ok_or("there is no config directory to keep widgets.toml in")?;
+        let path = self.path.as_ref().ok_or_else(no_config)?;
         self.layout
             .save(path)
             .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
         self.seen = stamp(path);
         self.error = None;
+        if let (Some(name), Some(dir)) = (&self.layout.name, &self.saved_dir) {
+            saved::save(dir, name, &self.layout)?;
+            if let Some(kept) = self.saved.iter_mut().find(|saved| &saved.name == name) {
+                kept.layout.widgets.clone_from(&self.layout.widgets);
+            }
+        }
         Ok(())
     }
 
@@ -541,9 +883,16 @@ impl State {
         );
     }
 
+    fn placed(&self, id: &str) -> Option<&Placed> {
+        self.layout.widgets.iter().find(|widget| widget.id == id)
+    }
+
     fn spec_of(&self, id: &str) -> Option<&Spec> {
-        let placed = self.layout.widgets.iter().find(|widget| widget.id == id)?;
-        self.spec_of_placed(placed)
+        self.spec_of_placed(self.placed(id)?)
+    }
+
+    fn look_of(&self, placed: &Placed) -> Option<catalog::Look<'_>> {
+        Some(self.spec_of_placed(placed)?.look(placed.variant.as_deref()))
     }
 
     fn spec_of_placed(&self, placed: &Placed) -> Option<&Spec> {
@@ -594,10 +943,15 @@ impl State {
             .iter()
             .map(|widget| {
                 let spec = self.spec_of_placed(widget);
+                let look = self.look_of(widget);
+                let variant = look.as_ref().and_then(|look| look.variant);
                 json!({
                     "id": widget.id,
                     "module": widget.module,
                     "widget": widget.widget,
+                    // The look it has, or null for a widget with one.
+                    "variant": variant.map(|variant| variant.id.clone()),
+                    "variantTitle": variant.map(|variant| variant.title.clone()),
                     "output": widget.output,
                     "anchor": widget.anchor.as_str(),
                     "x": widget.x,
@@ -610,11 +964,22 @@ impl State {
                         |spec| spec.settings_for(&widget.settings),
                     ),
                     // Not offered: its module isn't running.
-                    "view": spec.map(|spec| spec.view.clone()),
+                    "view": look.as_ref().map(|look| look.view),
                     "frame": spec.is_none_or(|spec| spec.frame),
                     "title": spec.map(|spec| spec.title.clone()),
-                    "min": spec.map(|spec| [spec.min.0, spec.min.1]),
-                    "max": spec.map(|spec| [spec.max.0, spec.max.1]),
+                    "icon": spec.and_then(|spec| spec.icon.clone()),
+                    "min": look.as_ref().map(|look| [look.min.0, look.min.1]),
+                    "max": look.as_ref().map(|look| [look.max.0, look.max.1]),
+                })
+            })
+            .collect();
+        let layouts: Vec<Value> = self
+            .saved
+            .iter()
+            .map(|saved| {
+                json!({
+                    "name": saved.name,
+                    "count": saved.layout.widgets.len(),
                 })
             })
             .collect();
@@ -629,6 +994,10 @@ impl State {
             "widgets": widgets,
             "catalog": self.specs.iter().map(Spec::to_json).collect::<Vec<_>>(),
             "zones": self.zones,
+            // The saved layouts, and the one on the desktop.
+            "layouts": layouts,
+            "layout": self.layout.name,
+            "layoutError": self.layout_error,
         });
         if state != self.published {
             ctx.publish_state(state.clone());
@@ -809,6 +1178,140 @@ mod tests {
             arranging(&args(&[("state", "off"), ("widget", "w2")]), true, focused),
             (None, None)
         );
+    }
+
+    fn clock(id: &str) -> Placed {
+        Placed {
+            id: id.into(),
+            module: "widgets".into(),
+            widget: "clock".into(),
+            variant: None,
+            output: "DP-1".into(),
+            anchor: Anchor::TopLeft,
+            x: 2,
+            y: 2,
+            width: 14,
+            height: 7,
+            z: 0,
+            settings: toml::Table::new(),
+        }
+    }
+
+    #[test]
+    fn a_click_adds_clear_of_the_drawer_and_other_widgets() {
+        let screen = Screen {
+            size: (1600, 1000),
+            covered: [0; 4],
+        };
+        let mut layout = Layout::default();
+        assert_eq!(
+            free_spot(&layout, "DP-1", screen, 16.0, (14, 7)),
+            Some((Anchor::TopLeft, 2, 2))
+        );
+        // One there already; others on another monitor don't count.
+        layout.widgets.push(clock("w1"));
+        let mut elsewhere = clock("w2");
+        elsewhere.output = "HDMI-A-1".into();
+        elsewhere.y = 10;
+        layout.widgets.push(elsewhere);
+        assert_eq!(
+            free_spot(&layout, "DP-1", screen, 16.0, (14, 7)),
+            Some((Anchor::TopLeft, 2, 10))
+        );
+        // The drawer open on the left: past it, a cell apart, at 432 pixels,
+        // which is the middle third, so anchored from the top's middle.
+        let drawer = Screen {
+            covered: [412, 0, 0, 0],
+            ..screen
+        };
+        assert_eq!(
+            free_spot(&layout, "DP-1", drawer, 16.0, (14, 7)),
+            Some((Anchor::Top, -16, 2))
+        );
+        // Or on the right: the left edge is free, under the island.
+        let right = Screen {
+            covered: [0, 412, 52, 0],
+            ..screen
+        };
+        assert_eq!(
+            free_spot(&Layout::default(), "DP-1", right, 16.0, (14, 7)),
+            Some((Anchor::TopLeft, 2, 5))
+        );
+        // A monitor whose size isn't known yet.
+        assert_eq!(
+            free_spot(&layout, "DP-1", Screen::default(), 16.0, (14, 7)),
+            None
+        );
+    }
+
+    #[test]
+    fn saves_switches_and_deletes_layouts() {
+        let dir = std::env::temp_dir().join(format!("mochi-layouts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut state = State::new(16, Some(dir.clone()));
+        let names = |state: &State| -> Vec<String> {
+            state.saved.iter().map(|saved| saved.name.clone()).collect()
+        };
+
+        // Saved: the arrangement is "Work" from now on.
+        state.layout.widgets.push(clock("w1"));
+        state.save_layout(" Work ").unwrap();
+        assert_eq!(state.layout.name.as_deref(), Some("Work"));
+        assert_eq!(names(&state), ["Work"]);
+        assert!(state.save_layout("a/b").is_err());
+        assert!(state.layout_error.is_some());
+
+        // A change to it goes to "Work" too.
+        state.layout.widgets.push(clock("w2"));
+        state.save().unwrap();
+        assert_eq!(
+            saved::load(&dir.join(saved::DIR), "Work")
+                .unwrap()
+                .widgets
+                .len(),
+            2
+        );
+
+        // An empty one, then back.
+        state.layout = Layout::default();
+        state.save_layout("Empty").unwrap();
+        state.use_layout("Work").unwrap();
+        assert_eq!(state.layout.widgets.len(), 2);
+        assert_eq!(state.layout.name.as_deref(), Some("Work"));
+        assert!(state.use_layout("Nothing").is_err());
+        assert_eq!(state.layout.widgets.len(), 2);
+
+        // An arrangement without a name isn't lost when another replaces it.
+        state.layout = Layout {
+            name: None,
+            widgets: vec![clock("w5")],
+        };
+        state.use_layout("Empty").unwrap();
+        assert_eq!(names(&state), ["Empty", "Unsaved", "Work"]);
+        assert!(state.layout.widgets.is_empty());
+        // New ids aren't one a saved layout has, since notes keep their text
+        // by id.
+        assert_eq!(
+            state
+                .layout
+                .new_id(state.saved.iter().map(|saved| &saved.layout)),
+            "w3"
+        );
+        assert!(state.kept("w5"));
+
+        // Deleting the one on the desktop leaves it there, without a name.
+        state.use_layout("Work").unwrap();
+        let gone = state.delete_layout("Work").unwrap();
+        assert_eq!(gone.len(), 2);
+        assert_eq!(state.layout.name, None);
+        assert_eq!(state.layout.widgets.len(), 2);
+        assert_eq!(names(&state), ["Empty", "Unsaved"]);
+        assert!(state.delete_layout("Work").is_err());
+        let file = Layout::load(&dir.join(FILE)).unwrap().unwrap();
+        assert_eq!(file.name, None);
+
+        assert!(state.list_layouts().starts_with("Empty: 0 widgets"));
+        std::fs::remove_dir_all(dir).unwrap();
     }
 
     #[test]
