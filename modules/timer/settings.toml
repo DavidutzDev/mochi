@@ -1,0 +1,13 @@
+# Focus timer: a bubble counts down a focus session or a break, and the
+# island says when it ends.
+[module.timer]
+# Minutes of focus that `start` counts down without an argument.
+# focus_minutes = 25
+# Minutes of rest after a focus session.
+# break_minutes = 5
+# Minutes of rest after every sessions_before_long_break focus sessions.
+# long_break_minutes = 15
+# How many focus sessions come before a long break. 0 never takes one.
+# sessions_before_long_break = 4
+# Starts the break by itself when focus ends, instead of asking.
+# auto_break = false

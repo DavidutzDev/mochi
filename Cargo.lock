@@ -1196,6 +1196,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-timer"
+version = "0.0.9"
+dependencies = [
+ "include_dir",
+ "mochi-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "mochi-module-tour"
 version = "0.0.9"
 dependencies = [
@@ -1361,6 +1374,7 @@ dependencies = [
  "mochi-module-privacy",
  "mochi-module-settings",
  "mochi-module-share",
+ "mochi-module-timer",
  "mochi-module-tour",
  "mochi-module-tray",
  "mochi-module-updater",

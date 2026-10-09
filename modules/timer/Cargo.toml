@@ -1,0 +1,20 @@
+[package]
+name = "mochi-module-timer"
+description = "A focus timer: a bubble counts down, the island says when to rest"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+include_dir.workspace = true
+mochi-core.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
+tracing.workspace = true
+
+[lints]
+workspace = true

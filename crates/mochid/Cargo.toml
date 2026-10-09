@@ -47,6 +47,7 @@ mochi-module-privacy.workspace = true
 mochi-module-settings.workspace = true
 mochi-module-share.workspace = true
 mochi-module-tour.workspace = true
+mochi-module-timer.workspace = true
 mochi-module-updater.workspace = true
 mochi-module-tray.workspace = true
 mochi-module-workspaces.workspace = true

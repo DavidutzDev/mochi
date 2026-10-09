@@ -40,6 +40,7 @@
 - [Emoji](modules/emoji.md)
 - [Colors](modules/colors.md)
 - [Drop](modules/drop.md)
+- [Focus timer](modules/timer.md)
 - [Settings](modules/settings.md)
 - [Tour](modules/tour.md)
 - [Updates](modules/updater.md)

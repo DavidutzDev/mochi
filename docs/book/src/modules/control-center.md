@@ -1,6 +1,6 @@
 # Control center
 
-A panel that grows out of the island: a home screen of cards, and pages in a navbar at the bottom. It has no content of its own besides the date and time. Other modules provide the rest: media a Now Playing card, audio a volume card and a Sound page, brightness a slider per display, night light a tile, notifications a card and a page, power a page, clipboard a card and a page, capture a Captures page, network a card and a page, bluetooth a tile and a page, battery a card, performance a page. A module that isn't running provides nothing.
+A panel that grows out of the island: a home screen of cards, and pages in a navbar at the bottom. It has no content of its own besides the date and time. Other modules provide the rest: media a Now Playing card, audio a volume card and a Sound page, brightness a slider per display, night light a tile, notifications a card and a page, power a page, clipboard a card and a page, capture a Captures page, network a card and a page, bluetooth a tile and a page, battery a card, performance a page, the focus timer a card. A module that isn't running provides nothing.
 
 Clicking the clock opens it, and Escape or a click elsewhere closes it. A card whose module also has a page shows a chevron by its heading: clicking the heading, or the card beside its controls, opens that page.
 

@@ -969,6 +969,7 @@ fn icon(module: &str) -> &'static str {
         "privacy" => "privacy_tip",
         "settings" => "settings",
         "tour" => "tour",
+        "timer" => "timer",
         "updater" => "system_update",
         "share" => "screen_share",
         "tray" => "apps",
