@@ -368,11 +368,11 @@ Item {
         }
     }
 
-    // By the region: its size and the button that takes it. Under it, or
-    // over it, right of it or left of it, where it first fits; a region
-    // that leaves no room around it gets them inside, near its bottom.
-    // Never under the island, at its edge of the screen.
-    Row {
+    // By the region: its size and the button that takes it, side by side
+    // under it or over it, or stacked right of it or left of it, where they
+    // first fit; a region that leaves no room around it gets them inside,
+    // near its bottom. Never under the island, at its edge of the screen.
+    Grid {
         id: bar
 
         readonly property rect area: root.shownRegion ?? Qt.rect(0, 0, 0, 0)
@@ -381,29 +381,59 @@ Item {
         readonly property real band: Theme.margin + Theme.idleHeight + Theme.controlHeight
         readonly property real highest: Theme.anchor === "bottom" ? gap : band
         readonly property real lowest: Theme.anchor === "bottom" ? root.height - band : root.height - gap
-        readonly property point spot: {
-            const across = x => Math.max(gap, Math.min(root.width - width - gap, x));
-            const down = y => Math.max(highest, Math.min(lowest - height, y));
-            const middleX = across(area.x + (area.width - width) / 2);
-            const middleY = down(area.y + (area.height - height) / 2);
-            if (area.y + area.height + gap + height <= lowest)
-                return Qt.point(middleX, area.y + area.height + gap);
-            if (area.y - gap - height >= highest)
-                return Qt.point(middleX, area.y - gap - height);
-            if (area.x + area.width + gap + width <= root.width - gap)
-                return Qt.point(area.x + area.width + gap, middleY);
-            if (area.x - gap - width >= gap)
-                return Qt.point(area.x - gap - width, middleY);
-            return Qt.point(middleX, down(area.y + area.height - gap - height));
+        // Their size side by side, and stacked.
+        readonly property real buttonWidth: confirm.visible ? confirm.implicitWidth : 0
+        readonly property real buttonHeight: confirm.visible ? confirm.implicitHeight : 0
+        readonly property size wide: Qt.size(label.width + (buttonWidth > 0 ? spacing + buttonWidth : 0), Math.max(label.height, buttonHeight))
+        readonly property size tall: Qt.size(Math.max(label.width, buttonWidth), label.height + (buttonHeight > 0 ? spacing + buttonHeight : 0))
+        // Where they go: {x, y, upright}.
+        readonly property var place: {
+            const across = (x, size) => Math.max(gap, Math.min(root.width - size.width - gap, x));
+            const down = (y, size) => Math.max(highest, Math.min(lowest - size.height, y));
+            const centerX = size => across(area.x + (area.width - size.width) / 2, size);
+            const centerY = size => down(area.y + (area.height - size.height) / 2, size);
+            if (area.y + area.height + gap + wide.height <= lowest)
+                return {
+                    "x": centerX(wide),
+                    "y": area.y + area.height + gap,
+                    "upright": false
+                };
+            if (area.y - gap - wide.height >= highest)
+                return {
+                    "x": centerX(wide),
+                    "y": area.y - gap - wide.height,
+                    "upright": false
+                };
+            if (area.x + area.width + gap + tall.width <= root.width - gap)
+                return {
+                    "x": area.x + area.width + gap,
+                    "y": centerY(tall),
+                    "upright": true
+                };
+            if (area.x - gap - tall.width >= gap)
+                return {
+                    "x": area.x - gap - tall.width,
+                    "y": centerY(tall),
+                    "upright": true
+                };
+            return {
+                "x": centerX(wide),
+                "y": down(area.y + area.height - gap - wide.height, wide),
+                "upright": false
+            };
         }
 
         visible: root.mode === "region" && root.picking && root.holdsRegion
+        columns: place.upright ? 1 : 2
         spacing: Theme.spaceSmall
-        x: spot.x
-        y: spot.y
+        horizontalItemAlignment: Grid.AlignHCenter
+        verticalItemAlignment: Grid.AlignVCenter
+        x: place.x
+        y: place.y
 
         Rectangle {
-            anchors.verticalCenter: parent.verticalCenter
+            id: label
+
             width: size.implicitWidth + 20
             height: 30
             radius: height / 2
@@ -424,6 +454,8 @@ Item {
         }
 
         Button {
+            id: confirm
+
             visible: root.dragged === null
             tone: "accent"
             icon: root.screenshot ? "camera" : "record"

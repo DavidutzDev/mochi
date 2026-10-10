@@ -6,7 +6,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
-- A screenshot or recording region nearly as tall as the screen put its size and Capture button off the screen or under the island, out of reach. They go under the region, over it, right of it or left of it, where they first fit, and inside it near its bottom when the region leaves no room, never under the island.
+- A screenshot or recording region nearly as tall as the screen put its size and Capture button off the screen or under the island, out of reach. They go side by side under the region or over it, or stacked right of it or left of it, where they first fit, and inside it near its bottom when the region leaves no room, never under the island.
 
 ## 0.1.0 - 2026-10-10
 
