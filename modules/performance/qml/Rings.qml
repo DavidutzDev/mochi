@@ -51,14 +51,17 @@ Item {
         visible: root.payload !== null
 
         Repeater {
-            model: root.rings
+            // By count: a reading changes the rows in place instead of making
+            // them again every couple of seconds.
+            model: root.rings.length
 
             Column {
                 id: ring
 
-                required property var modelData
-                readonly property bool known: modelData.value !== null
-                readonly property bool hot: root.hot(modelData.label)
+                required property int index
+                readonly property var entry: root.rings[index] ?? ({})
+                readonly property bool known: entry.value != null
+                readonly property bool hot: root.hot(entry.label ?? "")
 
                 width: root.column
                 spacing: Theme.spaceSmall
@@ -69,13 +72,13 @@ Item {
                     height: root.size
                     size: root.size
                     thickness: Math.max(3, root.size * 0.07)
-                    value: (ring.modelData.value ?? 0) / 100
+                    value: (ring.entry.value ?? 0) / 100
                     wavy: root.payload?.wavy ?? true
                     color: ring.hot ? Theme.danger : Theme.accent
 
                     RollingText {
                         anchors.centerIn: parent
-                        text: ring.known ? `${ring.modelData.value}%` : "?"
+                        text: ring.known ? `${ring.entry.value}%` : "?"
                         color: ring.hot ? Theme.danger : Theme.foreground
                         pixelSize: Math.max(Theme.textCaption, Math.min(Theme.textHeadline, root.size * 0.22))
                         weight: Theme.weightTitle
@@ -84,7 +87,7 @@ Item {
 
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: ring.modelData.label
+                    text: ring.entry.label ?? ""
                     color: Theme.muted
                     font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily

@@ -62,6 +62,9 @@ Item {
         }
     ].filter(row => shown(row.key) && (row.key !== "gpu" || gpu !== null))
 
+    // The shown rows, as text, which changes only when one comes or goes.
+    readonly property string shownKeys: rows.map(row => row.key).join(" ")
+
     function shown(key: string): bool {
         if (reading !== "all")
             return key === reading;
@@ -89,14 +92,17 @@ Item {
         visible: root.payload !== null
 
         Repeater {
-            model: root.rows
+            // By key: a reading changes the rows in place instead of making
+            // them again, graphs and all, every couple of seconds.
+            model: root.shownKeys === "" ? [] : root.shownKeys.split(" ")
 
             Item {
                 id: row
 
-                required property var modelData
-                readonly property bool hot: root.hot(modelData.label)
-                readonly property var speeds: modelData.speeds ?? []
+                required property string modelData
+                readonly property var entry: root.rows.find(entry => entry.key === modelData) ?? ({})
+                readonly property bool hot: root.hot(entry.label ?? "")
+                readonly property var speeds: entry.speeds ?? []
 
                 width: parent.width
                 height: (root.height - graphs.spacing * (root.rows.length - 1)) / root.rows.length
@@ -108,14 +114,14 @@ Item {
 
                     Symbol {
                         anchors.verticalCenter: parent.verticalCenter
-                        name: row.modelData.icon
+                        name: row.entry.icon ?? ""
                         size: 13
                         color: row.hot ? Theme.danger : Theme.muted
                     }
 
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: row.modelData.label
+                        text: row.entry.label ?? ""
                         color: Theme.muted
                         font.pixelSize: Theme.textCaption
                         font.family: Theme.fontFamily
@@ -125,7 +131,7 @@ Item {
                     RollingText {
                         anchors.verticalCenter: parent.verticalCenter
                         visible: row.speeds.length === 0
-                        text: row.modelData.value ?? ""
+                        text: row.entry.value ?? ""
                         color: row.hot ? Theme.danger : Theme.foreground
                         pixelSize: Theme.textBody
                         weight: Theme.weightTitle
@@ -136,7 +142,7 @@ Item {
                     anchors.right: parent.right
                     anchors.verticalCenter: label.verticalCenter
                     visible: row.speeds.length === 0
-                    text: row.modelData.detail ?? ""
+                    text: row.entry.detail ?? ""
                     color: Theme.muted
                     font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily
@@ -173,8 +179,8 @@ Item {
                     anchors.topMargin: Theme.spaceTiny
                     anchors.bottom: parent.bottom
                     width: parent.width
-                    values: row.modelData.values
-                    others: row.modelData.others ?? []
+                    values: row.entry.values ?? []
+                    others: row.entry.others ?? []
                     floor: row.speeds.length > 0 ? 64 * 1024 : 0
                     color: row.hot ? Theme.danger : Theme.accent
                 }

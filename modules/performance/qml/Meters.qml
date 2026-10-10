@@ -72,13 +72,16 @@ Item {
         spacing: Theme.spaceSmall
 
         Repeater {
-            model: root.meters.slice(0, root.fit)
+            // By count: a reading changes the rows in place instead of making
+            // them again every couple of seconds.
+            model: Math.min(root.meters.length, root.fit)
 
             Column {
                 id: meter
 
-                required property var modelData
-                readonly property bool hot: root.hot(modelData.label)
+                required property int index
+                readonly property var entry: root.meters[index] ?? ({})
+                readonly property bool hot: root.hot(entry.label ?? "")
 
                 width: list.width
                 spacing: Theme.spaceTiny
@@ -93,14 +96,14 @@ Item {
 
                         Symbol {
                             anchors.verticalCenter: parent.verticalCenter
-                            name: meter.modelData.icon
+                            name: meter.entry.icon ?? ""
                             size: 13
                             color: meter.hot ? Theme.danger : Theme.muted
                         }
 
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: meter.modelData.label
+                            text: meter.entry.label ?? ""
                             color: Theme.muted
                             font.pixelSize: Theme.textCaption
                             font.family: Theme.fontFamily
@@ -111,7 +114,7 @@ Item {
                             id: value
 
                             anchors.verticalCenter: parent.verticalCenter
-                            text: `${meter.modelData.value}%`
+                            text: `${meter.entry.value ?? 0}%`
                             color: meter.hot ? Theme.danger : Theme.foreground
                             pixelSize: Theme.textBody
                             weight: Theme.weightTitle
@@ -121,7 +124,7 @@ Item {
                     Text {
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
-                        text: meter.modelData.detail
+                        text: meter.entry.detail ?? ""
                         color: Theme.muted
                         font.pixelSize: Theme.textCaption
                         font.family: Theme.fontFamily
@@ -134,7 +137,7 @@ Item {
                 ProgressBar {
                     width: parent.width
                     height: 6
-                    value: meter.modelData.value / 100
+                    value: (meter.entry.value ?? 0) / 100
                     fill: meter.hot ? Theme.danger : Theme.accent
                 }
             }

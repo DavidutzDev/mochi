@@ -86,10 +86,13 @@ Item {
         width: parent.width
 
         Repeater {
-            model: root.rows.slice(0, root.fit)
+            // By count: a reading changes the rows in place instead of making
+            // them again every couple of seconds.
+            model: Math.min(root.rows.length, root.fit)
 
             Row {
-                required property var modelData
+                required property int index
+                readonly property var entry: root.rows[index] ?? ["", ""]
 
                 width: parent.width
                 height: root.lineHeight
@@ -98,7 +101,7 @@ Item {
                 Text {
                     width: widest.advanceWidth
                     anchors.verticalCenter: parent.verticalCenter
-                    text: parent.modelData[0]
+                    text: parent.entry[0]
                     color: Theme.muted
                     font: widest.font
                 }
@@ -107,7 +110,7 @@ Item {
                     width: parent.width - widest.advanceWidth - parent.spacing
                     anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
-                    text: parent.modelData[1]
+                    text: parent.entry[1]
                     color: Theme.foreground
                     font.pixelSize: Theme.textBody
                     font.family: Theme.fontFamily

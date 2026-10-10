@@ -99,6 +99,12 @@ Item {
             return material[name];
         return plain && probe.advanceWidth > 0 && Math.abs(probe.advanceWidth - known.advanceWidth) < 0.5 ? name : "";
     }
+    // Whether the glyph above is settled. While the symbol is being made,
+    // the font isn't measured yet and every Material name looks missing;
+    // the system theme is only asked after, since one lookup reads every
+    // icon directory and can take 40 ms.
+    property bool made: false
+    Component.onCompleted: made = true
 
     TextMetrics {
         id: probe
@@ -401,7 +407,7 @@ Item {
     Image {
         anchors.fill: parent
         visible: root.glyph === "" && root.icon === null && status === Image.Ready
-        source: root.glyph === "" && root.icon === null && root.name ? Quickshell.iconPath(root.name, true) : ""
+        source: root.made && root.glyph === "" && root.icon === null && root.name ? Quickshell.iconPath(root.name, true) : ""
         sourceSize.width: root.size * 2
         sourceSize.height: root.size * 2
     }
