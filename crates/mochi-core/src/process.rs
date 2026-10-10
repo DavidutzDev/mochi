@@ -77,6 +77,61 @@ pub fn in_app_scope(argv: &[String]) -> Vec<String> {
     scoped
 }
 
+/// Shows `paths` in the file manager, selected in their folder: through
+/// `org.freedesktop.FileManager1`, which Nautilus, Dolphin, Thunar and
+/// Nemo answer, or else by opening the first one's folder with `xdg-open`.
+pub async fn show_in_folder(paths: &[std::path::PathBuf]) -> Result<(), String> {
+    let first = paths.first().ok_or("nothing to show")?;
+    if installed("dbus-send") {
+        let uris: Vec<String> = paths.iter().map(|path| file_uri(path)).collect();
+        let shown = tokio::process::Command::new("dbus-send")
+            .args([
+                "--session",
+                "--print-reply",
+                "--reply-timeout=3000",
+                "--dest=org.freedesktop.FileManager1",
+                "/org/freedesktop/FileManager1",
+                "org.freedesktop.FileManager1.ShowItems",
+                &format!("array:string:{}", uris.join(",")),
+                "string:",
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await
+            .is_ok_and(|status| status.success());
+        if shown {
+            return Ok(());
+        }
+    }
+    let folder = if first.is_dir() {
+        first.as_path()
+    } else {
+        first.parent().unwrap_or(first)
+    };
+    spawn_detached(
+        &in_app_scope(&["xdg-open".to_owned(), folder.display().to_string()]),
+        None,
+    )
+}
+
+/// `path` as a `file://` URI, with everything but letters, digits, `/`
+/// and `-._~` percent-encoded, commas too, so a list of them splits on
+/// commas.
+pub fn file_uri(path: &Path) -> String {
+    use std::os::unix::ffi::OsStrExt;
+    let mut uri = String::from("file://");
+    for &byte in path.as_os_str().as_bytes() {
+        if byte.is_ascii_alphanumeric() || b"/-._~".contains(&byte) {
+            uri.push(byte as char);
+        } else {
+            uri.push_str(&format!("%{byte:02X}"));
+        }
+    }
+    uri
+}
+
 /// Whether `program` is in `PATH`.
 pub fn installed(program: &str) -> bool {
     std::env::var_os("PATH")
@@ -88,6 +143,14 @@ mod tests {
     use std::time::{Duration, Instant};
 
     use super::*;
+
+    #[test]
+    fn a_file_uri_escapes_what_would_split_it() {
+        assert_eq!(
+            file_uri(Path::new("/home/me/Shots/a, b é.png")),
+            "file:///home/me/Shots/a%2C%20b%20%C3%A9.png"
+        );
+    }
 
     #[test]
     fn the_program_is_not_our_child() {

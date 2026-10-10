@@ -4,7 +4,9 @@ import qs.island
 // The control center page: the pins, then the history, newest first, with a
 // search box, pause and clear above them. Clicking a row pastes it into the
 // window you were in, the pin button pins or unpins it, the copy button only
-// copies it, the trash removes it. Clearing leaves the pins.
+// copies it, the trash removes it. Clearing leaves the pins. Shift+click or
+// Ctrl+click selects several images, and dragging one of them drops them all
+// on another app.
 Item {
     id: root
 
@@ -23,6 +25,19 @@ Item {
     readonly property int headingHeight: 24
     // Up to five rows show; more scroll.
     readonly property int rows: Math.min(shown.length, 5)
+    // The selected images, by entry id; an entry gone leaves it.
+    property var chosen: []
+    onEntriesChanged: chosen = chosen.filter(id => entries.some(entry => `${entry.id}` === id))
+
+    // Adds an image to the selection, or takes it off.
+    function choose(id: string): void {
+        root.chosen = root.chosen.includes(id) ? root.chosen.filter(other => other !== id) : root.chosen.concat([id]);
+    }
+
+    // The selected images' files.
+    function chosenFiles(): var {
+        return root.entries.filter(entry => root.chosen.includes(`${entry.id}`)).map(entry => (entry.image ?? "").replace(/^file:\/\//, "")).filter(path => path !== "");
+    }
 
     implicitHeight: toolbar.height + Theme.spaceMedium + (shown.length === 0 ? 60 : rows * 60 + (rows - 1) * 8 + (hasPins ? 2 * headingHeight : 0))
 
@@ -197,9 +212,17 @@ Item {
                     return parts.join(" · ");
                 }
                 // An image opens in the preview card, with copy, edit and delete.
-                onClicked: Daemon.command("clipboard", row.image ? "show" : "pick", [row.entry])
-                // An image dragged onto an app drops it as a file.
+                onClicked: {
+                    root.chosen = [];
+                    Daemon.command("clipboard", row.image ? "show" : "pick", [row.entry]);
+                }
+                // An image dragged onto an app drops it as a file, or the
+                // selection it's in.
                 file: row.image ? (row.modelData.image ?? "").replace(/^file:\/\//, "") : ""
+                selectable: row.image
+                selected: root.chosen.includes(row.entry)
+                files: row.selected ? root.chosenFiles() : (row.file === "" ? [] : [row.file])
+                onSelectionToggled: root.choose(row.entry)
 
                 // Over the buttons too, which the row's own hover misses.
                 HoverHandler {

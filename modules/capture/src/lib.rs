@@ -804,10 +804,14 @@ impl State {
                 if saved.clipboard.is_some() {
                     return Err("a clipboard image has no folder".into());
                 }
-                spawn(&[
-                    "xdg-open".into(),
-                    folder_of(&saved.path).display().to_string(),
-                ])
+                // In the file manager, selected in its folder.
+                let paths = [saved.path.clone()];
+                tokio::spawn(async move {
+                    if let Err(error) = mochi_core::process::show_in_folder(&paths).await {
+                        tracing::warn!(%error, "can't show the capture in its folder");
+                    }
+                });
+                Ok(())
             }),
             "preview" => self.preview_file(ctx, args),
             "history" => {

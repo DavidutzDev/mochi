@@ -16,7 +16,7 @@ Results come from providers. These are built in:
 | `windows` | none | Open windows on every workspace whose title or app has every word you typed, the one focused last first, above the apps. Enter focuses one and switches to its workspace. Needs wlr-foreign-toplevel-management, which Hyprland, Sway and niri have |
 | `calculator` | `=` | Math, like `=2^10` or `=sqrt(2)*pi`. Plain math like `2+2` works without the prefix, above the apps. Enter copies the result |
 | `commands` | `>` | A shell command, like `> htop`, with the ones you ran before. Enter runs it, Shift+Enter runs it in the terminal from `terminal` |
-| `files` | `/` | Files and folders in your home by name, from an index in memory. Enter opens one, Shift+Enter the folder it's in |
+| `files` | `/` | Files and folders in your home by name, from an index in memory. Enter opens one, Shift+Enter or the folder button shows it selected in your file manager, and dragging one drops it on another app |
 | web searches | `!w`, `!g`, `!gh`, `!yt`, `!nix`, `!wiki` | `!w rust` opens a DuckDuckGo search for "rust"; the others search Google, GitHub, YouTube, NixOS packages and Wikipedia. `engines` adds more |
 | [emoji](emoji.md) | `:` | Emoji by name. Enter types it into the window you were in, Shift+Enter copies it |
 | [colors](colors.md) | `#` | A color you type, in every format, or a pick from the screen |
@@ -53,6 +53,7 @@ A section with a `command` adds a provider of your own. The launcher runs the co
 | `run` | Enter runs this shell command, Shift+Enter in a terminal |
 | `alt` | What Shift+Enter does, as an object with one of the four: `{"copy": "😀"}`. A `run` result runs in a terminal on Shift+Enter without one |
 | `id` | Passed to the provider's `pick` command after Enter |
+| `file` | A file or folder the result is: it drags out onto other apps, and Shift+Enter, without an `alt`, and the folder button show it in the file manager |
 
 A result has at most one of `copy`, `type`, `open` and `run`. A newer query stops a script that hasn't finished, and so does `timeout_ms`, 2 seconds by default. A script without a prefix isn't asked for an empty query.
 

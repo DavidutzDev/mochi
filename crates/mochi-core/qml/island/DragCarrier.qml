@@ -8,7 +8,8 @@ Item {
     id: root
 
     readonly property var host: Window.window
-    property string url: ""
+    // The files, as file:// URLs.
+    property var urls: []
     // An ItemGrabResult of what the row shows, kept while the drag is out.
     property var image: null
     property bool carrying: false
@@ -23,7 +24,7 @@ Item {
     Drag.imageSource: image ? image.url : ""
     Drag.hotSpot: hotSpot
     Drag.mimeData: ({
-            "text/uri-list": `${root.url}\r\n`
+            "text/uri-list": root.urls.map(url => `${url}\r\n`).join("")
         })
     Drag.onDragStarted: {
         DragOut.active = true;
@@ -36,8 +37,8 @@ Item {
         DragOut.active = false;
     }
 
-    function carry(url: string, image: var, hotSpot: point): void {
-        root.url = url;
+    function carry(urls: var, image: var, hotSpot: point): void {
+        root.urls = urls;
         root.image = image;
         root.hotSpot = hotSpot;
         root.carrying = true;

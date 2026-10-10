@@ -58,7 +58,7 @@ ModuleEvent::Command(command) if command.action == "search" => {
 }
 ```
 
-A result is the same as a [script provider's](modules/launcher.md#script-providers): a `title`, and optionally a `subtitle`, an `icon`, a `glyph` or a `color`, at most one of `copy`, `type`, `open` and `run` for what Enter does, an `alt` with what Shift+Enter does, and an `id`. A result with only an `id` leaves everything to `pick`, which can then do whatever the plugin wants. Answer with nothing for no results; an error is logged and shows no results.
+A result is the same as a [script provider's](modules/launcher.md#script-providers): a `title`, and optionally a `subtitle`, an `icon`, a `glyph` or a `color`, at most one of `copy`, `type`, `open` and `run` for what Enter does, an `alt` with what Shift+Enter does, an `id`, and a `file` the result drags out as. A result with only an `id` leaves everything to `pick`, which can then do whatever the plugin wants. Answer with nothing for no results; an error is logged and shows no results.
 
 The launcher asks at once, on every keystroke, so answer quickly. Answers to a query the user has typed past are dropped, so a slow provider never shows stale results. Keep the answer under 50 results; the launcher cuts the list at its `max_results`.
 

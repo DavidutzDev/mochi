@@ -4,6 +4,8 @@ import qs.island
 // The control center's Captures page: the newest screenshots and recordings in
 // their folders, whatever made them. A click opens one in the preview card;
 // each row can also copy it, edit a screenshot, open its folder or delete it.
+// Shift+click or Ctrl+click selects several, and dragging one of them drops
+// them all on another app.
 Item {
     id: root
 
@@ -12,6 +14,10 @@ Item {
     readonly property bool editable: payload?.editable ?? false
     // Up to five rows show; more scroll.
     readonly property int rows: Math.min(captures.length, 5)
+    // The selected captures' paths.
+    property var chosen: []
+    // A capture deleted or gone leaves the selection.
+    onCapturesChanged: chosen = chosen.filter(path => captures.some(capture => capture.path === path))
 
     implicitHeight: header.height + Theme.spaceMedium + (captures.length === 0 ? 60 : rows * 60 + (rows - 1) * 8)
 
@@ -35,6 +41,11 @@ Item {
         Daemon.command("capture", "start", [kind]);
     }
 
+    // Adds a capture to the selection, or takes it off.
+    function choose(path: string): void {
+        root.chosen = root.chosen.includes(path) ? root.chosen.filter(other => other !== path) : root.chosen.concat([path]);
+    }
+
     function size(bytes: real): string {
         if (bytes < 1024 * 1024)
             return `${Math.max(1, Math.round(bytes / 1024))} KB`;
@@ -48,10 +59,20 @@ Item {
 
         width: parent.width
         title: {
+            if (root.chosen.length > 0)
+                return `${root.chosen.length} selected`;
             const shots = root.captures.filter(capture => capture.kind === "screenshot").length;
             const videos = root.captures.length - shots;
             const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
             return `${plural(shots, "screenshot")} · ${plural(videos, "recording")}`;
+        }
+
+        Button {
+            visible: root.chosen.length > 0
+            icon: "close"
+            text: "Clear"
+            tone: "ghost"
+            onClicked: root.chosen = []
         }
 
         Button {
@@ -109,9 +130,16 @@ Item {
             leadingSize: 64
             title: modelData.name ?? ""
             subtitle: [row.screenshot ? "Screenshot" : "Recording", root.ago(modelData.time), root.size(modelData.bytes)].join(" · ")
-            onClicked: Daemon.command("capture", "preview", [row.modelData.path])
-            // Dragged onto an app, it drops the file.
-            file: row.modelData.path ?? ""
+            onClicked: {
+                root.chosen = [];
+                Daemon.command("capture", "preview", [row.modelData.path]);
+            }
+            // Dragged onto an app, it drops the file, or the selection it's in.
+            selectable: true
+            marker: true
+            selected: root.chosen.includes(row.modelData.path)
+            files: row.selected ? root.chosen : [row.modelData.path]
+            onSelectionToggled: root.choose(row.modelData.path)
 
             leading: Item {
                 anchors.fill: parent

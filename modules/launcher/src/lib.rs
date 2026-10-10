@@ -37,6 +37,7 @@ mod search;
 mod tour;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 
 use include_dir::{Dir, include_dir};
@@ -184,7 +185,7 @@ impl Module for Launcher {
             .arg(
                 ArgSpec::bool(
                     "alternate",
-                    "Do what Shift+Enter does: run a command in a terminal, copy an emoji, open a file's folder",
+                    "Do what Shift+Enter does: run a command in a terminal, copy an emoji, show a file in its folder",
                 )
                 .optional(),
             ),
@@ -600,17 +601,14 @@ impl State {
         items
     }
 
-    /// Files and folders by name. Enter opens one, Shift+Enter the folder
-    /// it's in.
+    /// Files and folders by name. Enter opens one, Shift+Enter shows it
+    /// in its folder, and it drags out onto other apps.
     fn files(&self, query: &str) -> Vec<Item> {
         self.index
             .search(query, self.max_results)
             .into_iter()
             .map(|entry| {
-                let folder = entry
-                    .path
-                    .parent()
-                    .map(|parent| parent.display().to_string());
+                let path = entry.path.display().to_string();
                 Item {
                     title: entry
                         .path
@@ -626,8 +624,9 @@ impl State {
                         }
                         .into(),
                     ),
-                    verb: Some(Verb::Open(entry.path.display().to_string())),
-                    alt: folder.map(Verb::Open),
+                    verb: Some(Verb::Open(path.clone())),
+                    alt: Some(Verb::Show(path.clone())),
+                    file: Some(path),
                     ..Item::default()
                 }
             })
@@ -657,6 +656,7 @@ impl State {
                     "glyph": item.glyph,
                     "color": item.color.as_deref().map(qml_color),
                     "small": item.small,
+                    "file": item.file,
                     "section": provider.title,
                 }));
                 self.listed
@@ -750,6 +750,15 @@ impl State {
                 // Closing gives the keyboard back to the window to type in.
                 self.close(ctx);
                 clipboard(ctx, "paste-text", text);
+            }
+            Some(Verb::Show(path)) => {
+                self.close(ctx);
+                let paths = [PathBuf::from(path)];
+                tokio::spawn(async move {
+                    if let Err(error) = mochi_core::process::show_in_folder(&paths).await {
+                        tracing::warn!(%error, "can't show the file in its folder");
+                    }
+                });
             }
             Some(Verb::Open(target)) => {
                 launch::spawn(self.method, &["xdg-open".into(), target], None)?;

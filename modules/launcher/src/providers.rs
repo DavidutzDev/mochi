@@ -289,6 +289,8 @@ pub enum Verb {
     RunInTerminal(String),
     /// Focuses an open window, by its compositor id.
     Focus(u32),
+    /// Shows a file selected in its folder, in the file manager.
+    Show(String),
 }
 
 /// One line in the list.
@@ -307,6 +309,9 @@ pub struct Item {
     pub id: Option<String>,
     /// An app's action, drawn a step in.
     pub small: bool,
+    /// A file or folder the result is: it drags out onto other apps, and
+    /// its folder button shows it in the file manager.
+    pub file: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -333,6 +338,8 @@ struct Line {
     alt: Option<Verbs>,
     #[serde(default)]
     id: Option<String>,
+    #[serde(default)]
+    file: Option<String>,
 }
 
 /// At most one of them.
@@ -400,7 +407,8 @@ fn item(line: &str) -> Result<Item, String> {
         Some(alt) => alt.verb()?,
         None => match &verb {
             Some(Verb::Run(command)) => Some(Verb::RunInTerminal(command.clone())),
-            _ => None,
+            // A file shows in its folder.
+            _ => line.file.clone().map(Verb::Show),
         },
     };
     Ok(Item {
@@ -413,6 +421,7 @@ fn item(line: &str) -> Result<Item, String> {
         alt,
         id: line.id,
         small: false,
+        file: line.file,
     })
 }
 

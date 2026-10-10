@@ -193,19 +193,33 @@ Item {
                         list.currentIndex = index;
                 }
                 onClicked: root.pick(index, false)
+                // A file drags out onto other apps.
+                file: modelData.file ?? ""
 
-                // Compact: the description at the end of the line, on the
-                // selected row only, given at most half the row.
-                trailing: Text {
-                    visible: root.compact && row.selected && text !== ""
-                    width: Math.min(implicitWidth, row.width / 2)
-                    text: row.modelData.subtitle ?? ""
-                    elide: Text.ElideRight
-                    textFormat: Text.PlainText
-                    color: Theme.muted
-                    font.pixelSize: Theme.textCaption
-                    font.family: Theme.fontFamily
-                }
+                trailing: [
+                    // Compact: the description at the end of the line, on
+                    // the selected row only, given at most half the row.
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: root.compact && row.selected && text !== ""
+                        width: Math.min(implicitWidth, row.width / 2)
+                        text: row.modelData.subtitle ?? ""
+                        elide: Text.ElideRight
+                        textFormat: Text.PlainText
+                        color: Theme.muted
+                        font.pixelSize: Theme.textCaption
+                        font.family: Theme.fontFamily
+                    },
+                    // A file's folder, with it selected, as Shift+Enter.
+                    IconButton {
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: row.selected && row.file !== ""
+                        icon: "folder_open"
+                        size: 14
+                        tone: "neutral"
+                        onClicked: root.pick(row.index, true)
+                    }
+                ]
 
                 leading: Item {
                     anchors.fill: parent
