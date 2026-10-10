@@ -4,7 +4,7 @@ A desktop shell for Wayland, built around one island at the top of your screen.
 
 Instead of a bar full of icons, Mochi has an island, like the Dynamic Island on a phone. It shows what matters right now, a notification, the volume you just changed, the song that started, then gets out of the way. Small bubbles beside it keep an eye on what's ongoing, like the music playing or a recording. Open it for a launcher, a control center with your quick settings, and a settings panel for everything else.
 
-Mochi works on Hyprland, niri and Sway. It's young, at version 0.1.0, and already the whole shell its author uses every day.
+Mochi works on Hyprland, niri and Sway. It's young, at version 0.1.1, and already the whole shell its author uses every day.
 
 ## Why Mochi
 

@@ -6,7 +6,7 @@ The flake has the `mochi` package, with both binaries, the systemd unit and the 
 
 ```nix
 mochi = {
-  url = "github:DavidutzDev/mochi/v0.1.0";
+  url = "github:DavidutzDev/mochi/v0.1.1";
   inputs.nixpkgs.follows = "nixpkgs";
 };
 ```
@@ -143,7 +143,7 @@ Options go after `sh -s --`:
 | Option | |
 |---|---|
 | `--prefix /usr/local` | Install there, with `sudo sh -s -- --prefix /usr/local`, instead of `~/.local` |
-| `--version 0.1.0` | A given release instead of the latest |
+| `--version 0.1.1` | A given release instead of the latest |
 | `--enable` | Start `mochid` with the session |
 | `--uninstall` | Remove what it installed |
 | `--force` | Install even when the same version is there, or when a package manager installed Mochi |
