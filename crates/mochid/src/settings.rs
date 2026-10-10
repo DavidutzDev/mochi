@@ -597,7 +597,12 @@ fn defaults(catalog: &Catalog) -> Tables {
     let mut config = Table::new();
     config.insert(
         "modules".to_owned(),
-        Value::Array(vec![Value::String("idle".to_owned())]),
+        Value::Array(
+            mochi_core::config::DEFAULT_MODULES
+                .iter()
+                .map(|id| Value::String((*id).to_owned()))
+                .collect(),
+        ),
     );
     let examples = [examples::ISLAND, examples::BUBBLES, examples::BENTO]
         .into_iter()
@@ -1257,6 +1262,18 @@ mod tests {
             "the changes should be gone"
         );
         assert_eq!(store.snapshot()["changes"], json!(false));
+        std::fs::remove_dir_all(config.parent().unwrap()).unwrap();
+    }
+
+    #[test]
+    fn without_a_module_list_the_panel_shows_the_default_modules_on() {
+        let config = temp("default-modules");
+        std::fs::write(&config, "").unwrap();
+        let (store, _) = Store::load(&config, None).unwrap();
+        assert_eq!(
+            store.snapshot()["enabled"],
+            json!(mochi_core::config::DEFAULT_MODULES)
+        );
         std::fs::remove_dir_all(config.parent().unwrap()).unwrap();
     }
 
