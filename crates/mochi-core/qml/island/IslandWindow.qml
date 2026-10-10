@@ -327,4 +327,7 @@ PanelWindow {
         overlay: overlay
         output: root.screen?.name ?? ""
     }
+
+    // Carries a drag out of a panel past the panel's closing.
+    DragCarrier {}
 }

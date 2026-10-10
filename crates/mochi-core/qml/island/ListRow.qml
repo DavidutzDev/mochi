@@ -45,36 +45,31 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
-        onClicked: root.clicked()
-        // Held and moved, a row with a file starts a drag: a click stays a
-        // click.
-        drag.target: root.file !== "" ? carrier : null
-        onPressed: {
-            if (root.file !== "")
-                leadingSlot.grabToImage(result => carrier.Drag.imageSource = result.url);
+        onClicked: {
+            if (!area.dragged)
+                root.clicked();
         }
-    }
 
-    // What a drag out carries. The pointer moves it only to start the drag;
-    // the system draws the drag from there, over every window.
-    Item {
-        id: carrier
+        // Held and moved, a row with a file is dragged out, with what
+        // leads it drawn under the pointer; DragOut carries it from there.
+        // A click stays a click.
+        property point pressedAt
+        property bool dragged: false
+        property var picture: null
 
-        width: 1
-        height: 1
-        Drag.active: area.drag.active
-        Drag.dragType: Drag.Automatic
-        Drag.supportedActions: Qt.CopyAction
-        Drag.hotSpot.x: root.leadingSize / 2
-        Drag.hotSpot.y: root.leadingSize / 2
-        Drag.mimeData: ({
-                "text/uri-list": `${root.fileUrl}\r\n`
-            })
-        Drag.onDragStarted: DragOut.active = true
-        Drag.onDragFinished: {
-            DragOut.active = false;
-            carrier.x = 0;
-            carrier.y = 0;
+        onPressed: mouse => {
+            area.pressedAt = Qt.point(mouse.x, mouse.y);
+            area.dragged = false;
+            if (root.file !== "")
+                leadingSlot.grabToImage(result => area.picture = result);
+        }
+        onPositionChanged: mouse => {
+            if (!area.pressed || area.dragged || root.file === "")
+                return;
+            if (Math.hypot(mouse.x - area.pressedAt.x, mouse.y - area.pressedAt.y) < Qt.styleHints.startDragDistance)
+                return;
+            area.dragged = true;
+            DragOut.start(root.Window.window, root.fileUrl, area.picture, Qt.point(root.leadingSize / 2, root.leadingSize / 2));
         }
     }
 

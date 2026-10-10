@@ -6,7 +6,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
-- Screenshots and recordings on the control center's Captures page, and images on its Clipboard page, drag onto any app as files, as from a file manager. While a drag is out, the island lets the pointer through to the apps under an open panel. Clipboard images are written with their type's extension, like `12.png`, so the app takes them for pictures.
+- Screenshots and recordings on the control center's Captures page, and images on its Clipboard page, drag onto any app as files, as from a file manager. The panel closes as the drag starts, so the apps under it take the drop, and the drag goes on without it. Clipboard images are written with their type's extension, like `12.png`, so the app takes them for pictures.
 - The clock's World tab adds any time zone the system has, with a search by city, country or offset and the keyboard; common cities come first. The settings and the widget editor use the same picker.
 - File settings, like the timer's alarm sound and the wallpaper, have a Choose button that opens the desktop's file chooser through the XDG portal, or zenity or kdialog.
 - The clock panel's Timer tab has the alarm: its volume, its sound with Choose and Default, and Play it.
