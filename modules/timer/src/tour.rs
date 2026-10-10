@@ -11,7 +11,7 @@ pub fn steps() -> Vec<ContributionSpec> {
             .order(47)
             .options(json!({
                 "chapter": "notices",
-                "since": "0.0.10",
+                "since": "0.1.0",
                 "caption": "A focus timer counts down in a bubble by the island, and says when to take a break. Start it from its card in the control center, or with mochi ipc timer start.",
                 "payload": {
                     "finished": "focus",
@@ -27,7 +27,7 @@ pub fn steps() -> Vec<ContributionSpec> {
             .order(48)
             .options(json!({
                 "chapter": "notices",
-                "since": "0.0.10",
+                "since": "0.1.0",
                 "caption": "Custom timers run beside the focus timer, several at once, each with a label. Type :t 15m Tea in the launcher, or add one in the clock panel's Timer tab; the alarm plays when it runs out.",
                 "payload": {
                     "label": "Tea",

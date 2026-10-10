@@ -189,7 +189,7 @@ pub fn steps() -> Vec<ContributionSpec> {
             .order(42)
             .options(json!({
                 "chapter": "panels",
-                "since": "0.0.10",
+                "since": "0.1.0",
                 "caption": "Apps recording from the microphone get their own rows, with a volume and a mute each.",
                 "payload": {
                     "connected": true,

@@ -24,7 +24,7 @@ pub fn steps() -> Vec<ContributionSpec> {
             .order(25)
             .options(json!({
                 "chapter": "panels",
-                "since": "0.0.10",
+                "since": "0.1.0",
                 "caption": "The clock: today with the weather, a calendar with reminders, the focus timer, a stopwatch and world clocks. Bind mochi ipc clock toggle to a key.",
                 "payload": {
                     "tab": "today",
@@ -51,7 +51,7 @@ pub fn steps() -> Vec<ContributionSpec> {
             .order(48)
             .options(json!({
                 "chapter": "notices",
-                "since": "0.0.10",
+                "since": "0.1.0",
                 "caption": "A reminder from the clock's calendar, when it's due, also if the computer slept through it. Done, or snooze it for 10 minutes.",
                 // No time: it's due now.
                 "payload": {

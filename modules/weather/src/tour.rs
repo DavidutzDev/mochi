@@ -11,7 +11,7 @@ pub fn steps() -> Vec<ContributionSpec> {
             .order(56)
             .options(json!({
                 "chapter": "panels",
-                "since": "0.0.10",
+                "since": "0.1.0",
                 "place": "card",
                 "size": [548, 96],
                 "caption": "The weather where you are, from Open-Meteo, with the next hours. Nothing is sent until you set a place in its settings.",
@@ -22,7 +22,7 @@ pub fn steps() -> Vec<ContributionSpec> {
             .order(57)
             .options(json!({
                 "chapter": "panels",
-                "since": "0.0.10",
+                "since": "0.1.0",
                 "place": "card",
                 "size": [828, 470],
                 "caption": "Its page in the control center: the weather now with the wind, the UV index and the sun, the next 7 days and the next 24 hours.",

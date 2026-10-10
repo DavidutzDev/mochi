@@ -268,7 +268,7 @@ mod tests {
     fn every_message_to_a_plugin_round_trips() {
         round_trip_to(ToPlugin::Hello {
             api: 1,
-            version: "0.0.9".into(),
+            version: "0.1.0".into(),
             module: "pomodoro".into(),
             settings: json!({ "minutes": 25 }),
             data_dir: "/run/user/1000/mochi/data/pomodoro".into(),
