@@ -127,16 +127,31 @@ Item {
             color: Theme.raised
         }
 
+        // While providers answer or the file index is built, dots that
+        // come one by one; then "No results".
         Text {
+            id: empty
+
+            readonly property bool searching: root.payload.searching === true
+            property int dots: 3
+
             visible: root.results.length === 0
             width: parent.width
             height: root.rowHeight
             leftPadding: Theme.padding + 4
             verticalAlignment: Text.AlignVCenter
-            text: root.payload.searching ? "Searching…" : "No results"
+            text: searching ? `Searching${".".repeat(dots)}` : "No results"
             color: Theme.muted
             font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily
+
+            Timer {
+                running: empty.visible && empty.searching && !Theme.reducedMotion
+                interval: 350
+                repeat: true
+                onRunningChanged: empty.dots = running ? 1 : 3
+                onTriggered: empty.dots = empty.dots % 3 + 1
+            }
         }
 
         ListView {

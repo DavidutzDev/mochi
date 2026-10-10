@@ -62,6 +62,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- A file search in the launcher said "No results" while the file index was still being built, as it is for a while after mochid starts. It says "Searching", with dots coming one by one, until the index is ready and the results come, and "No results" only after.
 - Opening the launcher could crash Quickshell: app icons loaded on Qt's image thread, and Qt's icon themes break when two threads read them at once. Icons from the theme load on the UI thread now, and pictures from files still in the background. File results in the launcher show a document symbol instead of an empty tile.
 - Night light said Unavailable while sharing a screen switchably: the share module's virtual screen has no gamma, and its refusal counted as night light failing. Virtual screens are left out now, and a real screen without gamma no longer stops the others from warming.
 - The settings panel's segmented choices fit long labels.

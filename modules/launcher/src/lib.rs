@@ -218,6 +218,7 @@ impl Module for Launcher {
                 files: settings.files,
                 index: files::Index::default(),
                 indexing: false,
+                files_asked: false,
                 watching: true,
                 indexed,
                 apps: Vec::new(),
@@ -283,6 +284,8 @@ struct State {
     files: FilesSettings,
     index: files::Index,
     indexing: bool,
+    /// The query asks the files provider, which may still be indexing.
+    files_asked: bool,
     /// Whether to follow changes with inotify. Turned off for good when
     /// the system runs out of watches.
     watching: bool,
@@ -381,6 +384,7 @@ impl State {
         self.waiting.clear();
         self.asking.clear();
         self.due = None;
+        self.files_asked = false;
         self.listed.clear();
     }
 
@@ -448,7 +452,10 @@ impl State {
                 Kind::Apps => self.apps(&rest),
                 Kind::Calculator => calculator(&rest, prefixed),
                 Kind::Commands => self.commands(&rest),
-                Kind::Files => self.files(&rest),
+                Kind::Files => {
+                    self.files_asked = true;
+                    self.files(&rest)
+                }
                 Kind::Windows => windows(&ctx.compositor().toplevels(), &rest, self.max_results),
                 Kind::Web { url } => web(&provider.title, url, &rest),
                 // Without a prefix, they have nothing to say to nothing.
@@ -671,7 +678,8 @@ impl State {
             "results": results,
             // Headings only help when there is more than one kind.
             "sections": sections > 1,
-            "searching": self.due.is_some() || !self.asking.is_empty(),
+            // Waiting on scripts, modules, or the file index being built.
+            "searching": self.due.is_some() || !self.asking.is_empty() || (self.files_asked && self.indexing),
         })
     }
 
