@@ -368,14 +368,39 @@ Item {
         }
     }
 
-    // Under the region: its size and the button that takes it.
+    // By the region: its size and the button that takes it. Under it, or
+    // over it, right of it or left of it, where it first fits; a region
+    // that leaves no room around it gets them inside, near its bottom.
+    // Never under the island, at its edge of the screen.
     Row {
+        id: bar
+
         readonly property rect area: root.shownRegion ?? Qt.rect(0, 0, 0, 0)
+        readonly property real gap: Theme.spaceMedium
+        // The band the island takes at its edge, while picking.
+        readonly property real band: Theme.margin + Theme.idleHeight + Theme.controlHeight
+        readonly property real highest: Theme.anchor === "bottom" ? gap : band
+        readonly property real lowest: Theme.anchor === "bottom" ? root.height - band : root.height - gap
+        readonly property point spot: {
+            const across = x => Math.max(gap, Math.min(root.width - width - gap, x));
+            const down = y => Math.max(highest, Math.min(lowest - height, y));
+            const middleX = across(area.x + (area.width - width) / 2);
+            const middleY = down(area.y + (area.height - height) / 2);
+            if (area.y + area.height + gap + height <= lowest)
+                return Qt.point(middleX, area.y + area.height + gap);
+            if (area.y - gap - height >= highest)
+                return Qt.point(middleX, area.y - gap - height);
+            if (area.x + area.width + gap + width <= root.width - gap)
+                return Qt.point(area.x + area.width + gap, middleY);
+            if (area.x - gap - width >= gap)
+                return Qt.point(area.x - gap - width, middleY);
+            return Qt.point(middleX, down(area.y + area.height - gap - height));
+        }
 
         visible: root.mode === "region" && root.picking && root.holdsRegion
         spacing: Theme.spaceSmall
-        x: Math.max(8, Math.min(root.width - width - 8, area.x + (area.width - width) / 2))
-        y: area.y + area.height + 12 + height > root.height ? area.y - height - 12 : area.y + area.height + 12
+        x: spot.x
+        y: spot.y
 
         Rectangle {
             anchors.verticalCenter: parent.verticalCenter
@@ -388,7 +413,7 @@ Item {
                 id: size
 
                 anchors.centerIn: parent
-                text: `${Math.round(parent.parent.area.width)} × ${Math.round(parent.parent.area.height)}`
+                text: `${Math.round(bar.area.width)} × ${Math.round(bar.area.height)}`
                 color: Theme.foreground
                 font.pixelSize: Theme.textCaption
                 font.family: Theme.fontFamily
