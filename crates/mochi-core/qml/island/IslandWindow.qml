@@ -13,12 +13,25 @@ PanelWindow {
 
     readonly property bool atBottom: Theme.anchor === "bottom"
 
-    // 0 floating, 1 attached to the edge in notch mode. Animated, so
-    // switching modes morphs every shape.
-    property real attached: Theme.mode === "notch" ? 1 : 0
+    // 0 floating, 1 attached to the edge in notch and bar modes. Animated,
+    // so switching modes morphs every shape.
+    property real attached: Theme.mode === "notch" || Theme.mode === "bar" ? 1 : 0
     readonly property real margin: Theme.margin * (1 - attached)
+    // 1 in bar mode: the strip fades in, and the island's and the pills'
+    // own backgrounds fade out into it.
+    property real barred: Theme.mode === "bar" ? 1 : 0
+    // How far the side areas stay from the screen's sides: the margin, or
+    // in bar mode a gap inside the bar.
+    readonly property real side: margin + Theme.spaceSmall * barred
 
     Behavior on attached {
+        NumberAnimation {
+            duration: Theme.duration(350)
+            easing.type: Easing.OutCubic
+        }
+    }
+
+    Behavior on barred {
         NumberAnimation {
             duration: Theme.duration(350)
             easing.type: Easing.OutCubic
@@ -105,7 +118,22 @@ PanelWindow {
     mask: covering && !DragOut.active ? everywhere : shapes
 
     property Region shapes: Region {
-        regions: [root.islandMask, ...pillMasks.instances]
+        regions: [root.barMask, root.islandMask, ...pillMasks.instances]
+    }
+
+    // The bar takes clicks all along it: there's no window under it, since
+    // windows keep out of its room.
+    property Region barMask: Region {
+        y: root.atBottom ? root.height - Theme.idleHeight : 0
+        width: Theme.mode === "bar" ? root.width : 0
+        height: Theme.idleHeight
+    }
+
+    // A pixel short of the bar's inner edge; see IslandRegion's inset.
+    property Region barBlur: Region {
+        y: root.atBottom ? root.height - Theme.idleHeight + 1 : 0
+        width: Theme.mode === "bar" ? root.width : 0
+        height: Theme.idleHeight - 1
     }
 
     property Region everywhere: Region {
@@ -228,7 +256,7 @@ PanelWindow {
     // Blur through ext-background-effect-v1. Compositors without the protocol
     // show everything without blur.
     BackgroundEffect.blurRegion: Region {
-        regions: [root.islandBlur, ...pillBlurs.instances]
+        regions: [root.barBlur, root.islandBlur, ...pillBlurs.instances]
     }
 
     property IslandRegion islandMask: IslandRegion {
@@ -257,6 +285,15 @@ PanelWindow {
         }
     }
 
+    // Under the bubbles and the island, which it draws the background of.
+    Bar {
+        anchors.fill: parent
+        island: root.islandItem
+        flipY: root.atBottom
+        visible: root.barred > 0
+        opacity: root.barred
+    }
+
     readonly property real edgeY: atBottom ? height - margin : margin
     readonly property var areas: ({
             "left": left,
@@ -274,6 +311,7 @@ PanelWindow {
         island: root.islandItem
         window: root
         attached: root.attached
+        flat: root.barred
         atBottom: root.atBottom
         y: root.atBottom ? root.edgeY - height : root.edgeY
     }
@@ -282,7 +320,7 @@ PanelWindow {
         id: left
 
         area: "left"
-        x: root.margin
+        x: root.side
     }
 
     Area {
@@ -312,7 +350,7 @@ PanelWindow {
         id: right
 
         area: "right"
-        x: root.width - width - root.margin
+        x: root.width - width - root.side
     }
 
     Island {
@@ -321,7 +359,8 @@ PanelWindow {
         x: root.host.x + root.host.slot.x
         y: root.host.y + root.host.slot.y
         attached: root.attached
-        sideAttached: root.host.onSide ? root.attached : 0
+        sideAttached: root.host.onSide ? root.attached * (1 - root.barred) : 0
+        flat: root.barred
         atBottom: root.atBottom
         atRight: Theme.islandArea === "right"
         overlay: overlay

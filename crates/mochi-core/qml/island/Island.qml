@@ -30,6 +30,9 @@ Item {
     // morphs the shape.
     property real attached: 0
     property real sideAttached: 0
+    // 1 in bar mode: the bar draws the background, and the shape fades
+    // out into it.
+    property real flat: 0
     property bool atBottom: false
     property bool atRight: false
     readonly property alias shape: shape
@@ -169,6 +172,7 @@ Item {
     RectangularShadow {
         anchors.fill: shape
         visible: Theme.shadow.a > 0
+        opacity: 1 - root.flat
         radius: shape.radius
         blur: 16
         offset.y: 2
@@ -185,6 +189,8 @@ Item {
         earRadius: Theme.earRadius
         flipX: root.atRight
         flipY: root.atBottom
+        // In bar mode it shows only for files held over it.
+        opacity: dropZone.containsDrag ? 1 : 1 - root.flat
         color: Theme.background
         // Files held over it: it takes them.
         border: dropZone.containsDrag ? Theme.accent : Theme.border

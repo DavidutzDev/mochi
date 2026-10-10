@@ -244,10 +244,13 @@ fn looks() -> Vec<Step> {
         look(
             "notch",
             Version(0, 0, 1),
-            "Notch",
+            "Notch or bar",
             "crop_16_9",
-            "Island or notch: the notch sits against the edge with curved ears. Settings › Layout › Mode.",
-            vec![vec![("theme.layout.mode", json!("notch"))]],
+            "Island, notch or bar: the notch sits against the edge with curved ears, and the bar runs along all of it. Settings › Layout › Mode.",
+            vec![
+                vec![("theme.layout.mode", json!("notch"))],
+                vec![("theme.layout.mode", json!("bar"))],
+            ],
         ),
         look(
             "bottom",

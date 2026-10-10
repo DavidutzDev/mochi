@@ -227,6 +227,8 @@ ear_radius = 10
 - [x] Switching mode on reload morphs: the island slides to the edge while its corners square off and the ears grow
 - [x] Views don't change, and the idle module still decides what idle shows
 - [x] Tested on Hyprland: top, bottom, both bottom corners, island and notch, the morph, expanding and collapsing by click
+- [x] Bar mode, `mode = "bar"`: a strip `idle_height` tall along the whole edge, drawn by `Bar.qml` as one outline with the part of the island that hangs past it, ears where it leaves the strip. Pills and the island fade their own backgrounds into it, and pills get a highlight under the pointer. The side areas keep `spaceSmall` from the screen's sides. The strip is in the input mask and the blur. Checked headless on Sway: top, bottom, the island in the left area, a panel, the morph from island mode
+- [ ] Bar mode on Hyprland, with blur, and the hover highlight with a real pointer
 - [ ] Switching the anchor jumps instead of moving, since the layer surface changes edge
 - [ ] Under another layer surface with an exclusive zone, like a bar, the notch attaches to that surface's edge, not the screen's. Matching the bar's color makes them look like one piece; a `[layout.notch] color` could help
 - [ ] Per-output layout: each monitor has its own island now, but `[layout]` is one for all; needs a config design (which keys can differ per monitor, and how a monitor is named)

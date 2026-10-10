@@ -42,7 +42,8 @@
 
 [layout]
 # "island" floats apart from the screen edge; "notch" attaches to it with
-# curved corners.
+# curved corners; "bar" is a strip along the whole edge with the bubbles on
+# it, and the island grows out of it.
 # mode = "island"
 # "top" or "bottom".
 # anchor = "top"
@@ -65,7 +66,8 @@
 # surface_height = 640
 
 [layout.notch]
-# Size of the curves where the notch meets the edge.
+# Size of the curves where the notch meets the edge, and where the island
+# leaves the bar.
 # ear_radius = 10
 
 [motion]

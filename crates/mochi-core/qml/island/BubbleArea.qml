@@ -17,6 +17,8 @@ Row {
     // The window, which keeps the list of pills for the input mask and blur.
     required property var window
     property real attached: 0
+    // 1 in bar mode, for the pills.
+    property real flat: 0
     property bool atBottom: false
 
     readonly property bool hostsIsland: Theme.islandArea === area
@@ -259,6 +261,7 @@ Row {
                 y: root.atBottom ? root.height - height : 0
                 attached: root.attached
                 sideAttached: root.touchesSide(pill)
+                flat: root.flat
                 atBottom: root.atBottom
                 atRight: root.area === "right"
                 transform: Scale {
@@ -308,6 +311,7 @@ Row {
         y: root.atBottom ? root.height - height : 0
         attached: root.attached
         sideAttached: root.touchesSide(more)
+        flat: root.flat
         atBottom: root.atBottom
         atRight: root.area === "right"
 

@@ -112,7 +112,7 @@ pub struct Layout {
     /// The area the island sits in.
     pub island: Area,
     /// Gap between the screen edges and everything on them in island mode.
-    /// Notch mode always touches the edge.
+    /// Notch and bar modes always touch the edge.
     #[serde(alias = "top_margin")]
     #[schemars(range(min = 0, max = 48))]
     pub margin: u32,
@@ -171,6 +171,9 @@ pub enum Mode {
     Island,
     /// Attached to the edge, with concave corners flaring into it.
     Notch,
+    /// A strip along the whole edge with the bubbles on it, and the island
+    /// in it, growing out of it like a notch.
+    Bar,
 }
 
 /// The screen edge everything sits against.
@@ -182,11 +185,12 @@ pub enum Anchor {
     Bottom,
 }
 
-/// Settings that only apply in notch mode.
+/// Settings for notch and bar modes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Notch {
-    /// Radius of the concave corners where the notch meets the edge.
+    /// Radius of the concave corners where the notch meets the edge, and
+    /// where the island leaves the bar.
     #[schemars(range(min = 0, max = 32))]
     pub ear_radius: u32,
 }
@@ -426,6 +430,9 @@ mod tests {
         assert_eq!(theme.layout.island, Area::Left);
         assert_eq!(theme.layout.margin, 4);
         assert_eq!(theme.layout.notch.ear_radius, 8);
+
+        let theme: Theme = serde_json::from_str(r#"{"layout":{"mode":"bar"}}"#).unwrap();
+        assert_eq!(theme.layout.mode, Mode::Bar);
 
         let error = serde_json::from_str::<Theme>(r#"{"layout":{"anchor":"top-left"}}"#)
             .unwrap_err()

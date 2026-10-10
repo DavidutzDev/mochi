@@ -2,6 +2,12 @@
 
 Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor release may change the config format, the protocol or the module interface; the changelog says when.
 
+## Unreleased
+
+### Added
+
+- A bar layout, `[layout] mode = "bar"`: a strip along the whole edge, like GNOME's or macOS's top bar, with the bubbles on it and the island in it. Notices and panels grow out of the bar like a notch. The settings panel's Layout › Mode picks it, and the tour's layout step shows it.
+
 ## 0.1.1 - 2026-10-10
 
 ### Added

@@ -38,6 +38,10 @@ They're checked like `theme.toml`, so a typo or a value out of range is an error
 
 `mochi bento add <directory or repository>` installs a theme, and `mochi bento try` tries it until you keep it or drop it: see [Bento](bento.md).
 
+## Layout
+
+`[layout] mode` picks the island's shape. `"island"` floats it `margin` away from the edge, rounded all around. `"notch"` attaches it to the edge, square there, with concave corners, the ears, flaring into the edge. `"bar"` draws a strip `idle_height` tall along the whole edge, like GNOME's or macOS's top bar: the bubbles sit on it without a background of their own and light up under the pointer, and the island sits in it, so the idle clock reads as part of the bar. A notice or a panel grows out of the bar like a notch, with ears where it leaves it. Windows keep out of the strip, and switching modes morphs from one to the other.
+
 ## Motion
 
 `[motion]` sets how things move. `reduced = true` turns animations off: views appear and change at once, and the island takes its shape without a spring. `speed` makes every animation faster or slower, 2 being twice as fast.

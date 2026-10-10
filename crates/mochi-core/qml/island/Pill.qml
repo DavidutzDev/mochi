@@ -16,6 +16,9 @@ Item {
     required property var bubbles
     property real attached: 0
     property real sideAttached: 0
+    // 1 in bar mode: it sits on the bar, which draws the background, and
+    // shows a highlight under the pointer instead.
+    property real flat: 0
     property bool atBottom: false
     property bool atRight: false
     // Set when it should go: it shrinks and fades, then says `gone`. Set
@@ -94,6 +97,7 @@ Item {
     RectangularShadow {
         anchors.fill: shape
         visible: Theme.shadow.a > 0
+        opacity: 1 - root.flat
         radius: shape.radius
         blur: 16
         offset.y: 2
@@ -110,8 +114,27 @@ Item {
         earRadius: Theme.earRadius
         flipX: root.atRight
         flipY: root.atBottom
+        opacity: 1 - root.flat
         color: Theme.background
         border: Theme.border
+    }
+
+    HoverHandler {
+        id: hover
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: Theme.spaceTiny
+        radius: height / 2
+        color: Theme.highlight
+        opacity: hover.hovered ? root.flat : 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.fast
+            }
+        }
     }
 
     Item {
