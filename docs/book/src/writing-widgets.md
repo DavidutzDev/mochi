@@ -76,9 +76,11 @@ The view fills the widget, inside the card's padding when it has a card. It gets
 | Property | |
 |---|---|
 | `payload` | The offering module's published state, as control center cards get it |
-| `settings` | This instance's settings, with the defaults filled in |
-| `instance` | This instance's id, like `w3`, or `preview` in the drawer's cards |
-| `variant` | The id of its look, for a view that declares `property string variant`. It comes right after the view is made, so bind to it rather than reading it once in `Component.onCompleted` |
+| `settings` | This instance's settings, with the defaults filled in, for a view that declares `property var settings` |
+| `instance` | This instance's id, like `w3`, or `preview` in the drawer's cards, for a view that declares `property string instance` |
+| `variant` | The id of its look, for a view that declares `property string variant` |
+
+Only `payload` is there in `Component.onCompleted`. The others come right after the view is made, before it first draws, so bind to them rather than reading them once there.
 
 ```qml
 import QtQuick

@@ -182,7 +182,8 @@ Item {
         id: content
 
         // Changes only when the view does; the rest goes in through the
-        // bindings below.
+        // bindings below, the settings and the id to views that declare
+        // them, before the view first draws.
         readonly property string url: root.widget ? `root:/modules/${root.widget.module}/${root.widget.view}.qml` : ""
 
         anchors.fill: parent
@@ -192,11 +193,16 @@ Item {
             if (url === "")
                 return;
             setSource(url, {
-                payload: Daemon.state(root.widget.module),
-                settings: root.widget.settings,
-                instance: root.widget.id
+                payload: Daemon.state(root.widget.module)
             });
         }
+    }
+
+    Binding {
+        target: content.item
+        property: "instance"
+        value: root.widget?.id ?? ""
+        when: content.item !== null && root.widget !== null && "instance" in content.item
     }
 
     Binding {
@@ -210,7 +216,7 @@ Item {
         target: content.item
         property: "settings"
         value: root.widget?.settings ?? ({})
-        when: content.item !== null && root.widget !== null
+        when: content.item !== null && root.widget !== null && "settings" in content.item
     }
 
     // For a view that has looks: which one, given to those that declare a

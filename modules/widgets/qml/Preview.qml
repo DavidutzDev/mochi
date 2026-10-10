@@ -54,10 +54,23 @@ Item {
             anchors.margins: root.framed ? Theme.padding : 0
             enabled: false
             Component.onCompleted: setSource(`root:/modules/${root.entry.module}/${root.variant?.view ?? root.entry.view}.qml`, {
-                payload: Daemon.state(root.entry.module),
-                settings: root.defaults,
-                instance: "preview"
+                payload: Daemon.state(root.entry.module)
             })
+        }
+
+        // The defaults and the id, to views that declare them.
+        Binding {
+            target: content.item
+            property: "settings"
+            value: root.defaults
+            when: content.item !== null && "settings" in content.item
+        }
+
+        Binding {
+            target: content.item
+            property: "instance"
+            value: "preview"
+            when: content.item !== null && "instance" in content.item
         }
 
         Binding {
