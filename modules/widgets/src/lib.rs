@@ -320,22 +320,15 @@ impl Module for Widgets {
                 .arg(ArgSpec::string("name", "The saved layout").rest()),
             ActionSpec::new(
                 "show-layout",
-                "Show a saved layout on this workspace, this monitor or every monitor",
+                "Show a saved layout on a workspace, a monitor or every monitor",
             )
-            .arg(ArgSpec::choice("on", "Where it shows", Scope::ALL))
+            .arg(ArgSpec::string("on", PLACES))
             .arg(ArgSpec::string("name", "The saved layout").rest()),
             ActionSpec::new(
                 "hide-layout",
                 "Stop showing a saved layout here, for what shows without it",
             )
-            .arg(
-                ArgSpec::choice(
-                    "on",
-                    "Which: the one for this workspace, this monitor or every monitor; the one shown here without",
-                    Scope::ALL,
-                )
-                .optional(),
-            ),
+            .arg(ArgSpec::string("on", PLACES).optional()),
             ActionSpec::new("delete-layout", "Delete a saved layout")
                 .arg(ArgSpec::string("name", "The saved layout").rest()),
             ActionSpec::new("layouts", "Print the saved layouts"),
@@ -503,6 +496,9 @@ struct State {
     /// each shows, by name.
     outputs: BTreeSet<String>,
     workspaces: BTreeMap<String, String>,
+    /// Every workspace of each monitor, in the compositor's order, for
+    /// the drawer's Apply to.
+    workspace_lists: BTreeMap<String, Vec<String>>,
     /// The monitor being arranged on.
     editing: Option<String>,
     /// The widget whose settings open as arranging starts, like one just
@@ -537,6 +533,7 @@ impl State {
             screens: BTreeMap::new(),
             outputs: BTreeSet::new(),
             workspaces: BTreeMap::new(),
+            workspace_lists: BTreeMap::new(),
             editing: None,
             selected: None,
             banner: None,
@@ -650,17 +647,13 @@ impl State {
             }
             "show-layout" => {
                 let here = self.here(ctx);
-                let on = args
-                    .str("on")
-                    .and_then(Scope::parse)
-                    .unwrap_or(Scope::Workspace);
+                let on = args.str("on").unwrap_or("workspace");
                 self.show_layout(args.str("name").unwrap_or_default(), on, &here)
                     .map(|()| None)
             }
             "hide-layout" => {
                 let here = self.here(ctx);
-                self.hide_layout(args.str("on").and_then(Scope::parse), &here)
-                    .map(|()| None)
+                self.hide_layout(args.str("on"), &here).map(|()| None)
             }
             "use-layout" => self
                 .use_layout(args.str("name").unwrap_or_default())
@@ -759,6 +752,7 @@ impl State {
             .new_id(self.saved.iter().map(|saved| &saved.layout));
         // Into the layout shown there.
         let source = self.source_on(&output);
+        let monitor = self.monitor_in(&source, &output);
         let layout = self
             .layout_of_mut(&source)
             .ok_or_else(|| format!("no layout is saved as {}", source.name()))?;
@@ -770,7 +764,7 @@ impl State {
             // Kept even for the first, so it stays if the widget's looks
             // are put in another order.
             variant,
-            output,
+            output: monitor,
             anchor,
             x,
             y,
@@ -822,8 +816,11 @@ impl State {
             .source_of(id)
             .ok_or_else(|| format!("no widget {id}"))?;
         let to = self.source_on(output);
+        // In the destination: on a layout shown there from another monitor,
+        // it belongs to that one.
+        let monitor = self.monitor_in(&to, output);
         let place = |widget: &mut Placed| {
-            widget.output = output.to_owned();
+            widget.output.clone_from(&monitor);
             widget.anchor = anchor;
             (widget.x, widget.y) = (x, y);
         };
@@ -894,36 +891,53 @@ impl State {
         free_spot(&self.shown_on(output), screen, f64::from(self.grid), size)
     }
 
-    /// Keeps the arrangement shown on `here` as `name`, which it then is:
-    /// `widgets.toml`'s own, or a saved layout shown there, which is then
-    /// shown there as `name`.
+    /// Keeps the widgets shown on `here` as `name`, and shows that layout
+    /// there from then on, so a change there goes to it. Other monitors go
+    /// on showing what they did, so a layout saved on each monitor is a
+    /// layout for each.
     fn save_layout(&mut self, name: &str, here: &str) -> Result<(), String> {
-        let result = saved::check_name(name).and_then(|name| match self.rule_on(here).cloned() {
-            None => {
-                self.layout.name = Some(name);
-                self.save()
+        let result = saved::check_name(name).and_then(|name| {
+            let dir = self.saved_dir.clone().ok_or_else(no_config)?;
+            let widgets: Vec<Placed> = self.shown_on(here).into_iter().cloned().collect();
+            let shown = self.rule_on(here).cloned();
+            // Already the layout shown here, which keeps its changes: saving
+            // only this monitor's part of it would drop the others'.
+            if shown.as_ref().is_some_and(|rule| rule.layout == name) {
+                return Ok(());
             }
-            Some(rule) => {
-                let dir = self.saved_dir.clone().ok_or_else(no_config)?;
-                let shown = self
-                    .layout_of(&Source::Saved(rule.layout.clone()))
-                    .cloned()
-                    .unwrap_or_default();
-                saved::save(&dir, &name, &shown)?;
-                for other in &mut self.layout.show {
-                    if other.same_place(&rule) {
-                        other.layout.clone_from(&name);
-                    }
-                }
-                self.save()
+            saved::save(
+                &dir,
+                &name,
+                &Layout {
+                    widgets,
+                    ..Layout::default()
+                },
+            )?;
+            self.reload_saved();
+            // The entry for this monitor, or a new one for it, as close as
+            // the one it replaces here.
+            let rule = Rule {
+                layout: name,
+                output: Some(here.to_owned()),
+                workspace: shown.and_then(|rule| rule.workspace),
+            };
+            match self
+                .layout
+                .show
+                .iter_mut()
+                .find(|other| other.same_place(&rule))
+            {
+                Some(other) => *other = rule,
+                None => self.layout.show.push(rule),
             }
+            self.save()
         });
         self.layout_done(result)
     }
 
-    /// Shows the layout saved as `name` on `here`'s workspace, on `here`,
-    /// or everywhere, in place of what showed there.
-    fn show_layout(&mut self, name: &str, on: Scope, here: &str) -> Result<(), String> {
+    /// Shows the layout saved as `name` on a place, see [`PLACES`], in
+    /// place of what showed there.
+    fn show_layout(&mut self, name: &str, on: &str, here: &str) -> Result<(), String> {
         let result = saved::check_name(name).and_then(|name| {
             if !self.exists(&name) {
                 return Err(format!("no layout is saved as {name}"));
@@ -944,9 +958,9 @@ impl State {
         self.layout_done(result)
     }
 
-    /// Stops showing the saved layout shown for `on`, or the one shown on
-    /// `here`, so what shows without it shows again.
-    fn hide_layout(&mut self, on: Option<Scope>, here: &str) -> Result<(), String> {
+    /// Stops showing the saved layout shown for a place, or the one shown
+    /// on `here`, so what shows without it shows again.
+    fn hide_layout(&mut self, on: Option<&str>, here: &str) -> Result<(), String> {
         let place = match on {
             Some(on) => self.rule_for(on, here, String::new()),
             None => self
@@ -966,18 +980,30 @@ impl State {
         self.layout_done(result)
     }
 
-    /// A rule showing `layout` on `here`'s workspace, on `here`, or
-    /// everywhere.
-    fn rule_for(&self, on: Scope, here: &str, layout: String) -> Result<Rule, String> {
-        let (output, workspace) = match on {
-            Scope::Workspace => {
-                let workspace = self.workspaces.get(here).cloned().ok_or_else(|| {
-                    format!("the compositor doesn't say which workspace {here} shows")
-                })?;
-                (Some(here.to_owned()), Some(workspace))
-            }
-            Scope::Screen => (Some(here.to_owned()), None),
-            Scope::Everywhere => (None, None),
+    /// A rule showing `layout` on a place, see [`PLACES`]: `workspace` and
+    /// `screen` are `here`'s.
+    fn rule_for(&self, on: &str, here: &str, layout: String) -> Result<Rule, String> {
+        let workspace_here = || {
+            self.workspaces
+                .get(here)
+                .cloned()
+                .ok_or_else(|| format!("the compositor doesn't say which workspace {here} shows"))
+        };
+        let (output, workspace) = match on.trim() {
+            "" => return Err("say where: a monitor, a workspace or everywhere".into()),
+            "everywhere" => (None, None),
+            "screen" => (Some(here.to_owned()), None),
+            "workspace" => (Some(here.to_owned()), Some(workspace_here()?)),
+            other => match other.split_once('/') {
+                Some((_, "")) | Some(("", _)) => {
+                    return Err(format!(
+                        "{other:?} isn't a place: say a monitor and a workspace, like DP-3/2"
+                    ));
+                }
+                Some(("*", workspace)) => (None, Some(workspace.to_owned())),
+                Some((output, workspace)) => (Some(output.to_owned()), Some(workspace.to_owned())),
+                None => (Some(other.to_owned()), None),
+            },
         };
         Ok(Rule {
             layout,
@@ -1246,14 +1272,10 @@ impl State {
             .map(|widget| (widget, widget.output.clone()))
             .collect();
         for output in &outputs {
-            if let source @ Source::Saved(_) = self.source_on(output) {
-                let widgets = self
-                    .layout_of(&source)
-                    .map(|layout| layout.widgets.as_slice());
+            if let Source::Saved(_) = self.source_on(output) {
                 shown.extend(
-                    widgets
-                        .unwrap_or_default()
-                        .iter()
+                    self.shown_on(output)
+                        .into_iter()
                         .map(|widget| (widget, output.clone())),
                 );
             }
@@ -1307,6 +1329,14 @@ impl State {
                     "count": saved.layout.widgets.len(),
                     // Where `[[show]]` entries show it, in words.
                     "places": self.places_of(&saved.name),
+                    // And as they are, for the drawer's Apply to.
+                    "rules": self
+                        .layout
+                        .show
+                        .iter()
+                        .filter(|rule| rule.layout == saved.name)
+                        .map(|rule| json!({ "output": rule.output, "workspace": rule.workspace }))
+                        .collect::<Vec<_>>(),
                 })
             })
             .collect();
@@ -1362,6 +1392,16 @@ impl State {
             "layouts": layouts,
             "layout": current,
             "here": here,
+            // The monitors, with their workspaces, for Apply to.
+            "screens": self
+                .outputs
+                .iter()
+                .map(|output| json!({
+                    "name": output,
+                    "workspace": self.workspaces.get(output),
+                    "workspaces": self.workspace_lists.get(output).cloned().unwrap_or_default(),
+                }))
+                .collect::<Vec<_>>(),
             "layoutError": self.layout_error,
         });
         if state != self.published {
@@ -1371,29 +1411,8 @@ impl State {
     }
 }
 
-/// Where `show-layout` shows a layout.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Scope {
-    /// The workspace on the monitor.
-    Workspace,
-    /// Every workspace of the monitor.
-    Screen,
-    /// Every monitor.
-    Everywhere,
-}
-
-impl Scope {
-    const ALL: [&str; 3] = ["workspace", "screen", "everywhere"];
-
-    fn parse(text: &str) -> Option<Self> {
-        match text {
-            "workspace" => Some(Self::Workspace),
-            "screen" => Some(Self::Screen),
-            "everywhere" => Some(Self::Everywhere),
-            _ => None,
-        }
-    }
-}
+/// The places `show-layout` and `hide-layout` take.
+const PLACES: &str = "everywhere; screen or workspace, the one being arranged on or focused, or its workspace; a monitor, like DP-3; a workspace on it, like DP-3/2; or a workspace on any monitor, like */2";
 
 /// Where a monitor's widgets come from: `widgets.toml`'s own, or a saved
 /// layout a `[[show]]` entry shows there.
@@ -1425,6 +1444,18 @@ impl State {
             .outputs
             .iter()
             .filter_map(|output| Some((output.clone(), state.active_on(output)?.name.clone())))
+            .collect();
+        self.workspace_lists = self
+            .outputs
+            .iter()
+            .map(|output| {
+                let names = state
+                    .workspaces_on(output)
+                    .filter(|workspace| !workspace.hidden)
+                    .map(|workspace| workspace.name.clone())
+                    .collect();
+                (output.clone(), names)
+            })
             .collect();
     }
 
@@ -1482,10 +1513,24 @@ impl State {
                 .iter()
                 .filter(|widget| widget.output == output)
                 .collect(),
-            source => self
-                .layout_of(&source)
-                .map(|layout| layout.widgets.iter().collect())
-                .unwrap_or_default(),
+            source => self.layout_of(&source).map_or_else(Vec::new, |layout| {
+                let monitor = layout.monitor_for(output);
+                layout
+                    .widgets
+                    .iter()
+                    .filter(|widget| widget.output == monitor)
+                    .collect()
+            }),
+        }
+    }
+
+    /// The monitor a widget on `output` belongs to in a layout: `output` in
+    /// `widgets.toml`'s own, and in a saved layout the one whose widgets
+    /// show there, see [`Layout::monitor_for`].
+    fn monitor_in(&self, source: &Source, output: &str) -> String {
+        match (source, self.layout_of(source)) {
+            (Source::Saved(_), Some(layout)) => layout.monitor_for(output),
+            _ => output.to_owned(),
         }
     }
 
@@ -1750,16 +1795,34 @@ mod tests {
             state.saved.iter().map(|saved| saved.name.clone()).collect()
         };
 
-        // Saved: the arrangement is "Work" from now on.
+        // Saved: what DP-1 shows is "Work", shown there from now on. Other
+        // monitors go on as they were.
         state.layout.widgets.push(clock("w1"));
+        let mut other = clock("w4");
+        other.output = "HDMI-A-1".into();
+        state.layout.widgets.push(other);
         state.save_layout(" Work ", "DP-1").unwrap();
-        assert_eq!(state.layout.name.as_deref(), Some("Work"));
         assert_eq!(names(&state), ["Work"]);
+        let work = saved::load(&dir.join(saved::DIR), "Work").unwrap();
+        assert_eq!(work.widgets, [clock("w1")]);
+        assert_eq!(state.rule_on("DP-1").unwrap().layout, "Work");
+        assert!(state.rule_on("HDMI-A-1").is_none());
         assert!(state.save_layout("a/b", "DP-1").is_err());
         assert!(state.layout_error.is_some());
 
-        // A change to it goes to "Work" too.
-        state.layout.widgets.push(clock("w2"));
+        // A change there goes to "Work", and saving it under its own name
+        // keeps it.
+        state
+            .move_widget("w1", "DP-1", Anchor::Center, (0, 0))
+            .unwrap();
+        state.save_layout("Work", "DP-1").unwrap();
+        let work = saved::load(&dir.join(saved::DIR), "Work").unwrap();
+        assert_eq!(work.widgets[0].anchor, Anchor::Center);
+
+        // The file's own arrangement, named, switches with use-layout.
+        state.layout.show.clear();
+        state.layout.name = Some("Work".into());
+        state.layout.widgets = vec![clock("w1"), clock("w2")];
         state.save().unwrap();
         assert_eq!(
             saved::load(&dir.join(saved::DIR), "Work")
@@ -1770,8 +1833,12 @@ mod tests {
         );
 
         // An empty one, then back.
-        state.layout = Layout::default();
-        state.save_layout("Empty", "DP-1").unwrap();
+        state.layout = Layout {
+            name: Some("Empty".into()),
+            ..Layout::default()
+        };
+        state.save().unwrap();
+        state.reload_saved();
         state.use_layout("Work").unwrap();
         assert_eq!(state.layout.widgets.len(), 2);
         assert_eq!(state.layout.name.as_deref(), Some("Work"));
@@ -1854,12 +1921,10 @@ mod tests {
         )
         .unwrap();
         state.reload_saved();
-        assert!(state.show_layout("Nothing", Scope::Screen, "DP-1").is_err());
+        assert!(state.show_layout("Nothing", "screen", "DP-1").is_err());
 
         // On DP-1's workspace 1, all of it, whatever its widgets' monitor.
-        state
-            .show_layout("Music", Scope::Workspace, "DP-1")
-            .unwrap();
+        state.show_layout("Music", "workspace", "DP-1").unwrap();
         assert_eq!(ids(&state, "DP-1"), ["w7"]);
         assert_eq!(ids(&state, "HDMI-A-1"), Vec::<String>::new());
         state.workspaces.insert("DP-1".into(), "2".into());
@@ -1867,9 +1932,7 @@ mod tests {
 
         // Everywhere: on both monitors, the same widget, and the closer
         // rule still wins on workspace 1.
-        state
-            .show_layout("Music", Scope::Everywhere, "DP-1")
-            .unwrap();
+        state.show_layout("Music", "everywhere", "DP-1").unwrap();
         assert_eq!(ids(&state, "DP-1"), ["w7"]);
         assert_eq!(ids(&state, "HDMI-A-1"), ["w7"]);
         let shown: Vec<(String, String)> = state
@@ -1895,9 +1958,7 @@ mod tests {
         state.layout.name = Some("Work".into());
         state.save().unwrap();
         state.reload_saved();
-        state
-            .show_layout("Work", Scope::Screen, "HDMI-A-1")
-            .unwrap();
+        state.show_layout("Work", "screen", "HDMI-A-1").unwrap();
         assert_eq!(ids(&state, "HDMI-A-1"), ["w1"]);
         // Sent there, it goes into Work.
         state
@@ -1908,22 +1969,92 @@ mod tests {
         // Work is the file's own arrangement too, so that follows.
         assert_eq!(state.layout.widgets.len(), 2);
 
-        // Saved as another name where Music shows, it shows that instead.
+        // Saved as another name where Music shows, that shows there instead,
+        // and Music still shows on the other monitors.
         state.editing = Some("DP-1".into());
         state.save_layout("Calm", "DP-1").unwrap();
         assert_eq!(state.rule_on("DP-1").unwrap().layout, "Calm");
-        assert_eq!(state.places_of("Calm"), ["every screen"]);
+        assert_eq!(state.places_of("Calm"), ["DP-1"]);
+        assert_eq!(
+            state.places_of("Music"),
+            ["workspace 1 on DP-1", "every screen"]
+        );
 
         // Hiding the one for HDMI-A-1 lets the one for everywhere show.
         state.hide_layout(None, "HDMI-A-1").unwrap();
-        assert_eq!(state.rule_on("HDMI-A-1").unwrap().layout, "Calm");
-        assert!(state.hide_layout(Some(Scope::Screen), "HDMI-A-1").is_err());
+        assert_eq!(state.rule_on("HDMI-A-1").unwrap().layout, "Music");
+        assert!(state.hide_layout(Some("screen"), "HDMI-A-1").is_err());
 
         // Deleting a layout drops where it's shown.
         state.delete_layout("Calm").unwrap();
         assert!(state.layout.show.iter().all(|rule| rule.layout != "Calm"));
         let file = Layout::load(&dir.join(FILE)).unwrap().unwrap();
         assert_eq!(file.show, state.layout.show);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn a_layout_across_monitors_keeps_each_widget_on_its_own() {
+        let dir = std::env::temp_dir().join(format!("mochi-across-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut state = State::new(16, Some(dir.clone()));
+        state.outputs = ["DP-1".to_owned(), "HDMI-A-1".to_owned()].into();
+        let ids = |state: &State, output: &str| -> Vec<String> {
+            state
+                .shown_on(output)
+                .iter()
+                .map(|widget| widget.id.clone())
+                .collect()
+        };
+        let mut right = clock("w2");
+        right.output = "HDMI-A-1".into();
+        let both = Layout {
+            widgets: vec![clock("w1"), right],
+            ..Layout::default()
+        };
+        saved::save(&dir.join(saved::DIR), "Both", &both).unwrap();
+        saved::save(
+            &dir.join(saved::DIR),
+            "Left",
+            &Layout {
+                widgets: vec![clock("w3")],
+                ..Layout::default()
+            },
+        )
+        .unwrap();
+        state.reload_saved();
+
+        // Arranged across both: each monitor its own widgets.
+        state.show_layout("Both", "everywhere", "DP-1").unwrap();
+        assert_eq!(ids(&state, "DP-1"), ["w1"]);
+        assert_eq!(ids(&state, "HDMI-A-1"), ["w2"]);
+
+        // Saved from one: the same on both, and one added on the other
+        // monitor joins it there, so it stays the same on both.
+        state.show_layout("Left", "HDMI-A-1", "DP-1").unwrap();
+        state.show_layout("Left", "DP-1", "DP-1").unwrap();
+        assert_eq!(ids(&state, "DP-1"), ["w3"]);
+        assert_eq!(ids(&state, "HDMI-A-1"), ["w3"]);
+        assert_eq!(
+            state.monitor_in(&Source::Saved("Left".into()), "HDMI-A-1"),
+            "DP-1"
+        );
+        state
+            .move_widget("w3", "HDMI-A-1", Anchor::Center, (0, 0))
+            .unwrap();
+        assert_eq!(ids(&state, "DP-1"), ["w3"]);
+
+        // Places: a workspace on a monitor, or on any.
+        state.show_layout("Left", "DP-1/2", "DP-1").unwrap();
+        state.show_layout("Left", "*/3", "DP-1").unwrap();
+        assert!(state.show_layout("Left", "DP-1/", "DP-1").is_err());
+        assert!(state.show_layout("Left", "", "DP-1").is_err());
+        assert_eq!(
+            state.places_of("Left"),
+            ["HDMI-A-1", "DP-1", "workspace 2 on DP-1", "workspace 3"]
+        );
+        state.hide_layout(Some("*/3"), "DP-1").unwrap();
+        assert_eq!(state.places_of("Left").len(), 3);
         std::fs::remove_dir_all(dir).unwrap();
     }
 

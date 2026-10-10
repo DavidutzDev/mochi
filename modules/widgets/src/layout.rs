@@ -132,10 +132,10 @@ pub struct Layout {
 }
 
 /// A saved layout shown on a monitor, a workspace, or both, or everywhere
-/// when it names neither, in place of `widgets.toml`'s own widgets. All its
-/// widgets show on each monitor it's shown on, whatever their `output`
-/// says, so a layout shown on two monitors is the same on both, and a
-/// change on one is a change on the other.
+/// when it names neither, in place of `widgets.toml`'s own widgets. A
+/// layout shown on two monitors is one layout, so a change on one is a
+/// change on the other; which of its widgets show where is
+/// [`Layout::monitor_for`].
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Rule {
@@ -225,6 +225,20 @@ impl Layout {
             }
         }
         Ok(layout)
+    }
+
+    /// Which of its monitors' widgets show on `output` when it's shown
+    /// there: those it has for `output`, or else those of the first
+    /// widget's monitor, the one it was saved from. So a layout saved from
+    /// one monitor is the same on every monitor it's shown on, and one
+    /// arranged across several keeps each widget on its own.
+    pub fn monitor_for(&self, output: &str) -> String {
+        if self.widgets.iter().any(|widget| widget.output == output) {
+            return output.to_owned();
+        }
+        self.widgets
+            .first()
+            .map_or_else(|| output.to_owned(), |widget| widget.output.clone())
     }
 
     /// `None` when there is no file, which is an empty layout.

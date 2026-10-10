@@ -89,11 +89,10 @@ Item {
     // What this monitor shows: {workspace, place, scope}. `place` is where
     // the saved layout shown here is shown, null for widgets.toml's own.
     readonly property var here: desktop.layout?.here ?? ({})
-    readonly property string workspace: here.workspace ?? ""
-    // Where Show puts a layout: this workspace, when the compositor says
-    // which it is, this screen, or everywhere. Picked in the tab.
-    property string showOn: ""
-    readonly property string scope: showOn !== "" && (showOn !== "workspace" || workspace !== "") ? showOn : workspace !== "" ? "workspace" : "screen"
+    // The monitors, with their workspaces: [{name, workspace, workspaces}].
+    readonly property var screens: desktop.layout?.screens ?? []
+    // The saved layout whose Apply to is open.
+    property string applying: "Left"
 
     function close(): void {
         copy.open = false;
@@ -733,7 +732,7 @@ Item {
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
                                 visible: name.text === ""
-                                text: "A name for this arrangement"
+                                text: "A name for this screen's widgets"
                                 color: Theme.muted
                                 font: name.font
                             }
@@ -771,40 +770,7 @@ Item {
                     text: `Stop showing it on ${root.here.place ?? ""}`
                     icon: "close"
                     tone: "ghost"
-                    onClicked: Daemon.command("widgets", "hide-layout", [root.here.scope])
-                }
-
-                Text {
-                    visible: root.layouts.length > 0
-                    text: "Show a layout on"
-                    color: Theme.muted
-                    font.pixelSize: Theme.textCaption
-                    font.family: Theme.fontFamily
-                }
-
-                Segmented {
-                    visible: root.layouts.length > 0
-                    width: parent.width
-                    height: Theme.controlHeight
-                    color: Theme.raised
-                    keyboard: true
-                    current: root.scope
-                    options: (root.workspace !== "" ? [
-                            {
-                                "value": "workspace",
-                                "label": `Workspace ${root.workspace}`
-                            }
-                        ] : []).concat([
-                        {
-                            "value": "screen",
-                            "label": "This screen"
-                        },
-                        {
-                            "value": "everywhere",
-                            "label": "Every screen"
-                        }
-                    ])
-                    onPicked: value => root.showOn = value
+                    onClicked: Daemon.command("widgets", "hide-layout", [])
                 }
 
                 Text {
@@ -835,58 +801,161 @@ Item {
                         view: layoutList
                     }
 
-                    delegate: ListRow {
-                        id: saved
+                    delegate: Column {
+                        id: entry
 
                         required property var modelData
                         readonly property bool current: modelData.name === root.current
                         readonly property bool confirming: root.confirming === modelData.name
+                        readonly property bool applying: root.applying === modelData.name
+
+                        // Whether a [[show]] entry shows this layout on a monitor,
+                        // a workspace of it, or everywhere (both null).
+                        function shownOn(output: var, workspace: var): bool {
+                            return (modelData.rules ?? []).some(rule => (rule.output ?? null) === output && (rule.workspace ?? null) === workspace);
+                        }
+
+                        // Shows it on a place, or stops: `everywhere`, a monitor,
+                        // or a monitor and a workspace as `DP-3/2`.
+                        function toggle(place: string, shown: bool): void {
+                            if (shown)
+                                Daemon.command("widgets", "hide-layout", [place]);
+                            else
+                                Daemon.command("widgets", "show-layout", [place, modelData.name]);
+                        }
 
                         width: layoutList.width
-                        icon: current ? "check" : "bookmarks"
-                        leadingSize: 28
-                        selected: current
-                        title: modelData.name
-                        subtitle: {
-                            const places = modelData.places ?? [];
-                            const count = `${modelData.count} ${modelData.count === 1 ? "widget" : "widgets"}`;
-                            if (places.length > 0)
-                                return `${count}, shown on ${places.join(", ")}`;
-                            return current ? `${count}, on the desktop` : count;
-                        }
-                        onClicked: {
-                            if (!current)
-                                Daemon.command("widgets", "show-layout", [root.scope, modelData.name]);
+                        spacing: Theme.spaceTiny
+
+                        ListRow {
+                            id: saved
+
+                            width: parent.width
+                            icon: entry.current ? "check" : "bookmarks"
+                            leadingSize: 28
+                            selected: entry.current
+                            title: entry.modelData.name
+                            subtitle: {
+                                const places = entry.modelData.places ?? [];
+                                const count = `${entry.modelData.count} ${entry.modelData.count === 1 ? "widget" : "widgets"}`;
+                                if (places.length > 0)
+                                    return `${count}, shown on ${places.join(", ")}`;
+                                return entry.current ? `${count}, on the desktop` : count;
+                            }
+                            onClicked: root.applying = entry.applying ? "" : entry.modelData.name
+
+                            trailing: [
+                                ActionButton {
+                                    visible: !entry.confirming
+                                    text: "Apply to"
+                                    icon: entry.applying ? "expand_less" : "expand_more"
+                                    onClicked: root.applying = entry.applying ? "" : entry.modelData.name
+                                },
+                                ActionButton {
+                                    visible: !entry.confirming
+                                    icon: "trash"
+                                    tone: "ghost"
+                                    onClicked: root.confirming = entry.modelData.name
+                                },
+                                ActionButton {
+                                    visible: entry.confirming
+                                    text: "Keep"
+                                    tone: "ghost"
+                                    onClicked: root.confirming = ""
+                                },
+                                ActionButton {
+                                    visible: entry.confirming
+                                    text: "Delete"
+                                    tone: "danger"
+                                    onClicked: {
+                                        root.confirming = "";
+                                        Daemon.command("widgets", "delete-layout", [entry.modelData.name]);
+                                    }
+                                }
+                            ]
                         }
 
-                        trailing: [
-                            ActionButton {
-                                visible: !saved.current && !saved.confirming
-                                text: "Show"
-                                onClicked: Daemon.command("widgets", "show-layout", [root.scope, saved.modelData.name])
-                            },
-                            ActionButton {
-                                visible: !saved.confirming
-                                icon: "trash"
-                                tone: "ghost"
-                                onClicked: root.confirming = saved.modelData.name
-                            },
-                            ActionButton {
-                                visible: saved.confirming
-                                text: "Keep"
-                                tone: "ghost"
-                                onClicked: root.confirming = ""
-                            },
-                            ActionButton {
-                                visible: saved.confirming
-                                text: "Delete"
-                                tone: "danger"
-                                onClicked: {
-                                    root.confirming = "";
-                                    Daemon.command("widgets", "delete-layout", [saved.modelData.name]);
+                        // Where it shows: every screen, each screen, each
+                        // workspace of each screen. The closest one wins where
+                        // several are on.
+                        Column {
+                            visible: entry.applying
+                            width: parent.width
+                            leftPadding: Theme.spaceMedium
+                            spacing: Theme.spaceTiny
+
+                            SwitchRow {
+                                readonly property bool shown: entry.shownOn(null, null)
+
+                                width: parent.width - parent.leftPadding
+                                icon: "select_all"
+                                title: "Every screen"
+                                subtitle: "Unless something closer is on"
+                                checked: shown
+                                onToggled: entry.toggle("everywhere", shown)
+                            }
+
+                            Repeater {
+                                model: root.screens
+
+                                Column {
+                                    id: screen
+
+                                    required property var modelData
+                                    readonly property bool shown: entry.shownOn(modelData.name, null)
+                                    // The workspaces to offer: the compositor's, and
+                                    // the one shown, which a compositor that lists
+                                    // none still says.
+                                    readonly property var workspaces: {
+                                        const all = modelData.workspaces ?? [];
+                                        const active = modelData.workspace ?? null;
+                                        return active !== null && !all.includes(active) ? all.concat([active]) : all;
+                                    }
+
+                                    width: parent.width - parent.leftPadding
+                                    spacing: Theme.spaceTiny
+
+                                    SwitchRow {
+                                        width: parent.width
+                                        icon: "display"
+                                        title: screen.modelData.name === root.desktop.output ? `${screen.modelData.name}, this screen` : screen.modelData.name
+                                        subtitle: "All its workspaces"
+                                        checked: screen.shown
+                                        onToggled: entry.toggle(screen.modelData.name, screen.shown)
+                                    }
+
+                                    Flow {
+                                        visible: screen.workspaces.length > 0
+                                        width: parent.width
+                                        leftPadding: Theme.spaceMedium
+                                        spacing: Theme.spaceSmall
+
+                                        Repeater {
+                                            model: screen.workspaces
+
+                                            Chip {
+                                                required property string modelData
+                                                readonly property bool shown: entry.shownOn(screen.modelData.name, modelData)
+
+                                                label: `Workspace ${modelData}`
+                                                chosen: shown
+                                                onActivated: entry.toggle(`${screen.modelData.name}/${modelData}`, shown)
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        ]
+
+                            Text {
+                                visible: root.screens.length === 0
+                                width: parent.width - parent.leftPadding
+                                wrapMode: Text.Wrap
+                                text: "The compositor doesn't say which screens there are, so only Every screen is offered."
+                                color: Theme.muted
+                                font.pixelSize: Theme.textCaption
+                                font.family: Theme.fontFamily
+                            }
+                        }
                     }
 
                     Text {
@@ -896,7 +965,7 @@ Item {
                         visible: layoutList.count === 0
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.Wrap
-                        text: "No saved layouts. Name this arrangement and save it, then show it on a workspace, on this screen or on every screen."
+                        text: "No saved layouts. Name what this screen shows and save it, then apply it to other screens or workspaces."
                         color: Theme.muted
                         font.pixelSize: Theme.textBody
                         font.family: Theme.fontFamily
@@ -989,5 +1058,54 @@ Item {
         const y = Math.max(0, Math.min(desktop.height - ghost.height, ghost.y));
         const spot = Place.place(x, y, ghost.width, ghost.height, ghost.cell, desktop.width, desktop.height);
         Daemon.command("widgets", "add", [look.entry.module, look.key, desktop.output, spot.anchor, `${spot.x}`, `${spot.y}`]);
+    }
+
+    // A pill that is on or off, like the workspaces in Apply to: white
+    // when on, as the category chips. Enter or Space flips it.
+    component Chip: Rectangle {
+        id: chip
+
+        property string label: ""
+        property bool chosen: false
+        signal activated
+
+        width: chipLabel.implicitWidth + Theme.spaceLarge + Theme.spaceTiny
+        height: Theme.controlHeight - Theme.spaceTiny
+        radius: height / 2
+        color: chosen ? Theme.foreground : chipArea.containsMouse ? Theme.highlight : Theme.raised
+        activeFocusOnTab: true
+        Keys.onReturnPressed: activated()
+        Keys.onEnterPressed: activated()
+        Keys.onSpacePressed: activated()
+
+        Text {
+            id: chipLabel
+
+            anchors.centerIn: parent
+            text: chip.label
+            color: chip.chosen ? Theme.background : Theme.foreground
+            font.pixelSize: Theme.textCaption
+            font.family: Theme.fontFamily
+            font.weight: Theme.weightTitle
+        }
+
+        MouseArea {
+            id: chipArea
+
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: chip.activated()
+        }
+
+        Rectangle {
+            visible: chip.activeFocus
+            anchors.fill: parent
+            anchors.margins: -3
+            radius: height / 2
+            color: "transparent"
+            border.width: 2
+            border.color: Theme.accent
+        }
     }
 }

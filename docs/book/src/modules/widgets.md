@@ -59,21 +59,23 @@ A widget whose module isn't running, or whose monitor isn't connected, waits in 
 
 ## Saved layouts
 
-The drawer's Layouts tab keeps arrangements under a name, like one for work and one for the evening, and shows each where you want it. Type a name and press Save, or Enter: what this screen shows is kept under that name, replacing one saved under it, and from then on it is that layout, so the changes you make go to it too. The trash button deletes a saved layout, after a second click on Delete.
+The drawer's Layouts tab keeps the widgets of a screen under a name, like one for work and one for the evening, and shows each where you want it: the same on both screens, or one per screen, or one per workspace.
 
-### On a workspace, a screen or every screen
+Type a name and press Save, or Enter: the widgets this screen shows are kept under that name, and that layout shows on this screen from then on, so the changes you make here go to it. The other screens go on showing what they did, so saving on each screen gives each its own layout. Saving under the name of the layout already shown here only keeps it. The trash button deletes a saved layout, after a second click on Delete.
 
-Pick where under "Show a layout on", then Show on a layout:
+### Apply to
 
-- **Workspace 2**, named after the workspace this screen shows: that workspace on this screen. Each workspace can have its own widgets.
-- **This screen**: every workspace of this screen, except those with a layout of their own.
-- **Every screen**: every screen and workspace, except those with a layout of their own.
+Each layout has Apply to, which lists where it can show, each with a switch:
 
-The closest one wins: the workspace's, then the screen's, then every screen's. Where none is set, the screen shows `widgets.toml`'s own widgets, the arrangement from before saved layouts, each on the monitor it names. Switching workspace switches the widgets with it.
+- **Every screen**: every screen and workspace, unless something closer is on.
+- **Each screen**, like `DP-3`: all its workspaces. Turn it on for both screens to have the same widgets on both.
+- **Each workspace** of a screen, as a chip under it, like "Workspace 2": only that workspace there. Each workspace can have its own widgets.
 
-A layout shown in several places is one layout, linked: all its widgets show on each screen it's shown on, whatever monitor they were saved from, and moving a widget, changing its settings or adding one on one screen changes it on the others too. Sending a widget to a monitor that shows another layout moves it into that layout.
+A layout can show in as many places as you like, and turning one on puts it there in place of the layout that showed there. The closest one wins: a workspace's, then a screen's, then every screen's. Where none is on, the screen shows `widgets.toml`'s own widgets, the arrangement from before saved layouts, each on the monitor it names. Switching workspace switches the widgets with it.
 
-The top of the tab says what this screen shows and where it's shown, and "Stop showing it" goes back to what shows here without it. Saving a layout shown here under another name shows that one here instead. Deleting a layout stops showing it everywhere it was shown; deleting the one that is `widgets.toml`'s own arrangement leaves its widgets there, without a name.
+A layout shown in several places is one layout, linked: moving a widget, changing its settings or adding one on one screen changes it on the others too. A layout saved from one screen is the same on every screen it shows on. One arranged across several, from before, keeps each widget on its own screen. Sending a widget to a screen that shows another layout moves it into that layout.
+
+The top of the tab says what this screen shows and where, and "Stop showing it" goes back to what shows here without it. Deleting a layout stops showing it everywhere it was shown.
 
 Where a layout shows is in `widgets.toml`, as `[[show]]` entries:
 
@@ -91,7 +93,7 @@ output = "DP-3"
 workspace = "2"          # workspace 2 on DP-3
 ```
 
-An entry with a `workspace` and no `output` is for that workspace on any screen. Workspaces go by the name the compositor gives them, like `2`. An entry naming a layout that isn't saved is passed over.
+An entry with a `workspace` and no `output` is for that workspace on any screen. Workspaces go by the name the compositor gives them, like `2`, and Apply to lists the ones the compositor has, with the one each screen shows. An entry naming a layout that isn't saved is passed over.
 
 Each saved layout is a file in `widget-layouts/`, next to `widgets.toml`, like `widget-layouts/Work.toml`, in the same form as `widgets.toml`. Copying one into another machine's `widget-layouts/` brings it there. A widget keeps its id in every layout it's saved in, so a note saved in two layouts is the same note, and removing a widget keeps its content while a saved layout still has it.
 
@@ -159,9 +161,9 @@ Each to-do list and note keeps its own content, in the [notes](notes.md) module.
 | `remove <id>` | Removes one |
 | `layer <id> up\|down\|front\|back` | Moves one a layer up or down, or over or under all the others |
 | `drawer [on\|off\|toggle]` | Opens or closes the drawer while arranging |
-| `save-layout <name>`, `delete-layout <name>` | Saves what the screen shows under a name, or deletes a saved layout |
-| `show-layout workspace\|screen\|everywhere <name>` | Shows a saved layout on the workspace of the screen being arranged on, or the focused one, on that screen, or on every screen |
-| `hide-layout [workspace\|screen\|everywhere]` | Stops showing the layout set for that place, or the one shown on the screen |
+| `save-layout <name>`, `delete-layout <name>` | Keeps the widgets the screen shows under a name and shows that layout there, or deletes a saved layout |
+| `show-layout <place> <name>` | Shows a saved layout on a place: `everywhere`; a monitor, like `DP-3`; a workspace on it, like `DP-3/2`; a workspace on any monitor, like `*/2`; or `screen` and `workspace`, the monitor being arranged on or the focused one, and its workspace |
+| `hide-layout [place]` | Stops showing the layout set for a place, or the one shown on the screen |
 | `use-layout <name>` | Puts a saved layout in place of `widgets.toml`'s own arrangement |
 | `layouts` | Prints the saved layouts |
 | `export [nix\|toml]`, `copy [nix\|toml]` | Prints the layout, or copies it |
