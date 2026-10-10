@@ -624,13 +624,13 @@ Item {
                 anchors.fill: parent
                 visible: !root.editing || content.searching
                 contentWidth: width
-                contentHeight: blocks.implicitHeight
+                contentHeight: page.item?.implicitHeight ?? 0
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
 
                 // Scrolls an option into view.
                 function reveal(item: Item): void {
-                    const top = item.mapToItem(blocks, 0, 0).y;
+                    const top = item.mapToItem(body.contentItem, 0, 0).y;
                     const bottom = top + item.height;
                     if (top < contentY || bottom > contentY + height)
                         contentY = Math.max(0, Math.min(top - Theme.spaceHuge, contentHeight - height));
@@ -640,186 +640,237 @@ Item {
                     view: body
                 }
 
-                Column {
-                    id: blocks
+                // The page builds over a few frames, so the panel opens at
+                // once and stays smooth while it does; the skeleton stands
+                // in meanwhile. Another section builds a new page, a search
+                // only changes the rows of its own.
+                Loader {
+                    id: page
+
+                    readonly property string key: content.searching ? "search" : root.current?.id ?? ""
 
                     width: body.width
-                    spacing: Theme.spaceLarge
-
-                    // Bento's pages.
-                    Bento {
-                        visible: !content.searching && root.bentoPage
-                        width: parent.width
-                        page: root.bentoPage ? root.current.id : ""
+                    asynchronous: true
+                    sourceComponent: pageView
+                    onKeyChanged: {
+                        active = false;
+                        active = true;
                     }
-
-                    About {
-                        visible: !content.searching && root.aboutPage
-                        width: parent.width
-                    }
-
-                    // What a module shows on its own page above its
-                    // options, offered as a "section" to the settings,
-                    // like the Updates page's status and changelog.
-                    Repeater {
-                        model: root.offered(false)
-
-                        Offered {}
-                    }
-
-                    // The Modules page: a switch per module.
-                    Column {
-                        visible: !content.searching && root.current?.id === "modules"
-                        width: parent.width
-                        spacing: 2
-
-                        Text {
-                            visible: root.settings.fixed_modules === true
-                            width: parent.width
-                            leftPadding: Theme.spaceMedium
-                            wrapMode: Text.Wrap
-                            text: "mochid runs with --modules, which decides what runs."
-                            color: Theme.muted
-                            font.pixelSize: Theme.textCaption
-                            font.family: Theme.fontFamily
-                        }
-
-                        Text {
-                            visible: root.error?.path === "config.modules"
-                            width: parent.width
-                            leftPadding: Theme.spaceMedium
-                            wrapMode: Text.Wrap
-                            text: root.error?.message ?? ""
-                            color: Theme.danger
-                            font.pixelSize: Theme.textCaption
-                            font.family: Theme.fontFamily
-                        }
-
-                        Repeater {
-                            model: root.current?.id === "modules" ? (root.settings.modules ?? []).map(module => module.id) : []
-
-                            ListRow {
-                                id: moduleRow
-
-                                required property string modelData
-                                readonly property var module: (root.settings.modules ?? []).find(entry => entry.id === modelData) ?? {}
-
-                                width: blocks.width
-                                height: Theme.rowHeight
-                                flat: true
-                                leadingSize: 26
-                                icon: module.icon ?? ""
-                                title: module.title ?? modelData
-                                subtitle: module.plugin ? "Plugin" : ""
-                                onClicked: root.go(modelData, "")
-
-                                trailing: Switch {
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    enabled: root.settings.fixed_modules !== true
-                                    checked: moduleRow.module.enabled === true
-                                    onToggled: checked => root.toggleModule(moduleRow.modelData, checked)
-                                }
-                            }
-                        }
-                    }
-
-                    Text {
-                        visible: !content.searching && root.current !== null && root.current.id !== "modules" && root.current.fields.length === 0 && !root.bentoPage && !root.aboutPage
-                        width: parent.width
-                        leftPadding: Theme.spaceMedium
-                        text: "Nothing to set here."
-                        color: Theme.muted
-                        font.pixelSize: Theme.textBody
-                        font.family: Theme.fontFamily
-                    }
-
-                    Repeater {
-                        model: root.layout
-
-                        Column {
-                            id: block
-
-                            required property var modelData
-                            readonly property var entry: root.sectionOf(modelData.section)
-
-                            width: blocks.width
-                            spacing: 2
-
-                            // While searching, which section the options are in.
-                            Item {
-                                visible: content.searching
-                                width: parent.width
-                                height: visible ? Theme.controlHeight : 0
-
-                                Row {
-                                    x: Theme.spaceMedium
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    spacing: Theme.spaceSmall
-
-                                    Symbol {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        name: block.entry?.icon ?? ""
-                                        size: Theme.textBody
-                                        color: Theme.muted
-                                    }
-
-                                    Text {
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        text: block.entry?.title ?? ""
-                                        color: Theme.muted
-                                        font.pixelSize: Theme.textCaption
-                                        font.family: Theme.fontFamily
-                                        font.weight: Theme.weightLabel
-                                    }
-                                }
-
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.go(block.modelData.section, "")
-                                }
-                            }
-
-                            Repeater {
-                                model: block.modelData.paths
-
-                                Option {
-                                    id: row
-
-                                    required property string modelData
-
-                                    width: block.width
-                                    field: root.fields[modelData] ?? ({
-                                            "path": modelData,
-                                            "kind": "group",
-                                            "title": ""
-                                        })
-                                    prefix: content.searching ? root.prefix(modelData) : ""
-                                    error: root.error?.path === modelData ? root.error.message : ""
-                                    highlighted: root.option === modelData
-                                    onPopup: (kind, anchor) => root.openPopup(kind, row, anchor)
-                                    onEditToml: root.edit()
-                                    onHighlightedChanged: {
-                                        if (highlighted)
-                                            Qt.callLater(() => body.reveal(row));
-                                    }
-                                    Component.onCompleted: {
-                                        if (highlighted)
-                                            Qt.callLater(() => body.reveal(row));
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // A module's credit and other sections offered with
-                    // `place: "bottom"`, under its options.
-                    Repeater {
-                        model: root.offered(true)
-
-                        Offered {}
+                    onLoaded: {
+                        if (root.pointed !== null)
+                            Qt.callLater(() => root.reveal(root.pointed));
                     }
                 }
+            }
+
+            Skeleton {
+                width: parent.width
+                height: parent.height
+                visible: body.visible
+                loading: page.status === Loader.Loading
+            }
+        }
+    }
+
+    // The option pointed at, scrolled into view once the page has built.
+    property Item pointed: null
+
+    function reveal(item: Item): void {
+        root.pointed = item;
+        Qt.callLater(() => {
+            if (root.pointed === item)
+                body.reveal(item);
+        });
+    }
+
+    Component {
+        id: pageView
+
+        Column {
+            id: blocks
+
+            spacing: Theme.spaceLarge
+
+            // Bento's pages and the About page, which only build
+            // when they show: they ask the daemon for what they list.
+            Loader {
+                width: parent.width
+                active: !content.searching && root.bentoPage
+                asynchronous: true
+
+                sourceComponent: Bento {
+                    page: root.bentoPage ? root.current.id : ""
+                }
+            }
+
+            Loader {
+                width: parent.width
+                active: !content.searching && root.aboutPage
+                asynchronous: true
+
+                sourceComponent: About {}
+            }
+
+            // What a module shows on its own page above its
+            // options, offered as a "section" to the settings,
+            // like the Updates page's status and changelog.
+            Repeater {
+                model: root.offered(false)
+
+                Offered {}
+            }
+
+            // The Modules page: a switch per module.
+            Column {
+                visible: !content.searching && root.current?.id === "modules"
+                width: parent.width
+                spacing: 2
+
+                Text {
+                    visible: root.settings.fixed_modules === true
+                    width: parent.width
+                    leftPadding: Theme.spaceMedium
+                    wrapMode: Text.Wrap
+                    text: "mochid runs with --modules, which decides what runs."
+                    color: Theme.muted
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
+                }
+
+                Text {
+                    visible: root.error?.path === "config.modules"
+                    width: parent.width
+                    leftPadding: Theme.spaceMedium
+                    wrapMode: Text.Wrap
+                    text: root.error?.message ?? ""
+                    color: Theme.danger
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
+                }
+
+                Repeater {
+                    model: root.current?.id === "modules" ? (root.settings.modules ?? []).map(module => module.id) : []
+
+                    ListRow {
+                        id: moduleRow
+
+                        required property string modelData
+                        readonly property var module: (root.settings.modules ?? []).find(entry => entry.id === modelData) ?? {}
+
+                        width: blocks.width
+                        height: Theme.rowHeight
+                        flat: true
+                        leadingSize: 26
+                        icon: module.icon ?? ""
+                        title: module.title ?? modelData
+                        subtitle: module.plugin ? "Plugin" : ""
+                        onClicked: root.go(modelData, "")
+
+                        trailing: Switch {
+                            anchors.verticalCenter: parent.verticalCenter
+                            enabled: root.settings.fixed_modules !== true
+                            checked: moduleRow.module.enabled === true
+                            onToggled: checked => root.toggleModule(moduleRow.modelData, checked)
+                        }
+                    }
+                }
+            }
+
+            Text {
+                visible: !content.searching && root.current !== null && root.current.id !== "modules" && root.current.fields.length === 0 && !root.bentoPage && !root.aboutPage
+                width: parent.width
+                leftPadding: Theme.spaceMedium
+                text: "Nothing to set here."
+                color: Theme.muted
+                font.pixelSize: Theme.textBody
+                font.family: Theme.fontFamily
+            }
+
+            Repeater {
+                model: root.layout
+
+                Column {
+                    id: block
+
+                    required property var modelData
+                    readonly property var entry: root.sectionOf(modelData.section)
+
+                    width: blocks.width
+                    spacing: 2
+
+                    // While searching, which section the options are in.
+                    Item {
+                        visible: content.searching
+                        width: parent.width
+                        height: visible ? Theme.controlHeight : 0
+
+                        Row {
+                            x: Theme.spaceMedium
+                            anchors.verticalCenter: parent.verticalCenter
+                            spacing: Theme.spaceSmall
+
+                            Symbol {
+                                anchors.verticalCenter: parent.verticalCenter
+                                name: block.entry?.icon ?? ""
+                                size: Theme.textBody
+                                color: Theme.muted
+                            }
+
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: block.entry?.title ?? ""
+                                color: Theme.muted
+                                font.pixelSize: Theme.textCaption
+                                font.family: Theme.fontFamily
+                                font.weight: Theme.weightLabel
+                            }
+                        }
+
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.go(block.modelData.section, "")
+                        }
+                    }
+
+                    Repeater {
+                        model: block.modelData.paths
+
+                        Option {
+                            id: row
+
+                            required property string modelData
+
+                            width: block.width
+                            field: root.fields[modelData] ?? ({
+                                    "path": modelData,
+                                    "kind": "group",
+                                    "title": ""
+                                })
+                            prefix: content.searching ? root.prefix(modelData) : ""
+                            error: root.error?.path === modelData ? root.error.message : ""
+                            highlighted: root.option === modelData
+                            onPopup: (kind, anchor) => root.openPopup(kind, row, anchor)
+                            onEditToml: root.edit()
+                            onHighlightedChanged: {
+                                if (highlighted)
+                                    root.reveal(row);
+                            }
+                            Component.onCompleted: {
+                                if (highlighted)
+                                    root.reveal(row);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // A module's credit and other sections offered with
+            // `place: "bottom"`, under its options.
+            Repeater {
+                model: root.offered(true)
+
+                Offered {}
             }
         }
     }
@@ -1099,11 +1150,6 @@ Item {
         readonly property var owner: root.popupKind === "zones" ? root.popupOwner : null
 
         visible: owner !== null
-        onVisibleChanged: {
-            zonePicker.clear();
-            if (visible)
-                Qt.callLater(() => zonePicker.focusSearch());
-        }
         z: 10
         x: Math.min(root.popupAt.x, root.width - width - Theme.spaceMedium)
         y: Math.min(root.popupAt.y, root.height - height - Theme.spaceMedium)
@@ -1117,33 +1163,40 @@ Item {
             anchors.fill: parent
         }
 
-        ZonePicker {
-            id: zonePicker
-
+        // Built while it shows: it sorts every zone again with each change
+        // to the settings.
+        Loader {
             anchors.fill: parent
             anchors.margins: Theme.spaceTiny
-            zones: Daemon.state("settings")?.timezones ?? null
-            chosen: {
-                const owner = zoneMenu.owner;
-                if (!owner)
-                    return [];
-                return owner.multiple ? (owner.value ?? []).map(String) : [String(owner.value ?? "")];
+            active: zoneMenu.visible
+
+            sourceComponent: ZonePicker {
+                id: zonePicker
+
+                zones: Daemon.state("settings")?.timezones ?? null
+                chosen: {
+                    const owner = zoneMenu.owner;
+                    if (!owner)
+                        return [];
+                    return owner.multiple ? (owner.value ?? []).map(String) : [String(owner.value ?? "")];
+                }
+                custom: true
+                color: Theme.raised
+                fieldColor: Theme.highlight
+                titles: ({
+                        "chosen": "Chosen",
+                        "suggested": "",
+                        "all": "Every zone, west to east"
+                    })
+                onPicked: value => {
+                    const owner = zoneMenu.owner;
+                    owner.pick(value);
+                    if (!owner.multiple)
+                        root.closePopup();
+                }
+                onClosed: root.closePopup()
+                Component.onCompleted: Qt.callLater(() => zonePicker.focusSearch())
             }
-            custom: true
-            color: Theme.raised
-            fieldColor: Theme.highlight
-            titles: ({
-                    "chosen": "Chosen",
-                    "suggested": "",
-                    "all": "Every zone, west to east"
-                })
-            onPicked: value => {
-                const owner = zoneMenu.owner;
-                owner.pick(value);
-                if (!owner.multiple)
-                    root.closePopup();
-            }
-            onClosed: root.closePopup()
         }
     }
 

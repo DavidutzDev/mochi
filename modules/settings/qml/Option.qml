@@ -69,7 +69,7 @@ Item {
     // A command's module and action, and the arguments after them.
     readonly property string commandModule: source === "command" ? ((value ?? [])[0] ?? "") : ""
     readonly property string commandAction: source === "command" ? ((value ?? [])[1] ?? "") : ""
-    readonly property var commandSpec: (Daemon.state("settings")?.actions?.[commandModule] ?? []).find(action => action.name === commandAction) ?? null
+    readonly property var commandSpec: source === "command" ? (Daemon.state("settings")?.actions?.[commandModule] ?? []).find(action => action.name === commandAction) ?? null : null
     readonly property var commandArgs: commandSpec?.args ?? []
 
     function argAt(index: int): var {

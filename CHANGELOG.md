@@ -64,6 +64,8 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 - The world clock found no time zones on NixOS without `TZDIR` set; it reads the zone files' full paths now.
 - Turning a module on no longer restarts Quickshell: the UI reloads its views in place and keeps its windows, so the island, the bubbles and the widgets stay on screen. Quickshell also stops reloading by itself while mochid writes the views, which it only does now for `mochid --dev`. A UI that doesn't come back from the reload still gets a fresh Quickshell.
 - The installer restarts the running mochid only when it's the one it just updated. Installing into another prefix used to restart a mochid from a package or Nix too.
+- The settings panel opens at once: a page's options build over a few frames, behind placeholder rows that show if it takes a moment, instead of all at once before the panel appears. Bento, the About page, the Modules list and the time zone picker build only when they show.
+- Without a `modules` list in `config.toml`, the settings panel showed only Idle as on, though every default module runs, and turning one on or off there would have written a list with Idle alone.
 
 ## 0.0.9 - 2026-10-09
 
