@@ -864,19 +864,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mochi-module-agents"
-version = "0.0.9"
-dependencies = [
- "include_dir",
- "mochi-core",
- "schemars",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "mochi-module-audio"
 version = "0.0.9"
 dependencies = [
@@ -1413,7 +1400,6 @@ dependencies = [
  "include_dir",
  "libc",
  "mochi-core",
- "mochi-module-agents",
  "mochi-module-audio",
  "mochi-module-battery",
  "mochi-module-bluetooth",

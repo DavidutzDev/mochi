@@ -2,13 +2,10 @@
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-mod agents;
-
 use std::io::{BufRead, BufReader, IsTerminal, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
-use std::time::Duration;
 
 use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::Shell;
@@ -117,11 +114,6 @@ enum Command {
     /// installing it would do, without installing anything: an id in the
     /// registry, or a repository like `github.com/someone/cozy`.
     OpenUrl { url: String },
-    /// Show coding agents on the island, from their hooks: `hook`.
-    Agents {
-        #[command(subcommand)]
-        action: AgentsAction,
-    },
     /// Print a completion script for a shell.
     ///
     /// For example, `mochi completions fish > ~/.config/fish/completions/mochi.fish`.
@@ -151,21 +143,6 @@ enum PluginsAction {
     },
     /// Delete an installed plugin and its entry in plugins.lock.
     Remove { id: String },
-}
-
-#[derive(Debug, Subcommand)]
-enum AgentsAction {
-    /// For Claude Code's hooks: reads the hook's JSON on stdin and tells
-    /// the agents module what the session is doing.
-    ///
-    /// Always exits 0, and quickly, also when mochid isn't running, so it
-    /// never holds up the agent.
-    Hook {
-        /// The agent's name on the island; "T3 Code" when T3 Code runs
-        /// it, "Claude Code" otherwise.
-        #[arg(long)]
-        app: Option<String>,
-    },
 }
 
 fn main() -> ExitCode {
@@ -267,12 +244,6 @@ fn run(command: Command, json: bool) -> Result<(), String> {
         }
         Command::Plugins { config, action } => plugins(config, action, json),
         Command::SharePick { allow_token } => share_pick(allow_token),
-        Command::Agents {
-            action: AgentsAction::Hook { app },
-        } => {
-            agents::hook(app);
-            Ok(())
-        }
         Command::Completions { shell } => {
             clap_complete::generate(shell, &mut Cli::command(), "mochi", &mut std::io::stdout());
             Ok(())
@@ -587,15 +558,6 @@ fn print_action(action: &ActionSpec) {
 
 /// Sends one request and returns the answer. An `error` answer becomes `Err`.
 fn request(message: ClientMessage) -> Result<DaemonMessage, String> {
-    request_within(message, None)
-}
-
-/// Like `request`, giving up on a daemon that doesn't answer within
-/// `patience`.
-fn request_within(
-    message: ClientMessage,
-    patience: Option<Duration>,
-) -> Result<DaemonMessage, String> {
     let path = socket()?;
     let mut stream = UnixStream::connect(&path).map_err(|error| {
         format!(
@@ -603,10 +565,6 @@ fn request_within(
             path.display()
         )
     })?;
-    stream
-        .set_read_timeout(patience)
-        .and_then(|()| stream.set_write_timeout(patience))
-        .map_err(|error| error.to_string())?;
 
     let hello = ClientMessage::Hello {
         api: API,

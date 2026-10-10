@@ -52,7 +52,6 @@ Most shells you see on [r/unixporn](https://www.reddit.com/r/unixporn/) are some
 - 🌤️ The weather, from Open-Meteo, with no account
 - 🕰️ A clock panel: today with the weather, a calendar with reminders, a stopwatch and world clocks
 - ⏱️ A focus timer, with breaks
-- 🤖 Your coding agents on the island: working, waiting for you, or done
 - 🔒 Lock, log out, suspend, reboot and shut down
 - ⚙️ A settings panel for every option, applied as you change it
 - 🍱 Bento, to install and share themes, plugins and whole setups

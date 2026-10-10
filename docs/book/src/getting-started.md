@@ -93,8 +93,6 @@ binds {
 mochi status --json | jq -r '.modules[]'
 ```
 
-`mochi agents hook` is for Claude Code's hooks: it reads the hook's JSON on stdin and shows the session on the island as working, waiting for you, or done. It always exits 0, also without a running mochid. The [agents](modules/agents.md) page has the hooks to add.
-
 ## Using the island
 
 - A left click expands what the island shows, or collapses it; clicking the clock opens the control center.

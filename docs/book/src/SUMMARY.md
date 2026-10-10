@@ -43,7 +43,6 @@
 - [Clock](modules/clock.md)
 - [Focus timer](modules/timer.md)
 - [Weather](modules/weather.md)
-- [Agents](modules/agents.md)
 - [Settings](modules/settings.md)
 - [Tour](modules/tour.md)
 - [Updates](modules/updater.md)

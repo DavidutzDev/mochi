@@ -947,7 +947,6 @@ fn available(catalog: &Catalog) -> Vec<Available> {
 /// A builtin module's icon in the sidebar.
 fn icon(module: &str) -> &'static str {
     match module {
-        "agents" => "smart_toy",
         "audio" => "volume_up",
         "battery" => "battery_full",
         "brightness" => "light_mode",

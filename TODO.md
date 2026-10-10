@@ -643,7 +643,7 @@ Later:
 ### Features
 
 - [x] Drop files on the island: it says what was dropped and offers actions that fit, like compress, merge PDFs, convert images, extract an archive or open with
-- [x] Coding agents' status on the island: working, waiting for you, or done, for T3 Code and Claude Code through their hooks
+- [ ] Coding agents' status on the island: working, waiting for you, or done, for T3 Code and Claude Code through their hooks, as a plugin rather than a builtin. The builtin `agents` module that did it is in git history (commit cfd4590) to start from
 - [x] A privacy indicator: a microphone or camera icon by the island while the microphone or camera is in use, with a mic mute; the audio module already sees recording apps
 - [x] Keep awake: a toggle that blocks idle and sleep
 - [x] Night light, through wlr-gamma-control itself rather than hyprsunset or wlsunset
