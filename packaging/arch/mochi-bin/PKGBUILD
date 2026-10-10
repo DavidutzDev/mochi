@@ -4,7 +4,7 @@
 # release workflow's packaging/release/record.sh sets pkgver and the sums.
 
 pkgname=mochi-bin
-pkgver=0.1.1
+pkgver=0.1.2
 pkgrel=1
 pkgdesc='A desktop shell built around a central island (prebuilt)'
 arch=('x86_64' 'aarch64')
@@ -23,8 +23,8 @@ provides=('mochi')
 conflicts=('mochi' 'mochi-git')
 source_x86_64=("mochi-$pkgver-x86_64.tar.gz::$url/releases/download/v$pkgver/mochi-x86_64-linux.tar.gz")
 source_aarch64=("mochi-$pkgver-aarch64.tar.gz::$url/releases/download/v$pkgver/mochi-aarch64-linux.tar.gz")
-sha256sums_x86_64=('4357ce9c8cec6254b596f36c7ee630ddd95da1d14921a8374294fb001a995842')
-sha256sums_aarch64=('7d1e646858eebe16e9744f870af64c59af75a5b8c21b10266d047e4863e38b77')
+sha256sums_x86_64=('350027249537d61745033b9f353bef7094c86b93296f485ebe55467c2ee896e7')
+sha256sums_aarch64=('eaaaccdad80f3eecdb5b354b486a9427c4945e2bde7dbc1cc0fc769ec034bb75')
 
 package() {
   cd "mochi-$pkgver"
