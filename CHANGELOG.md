@@ -2,6 +2,12 @@
 
 Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor release may change the config format, the protocol or the module interface; the changelog says when.
 
+## Unreleased
+
+### Added
+
+- Widget layouts by workspace and by screen. The drawer's Layouts tab shows a saved layout on the workspace you're on, on this screen, or on every screen, and the closest one wins, so each workspace can have its own widgets. A layout shown in several places is linked: a change on one screen is a change on the others. `widgets.toml` keeps where each shows as `[[show]]` entries, and `mochi ipc widgets show-layout` and `hide-layout` do it from a script. Where nothing is set, the widgets are as before.
+
 ## 0.1.2 - 2026-10-10
 
 ### Added

@@ -88,8 +88,8 @@ pub fn save(dir: &Path, name: &str, layout: &Layout) -> Result<(), String> {
     let path = path(dir, name)?;
     // The file is the name; it doesn't say it again.
     let layout = Layout {
-        name: None,
         widgets: layout.widgets.clone(),
+        ..Layout::default()
     };
     layout
         .save(&path)

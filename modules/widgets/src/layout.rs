@@ -27,6 +27,16 @@
 //! `variant` is the look it has, of those its widget offers; without one,
 //! the first. `layout` names the saved layout this arrangement is, see
 //! [`crate::saved`]: changes go to that one too.
+//!
+//! `[[show]]` entries show a saved layout on a monitor, a workspace or
+//! everywhere instead, see [`Rule`]:
+//!
+//! ```toml
+//! [[show]]
+//! layout = "Music"
+//! output = "DP-3"
+//! workspace = "5"
+//! ```
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -115,6 +125,82 @@ pub struct Layout {
     pub name: Option<String>,
     #[serde(default, rename = "widget")]
     pub widgets: Vec<Placed>,
+    /// Where saved layouts show instead of these widgets. Only
+    /// `widgets.toml` has them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub show: Vec<Rule>,
+}
+
+/// A saved layout shown on a monitor, a workspace, or both, or everywhere
+/// when it names neither, in place of `widgets.toml`'s own widgets. All its
+/// widgets show on each monitor it's shown on, whatever their `output`
+/// says, so a layout shown on two monitors is the same on both, and a
+/// change on one is a change on the other.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Rule {
+    pub layout: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
+    /// The workspace's name, like `2`, as the compositor says it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub workspace: Option<String>,
+}
+
+impl Rule {
+    /// How closely it matches a monitor showing a workspace, or `None` when
+    /// it doesn't: a monitor and its workspace, then the workspace on any
+    /// monitor, then the monitor, then everywhere.
+    pub fn matches(&self, output: &str, workspace: Option<&str>) -> Option<u8> {
+        let on_output = match &self.output {
+            Some(wanted) if wanted != output => return None,
+            Some(_) => true,
+            None => false,
+        };
+        let on_workspace = match &self.workspace {
+            Some(wanted) if Some(wanted.as_str()) != workspace => return None,
+            Some(_) => true,
+            None => false,
+        };
+        Some(match (on_output, on_workspace) {
+            (true, true) => 3,
+            (false, true) => 2,
+            (true, false) => 1,
+            (false, false) => 0,
+        })
+    }
+
+    /// Whether it's for the same places as another.
+    pub fn same_place(&self, other: &Rule) -> bool {
+        self.output == other.output && self.workspace == other.workspace
+    }
+
+    /// Where it shows, in words.
+    pub fn place(&self) -> String {
+        match (&self.output, &self.workspace) {
+            (Some(output), Some(workspace)) => format!("workspace {workspace} on {output}"),
+            (None, Some(workspace)) => format!("workspace {workspace}"),
+            (Some(output), None) => output.clone(),
+            (None, None) => "every screen".into(),
+        }
+    }
+}
+
+/// The rule that decides what a monitor showing a workspace shows, among
+/// those whose layout `exists`: the one that matches most closely. `None`
+/// shows `widgets.toml`'s own widgets for that monitor.
+pub fn shown<'a>(
+    rules: &'a [Rule],
+    output: &str,
+    workspace: Option<&str>,
+    exists: impl Fn(&str) -> bool,
+) -> Option<&'a Rule> {
+    rules
+        .iter()
+        .filter(|rule| exists(&rule.layout))
+        .filter_map(|rule| Some((rule.matches(output, workspace)?, rule)))
+        .max_by_key(|(closeness, _)| *closeness)
+        .map(|(_, rule)| rule)
 }
 
 impl Layout {
@@ -124,6 +210,18 @@ impl Layout {
         for widget in &layout.widgets {
             if !seen.insert(&widget.id) {
                 return Err(format!("two widgets have the id {:?}", widget.id));
+            }
+        }
+        for (index, rule) in layout.show.iter().enumerate() {
+            crate::saved::check_name(&rule.layout)?;
+            if layout.show[..index]
+                .iter()
+                .any(|other| other.same_place(rule))
+            {
+                return Err(format!(
+                    "two [[show]] entries are for the same place: {}",
+                    rule.place()
+                ));
             }
         }
         Ok(layout)
@@ -300,6 +398,53 @@ timezone = "Europe/Paris"
         assert_eq!(new.widgets[0].variant.as_deref(), Some("stacked"));
         assert_eq!(Layout::parse(&new.to_toml()).unwrap(), new);
         assert!(new.to_nix().contains("variant = \"stacked\";"));
+    }
+
+    #[test]
+    fn the_closest_show_entry_wins() {
+        let layout = Layout::parse(
+            r#"
+[[show]]
+layout = "Everywhere"
+
+[[show]]
+layout = "Screen"
+output = "DP-3"
+
+[[show]]
+layout = "Workspace"
+workspace = "5"
+
+[[show]]
+layout = "Both"
+output = "DP-3"
+workspace = "5"
+"#,
+        )
+        .unwrap();
+        let all = |_: &str| true;
+        let shown = |output, workspace| {
+            shown(&layout.show, output, workspace, all).map(|rule| rule.layout.as_str())
+        };
+        assert_eq!(shown("DP-3", Some("5")), Some("Both"));
+        assert_eq!(shown("HDMI-A-1", Some("5")), Some("Workspace"));
+        assert_eq!(shown("DP-3", Some("1")), Some("Screen"));
+        assert_eq!(shown("HDMI-A-1", Some("1")), Some("Everywhere"));
+        // A compositor that doesn't say: only the entries without a
+        // workspace.
+        assert_eq!(shown("DP-3", None), Some("Screen"));
+        // An entry whose layout isn't saved is passed over.
+        let found = super::shown(&layout.show, "DP-3", Some("5"), |name| name != "Both");
+        assert_eq!(found.map(|rule| rule.layout.as_str()), Some("Workspace"));
+        assert_eq!(Layout::parse(&layout.to_toml()).unwrap(), layout);
+        assert_eq!(layout.show[3].place(), "workspace 5 on DP-3");
+    }
+
+    #[test]
+    fn refuses_two_show_entries_for_one_place() {
+        let twice = "[[show]]\nlayout = \"A\"\noutput = \"DP-3\"\n\n[[show]]\nlayout = \"B\"\noutput = \"DP-3\"\n";
+        assert!(Layout::parse(twice).unwrap_err().contains("same place"));
+        assert!(Layout::parse("[[show]]\nlayout = \"../x\"\n").is_err());
     }
 
     #[test]

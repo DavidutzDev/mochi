@@ -22,7 +22,7 @@ Item {
     property string query: ""
     // The category the list is narrowed to, or "" for all.
     property string category: ""
-    property string tab: "add"
+    property string tab: "layouts"
     // The saved layout whose Delete waits for a second click.
     property string confirming: ""
 
@@ -86,6 +86,14 @@ Item {
     }
     readonly property var layouts: desktop.layout?.layouts ?? []
     readonly property string current: desktop.layout?.layout ?? ""
+    // What this monitor shows: {workspace, place, scope}. `place` is where
+    // the saved layout shown here is shown, null for widgets.toml's own.
+    readonly property var here: desktop.layout?.here ?? ({})
+    readonly property string workspace: here.workspace ?? ""
+    // Where Show puts a layout: this workspace, when the compositor says
+    // which it is, this screen, or everywhere. Picked in the tab.
+    property string showOn: ""
+    readonly property string scope: showOn !== "" && (showOn !== "workspace" || workspace !== "") ? showOn : workspace !== "" ? "workspace" : "screen"
 
     function close(): void {
         copy.open = false;
@@ -198,7 +206,7 @@ Item {
                 Text {
                     width: parent.width
                     wrapMode: Text.Wrap
-                    text: root.tab === "add" ? "Drag one onto the desktop, or click it to add it." : root.tab === "placed" ? "Every widget placed, on every monitor." : "Arrangements kept under a name, to switch between."
+                    text: root.tab === "add" ? "Drag one onto the desktop, or click it to add it." : root.tab === "placed" ? "Every widget placed, on every monitor." : "Arrangements kept under a name, to show on a workspace, a screen or every screen."
                     color: Theme.muted
                     font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily
@@ -683,7 +691,8 @@ Item {
                 }
             }
 
-            // Layouts: save this arrangement, switch, delete.
+            // Layouts: save this arrangement, show one on this workspace, this
+            // screen or every screen, delete.
             Column {
                 anchors.fill: parent
                 visible: root.tab === "layouts"
@@ -745,10 +754,57 @@ Item {
                 Text {
                     width: parent.width
                     wrapMode: Text.Wrap
-                    text: root.current !== "" ? `On the desktop: ${root.current}. Changes you make are kept in it.` : "This arrangement has no name. Switching keeps it as Unsaved."
+                    text: {
+                        if (root.here.place)
+                            return `Here: ${root.current}, shown on ${root.here.place}. Changes you make here are kept in it, wherever it shows.`;
+                        return root.current !== "" ? `On the desktop: ${root.current}. Changes you make are kept in it.` : "This arrangement has no name. Switching keeps it as Unsaved.";
+                    }
                     color: Theme.muted
                     font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily
+                }
+
+                // Back to what shows here without it.
+                ActionButton {
+                    visible: !!root.here.place
+                    height: Theme.controlHeight
+                    text: `Stop showing it on ${root.here.place ?? ""}`
+                    icon: "close"
+                    tone: "ghost"
+                    onClicked: Daemon.command("widgets", "hide-layout", [root.here.scope])
+                }
+
+                Text {
+                    visible: root.layouts.length > 0
+                    text: "Show a layout on"
+                    color: Theme.muted
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
+                }
+
+                Segmented {
+                    visible: root.layouts.length > 0
+                    width: parent.width
+                    height: Theme.controlHeight
+                    color: Theme.raised
+                    keyboard: true
+                    current: root.scope
+                    options: (root.workspace !== "" ? [
+                            {
+                                "value": "workspace",
+                                "label": `Workspace ${root.workspace}`
+                            }
+                        ] : []).concat([
+                        {
+                            "value": "screen",
+                            "label": "This screen"
+                        },
+                        {
+                            "value": "everywhere",
+                            "label": "Every screen"
+                        }
+                    ])
+                    onPicked: value => root.showOn = value
                 }
 
                 Text {
@@ -791,17 +847,23 @@ Item {
                         leadingSize: 28
                         selected: current
                         title: modelData.name
-                        subtitle: `${modelData.count} ${modelData.count === 1 ? "widget" : "widgets"}${current ? ", on the desktop" : ""}`
+                        subtitle: {
+                            const places = modelData.places ?? [];
+                            const count = `${modelData.count} ${modelData.count === 1 ? "widget" : "widgets"}`;
+                            if (places.length > 0)
+                                return `${count}, shown on ${places.join(", ")}`;
+                            return current ? `${count}, on the desktop` : count;
+                        }
                         onClicked: {
                             if (!current)
-                                Daemon.command("widgets", "use-layout", [modelData.name]);
+                                Daemon.command("widgets", "show-layout", [root.scope, modelData.name]);
                         }
 
                         trailing: [
                             ActionButton {
                                 visible: !saved.current && !saved.confirming
-                                text: "Use"
-                                onClicked: Daemon.command("widgets", "use-layout", [saved.modelData.name])
+                                text: "Show"
+                                onClicked: Daemon.command("widgets", "show-layout", [root.scope, saved.modelData.name])
                             },
                             ActionButton {
                                 visible: !saved.confirming
@@ -834,7 +896,7 @@ Item {
                         visible: layoutList.count === 0
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.Wrap
-                        text: "No saved layouts. Name this arrangement and save it, to come back to it after trying another."
+                        text: "No saved layouts. Name this arrangement and save it, then show it on a workspace, on this screen or on every screen."
                         color: Theme.muted
                         font.pixelSize: Theme.textBody
                         font.family: Theme.fontFamily
