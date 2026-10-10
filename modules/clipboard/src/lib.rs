@@ -140,6 +140,7 @@ impl Module for Clipboard {
             ContributionSpec::new("control-center", "page", "history", "Page", "Clipboard")
                 .icon("clipboard")
                 .order(30),
+            ContributionSpec::preload("Picker"),
         ];
         offers.extend(tour::steps());
         offers

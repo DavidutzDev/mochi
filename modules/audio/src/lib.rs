@@ -109,6 +109,7 @@ impl Module for Audio {
                 .icon("volume")
                 .order(11)
                 .options(json!({ "span": 2, "rows": 1, "page": "mixer" })),
+            ContributionSpec::preload("Panel"),
         ];
         offers.extend(tour::steps());
         offers

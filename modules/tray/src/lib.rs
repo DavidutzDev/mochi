@@ -143,7 +143,9 @@ impl Module for Tray {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        tour::steps()
+        let mut offers = tour::steps();
+        offers.push(ContributionSpec::preload("Panel"));
+        offers
     }
 
     fn settings_example(&self) -> &'static str {

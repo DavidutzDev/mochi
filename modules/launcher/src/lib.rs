@@ -123,7 +123,9 @@ impl Module for Launcher {
     }
 
     fn contributions(&self) -> Vec<ContributionSpec> {
-        tour::steps()
+        let mut offers = tour::steps();
+        offers.push(ContributionSpec::preload("Launcher"));
+        offers
     }
 
     fn settings_example(&self) -> &'static str {

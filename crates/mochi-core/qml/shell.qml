@@ -23,6 +23,9 @@ ShellRoot {
         }
     }
 
+    // Panels compiled ahead, so their first open is quick.
+    Preloader {}
+
     // The same island on every screen, and the space it keeps free.
     Variants {
         model: Daemon.screens

@@ -176,6 +176,8 @@ impl Module for Settings {
                     "pick": "pick-result",
                 }),
             ),
+            // The panel and the sections modules add to their pages.
+            ContributionSpec::preload("Panel").options(json!({ "offered": ["section"] })),
         ];
         offers.extend(tour::steps());
         offers

@@ -39,6 +39,15 @@ impl ContributionSpec {
         }
     }
 
+    /// Asks the shell to compile `view` while it's idle after starting, so
+    /// the first time it shows, like a panel, it doesn't wait for that.
+    /// The views of what other modules offer this one compile with it when
+    /// `options` names their kinds, like `{"offered": ["card", "page"]}`.
+    pub fn preload(view: impl Into<String>) -> Self {
+        let view = view.into();
+        Self::new("mochi", "preload", view.clone(), view, "")
+    }
+
     pub fn icon(mut self, icon: impl Into<String>) -> Self {
         self.icon = Some(icon.into());
         self

@@ -178,6 +178,8 @@ Consecutive bubbles in the same area with the same `group` share one pill. A bub
 
 `target` is the module meant to use it, and `kind` is one of the kinds that module takes. The target's view loads `root:/modules/<module>/<view>.qml` and passes it the offering module's latest `state` as `payload`. `icon` and `options` are only present when set. A contribution to a module that isn't enabled is simply unused.
 
+The shell itself takes contributions as `mochi`, which is always there. Its one kind is `preload`: a view the UI compiles a few seconds after it starts, one at a time and off the UI thread, so the first time it shows, like the settings panel, it only has to build it. With `{"offered": ["card", "page"]}` in `options`, the views other modules offer the preloading module as those kinds compile too.
+
 ### Action descriptions
 
 `actions` lists what `mochi ipc` can run:

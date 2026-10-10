@@ -950,12 +950,12 @@ impl Daemon {
 
     /// What the enabled modules offer the enabled ones: an offer to a
     /// module that isn't running, like a tour step without the tour, goes
-    /// nowhere.
+    /// nowhere. The shell itself, `mochi`, always takes them.
     fn contributions(&self) -> Vec<Contribution> {
         self.order
             .iter()
             .flat_map(|module| self.modules[module].contributions.clone())
-            .filter(|offer| self.order.contains(&offer.target.as_str()))
+            .filter(|offer| offer.target == CORE_ID || self.order.contains(&offer.target.as_str()))
             .collect()
     }
 

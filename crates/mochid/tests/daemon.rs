@@ -201,6 +201,11 @@ fn modules_offer_contributions_and_call_each_other() {
         offered.contains(&("clock", "control-center", "page", "Page")),
         "{offered:?}"
     );
+    // The shell, which isn't a module, takes the panels to compile ahead.
+    assert!(
+        offered.contains(&("control-center", "mochi", "preload", "ControlCenter")),
+        "{offered:?}"
+    );
     ui.wait_for_view("idle", "Pill");
 
     // The demo module calls the control center, which takes the keyboard.

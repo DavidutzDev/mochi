@@ -91,6 +91,7 @@ impl Module for Emoji {
             ContributionSpec::new("launcher", "provider", "emoji", "", "Emoji")
                 .icon("face-smile")
                 .options(json!({ "prefix": ":", "search": "search", "pick": "pick" })),
+            ContributionSpec::preload("Picker"),
         ];
         offers.extend(tour::steps());
         offers

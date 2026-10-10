@@ -341,6 +341,7 @@ impl Module for Clock {
             ContributionSpec::new("control-center", "page", "clock", "Page", "Clock")
                 .icon("clock")
                 .order(14),
+            ContributionSpec::preload("Panel"),
         ];
         offers.extend(tour::steps());
         offers

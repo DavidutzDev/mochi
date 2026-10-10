@@ -101,8 +101,8 @@ What the plugin offers other modules, like a card or a page for the control cent
 
 | Key | | |
 |---|---|---|
-| `target` | required | The module it's for, like `control-center`. |
-| `kind` | required | What it is to the target: the control center takes `card` and `page`, the launcher `provider`, and the settings `section`, a view drawn on the module's own page above its options. |
+| `target` | required | The module it's for, like `control-center`, or `mochi` for the shell itself. |
+| `kind` | required | What it is to the target: the control center takes `card` and `page`, the launcher `provider`, and the settings `section`, a view drawn on the module's own page above its options. The shell, `mochi`, takes `preload`: a view it compiles while idle after starting, so the first time it shows doesn't wait for that. A panel the plugin opens on the island is worth it; `{ offered = ["card"] }` compiles the views other modules offer the plugin as those kinds with it. |
 | `id` | required | Unique among the plugin's contributions. |
 | `view` | | The view's file name, without `.qml`. Kinds without a view, like a launcher `provider`, leave it out. |
 | `title` | required | Its heading. |

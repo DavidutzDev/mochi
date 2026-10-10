@@ -160,7 +160,13 @@ impl Module for ControlCenter {
 
     // Every card and page comes from a module; the time is the clock's.
     fn contributions(&self) -> Vec<ContributionSpec> {
-        tour::steps()
+        let mut offers = tour::steps();
+        // With the cards and pages modules offer it.
+        offers.push(
+            ContributionSpec::preload("ControlCenter")
+                .options(json!({ "offered": ["card", "page"] })),
+        );
+        offers
     }
 
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {
