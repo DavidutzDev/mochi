@@ -701,7 +701,6 @@ Later:
 - [ ] Lua or WASM plugin backends
 - [ ] SDKs for other languages
 - [ ] A polkit agent, in Mochi's style
-- [ ] A window switcher and an overview of the workspaces with live previews
 - [ ] An on-screen keyboard that doesn't take focus, with latching modifiers
 - [ ] System sounds: short tones for devices plugged in, the charger, battery warnings, quiet while notifications are silenced
 - [ ] A storage analyzer: what fills each drive, with a usage map
