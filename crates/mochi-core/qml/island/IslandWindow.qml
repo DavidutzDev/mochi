@@ -101,7 +101,8 @@ PanelWindow {
         pills = pills.filter(other => other !== pill);
     }
 
-    mask: covering ? everywhere : shapes
+    // A drag out of the island goes through to the apps underneath.
+    mask: covering && !DragOut.active ? everywhere : shapes
 
     property Region shapes: Region {
         regions: [root.islandMask, ...pillMasks.instances]

@@ -17,7 +17,7 @@ mod store;
 mod tour;
 mod wayland;
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -272,9 +272,12 @@ struct State {
     bubble: Option<BubbleId>,
     /// Why something doesn't work, for the control center card.
     warning: Option<String>,
-    /// Where images are written for the picker to show.
+    /// Where images are written for the picker to show, and dragged out of
+    /// the control center from.
     pictures: PathBuf,
-    written: HashSet<u64>,
+    /// Each image written, by entry, as `<id>.png` and the like, so an app
+    /// it's dropped on takes it for a picture.
+    written: HashMap<u64, PathBuf>,
     query: String,
     shown: Option<ActivityId>,
     /// The text entry the picker shows in full: its id and text.
@@ -330,7 +333,7 @@ impl State {
             bubble: None,
             warning,
             pictures: ctx.data_dir().to_owned(),
-            written: HashSet::new(),
+            written: HashMap::new(),
             query: String::new(),
             shown: None,
             detail: None,
@@ -442,7 +445,7 @@ impl State {
                 .map(|()| {
                     let gone: Vec<u64> = self
                         .written
-                        .iter()
+                        .keys()
                         .copied()
                         .filter(|id| !self.history.is_pinned(*id))
                         .collect();
@@ -716,28 +719,24 @@ impl State {
 
     /// Deletes an entry's picture, if one was written.
     fn forget(&mut self, id: u64) {
-        if self.written.remove(&id) {
-            let _ = std::fs::remove_file(self.picture(id));
+        if let Some(path) = self.written.remove(&id) {
+            let _ = std::fs::remove_file(path);
         }
-    }
-
-    fn picture(&self, id: u64) -> PathBuf {
-        self.pictures.join(id.to_string())
     }
 
     /// Writes an image entry where the picker can load it, once.
     fn show_picture(&mut self, id: u64) -> Option<PathBuf> {
-        let path = self.picture(id);
-        if self.written.contains(&id) {
-            return Some(path);
+        if let Some(path) = self.written.get(&id) {
+            return Some(path.clone());
         }
         let content = self.history.content(id).ok()?;
-        let (_, data) = content.first()?;
+        let (mime, data) = content.first()?;
+        let path = self.pictures.join(picture_name(id, mime));
         if let Err(error) = write_private(&path, data) {
             tracing::warn!(%error, "cannot write a clipboard image");
             return None;
         }
-        self.written.insert(id);
+        self.written.insert(id, path.clone());
         Some(path)
     }
 
@@ -842,6 +841,23 @@ fn state_path(name: &str) -> Option<PathBuf> {
 }
 
 /// Writes a file only the user can read.
+/// An image entry's file name: its id, with the extension of its type,
+/// like `12.png`, or none for a type without a known one.
+fn picture_name(id: u64, mime: &str) -> String {
+    let extension = match mime {
+        "image/png" => "png",
+        "image/jpeg" | "image/jpg" => "jpg",
+        "image/gif" => "gif",
+        "image/webp" => "webp",
+        "image/bmp" => "bmp",
+        "image/avif" => "avif",
+        "image/tiff" => "tiff",
+        "image/svg+xml" => "svg",
+        _ => return id.to_string(),
+    };
+    format!("{id}.{extension}")
+}
+
 fn write_private(path: &Path, data: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     use std::os::unix::fs::OpenOptionsExt;
@@ -868,5 +884,17 @@ mod settings_example {
             "clipboard",
             include_str!("../settings.toml"),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::picture_name;
+
+    #[test]
+    fn an_image_file_has_its_type_as_extension() {
+        assert_eq!(picture_name(12, "image/png"), "12.png");
+        assert_eq!(picture_name(3, "image/jpeg"), "3.jpg");
+        assert_eq!(picture_name(7, "image/x-unknown"), "7");
     }
 }

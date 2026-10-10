@@ -106,6 +106,8 @@ Item {
             title: modelData.name ?? ""
             subtitle: [row.screenshot ? "Screenshot" : "Recording", root.ago(modelData.time), root.size(modelData.bytes)].join(" · ")
             onClicked: Daemon.command("capture", "preview", [row.modelData.path])
+            // Dragged onto an app, it drops the file.
+            file: row.modelData.path ?? ""
 
             leading: Item {
                 anchors.fill: parent

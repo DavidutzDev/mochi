@@ -194,6 +194,8 @@ Item {
                 }
                 // An image opens in the preview card, with copy, edit and delete.
                 onClicked: Daemon.command("clipboard", row.image ? "show" : "pick", [row.entry])
+                // An image dragged onto an app drops it as a file.
+                file: row.image ? (row.modelData.image ?? "").replace(/^file:\/\//, "") : ""
 
                 // Over the buttons too, which the row's own hover misses.
                 HoverHandler {

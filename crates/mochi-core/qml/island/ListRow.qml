@@ -18,6 +18,10 @@ Rectangle {
     property bool flat: false
     property bool marker: false
     property real leadingSize: 34
+    // A file the row can be dragged out as and dropped on any app, as from
+    // a file manager: its path. The drag shows what leads the row.
+    property string file: ""
+    readonly property string fileUrl: file === "" ? "" : `file://${file.split("/").map(encodeURIComponent).join("/")}`
     property alias leading: leadingSlot.data
     property alias trailing: trailingSlot.data
     readonly property bool hovered: area.containsMouse
@@ -42,6 +46,36 @@ Rectangle {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: root.clicked()
+        // Held and moved, a row with a file starts a drag: a click stays a
+        // click.
+        drag.target: root.file !== "" ? carrier : null
+        onPressed: {
+            if (root.file !== "")
+                leadingSlot.grabToImage(result => carrier.Drag.imageSource = result.url);
+        }
+    }
+
+    // What a drag out carries. The pointer moves it only to start the drag;
+    // the system draws the drag from there, over every window.
+    Item {
+        id: carrier
+
+        width: 1
+        height: 1
+        Drag.active: area.drag.active
+        Drag.dragType: Drag.Automatic
+        Drag.supportedActions: Qt.CopyAction
+        Drag.hotSpot.x: root.leadingSize / 2
+        Drag.hotSpot.y: root.leadingSize / 2
+        Drag.mimeData: ({
+                "text/uri-list": `${root.fileUrl}\r\n`
+            })
+        Drag.onDragStarted: DragOut.active = true
+        Drag.onDragFinished: {
+            DragOut.active = false;
+            carrier.x = 0;
+            carrier.y = 0;
+        }
     }
 
     Rectangle {
