@@ -4,6 +4,10 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ## Unreleased
 
+### Added
+
+- After an update within a series, like 0.1.0 to 0.1.2, the tour of what's new shows what the patches changed, a card for each entry of their changelog. An update to a new series still shows only its new steps, and a first tour shows neither.
+
 ### Fixed
 
 - A screenshot or recording region nearly as tall as the screen put its size and Capture button off the screen or under the island, out of reach. They go in a line under the region or over it, or turned upright right of it or left of it, reading down its side, where they first fit, and inside it near its bottom when the region leaves no room, never under the island.

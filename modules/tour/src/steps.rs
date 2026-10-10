@@ -41,6 +41,16 @@ impl Version {
     pub fn current() -> Self {
         Self::parse(env!("CARGO_PKG_VERSION")).expect("the crate version parses")
     }
+
+    /// The series a release belongs to: 0.1.2 is a patch of 0.1, which
+    /// brings tour steps; patches only bring fixes and small changes.
+    /// Before 0.1, every release was a series of its own.
+    pub fn series(self) -> Self {
+        match self {
+            Self(0, 0, _) => self,
+            Self(major, minor, _) => Self(major, minor, 0),
+        }
+    }
 }
 
 impl fmt::Display for Version {
@@ -50,8 +60,9 @@ impl fmt::Display for Version {
 }
 
 /// The tour's chapters, in order, with their titles.
-pub const CHAPTERS: [(&str, &str); 8] = [
+pub const CHAPTERS: [(&str, &str); 9] = [
     ("welcome", "Welcome"),
+    ("changes", "What changed"),
     ("island", "The island"),
     ("panels", "Panels"),
     ("notices", "Notices"),
@@ -198,7 +209,10 @@ impl Step {
     /// are quick to read, a module's view gets the full time.
     pub fn seconds(&self, pace: f64) -> f64 {
         match self.place.as_str() {
-            "text" | "off" | "look" => pace * 0.6,
+            // A long caption, like a changelog entry, gets the time to
+            // read it, at four words a second.
+            "text" => (pace * 0.6).max(self.caption.split_whitespace().count() as f64 / 4.0),
+            "off" | "look" => pace * 0.6,
             _ => pace,
         }
     }
@@ -285,6 +299,23 @@ fn looks() -> Vec<Step> {
 /// Every step, in order. `since` keeps only what came after a release,
 /// for a tour of what's new; `None` is the whole tour.
 pub fn build(offers: &[Contribution], known: &[Known], since: Option<Version>) -> Vec<Step> {
+    let current = Version::current();
+    let notes = since.map_or_else(Vec::new, |seen| crate::notes::between(seen, current));
+    build_at(offers, known, since, current, &notes)
+}
+
+/// `build`, for the release `current` with the changelog entries `notes`
+/// of the releases after `since`. An update within a series, like 0.1.0 to
+/// 0.1.2, shows those entries, since patches bring no steps; one to another
+/// series, like 0.1.2 to 0.3.1, shows the new steps only, and the whole
+/// tour never shows them.
+pub fn build_at(
+    offers: &[Contribution],
+    known: &[Known],
+    since: Option<Version>,
+    current: Version,
+    notes: &[crate::notes::Note],
+) -> Vec<Step> {
     let mut steps = vec![Step::text(
         "welcome",
         "welcome",
@@ -332,19 +363,27 @@ pub fn build(offers: &[Contribution], known: &[Known], since: Option<Version>) -
     ));
 
     if let Some(seen) = since {
-        let news: Vec<Step> = steps
+        let mut news: Vec<Step> = steps
             .iter()
             .filter(|step| step.since > seen && step.chapter != "welcome" && step.chapter != "end")
             .cloned()
             .collect();
+        if seen.series() == current.series() {
+            news.extend(
+                notes
+                    .iter()
+                    .enumerate()
+                    .map(|(index, note)| note_step(index, note)),
+            );
+        }
         if news.is_empty() {
             return Vec::new();
         }
         let mut welcome = Step::text(
             "whats-new",
             "welcome",
-            Version::current(),
-            &format!("New in Mochi {}", Version::current()),
+            current,
+            &format!("New in Mochi {current}"),
             "new_releases",
             &format!("What changed since {seen}. Space goes on, ← goes back, Esc stops."),
         );
@@ -364,6 +403,26 @@ pub fn build(offers: &[Contribution], known: &[Known], since: Option<Version>) -
             .then(Ordering::Equal)
     });
     steps
+}
+
+/// A changelog entry of a patch release, as a card of its own in the
+/// "What changed" chapter.
+fn note_step(index: usize, note: &crate::notes::Note) -> Step {
+    let (title, icon) = match note.kind.as_str() {
+        "Added" => (format!("New in {}", note.version), "add_circle"),
+        "Fixed" => (format!("Fixed in {}", note.version), "build"),
+        _ => (format!("Changed in {}", note.version), "change_circle"),
+    };
+    let mut step = Step::text(
+        &format!("note/{index}"),
+        "changes",
+        note.version,
+        &title,
+        icon,
+        &note.text,
+    );
+    step.order = i32::try_from(index).unwrap_or(i32::MAX);
+    step
 }
 
 /// A chapter's title.
@@ -447,5 +506,57 @@ mod tests {
         let ids: Vec<&str> = steps.iter().map(|step| step.id.as_str()).collect();
         assert_eq!(ids, ["tour/whats-new", "audio/meters", "tour/end"]);
         assert!(build(&offers, &[], Some(Version(0, 0, 7))).is_empty());
+    }
+
+    fn note(version: Version, kind: &str, text: &str) -> crate::notes::Note {
+        crate::notes::Note {
+            version,
+            kind: kind.into(),
+            text: text.into(),
+        }
+    }
+
+    #[test]
+    fn a_patch_update_shows_what_its_patches_changed() {
+        let notes = [
+            note(Version(0, 1, 1), "Fixed", "The bar fits."),
+            note(Version(0, 1, 2), "Added", "Files drag out."),
+        ];
+        let steps = build_at(&[], &[], Some(Version(0, 1, 0)), Version(0, 1, 2), &notes);
+        let shown: Vec<(&str, &str)> = steps
+            .iter()
+            .map(|step| (step.title.as_str(), step.caption.as_str()))
+            .collect();
+        assert_eq!(
+            shown[1..3],
+            [
+                ("Fixed in 0.1.1", "The bar fits."),
+                ("New in 0.1.2", "Files drag out.")
+            ]
+        );
+        assert_eq!(steps[0].id, "tour/whats-new");
+        assert_eq!(steps.last().unwrap().id, "tour/end");
+    }
+
+    #[test]
+    fn a_new_series_shows_its_steps_and_not_the_patches() {
+        let offers = [offer(
+            "weather",
+            "card",
+            json!({ "chapter": "panels", "since": "0.2.0", "caption": "Weather." }),
+        )];
+        let notes = [note(Version(0, 2, 1), "Fixed", "A fix.")];
+        let steps = build_at(
+            &offers,
+            &[],
+            Some(Version(0, 1, 2)),
+            Version(0, 2, 1),
+            &notes,
+        );
+        let ids: Vec<&str> = steps.iter().map(|step| step.id.as_str()).collect();
+        assert_eq!(ids, ["tour/whats-new", "weather/card", "tour/end"]);
+        // The whole tour has no changelog either.
+        let whole = build_at(&offers, &[], None, Version(0, 2, 1), &notes);
+        assert!(whole.iter().all(|step| step.chapter != "changes"));
     }
 }

@@ -1,0 +1,59 @@
+# Cuts a patch release, like 0.1.2 after 0.1.1, from a push to main whose
+# CHANGELOG.md has entries under "## Unreleased": packaging/release/patch.sh
+# writes the version everywhere and dates the section, this commits that as
+# "Release <version>", tags it and pushes both, then release.yml builds and
+# publishes it. All the commits since the last release go in one patch, so
+# a fix in three commits is one release.
+#
+# A push without changelog entries releases nothing, and neither does one
+# while a minor or major release is being made by hand (RELEASING.md).
+# Pull afterwards: the release adds two commits to main.
+name: Patch release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+# One at a time, so two pushes can't both make the same version.
+concurrency:
+  group: patch-release
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.cut.outputs.tag }}
+    steps:
+      # main as it is now, with every tag, so a queued run releases what
+      # was pushed since and the patch follows the latest tag.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - id: cut
+        run: |
+          version=$(sh packaging/release/patch.sh)
+          if [ -z "$version" ]; then
+            echo "Nothing to release"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release $version"
+          git tag -a "v$version" -m "Mochi $version"
+          git push origin HEAD:main "v$version"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: cut
+    if: needs.cut.outputs.tag != ''
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.cut.outputs.tag }}
+    permissions:
+      contents: write

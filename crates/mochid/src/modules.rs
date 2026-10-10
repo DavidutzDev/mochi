@@ -375,6 +375,12 @@ mod tests {
                     since.len() == 3 && since.iter().all(|part| part.parse::<u32>().is_ok()),
                     "{name} has no release in `since`"
                 );
+                // From 0.1 on, steps come with minor releases, like 0.2.0;
+                // the tour shows patches' changelog instead.
+                assert!(
+                    since[..2] == ["0", "0"] || since[2] == "0",
+                    "{name}: a step's `since` is a minor release, like 0.2.0, not a patch"
+                );
                 assert!(
                     module.assets().has_view(&offer.view),
                     "{name} shows {}, which {} doesn't have",

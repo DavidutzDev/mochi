@@ -2,7 +2,7 @@
 
 A guided tour of Mochi. Each module shows its real views with made-up data, so nothing of yours appears on screen, and a caption says what it does and where to find it.
 
-The first time Mochi starts, a notice on the island offers the tour: **Take the tour**, **Later**, which asks again next time, or **Never**. After an update, it offers a shorter tour of what's new since your last one, and nothing at all when nothing you'd see changed. `mochi ipc tour start` runs it any time, as do "Tour" and "What's new in Mochi" in the launcher and **Take the tour** on the tour's page in Settings.
+The first time Mochi starts, a notice on the island offers the tour: **Take the tour**, **Later**, which asks again next time, or **Never**. After an update, it offers a shorter tour of what's new since your last one, and nothing at all when nothing you'd see changed. An update to a new series, like 0.1.2 to 0.3.0, shows that series' new steps. A patch within one, like 0.1.0 to 0.1.2, brings no steps, so the tour shows its changelog instead, a card for each fix or change. A first tour shows neither. `mochi ipc tour start` runs it any time, as do "Tour" and "What's new in Mochi" in the launcher and **Take the tour** on the tour's page in Settings.
 
 ## During the tour
 
@@ -48,7 +48,7 @@ options = { chapter = "desktop", since = "0.1.0", place = "card", size = [280, 9
 | Option | |
 |---|---|
 | `chapter` | `island`, `panels`, `notices`, `desktop`, `capture` or `settings`. |
-| `since` | The release that brought it: the tour of what's new shows it to anyone whose last tour was before. |
+| `since` | The release that brought it: the tour of what's new shows it to anyone whose last tour was before. A minor release, like `0.2.0`: patches bring no steps. |
 | `caption` | One or two plain sentences. |
 | `payload` | The made-up data the view gets. |
 | `place` | `island` (the default), `bubble`, or a control center `card` or desktop `widget` framed at `size`. A bubble's payload can name its `area`. |

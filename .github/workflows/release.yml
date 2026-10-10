@@ -5,14 +5,28 @@
 #
 # The binaries are built on Ubuntu 22.04, so they run on any distribution
 # with glibc 2.35 or newer. They need Quickshell and libpulse there.
+#
+# A minor or major release is tagged by hand (RELEASING.md); a patch
+# release is cut by patch.yml, which calls this with the tag it made: a tag
+# a workflow pushes doesn't start other workflows.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_call:
+    inputs:
+      tag:
+        description: The version tag to release, like v0.1.2
+        required: true
+        type: string
 
 permissions:
   contents: write
+
+env:
+  # The tag pushed, or the one patch.yml made.
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   # The tag must be the version Cargo.toml says, and CHANGELOG.md must have
@@ -23,11 +37,13 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - id: version
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::the tag is $GITHUB_REF_NAME, but Cargo.toml says $version"
+          if [ "v$version" != "$TAG" ]; then
+            echo "::error::the tag is $TAG, but Cargo.toml says $version"
             exit 1
           fi
           if ! grep -q "^## $version " CHANGELOG.md; then
@@ -48,6 +64,8 @@ jobs:
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: dtolnay/rust-toolchain@stable
       - name: Install the build's libraries
         run: sudo apt-get update && sudo apt-get install -y libpulse-dev pkg-config
@@ -67,6 +85,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: actions/download-artifact@v4
         with:
           path: dist
@@ -82,7 +102,7 @@ jobs:
             found && /^## / { exit }
             found { print }
           ' CHANGELOG.md > notes.md
-          gh release create "$GITHUB_REF_NAME" dist/* \
+          gh release create "$TAG" dist/* \
             --title "Mochi $VERSION" \
             --notes-file notes.md \
             --verify-tag

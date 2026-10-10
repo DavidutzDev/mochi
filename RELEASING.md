@@ -1,24 +1,46 @@
 # Releasing
 
-A release is a version tag pushed to GitHub. `.github/workflows/release.yml` does the rest.
+A release is a version tag on GitHub, like `v0.2.0`. `.github/workflows/release.yml` builds and publishes it.
 
-## Before tagging
+Mochi has two kinds:
 
-1. Set the version in `Cargo.toml`'s `[workspace.package]`, and run `cargo build` so `Cargo.lock` follows.
-2. Change the other places that name it: `README.md` (its summary), `docs/book/src/installing.md`, `docs/book/src/sdk.md`, `docs/book/src/writing-plugins.md`, `docs/book/src/custom-sdks.md`, `docs/protocol.md`, the `hello` examples in `crates/mochi-protocol/src/messages.rs` and `plugin.rs`, and the `mochi-sdk` lines in `examples/plugins/*/Cargo.toml`. `grep -rn "<old version>"` finds them.
-3. Rename `## Unreleased` in `CHANGELOG.md` to `## <version> - <date>`. The release's notes are that section.
-4. Tag the steps a new feature brings in the tour with `"since": "<version>"`, so people who update see them.
-5. Add a line for the release to `TODO.md`.
-6. Check it: `nix build .#mochi`, which runs the tests, and `nix build .#docs`.
-7. Commit as `Release <version>: <what it brings>`, then tag: `git tag -a v<version> -m "Mochi <version>"`.
+- **Patches**, like 0.1.1 and 0.1.2: fixes and small changes. CI cuts them from your pushes; you only write the changelog.
+- **Minor and major releases**, like 0.2.0 and 1.0.0: new features, the tour's new steps, and, before 1.0, changes to the config format, the protocol or the module interface. You make them by hand.
 
-## Publishing
+## Patches
+
+Each fix or small change adds its line to `## Unreleased` in `CHANGELOG.md`, under `### Added`, `### Changed` or `### Fixed`. Push to `main`, and `.github/workflows/patch.yml`:
+
+1. Runs `packaging/release/patch.sh`, which takes the patch after the latest tag, like `0.1.2` after `v0.1.1`, writes it everywhere with `packaging/release/bump.sh`, and renames `## Unreleased` to `## 0.1.2 - <date>`.
+2. Commits that as `Release 0.1.2`, tags it `v0.1.2` and pushes both.
+3. Runs `release.yml` for the tag, as below.
+
+Everything pushed since the last release goes into one patch, however many commits it is: nothing needs squashing. A push without entries under `## Unreleased` releases nothing, so docs, tests and the TODO can go out on their own. `git pull --rebase` before your next push, for the release's two commits.
+
+A patch brings no tour steps: a step's `since` is always a minor release, like `0.2.0`, and `patch.sh` stops if one was added since the last tag. After a patch update, the tour shows its changelog entries instead, one card each. After an update to a new series, like 0.1.2 to 0.3.1, it shows only the new series' steps, and a first tour shows neither.
+
+## Minor and major releases
+
+### Before tagging
+
+1. Set the version everywhere, `Cargo.toml`, `Cargo.lock`, the README, the docs, the protocol's examples and the example plugins' `mochi-sdk` lines, with `packaging/release/bump.sh <version>`.
+2. Rename `## Unreleased` in `CHANGELOG.md` to `## <version> - <date>`. The release's notes are that section.
+3. Tag the steps a new feature brings in the tour with `"since": "<version>"`, so people who update see them.
+4. Add a line for the release to `TODO.md`.
+5. Check it: `nix build .#mochi`, which runs the tests, and `nix build .#docs`.
+6. Commit as `Release <version>: <what it brings>`, then tag: `git tag -a v<version> -m "Mochi <version>"`.
+
+While `Cargo.toml` says a version that isn't tagged yet, `patch.sh` leaves the push alone.
+
+### Publishing
 
 ```sh
 git push origin main v<version>
 ```
 
-The workflow then:
+## What release.yml does
+
+For a tag pushed by hand, or one `patch.yml` made:
 
 1. Checks that the tag is the version `Cargo.toml` says, and that `CHANGELOG.md` has its section.
 2. Builds `mochi` and `mochid` for x86_64 and aarch64 on Ubuntu 22.04, so they run with glibc 2.35 or newer.
@@ -30,5 +52,5 @@ The workflow then:
 
 ## After
 
-- Start the next section of `CHANGELOG.md` with `## Unreleased`.
+- Start the next section of `CHANGELOG.md` with `## Unreleased` when the next change comes.
 - The AUR packages, once they're published there, take the new `PKGBUILD`s.

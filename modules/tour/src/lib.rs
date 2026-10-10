@@ -13,6 +13,7 @@
 //! preview layer, which applies options without saving them, and drop it
 //! after.
 
+mod notes;
 mod state;
 mod steps;
 
