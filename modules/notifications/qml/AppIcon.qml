@@ -43,6 +43,9 @@ ClippingRectangle {
         sourceSize.width: root.size * 2
         sourceSize.height: root.size * 2
         fillMode: root.note.image ? Image.PreserveAspectCrop : Image.PreserveAspectFit
-        asynchronous: true
+        // A theme icon loads here: Qt's icon themes break when read from
+        // the loading thread while this one reads them too. Files load
+        // in the background.
+        asynchronous: !String(source).startsWith("image://icon/")
     }
 }

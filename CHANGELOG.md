@@ -62,6 +62,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Fixed
 
+- Opening the launcher could crash Quickshell: app icons loaded on Qt's image thread, and Qt's icon themes break when two threads read them at once. Icons from the theme load on the UI thread now, and pictures from files still in the background. File results in the launcher show a document symbol instead of an empty tile.
 - Night light said Unavailable while sharing a screen switchably: the share module's virtual screen has no gamma, and its refusal counted as night light failing. Virtual screens are left out now, and a real screen without gamma no longer stops the others from warming.
 - The settings panel's segmented choices fit long labels.
 - The world clock found no time zones on NixOS without `TZDIR` set; it reads the zone files' full paths now.

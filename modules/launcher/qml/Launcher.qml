@@ -262,7 +262,10 @@ Item {
                         sourceSize.width: 64
                         sourceSize.height: 64
                         fillMode: Image.PreserveAspectFit
-                        asynchronous: true
+                        // A theme icon loads here: Qt's icon themes break when read from
+                        // the loading thread while this one reads them too. Files load
+                        // in the background.
+                        asynchronous: !String(source).startsWith("image://icon/")
                     }
 
                     // No such icon in the theme: a symbol by that name, like

@@ -127,7 +127,10 @@ Rectangle {
             sourceSize.width: root.leadingSize * 2
             sourceSize.height: root.leadingSize * 2
             fillMode: Image.PreserveAspectFit
-            asynchronous: true
+            // A theme icon loads here: Qt's icon themes break when read from
+            // the loading thread while this one reads them too. Files load
+            // in the background.
+            asynchronous: !String(source).startsWith("image://icon/")
         }
     }
 

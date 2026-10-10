@@ -620,7 +620,7 @@ impl State {
                         if entry.folder {
                             "folder"
                         } else {
-                            "text-x-generic"
+                            "description"
                         }
                         .into(),
                     ),
