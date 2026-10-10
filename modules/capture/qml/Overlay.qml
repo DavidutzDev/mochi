@@ -368,11 +368,12 @@ Item {
         }
     }
 
-    // By the region: its size and the button that takes it, side by side
-    // under it or over it, or stacked right of it or left of it, where they
-    // first fit; a region that leaves no room around it gets them inside,
-    // near its bottom. Never under the island, at its edge of the screen.
-    Grid {
+    // By the region: its size and the button that takes it, in a line under
+    // it or over it, or turned upright right of it or left of it, reading
+    // down its side, where they first fit; a region that leaves no room
+    // around it gets them inside, near its bottom. Never under the island,
+    // at its edge of the screen.
+    Item {
         id: bar
 
         readonly property rect area: root.shownRegion ?? Qt.rect(0, 0, 0, 0)
@@ -381,12 +382,10 @@ Item {
         readonly property real band: Theme.margin + Theme.idleHeight + Theme.controlHeight
         readonly property real highest: Theme.anchor === "bottom" ? gap : band
         readonly property real lowest: Theme.anchor === "bottom" ? root.height - band : root.height - gap
-        // Their size side by side, and stacked.
-        readonly property real buttonWidth: confirm.visible ? confirm.implicitWidth : 0
-        readonly property real buttonHeight: confirm.visible ? confirm.implicitHeight : 0
-        readonly property size wide: Qt.size(label.width + (buttonWidth > 0 ? spacing + buttonWidth : 0), Math.max(label.height, buttonHeight))
-        readonly property size tall: Qt.size(Math.max(label.width, buttonWidth), label.height + (buttonHeight > 0 ? spacing + buttonHeight : 0))
-        // Where they go: {x, y, upright}.
+        // The space the line takes, lying and upright.
+        readonly property size wide: Qt.size(line.implicitWidth, line.implicitHeight)
+        readonly property size tall: Qt.size(line.implicitHeight, line.implicitWidth)
+        // Where it goes: {x, y, upright}.
         readonly property var place: {
             const across = (x, size) => Math.max(gap, Math.min(root.width - size.width - gap, x));
             const down = (y, size) => Math.max(highest, Math.min(lowest - size.height, y));
@@ -424,43 +423,55 @@ Item {
         }
 
         visible: root.mode === "region" && root.picking && root.holdsRegion
-        columns: place.upright ? 1 : 2
-        spacing: Theme.spaceSmall
-        horizontalItemAlignment: Grid.AlignHCenter
-        verticalItemAlignment: Grid.AlignVCenter
         x: place.x
         y: place.y
+        width: place.upright ? tall.width : wide.width
+        height: place.upright ? tall.height : wide.height
 
-        Rectangle {
-            id: label
+        Row {
+            id: line
 
-            width: size.implicitWidth + 20
-            height: 30
-            radius: height / 2
-            color: Theme.background
+            anchors.centerIn: parent
+            spacing: Theme.spaceSmall
+            // Upright, it reads from the top down.
+            rotation: bar.place.upright ? 90 : 0
 
-            Text {
-                id: size
-
-                anchors.centerIn: parent
-                text: `${Math.round(bar.area.width)} × ${Math.round(bar.area.height)}`
-                color: Theme.foreground
-                font.pixelSize: Theme.textCaption
-                font.family: Theme.fontFamily
-                font.features: {
-                    "tnum": 1
+            Behavior on rotation {
+                NumberAnimation {
+                    duration: Theme.move
+                    easing.type: Easing.OutCubic
                 }
             }
-        }
 
-        Button {
-            id: confirm
+            Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: size.implicitWidth + 20
+                height: 30
+                radius: height / 2
+                color: Theme.background
 
-            visible: root.dragged === null
-            tone: "accent"
-            icon: root.screenshot ? "camera" : "record"
-            text: root.screenshot ? "Capture" : "Record"
-            onClicked: Daemon.command("capture", "confirm", [])
+                Text {
+                    id: size
+
+                    anchors.centerIn: parent
+                    text: `${Math.round(bar.area.width)} × ${Math.round(bar.area.height)}`
+                    color: Theme.foreground
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
+                    font.features: {
+                        "tnum": 1
+                    }
+                }
+            }
+
+            Button {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.dragged === null
+                tone: "accent"
+                icon: root.screenshot ? "camera" : "record"
+                text: root.screenshot ? "Capture" : "Record"
+                onClicked: Daemon.command("capture", "confirm", [])
+            }
         }
     }
 
