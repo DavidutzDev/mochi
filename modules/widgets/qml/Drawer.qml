@@ -384,6 +384,10 @@ Item {
                     view: cards
                 }
 
+                WheelScroll {
+                    view: cards
+                }
+
                 Column {
                     id: groups
 
@@ -605,6 +609,10 @@ Item {
                     view: placedList
                 }
 
+                WheelScroll {
+                    view: placedList
+                }
+
                 delegate: ListRow {
                     id: row
 
@@ -764,6 +772,10 @@ Item {
                     boundsBehavior: Flickable.StopAtBounds
 
                     ScrollFade {
+                        view: layoutList
+                    }
+
+                    WheelScroll {
                         view: layoutList
                     }
 

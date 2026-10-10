@@ -50,6 +50,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Changed
 
+- Lists scroll as in a browser: a mouse wheel's step glides instead of jumping, quick steps add up, and a touchpad's scroll coasts on and slows down after the fingers lift, in the settings panel, the control center, the launcher, the pickers and every other list. A step goes 120 pixels; the theme's `[motion] scroll_step` changes it, and `smooth_scroll = false` goes back to Qt's own scrolling.
 - The control center's Today card is the clock module's now: it shows with the clock module on, and its heading opens the Clock page in the control center instead of the separate clock panel. Without the clock module the control center has no time card. `control-center/clock` in its `order` or `hidden` becomes `clock/clock`.
 - The media progress line waves while a track plays and lies flat when paused, in the island and on the Now Playing card.
 - The example weather plugin is now `meteo`, since `weather` is a builtin id; Bento leaves the weather's `place` out of shared setups.

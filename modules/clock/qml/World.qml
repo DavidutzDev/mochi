@@ -83,6 +83,10 @@ Item {
             view: view
         }
 
+        WheelScroll {
+            view: view
+        }
+
         Grid {
             id: grid
 

@@ -105,6 +105,9 @@ Singleton {
     // WavyRing lie flat whatever their owner asks. Reduced motion keeps the
     // waves and only stops them drifting.
     readonly property bool waves: tokens?.motion.waves ?? true
+    // Scrolling lists with a wheel or a touchpad: see WheelScroll.
+    readonly property real wheelStep: tokens?.motion.scroll_step ?? 120
+    readonly property bool smoothScroll: tokens?.motion.smooth_scroll ?? true
 
     readonly property string fontFamily: tokens?.text.family || (inter.status === FontLoader.Ready ? inter.name : "Inter")
     // The clocks.

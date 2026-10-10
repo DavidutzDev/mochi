@@ -338,6 +338,10 @@ Item {
                 color: Theme.surface
             }
 
+            WheelScroll {
+                view: list
+            }
+
             delegate: Item {
                 id: row
 

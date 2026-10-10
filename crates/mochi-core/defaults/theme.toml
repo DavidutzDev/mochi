@@ -89,6 +89,11 @@
 # Progress lines and rings wave while something goes on, like the media line
 # while a track plays. Off draws every one of them flat.
 # waves = true
+# How far a mouse wheel's step scrolls a list, in pixels.
+# scroll_step = 120
+# A wheel's steps glide instead of jumping, and a touchpad's scroll coasts on
+# after the fingers lift.
+# smooth_scroll = true
 
 [text]
 # A font family name; empty uses Inter, which Mochi's packages bring, or

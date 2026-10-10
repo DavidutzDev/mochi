@@ -240,6 +240,10 @@ Column {
             view: appList
         }
 
+        WheelScroll {
+            view: appList
+        }
+
         delegate: Column {
             id: group
 

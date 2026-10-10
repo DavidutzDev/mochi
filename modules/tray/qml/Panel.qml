@@ -325,6 +325,10 @@ Item {
                 view: menuList
             }
 
+            WheelScroll {
+                view: menuList
+            }
+
             Column {
                 id: entryColumn
 

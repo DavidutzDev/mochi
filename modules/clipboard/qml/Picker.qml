@@ -247,6 +247,10 @@ Item {
                     view: list
                 }
 
+                WheelScroll {
+                    view: list
+                }
+
                 delegate: Column {
                     id: item
 
@@ -379,6 +383,10 @@ Item {
                         view: pane
                         color: Theme.surface
                         size: Theme.spaceMedium
+                    }
+
+                    WheelScroll {
+                        view: pane
                     }
 
                     Text {

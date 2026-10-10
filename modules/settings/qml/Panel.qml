@@ -335,6 +335,10 @@ Item {
                 view: list
             }
 
+            WheelScroll {
+                view: list
+            }
+
             delegate: Item {
                 id: row
 
@@ -637,6 +641,10 @@ Item {
                 }
 
                 ScrollFade {
+                    view: body
+                }
+
+                WheelScroll {
                     view: body
                 }
 
@@ -1266,6 +1274,10 @@ Item {
             ScrollFade {
                 view: fontList
                 color: Theme.raised
+            }
+
+            WheelScroll {
+                view: fontList
             }
 
             delegate: Rectangle {

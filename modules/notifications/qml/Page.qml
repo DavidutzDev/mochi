@@ -60,6 +60,10 @@ Item {
             view: list
         }
 
+        WheelScroll {
+            view: list
+        }
+
         delegate: ListRow {
             id: row
 

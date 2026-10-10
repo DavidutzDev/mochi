@@ -149,6 +149,10 @@ Item {
             view: list
         }
 
+        WheelScroll {
+            view: list
+        }
+
         delegate: Column {
             id: item
 

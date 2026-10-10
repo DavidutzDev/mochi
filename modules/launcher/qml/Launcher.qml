@@ -154,6 +154,10 @@ Item {
                 view: list
             }
 
+            WheelScroll {
+                view: list
+            }
+
             // Headings only when results come from more than one provider.
             section.property: root.payload.sections ? "section" : ""
             section.delegate: Item {

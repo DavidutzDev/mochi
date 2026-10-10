@@ -174,6 +174,10 @@ Item {
                 color: Theme.surface
             }
 
+            WheelScroll {
+                view: lapList
+            }
+
             delegate: Item {
                 id: row
 
@@ -253,6 +257,10 @@ Item {
             ScrollFade {
                 view: runList
                 color: Theme.surface
+            }
+
+            WheelScroll {
+                view: runList
             }
 
             delegate: Item {

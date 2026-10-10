@@ -231,6 +231,13 @@ pub struct Motion {
     /// timer's ring while it runs. Off draws every one of them flat; each
     /// module with a wave can also turn off its own.
     pub waves: bool,
+    /// How far a mouse wheel's step scrolls a list, in pixels.
+    #[schemars(range(min = 20, max = 600))]
+    pub scroll_step: u32,
+    /// A wheel's steps glide instead of jumping, and a touchpad's scroll
+    /// coasts on after the fingers lift. Off scrolls the way Qt does by
+    /// itself.
+    pub smooth_scroll: bool,
 }
 
 impl Default for Motion {
@@ -246,6 +253,8 @@ impl Default for Motion {
             fast_ms: 150,
             move_ms: 350,
             waves: true,
+            scroll_step: 120,
+            smooth_scroll: true,
         }
     }
 }

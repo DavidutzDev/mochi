@@ -443,6 +443,10 @@ Item {
                     view: grid
                 }
 
+                WheelScroll {
+                    view: grid
+                }
+
                 delegate: Item {
                     id: tile
 

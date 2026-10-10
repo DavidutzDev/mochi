@@ -213,6 +213,10 @@ Item {
                 view: thumbs
             }
 
+            WheelScroll {
+                view: thumbs
+            }
+
             Grid {
                 id: grid
 

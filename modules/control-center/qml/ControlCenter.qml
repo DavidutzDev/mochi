@@ -240,6 +240,10 @@ Item {
             view: body
         }
 
+        WheelScroll {
+            view: body
+        }
+
         Column {
             id: home
 

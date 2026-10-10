@@ -673,6 +673,10 @@ Item {
                             view: history
                         }
 
+                        WheelScroll {
+                            view: history
+                        }
+
                         delegate: Rectangle {
                             id: historyRow
 

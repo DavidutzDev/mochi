@@ -391,6 +391,10 @@ Item {
                 view: list
             }
 
+            WheelScroll {
+                view: list
+            }
+
             delegate: Item {
                 id: row
 

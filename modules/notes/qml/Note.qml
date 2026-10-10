@@ -64,6 +64,10 @@ Item {
             view: scroll
         }
 
+        WheelScroll {
+            view: scroll
+        }
+
         TextEdit {
             id: edit
 

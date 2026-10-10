@@ -203,6 +203,10 @@ Item {
             color: root.color
         }
 
+        WheelScroll {
+            view: list
+        }
+
         delegate: Item {
             id: row
 
