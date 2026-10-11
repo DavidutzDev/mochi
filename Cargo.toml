@@ -109,3 +109,9 @@ opt-level = 3
 opt-level = 3
 [profile.dev.package.crc32fast]
 opt-level = 3
+# mochi-lock scales the background with tiny-skia while the renderer starts:
+# unoptimized, that takes a second for each monitor.
+[profile.dev.package.tiny-skia]
+opt-level = 3
+[profile.dev.package.tiny-skia-path]
+opt-level = 3

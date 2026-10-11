@@ -54,11 +54,23 @@ const FRAME: Duration = Duration::from_millis(16);
 /// How long the renderer has to draw a change, or to draw at all, before
 /// the lock shows its own face instead.
 const STALE: Duration = Duration::from_millis(1500);
+/// How long the renderer has to say a monitor is drawn, before the lock shows
+/// its own face there.
+const READY_WAIT: Duration = Duration::from_secs(3);
 
 /// What a monitor shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Source {
     Renderer,
+    Background,
+    Face,
+}
+
+/// What a monitor shows now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Drawn {
+    /// The renderer's frame made at that time.
+    Frame(Instant),
     Background,
     Face,
 }
@@ -185,7 +197,16 @@ pub fn run(config: Config, marker: Option<std::path::PathBuf>) -> i32 {
         drawn: HashMap::new(),
         pushed: Instant::now(),
         backgrounds: serde_json::Value::Null,
+        scenes: HashMap::new(),
     };
+
+    // Each monitor's background, made before locking, at once: the
+    // compositor blanks the screens from the moment a lock is asked for, so
+    // they'd be blank for as long as this takes.
+    let mut queue = queue;
+    if queue.roundtrip(&mut lock).is_ok() {
+        lock.prepare_scenes();
+    }
 
     // Before anything draws.
     let Ok(session) = session_state.lock(&qh) else {
@@ -307,14 +328,31 @@ struct Lock {
     cursor_shapes: Option<CursorShapeManager>,
     pointer: Option<wl_pointer::WlPointer>,
     cursor: Option<WpCursorShapeDeviceV1>,
-    /// When the renderer's frame drawn last on each monitor was made, or
-    /// `None` when the lock's own face is there.
-    drawn: HashMap<String, Option<Instant>>,
+    /// What each monitor shows now.
+    drawn: HashMap<String, Drawn>,
     /// When the renderer was last told the lock's state.
     pushed: Instant,
     /// A background for each monitor, by its name, from mochid: what each
     /// showed before locking, blurred.
     backgrounds: serde_json::Value,
+    /// Each monitor's scene, by its name, for the lock to draw itself while
+    /// the renderer gets ready, and under its own face.
+    scenes: HashMap<String, Scene>,
+}
+
+/// A monitor's background, made once: scaling it is slow.
+struct Scene {
+    path: Option<std::path::PathBuf>,
+    pixmap: tiny_skia::Pixmap,
+    /// The same, as the surface takes it.
+    bgra: Vec<u8>,
+}
+
+impl Scene {
+    fn new(path: Option<std::path::PathBuf>, pixmap: tiny_skia::Pixmap) -> Self {
+        let bgra = Face::bgra(&pixmap);
+        Self { path, pixmap, bgra }
+    }
 }
 
 impl Lock {
@@ -357,18 +395,24 @@ impl Lock {
         let Some(renderer) = &self.renderer else {
             return Source::Face;
         };
+        let ready = name.is_some_and(|name| renderer.is_ready(name));
         let frame = name.and_then(|name| renderer.display.server.frames.get(name));
-        if let Some(frame) = frame
+        if ready
+            && let Some(frame) = frame
             && (frame.width, frame.height) == pixels
             && (frame.at >= self.pushed || self.pushed.elapsed() < STALE)
         {
             return Source::Renderer;
         }
+        // While it gets ready, the background alone, as it will be under
+        // it; the lock's own face once something's typed, or when it takes
+        // too long.
         let quiet = self.state.typed() == 0 && self.state.message.is_none();
-        if quiet
+        if !ready
+            && quiet
             && renderer
-                .starting_since()
-                .is_some_and(|since| since.elapsed() < STALE)
+                .started()
+                .is_some_and(|since| since.elapsed() < READY_WAIT)
         {
             return Source::Background;
         }
@@ -433,10 +477,11 @@ impl Lock {
                     .renderer
                     .as_ref()
                     .and_then(|renderer| renderer.display.server.frames.get(&name))
-                    .map(|frame| frame.at),
-                Source::Face | Source::Background => None,
+                    .map(|frame| Drawn::Frame(frame.at)),
+                Source::Background => Some(Drawn::Background),
+                Source::Face => Some(Drawn::Face),
             };
-            if self.drawn.get(&name) != Some(&wanted) {
+            if wanted.is_some() && self.drawn.get(&name) != wanted.as_ref() {
                 self.draw(index);
             }
         }
@@ -450,6 +495,7 @@ impl Lock {
         if message["type"] == "backgrounds" && message["backgrounds"].is_object() {
             self.backgrounds = message["backgrounds"].clone();
             self.push();
+            self.draw_all();
             return;
         }
         let Some(renderer) = &mut self.renderer else {
@@ -467,6 +513,76 @@ impl Lock {
                 }
             }
             _ => {}
+        }
+    }
+
+    /// The background a monitor has, as mochid made it: its own when there
+    /// is one, else the one for all.
+    fn backdrop_path(&self, name: Option<&str>) -> Option<std::path::PathBuf> {
+        name.and_then(|name| self.backgrounds[name].as_str())
+            .map(std::path::PathBuf::from)
+            .or_else(|| self.config.background.clone())
+    }
+
+    /// Makes every monitor's scene the compositor told about, each on a
+    /// thread of its own.
+    fn prepare_scenes(&mut self) {
+        let wanted: Vec<_> = self
+            .outputs
+            .outputs()
+            .filter_map(|output| {
+                let info = self.outputs.info(&output)?;
+                let (width, height) = info.logical_size?;
+                let scale = info.scale_factor.max(1);
+                let size = face::Size {
+                    width: u32::try_from(width * scale).ok()?,
+                    height: u32::try_from(height * scale).ok()?,
+                    scale: scale as f32,
+                };
+                let name = info.name?;
+                let path = self.backdrop_path(Some(&name));
+                Some((name, size, path))
+            })
+            .collect();
+        let face = &self.face;
+        let made: Vec<_> = std::thread::scope(|scope| {
+            let threads: Vec<_> = wanted
+                .into_iter()
+                .map(|(name, size, path)| {
+                    scope.spawn(move || {
+                        let image = path
+                            .as_ref()
+                            .and_then(|path| tiny_skia::Pixmap::load_png(path).ok());
+                        let pixmap = face.scene(size, image.as_ref())?;
+                        Some((name, Scene::new(path, pixmap)))
+                    })
+                })
+                .collect();
+            threads
+                .into_iter()
+                .filter_map(|thread| thread.join().ok().flatten())
+                .collect()
+        });
+        self.scenes.extend(made);
+        timing("backgrounds made");
+    }
+
+    /// Makes a monitor's scene when it has none yet, or its background or
+    /// its size changed.
+    fn make_scene(&mut self, name: &str, size: face::Size) {
+        let path = self.backdrop_path(Some(name));
+        if self.scenes.get(name).is_some_and(|scene| {
+            scene.path == path
+                && (scene.pixmap.width(), scene.pixmap.height()) == (size.width, size.height)
+        }) {
+            return;
+        }
+        let image = path
+            .as_ref()
+            .and_then(|path| tiny_skia::Pixmap::load_png(path).ok());
+        if let Some(pixmap) = self.face.scene(size, image.as_ref()) {
+            self.scenes
+                .insert(name.to_owned(), Scene::new(path, pixmap));
         }
     }
 
@@ -488,6 +604,17 @@ impl Lock {
         let stride = pixel_width as i32 * 4;
         let name = self.name(&covered.output);
         let source = self.source(name.as_deref(), (pixel_width, pixel_height));
+        let size = face::Size {
+            width: pixel_width,
+            height: pixel_height,
+            scale: scale as f32,
+        };
+        if source != Source::Renderer
+            && let Some(name) = &name
+        {
+            self.make_scene(name, size);
+        }
+        let scene = name.as_ref().and_then(|name| self.scenes.get(name));
         let Ok((buffer, canvas)) = self.pool.create_buffer(
             pixel_width as i32,
             pixel_height as i32,
@@ -496,28 +623,32 @@ impl Lock {
         ) else {
             return;
         };
-        let size = face::Size {
-            width: pixel_width,
-            height: pixel_height,
-            scale: scale as f32,
-        };
-        match (source, &self.renderer, &name) {
-            (Source::Renderer, Some(renderer), Some(name)) => {
-                if !self.drawn.contains_key(name) || self.drawn.get(name) == Some(&None) {
+        match (source, &self.renderer, &name, scene) {
+            (Source::Renderer, Some(renderer), Some(name), _) => {
+                if !matches!(self.drawn.get(name), Some(Drawn::Frame(_))) {
                     timing(&format!("renderer's first frame on {name}"));
                 }
                 let frame = &renderer.display.server.frames[name];
                 canvas.copy_from_slice(&frame.pixels);
-                self.drawn.insert(name.clone(), Some(frame.at));
+                self.drawn.insert(name.clone(), Drawn::Frame(frame.at));
             }
-            (Source::Background, ..) => {
-                self.face.background(canvas);
+            (Source::Background, _, Some(name), Some(scene))
+                if scene.bgra.len() == canvas.len() =>
+            {
+                canvas.copy_from_slice(&scene.bgra);
+                self.drawn.insert(name.clone(), Drawn::Background);
             }
             _ => {
-                self.face
-                    .draw(size, &self.state, &self.clock, Instant::now(), canvas);
+                self.face.draw(
+                    size,
+                    &self.state,
+                    &self.clock,
+                    Instant::now(),
+                    scene.map(|scene| &scene.pixmap),
+                    canvas,
+                );
                 if let Some(name) = name {
-                    self.drawn.insert(name, None);
+                    self.drawn.insert(name, Drawn::Face);
                 }
             }
         }

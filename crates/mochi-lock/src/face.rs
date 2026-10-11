@@ -80,27 +80,70 @@ impl Face {
         }
     }
 
-    /// Only the background, opaque: what shows while the renderer starts.
-    pub fn background(&self, out: &mut [u8]) {
-        let [red, green, blue, _] = self.palette.background;
-        for pixel in out.as_chunks_mut::<4>().0 {
-            *pixel = [blue, green, red, 255];
+    /// What's under everything on a monitor of `size`: the theme's
+    /// background, and over it the blurred image, filling the monitor and
+    /// dimmed as the lock screen dims it. Scaling the image is the slow
+    /// part of drawing, so the lock makes this once and keeps it.
+    pub fn scene(&self, size: Size, backdrop: Option<&Pixmap>) -> Option<Pixmap> {
+        let mut pixmap = Pixmap::new(size.width.max(1), size.height.max(1))?;
+        pixmap.fill(color(self.palette.background));
+        let Some(image) = backdrop else {
+            return Some(pixmap);
+        };
+        let (width, height) = (pixmap.width() as f32, pixmap.height() as f32);
+        let scale = (width / image.width() as f32).max(height / image.height() as f32);
+        let x = (width - image.width() as f32 * scale) / 2.0;
+        let y = (height - image.height() as f32 * scale) / 2.0;
+        let smooth = tiny_skia::PixmapPaint {
+            quality: tiny_skia::FilterQuality::Bilinear,
+            ..tiny_skia::PixmapPaint::default()
+        };
+        pixmap.draw_pixmap(
+            0,
+            0,
+            image.as_ref(),
+            &smooth,
+            Transform::from_row(scale, 0.0, 0.0, scale, x, y),
+            None,
+        );
+        // As LockScreen.qml dims it.
+        let mut dim = self.palette.background;
+        dim[3] = (255.0 * DIM).round() as u8;
+        if let Some(rect) = Rect::from_xywh(0.0, 0.0, width, height) {
+            pixmap.fill_rect(rect, &paint(dim), Transform::identity(), None);
         }
+        Some(pixmap)
+    }
+
+    /// A scene in BGRA bytes, as `wl_shm` wants them: what shows while the
+    /// renderer gets ready, copied as it is.
+    pub fn bgra(scene: &Pixmap) -> Vec<u8> {
+        let mut out = vec![0; scene.data().len()];
+        to_bgra(scene, &mut out);
+        out
     }
 
     /// Draws a monitor of `size` into BGRA bytes, as `wl_shm`'s ARGB8888
     /// wants them.
-    pub fn draw(&self, size: Size, state: &State, clock: &Clock, now: Instant, out: &mut [u8]) {
+    pub fn draw(
+        &self,
+        size: Size,
+        state: &State,
+        clock: &Clock,
+        now: Instant,
+        scene: Option<&Pixmap>,
+        out: &mut [u8],
+    ) {
         let Size {
             width,
             height,
             scale,
         } = size;
-        let Some(mut pixmap) = Pixmap::new(width.max(1), height.max(1)) else {
+        let scene = scene.filter(|scene| (scene.width(), scene.height()) == (width, height));
+        let Some(mut pixmap) = scene.cloned().or_else(|| self.scene(size, None)) else {
             return;
         };
         let palette = self.palette;
-        pixmap.fill(color(palette.background));
         let (width, height) = (width as f32, height as f32);
         let center = width / 2.0;
 
@@ -258,6 +301,10 @@ impl Face {
 fn color(rgba: [u8; 4]) -> Color {
     Color::from_rgba8(rgba[0], rgba[1], rgba[2], rgba[3])
 }
+
+/// How much the background's color darkens the image behind the lock
+/// screen, as in LockScreen.qml.
+const DIM: f32 = 0.45;
 
 fn paint(rgba: [u8; 4]) -> Paint<'static> {
     let mut paint = Paint::default();
@@ -467,7 +514,7 @@ mod tests {
             height: 300,
             scale: 1.0,
         };
-        face.draw(size, state, &clock, Instant::now(), &mut out);
+        face.draw(size, state, &clock, Instant::now(), None, &mut out);
         out
     }
 

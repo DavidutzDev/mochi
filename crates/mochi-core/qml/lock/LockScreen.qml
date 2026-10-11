@@ -50,11 +50,15 @@ Variants {
         }
 
         Image {
+            id: backdropImage
+
             anchors.fill: parent
             visible: status === Image.Ready
             source: window.backdrop !== "" ? `file://${window.backdrop}` : ""
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
+            // A screenshot that comes later replaces it without a flash.
+            retainWhileLoading: true
             smooth: true
         }
 
@@ -72,6 +76,7 @@ Variants {
             id: arranged
 
             anchors.fill: parent
+            opacity: window.shown
             active: (Daemon.state("widgets")?.widgets ?? []).length > 0
             source: "root:/modules/widgets/Desktop.qml"
         }
@@ -83,9 +88,55 @@ Variants {
             when: arranged.item !== null
         }
 
+        // Tells mochi-lock when this monitor is drawn as it should be: its
+        // background loaded, and its widgets laid out, or the layout below
+        // when there's none. Until then mochi-lock shows the background
+        // itself, so nothing shows half drawn.
+        readonly property bool loaded: {
+            if (!Daemon.ready || Daemon.state("lock") === null)
+                return false;
+            const background = window.backdrop === "" || backdropImage.status === Image.Ready || backdropImage.status === Image.Error;
+            const layout = arranged.active ? arranged.status === Loader.Ready || arranged.status === Loader.Error : noLayout.waited;
+            return background && layout && width > 0;
+        }
+        property bool told: false
+
+        // The widgets fade in over the background once mochi-lock shows
+        // this renderer, which until then shows the same background alone.
+        property real shown: told ? 1 : 0
+
+        Behavior on shown {
+            NumberAnimation {
+                duration: Theme.fadeIn
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        // No layout yet may only mean it's still on its way.
+        Timer {
+            id: noLayout
+
+            property bool waited: false
+
+            interval: 300
+            running: Daemon.ready
+            onTriggered: waited = true
+        }
+
+        // A frame more, for the widgets' own views.
+        Timer {
+            interval: 60
+            running: window.loaded && !window.told
+            onTriggered: {
+                window.told = true;
+                Daemon.command("lock", "ready", [window.modelData.name]);
+            }
+        }
+
         // Without a layout, or when its view can't load: this one.
         Item {
             anchors.fill: parent
+            opacity: window.shown
             visible: arranged.status !== Loader.Ready
 
             // The clock: the focal point.

@@ -70,6 +70,8 @@ pub struct Renderer {
     theme: Value,
     states: BTreeMap<String, Value>,
     started: Option<Instant>,
+    /// The monitors the renderer said it has drawn as they should be.
+    ready: std::collections::BTreeSet<String>,
     /// Starts in a row that ended before drawing anything.
     failures: u32,
     restart_at: Option<Instant>,
@@ -123,6 +125,7 @@ impl Renderer {
             theme,
             states: BTreeMap::new(),
             started: None,
+            ready: std::collections::BTreeSet::new(),
             failures: 0,
             restart_at: None,
         };
@@ -133,6 +136,7 @@ impl Renderer {
     fn start(&mut self) {
         self.restart_at = None;
         self.client = None;
+        self.ready.clear();
         self.display.server.frames.clear();
         let mut command = Command::new(&self.settings.quickshell);
         command
@@ -185,11 +189,14 @@ impl Renderer {
         }
     }
 
-    /// When it started, while it hasn't drawn yet.
-    pub fn starting_since(&self) -> Option<Instant> {
-        (self.child.is_some() && self.display.server.frames.is_empty())
-            .then_some(self.started)
-            .flatten()
+    /// Whether it said a monitor is drawn as it should be.
+    pub fn is_ready(&self, output: &str) -> bool {
+        self.ready.contains(output)
+    }
+
+    /// When it started, while it runs.
+    pub fn started(&self) -> Option<Instant> {
+        self.child.as_ref().and(self.started)
     }
 
     fn schedule(&mut self) {
@@ -233,7 +240,16 @@ impl Renderer {
                         self.client = None;
                         break;
                     }
-                    Ok(_) => asked.extend(allowed(&line)),
+                    Ok(_) => {
+                        // Its own word that a monitor is drawn: for the lock, not
+                        // a command for mochid.
+                        if let Some(output) = ready(&line) {
+                            crate::lock::timing(&format!("renderer ready on {output}"));
+                            self.ready.insert(output);
+                        } else {
+                            asked.extend(allowed(&line));
+                        }
+                    }
                     Err(error) if error.kind() == ErrorKind::WouldBlock => break,
                     Err(_) => {
                         self.client = None;
@@ -250,6 +266,7 @@ impl Renderer {
             self.child = None;
             self.client = None;
             self.display.server.allow(None);
+            self.ready.clear();
             self.display.server.frames.clear();
             self.failures = if drew { 0 } else { self.failures + 1 };
             crate::lock::report("warning", Some("the lock screen's renderer ended"));
@@ -342,6 +359,14 @@ fn sweep(runtime: &Path) {
             let _ = std::fs::remove_dir_all(entry.path());
         }
     }
+}
+
+/// The monitor the renderer says it has drawn, from its `lock ready`.
+fn ready(line: &str) -> Option<String> {
+    let message: Value = serde_json::from_str(line).ok()?;
+    (message["type"] == "command" && message["module"] == "lock" && message["action"] == "ready")
+        .then(|| message["args"][0].as_str().map(str::to_owned))
+        .flatten()
 }
 
 /// A command from the renderer, if it's one it may ask for.

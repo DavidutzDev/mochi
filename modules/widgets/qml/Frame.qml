@@ -46,8 +46,23 @@ Item {
     height: moving ? liveHeight : placed.height
     visible: widget !== null && (!hidden || editing)
 
+    // Placed at once the first time, once the screen has its size: only
+    // moves after that slide, not the first placing.
+    property bool settled: false
+
+    Component.onCompleted: Qt.callLater(() => root.settled = root.desktop.width > 0)
+
+    Connections {
+        target: root.desktop
+
+        function onWidthChanged(): void {
+            if (!root.settled && root.desktop.width > 0)
+                Qt.callLater(() => root.settled = true);
+        }
+    }
+
     Behavior on x {
-        enabled: !root.moving
+        enabled: !root.moving && root.settled
         NumberAnimation {
             duration: Theme.move
             easing.type: Easing.BezierSpline
@@ -56,7 +71,7 @@ Item {
     }
 
     Behavior on y {
-        enabled: !root.moving
+        enabled: !root.moving && root.settled
         NumberAnimation {
             duration: Theme.move
             easing.type: Easing.BezierSpline
