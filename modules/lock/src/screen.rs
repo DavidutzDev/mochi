@@ -24,8 +24,14 @@ ShellRoot {
 }
 "#;
 
-/// Writes the renderer's shell into `dir`.
-pub fn write_shell(dir: &Path) -> std::io::Result<()> {
+/// The modules whose views the lock screen's widgets use, as in the
+/// widgets module's list of what may go on the lock screen.
+pub const VIEWS: [&str; 6] = ["widgets", "weather", "media", "battery", "timer", "lock"];
+
+/// Writes the renderer's shell into `dir`, with the views of [`VIEWS`]
+/// copied from the daemon's `shell`: each module's own, from `builtin/`
+/// when a plugin overrides some, never the plugin's.
+pub fn write_shell(dir: &Path, shell: Option<&Path>) -> std::io::Result<()> {
     // Copies, so a link left from a development build goes too.
     let _ = std::fs::remove_file(dir.join("shell.qml"));
     assets::write_shell(
@@ -36,7 +42,52 @@ pub fn write_shell(dir: &Path) -> std::io::Result<()> {
         Mode::Copy,
     )?;
     let _ = std::fs::remove_file(dir.join("shell.qml"));
-    std::fs::write(dir.join("shell.qml"), SHELL)
+    std::fs::write(dir.join("shell.qml"), SHELL)?;
+    let mut copied = Vec::new();
+    if let Some(shell) = shell {
+        for module in VIEWS {
+            let builtin = shell.join("builtin").join(module);
+            let from = if builtin.is_dir() {
+                builtin
+            } else {
+                shell.join("modules").join(module)
+            };
+            if from.is_dir() {
+                copy_dir(&from, &dir.join("modules").join(module))?;
+                copied.push(module);
+            }
+        }
+    }
+    // Quickshell finds the views by the imports here: without them, a view
+    // can't use the others in its folder.
+    let imports: String = copied
+        .iter()
+        .enumerate()
+        .map(|(index, module)| format!("import \"modules/{module}\" as Module{index}\n"))
+        .collect();
+    std::fs::write(
+        dir.join("Modules.qml"),
+        format!(
+            "// Written by the lock module: the views the lock screen has.\nimport QtQuick\n{imports}\nQtObject {{}}\n"
+        ),
+    )?;
+    Ok(())
+}
+
+/// Copies a directory's files, following links, so the copy holds the
+/// files themselves and nothing that points elsewhere.
+fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    let _ = std::fs::remove_dir_all(to);
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)?.flatten() {
+        let target = to.join(entry.file_name());
+        if entry.path().is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            std::fs::write(target, std::fs::read(entry.path())?)?;
+        }
+    }
+    Ok(())
 }
 
 /// Quickshell, by its full path, from PATH as mochid has it.
@@ -70,7 +121,7 @@ mod tests {
     #[test]
     fn writes_a_shell_of_its_own() {
         let dir = std::env::temp_dir().join(format!("mochi-lock-shell-{}", std::process::id()));
-        write_shell(&dir).unwrap();
+        write_shell(&dir, None).unwrap();
         let shell = std::fs::read_to_string(dir.join("shell.qml")).unwrap();
         assert!(shell.contains("LockScreen {}"));
         assert!(shell.contains("watchFiles: false"));
@@ -85,7 +136,7 @@ mod tests {
                 .is_symlink()
         );
         // Written again, the same.
-        write_shell(&dir).unwrap();
+        write_shell(&dir, None).unwrap();
         std::fs::remove_dir_all(dir).unwrap();
     }
 

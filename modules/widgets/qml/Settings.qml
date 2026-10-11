@@ -421,6 +421,7 @@ Rectangle {
         }
 
         Button {
+            visible: !(root.widget?.required ?? false)
             text: "Remove"
             icon: "trash"
             tone: "danger"

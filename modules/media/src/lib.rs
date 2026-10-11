@@ -159,6 +159,8 @@ impl Module for Media {
             ContributionSpec::new("widgets", "widget", "now-playing", "Card", "Now playing")
                 .icon("music")
                 .options(json!({
+                    // The desktop, and the lock screen.
+                    "places": ["desktop", "lock"],
                     "size": [24, 8],
                     "min": [18, 7],
                     "max": [40, 9],

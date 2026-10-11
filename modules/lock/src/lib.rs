@@ -23,8 +23,8 @@ use std::time::{Duration, Instant};
 use futures_util::StreamExt;
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActionSpec, ActivityId, ActivitySpec, Assets, BoxFuture, Module, ModuleCtx, ModuleError,
-    ModuleEvent, Priority,
+    ActionSpec, ActivityId, ActivitySpec, Assets, BoxFuture, ContributionSpec, Module, ModuleCtx,
+    ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -51,12 +51,6 @@ struct Settings {
     /// The image behind it, blurred, when `background` is "image".
     #[schemars(extend("x-source" = "file", "x-filter" = "image"))]
     image: String,
-    /// What's playing, with play, pause and skip.
-    media: bool,
-    /// The battery's level, in a corner.
-    battery: bool,
-    /// The weather now, under the date.
-    weather: bool,
 }
 
 impl Default for Settings {
@@ -67,9 +61,6 @@ impl Default for Settings {
             logind: true,
             background: Background::Wallpaper,
             image: String::new(),
-            media: true,
-            battery: true,
-            weather: true,
         }
     }
 }
@@ -99,18 +90,6 @@ impl Settings {
             Background::Image | Background::None => None,
         }
     }
-
-    /// The modules whose state the lock screen shows.
-    fn shown(&self) -> Vec<&'static str> {
-        [
-            ("media", self.media),
-            ("battery", self.battery),
-            ("weather", self.weather),
-        ]
-        .into_iter()
-        .filter_map(|(module, on)| on.then_some(module))
-        .collect()
-    }
 }
 
 /// The commands the lock screen may run, as in `mochi-lock`'s renderer.
@@ -119,6 +98,10 @@ const ALLOWED: [(&str, &str); 3] = [
     ("media", "next"),
     ("media", "previous"),
 ];
+
+/// The modules whose state the lock screen's widgets show: the widgets
+/// module for the layout, and the modules whose widgets may go there.
+const WATCHED: [&str; 5] = ["widgets", "weather", "media", "battery", "timer"];
 
 /// How long the computer waits to sleep for the lock to show, at most.
 const SLEEP_WAIT: Duration = Duration::from_secs(2);
@@ -148,9 +131,28 @@ impl Module for Lock {
             .map_err(|error| error.to_string())
     }
 
+    fn contributions(&self) -> Vec<ContributionSpec> {
+        // The password field: on the lock screen only, and always there.
+        vec![
+            ContributionSpec::new("widgets", "widget", "field", "Field", "Password")
+                .icon("lock")
+                .options(json!({
+                    "places": ["lock"],
+                    "required": true,
+                    "frame": false,
+                    "size": [24, 6],
+                    "min": [16, 5],
+                    "max": [40, 9],
+                    "category": "Lock screen",
+                    "description": "The password field, with what went wrong and Caps Lock",
+                })),
+        ]
+    }
+
     fn actions(&self) -> Vec<ActionSpec> {
         vec![
             ActionSpec::new("lock", "Lock the screen"),
+            ActionSpec::new("edit", "Arrange the lock screen's widgets, or stop"),
             ActionSpec::new("status", "Say whether the screen is locked"),
         ]
     }
@@ -160,7 +162,7 @@ impl Module for Lock {
             let settings: Settings = ctx.settings()?;
             let dir = ctx.session_dir().to_owned();
             let mut locker = Locker::new(&dir, &settings, &ctx);
-            for module in settings.shown() {
+            for module in WATCHED {
                 ctx.watch_state(module);
             }
             // The wallpaper blurred, off the loop: a lock doesn't wait on it.
@@ -219,6 +221,13 @@ impl Module for Lock {
                                 command.reply(started);
                             }
                             "status" => command.answer(Ok(locker.status().into())),
+                            "edit" => {
+                                let call = ctx.call("widgets", "edit-lock", &["toggle"]);
+                                tokio::spawn(async move {
+                                    let _ = call.await;
+                                });
+                                command.reply(Ok(()));
+                            }
                             other => {
                                 let error = format!("lock has no action {other}");
                                 command.reply(Err(error));
@@ -380,12 +389,14 @@ struct Locker {
     states: std::collections::BTreeMap<String, Value>,
     /// Lines to the running lock's stdin.
     input: Option<mpsc::UnboundedSender<String>>,
+    /// The daemon's QML tree, which the renderer's views are copied from.
+    daemon_shell: Option<PathBuf>,
 }
 
 impl Locker {
     fn new(dir: &Path, settings: &Settings, ctx: &ModuleCtx) -> Self {
         let shell = ctx.data_dir().join("lock-shell");
-        let shell = match screen::write_shell(&shell) {
+        let shell = match screen::write_shell(&shell, ctx.shell_dir()) {
             Ok(()) => Some(shell),
             Err(error) => {
                 tracing::warn!(%error, "can't write the lock screen's views; it shows its own face");
@@ -408,6 +419,7 @@ impl Locker {
             background: None,
             states: std::collections::BTreeMap::new(),
             input: None,
+            daemon_shell: ctx.shell_dir().map(Path::to_owned),
             config: dir.join("lock.json"),
         };
         locker.write_config(settings, ctx);
@@ -435,6 +447,13 @@ impl Locker {
     /// A module's state, for the lock screen: kept, and passed on to a
     /// running lock.
     fn relay(&mut self, module: &str, state: Value) {
+        // The widgets module's state, as the lock screen draws it: its
+        // layout as `widgets`, never being arranged.
+        let state = if module == "widgets" {
+            lock_widgets(&state)
+        } else {
+            state
+        };
         let line = json!({ "type": "state", "module": module, "state": state }).to_string();
         self.states.insert(module.to_owned(), state);
         if let Some(input) = &self.input {
@@ -464,6 +483,12 @@ impl Locker {
     }
 
     fn spawn(&mut self, events: &mpsc::UnboundedSender<ChildEvent>) -> Result<(), String> {
+        // The views again: a module turned on since has its widgets too.
+        if let Some(shell) = &self.shell
+            && let Err(error) = screen::write_shell(shell, self.daemon_shell.as_deref())
+        {
+            tracing::warn!(%error, "can't write the lock screen's views");
+        }
         let mut command = tokio::process::Command::new(&self.binary);
         command
             .arg("--config")
@@ -703,6 +728,8 @@ impl Locker {
             "problem": self.problem,
             // For the settings' menu of PAM services.
             "services": pam_services(Path::new("/etc/pam.d")),
+            // The blurred wallpaper, for arranging the lock screen over it.
+            "background": self.background,
         });
         if state != self.published {
             ctx.publish_state(state.clone());
@@ -798,6 +825,22 @@ fn write_config(
     std::fs::write(path, config.to_string())
 }
 
+/// The widgets module's state as the lock screen's widgets view takes it:
+/// the lock screen's layout in place of the desktop's, never arranged, and
+/// none of the editor's data.
+fn lock_widgets(state: &Value) -> Value {
+    json!({
+        "grid": state["grid"],
+        "editing": false,
+        "drawer": false,
+        "widgets": state["lockWidgets"],
+        "zones": state["zones"],
+        "unknownZones": state["unknownZones"],
+        "catalog": [],
+        "layouts": [],
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -844,6 +887,23 @@ mod tests {
         assert!(!is_lock(std::process::id()));
         assert!(!is_lock(u32::MAX));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_lock_screen_gets_its_own_layout_never_arranged() {
+        let state = json!({
+            "grid": 16,
+            "editing": true,
+            "widgets": [{ "id": "w1" }],
+            "lockWidgets": [{ "id": "lock-field" }],
+            "catalog": [{ "widget": "note" }],
+            "layouts": [{ "name": "Work" }],
+        });
+        let relayed = lock_widgets(&state);
+        assert_eq!(relayed["widgets"], json!([{ "id": "lock-field" }]));
+        assert_eq!(relayed["editing"], false);
+        assert_eq!(relayed["catalog"], json!([]));
+        assert_eq!(relayed["layouts"], json!([]));
     }
 
     #[test]

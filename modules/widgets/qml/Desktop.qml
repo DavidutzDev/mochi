@@ -16,6 +16,9 @@ Item {
     readonly property var layout: Daemon.state("widgets")
     readonly property real cell: layout?.grid ?? 16
     readonly property bool editing: (layout?.editing ?? false) && layout?.output === output
+    // Arranging the lock screen's widgets, not the desktop's: shown over
+    // what the lock screen has behind them.
+    readonly property bool lockScreen: editing && (layout?.target ?? "desktop") === "lock"
     // Widgets whose module isn't running have no view, and wait.
     readonly property var placed: (layout?.widgets ?? []).filter(widget => widget.output === output && widget.view)
     readonly property var byId: {
@@ -122,6 +125,21 @@ Item {
     onReportChanged: {
         if (report)
             Daemon.command("widgets", "screen", report);
+    }
+
+    // The lock screen's background, while arranging it.
+    Rectangle {
+        anchors.fill: parent
+        visible: root.lockScreen
+        color: Theme.background
+
+        Image {
+            anchors.fill: parent
+            readonly property string path: Daemon.state("lock")?.background ?? ""
+            source: path !== "" ? `file://${path}` : ""
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+        }
     }
 
     Rectangle {

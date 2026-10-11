@@ -722,10 +722,7 @@ fn sound_themes() -> &'static Value {
     THEMES.get_or_init(|| {
         let home = std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
-            .or_else(|| {
-                std::env::var_os("HOME")
-                    .map(|home| Path::new(&home).join(".local/share"))
-            });
+            .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join(".local/share")));
         let system = std::env::var_os("XDG_DATA_DIRS")
             .map(|dirs| std::env::split_paths(&dirs).collect::<Vec<_>>())
             .unwrap_or_else(|| vec!["/usr/local/share".into(), "/usr/share".into()]);

@@ -366,6 +366,7 @@ pub struct ModuleCtx {
     config_dir: Option<PathBuf>,
     config_file: Option<PathBuf>,
     socket: Option<PathBuf>,
+    shell_dir: Option<PathBuf>,
     requests: mpsc::UnboundedSender<ModuleRequest>,
     events: mpsc::UnboundedReceiver<ModuleEvent>,
 }
@@ -392,6 +393,7 @@ impl ModuleCtx {
             session_dir,
             config_dir: None,
             config_file: None,
+            shell_dir: None,
             socket: None,
             requests,
             events,
@@ -414,6 +416,20 @@ impl ModuleCtx {
         self.config_file = Some(config_file);
         self.socket = Some(socket);
         self
+    }
+
+    /// Sets the QML tree the daemon writes for Quickshell.
+    #[must_use]
+    pub fn with_shell_dir(mut self, dir: PathBuf) -> Self {
+        self.shell_dir = Some(dir);
+        self
+    }
+
+    /// The QML tree the daemon writes for Quickshell: `modules/<id>/` for
+    /// each module's views, and `builtin/<id>/` for the originals of the
+    /// ones a plugin overrides. `None` in tests.
+    pub fn shell_dir(&self) -> Option<&Path> {
+        self.shell_dir.as_deref()
     }
 
     /// The `config.toml` the daemon reads, also when `mochid --config` names

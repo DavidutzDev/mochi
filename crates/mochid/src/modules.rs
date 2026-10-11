@@ -312,7 +312,8 @@ impl Runner {
         );
         let ctx = ctx
             .with_config_dir(self.config_dir.clone())
-            .with_daemon(self.config_file.clone(), self.paths.socket());
+            .with_daemon(self.config_file.clone(), self.paths.socket())
+            .with_shell_dir(self.paths.shell_dir());
         self.generation += 1;
         let slot = ModuleSlot {
             contributions: contributions(module.as_ref()),

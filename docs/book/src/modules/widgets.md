@@ -153,6 +153,7 @@ Each to-do list and note keeps its own content, in the [notes](notes.md) module.
 | Action | What it does |
 |---|---|
 | `edit [on\|off\|toggle] [output] [id]` | Starts or stops arranging, on the focused monitor or the one named, with a widget's settings open |
+| `edit-lock [on\|off\|toggle] [output] [id]` | The same for the [lock screen](lock.md)'s widgets |
 | `add <module> <widget>[:<variant>] [output] [anchor] [x] [y]` | Places a widget, in a look like `clock:digital` or its first; prints its id. Without an anchor, in the first free spot, down the left edge first |
 | `variant <id> <variant>` | Gives one another look, at that look's size |
 | `move <id> <output> <anchor> <x> <y>` | Moves one |

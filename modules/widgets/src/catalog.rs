@@ -167,6 +167,10 @@ pub struct Spec {
     pub forget: Option<String>,
     /// Its looks, the default first; none for a widget with one look.
     pub variants: Vec<Variant>,
+    /// Where it may go: `desktop`, `lock`, or both.
+    pub places: Vec<String>,
+    /// It can't be removed, like the lock screen's password field.
+    pub required: bool,
 }
 
 /// How a placed widget looks: its variant, or the widget itself when it
@@ -200,6 +204,12 @@ struct Options {
     category: Option<String>,
     description: Option<String>,
     variants: Vec<VariantOptions>,
+    /// Where it may go: `desktop`, `lock`, or both. The desktop only
+    /// when it says nothing.
+    places: Option<Vec<String>>,
+    /// It can't be removed from where it's required, like the lock
+    /// screen's password field.
+    required: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -217,6 +227,16 @@ struct VariantOptions {
     settings: Option<Vec<String>>,
     #[serde(default)]
     defaults: serde_json::Map<String, Value>,
+}
+
+impl Spec {
+    /// Whether it may go on the desktop, or on the lock screen.
+    pub fn goes(&self, place: &str) -> bool {
+        if place == "lock" && !crate::lock::MODULES.contains(&self.module.as_str()) {
+            return false;
+        }
+        self.places.iter().any(|it| it == place)
+    }
 }
 
 impl Spec {
@@ -287,6 +307,11 @@ impl Spec {
             settings: options.settings,
             forget: options.forget,
             variants,
+            places: options
+                .places
+                .filter(|places| !places.is_empty())
+                .unwrap_or_else(|| vec!["desktop".into()]),
+            required: options.required,
         })
     }
 
@@ -395,6 +420,8 @@ impl Spec {
             "frame": self.frame,
             "settings": self.settings.iter().map(Setting::to_json).collect::<Vec<_>>(),
             "variants": self.variants.iter().map(Variant::to_json).collect::<Vec<_>>(),
+            "places": self.places,
+            "required": self.required,
         })
     }
 }

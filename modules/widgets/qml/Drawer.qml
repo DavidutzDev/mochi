@@ -22,11 +22,12 @@ Item {
     property string query: ""
     // The category the list is narrowed to, or "" for all.
     property string category: ""
-    property string tab: "layouts"
+    property string tab: "add"
     // The saved layout whose Delete waits for a second click.
     property string confirming: ""
 
     readonly property bool open: desktop.editing && (desktop.layout?.drawer ?? false)
+    readonly property bool lockScreen: desktop.lockScreen
     readonly property bool shown: open && dragging === null
     // Away from the island's notice, which opens it.
     readonly property bool onRight: Theme.islandArea === "left"
@@ -70,10 +71,15 @@ Item {
                     looks: shown.filter(look => look.category === name)
                 })).filter(group => group.looks.length > 0);
     }
-    // How many of each look are placed, on every monitor.
+    // How many of each look are placed, on every monitor. A widget shown on
+    // several, like the lock screen's, counts once.
     readonly property var placedCounts: {
         const counts = {};
+        const seen = new Set();
         for (const widget of desktop.layout?.widgets ?? []) {
+            if (seen.has(widget.id))
+                continue;
+            seen.add(widget.id);
             const key = `${widget.module}/${widget.widget}/${widget.variant ?? ""}`;
             counts[key] = (counts[key] ?? 0) + 1;
         }
@@ -92,7 +98,7 @@ Item {
     // The monitors, with their workspaces: [{name, workspace, workspaces}].
     readonly property var screens: desktop.layout?.screens ?? []
     // The saved layout whose Apply to is open.
-    property string applying: "Left"
+    property string applying: ""
 
     function close(): void {
         copy.open = false;
@@ -106,7 +112,7 @@ Item {
     }
 
     function step(by: int): void {
-        const order = ["add", "placed", "layouts"];
+        const order = lockScreen ? ["add", "placed"] : ["add", "placed", "layouts"];
         tab = order[(order.indexOf(tab) + by + order.length) % order.length];
     }
 
@@ -192,7 +198,7 @@ Item {
 
                 PanelHeader {
                     width: parent.width
-                    title: "Widgets"
+                    title: root.lockScreen ? "Lock screen" : "Widgets"
                     icon: "dashboard_customize"
 
                     ActionButton {
@@ -205,7 +211,7 @@ Item {
                 Text {
                     width: parent.width
                     wrapMode: Text.Wrap
-                    text: root.tab === "add" ? "Drag one onto the desktop, or click it to add it." : root.tab === "placed" ? "Every widget placed, on every monitor." : "Arrangements kept under a name, to show on a workspace, a screen or every screen."
+                    text: root.tab === "add" ? (root.lockScreen ? "Drag one onto the lock screen, or click it to add it." : "Drag one onto the desktop, or click it to add it.") : root.tab === "placed" ? "Every widget placed, on every monitor." : "Arrangements kept under a name, to show on a workspace, a screen or every screen."
                     color: Theme.muted
                     font.pixelSize: Theme.textCaption
                     font.family: Theme.fontFamily
@@ -226,6 +232,7 @@ Item {
                     anchors.fill: parent
                     color: Theme.raised
                     current: root.tab
+                    // Saved layouts are the desktop's: not for the lock screen.
                     options: [
                         {
                             "value": "add",
@@ -234,15 +241,16 @@ Item {
                         },
                         {
                             "value": "placed",
-                            "label": "On desktop",
+                            "label": root.lockScreen ? "Placed" : "On desktop",
                             "icon": "display"
-                        },
-                        {
-                            "value": "layouts",
-                            "label": "Layouts",
-                            "icon": "bookmarks"
                         }
-                    ]
+                    ].concat(root.lockScreen ? [] : [
+                            {
+                                "value": "layouts",
+                                "label": "Layouts",
+                                "icon": "bookmarks"
+                            }
+                        ])
                     onPicked: value => root.tab = value
                 }
 
@@ -524,7 +532,7 @@ Item {
                                                 id: countLabel
 
                                                 anchors.centerIn: parent
-                                                text: `${card.count} on the desktop`
+                                                text: `${card.count} on the ${root.lockScreen ? "lock screen" : "desktop"}`
                                                 color: Theme.foreground
                                                 font.pixelSize: Theme.textCaption
                                                 font.family: Theme.fontFamily
@@ -657,6 +665,7 @@ Item {
                             onClicked: row.settings()
                         },
                         ActionButton {
+                            visible: !(row.modelData.required ?? false)
                             icon: "trash"
                             tone: "ghost"
                             onClicked: Daemon.command("widgets", "remove", [row.modelData.id])
@@ -674,7 +683,7 @@ Item {
                         width: parent.width
                         horizontalAlignment: Text.AlignHCenter
                         wrapMode: Text.Wrap
-                        text: root.query !== "" ? "No widgets placed match" : "Nothing on the desktop yet. Add a widget, and it shows up here."
+                        text: root.query !== "" ? "No widgets placed match" : root.lockScreen ? "Nothing on the lock screen yet. Add a widget, and it shows up here." : "Nothing on the desktop yet. Add a widget, and it shows up here."
                         color: Theme.muted
                         font.pixelSize: Theme.textBody
                         font.family: Theme.fontFamily

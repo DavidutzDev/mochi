@@ -4,9 +4,17 @@ Mochi's own lock screen, in place of hyprlock or swaylock. It's off until you ad
 
 A small program of its own, `mochi-lock`, takes the compositor's session lock (`ext-session-lock-v1`, which Hyprland, niri and Sway have) and checks your password with PAM. From the moment the compositor confirms the lock, it shows nothing but the lock screen on every monitor, a monitor plugged in while locked too, and gives the keyboard to nothing else. Only `mochi-lock` can unlock, and only once PAM accepts the password: there is no command that unlocks, and logind's unlock request is ignored.
 
-The lock screen shows the time, big, with the date and the weather under it, and on the right what's playing, with play, pause and skip, and the field, with a dot for each character typed. The battery's level sits in a corner. Behind it all is your wallpaper, blurred and dimmed. Escape or Ctrl+U clears the field, Enter checks it. After a wrong password it says so, or says what PAM said, like an account locked after too many tries; from the third wrong one in a row, Enter waits 2 seconds, then 4, 8 and so on, up to a minute, on top of PAM's own delays. It says when Caps Lock is on. Its colors and fonts are the theme's.
+By default the lock screen shows the time, big, with the date and the weather under it, and on the right what's playing, with play, pause and skip, and the field, with a dot for each character typed. The battery's level sits in a corner. Behind it all is your wallpaper, blurred and dimmed. Escape or Ctrl+U clears the field, Enter checks it. After a wrong password it says so, or says what PAM said, like an account locked after too many tries; from the third wrong one in a row, Enter waits 2 seconds, then 4, 8 and so on, up to a minute, on top of PAM's own delays. It says when Caps Lock is on. Its colors and fonts are the theme's.
 
-`background`, `media`, `battery` and `weather` in `[module.lock]` choose what shows. Weather shows once the [weather](weather.md) module runs with a place, and what's playing once the [media](media.md) module runs.
+`background` in `[module.lock]` picks what's behind it, and [Arranging it](#arranging-it) what's on it. Weather shows once the [weather](weather.md) module runs with a place, and what's playing once the [media](media.md) module runs.
+
+## Arranging it
+
+`mochi ipc lock edit` arranges the lock screen the way `mochi ipc widgets edit` arranges the desktop: over its background, with the same grid, dragging, resizing, settings and layers, and the island's notice opening the drawer. The drawer has what may go on a lock screen: the password field, the clock in each of its looks, the calendar, the weather, what's playing, the battery and the focus timer. Run it again, Escape or Done to stop.
+
+The password field is always there: it can't be removed, only moved and resized, and a layout without one gets it back. Notes, to-do lists and the other widgets you type into or that act on things stay on the desktop, and so do plugins' widgets for now.
+
+The layout is kept in `lock-widgets.toml`, next to `widgets.toml`, in the same form; the default one has the clock on the left, the weather under it, what's playing over the field on the right and the battery in a corner. A widget whose `output` is empty, as in the default, shows on every monitor.
 
 ## How it draws
 
@@ -40,6 +48,7 @@ Or point `pam_service` at a service you have, like `hyprlock`. On Hyprland, set 
 |---|---|
 | `lock` | Locks the screen |
 | `status` | Says `locked`, `locking` or `unlocked` |
+| `edit` | Arranges the lock screen's widgets, or stops |
 
 ## When something fails
 

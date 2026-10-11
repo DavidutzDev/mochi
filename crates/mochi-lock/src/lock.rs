@@ -55,7 +55,7 @@ const FRAME: Duration = Duration::from_millis(16);
 /// the lock shows its own face instead.
 const STALE: Duration = Duration::from_millis(1500);
 /// The modules whose state mochid may pass on to the renderer.
-const RELAYED: [&str; 3] = ["media", "battery", "weather"];
+const RELAYED: [&str; 5] = ["widgets", "media", "battery", "weather", "timer"];
 
 /// What a monitor shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

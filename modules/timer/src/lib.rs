@@ -294,6 +294,8 @@ impl Module for Timer {
             ContributionSpec::new("widgets", "widget", "focus", "Widget", "Focus timer")
                 .icon("timer")
                 .options(json!({
+                    // The desktop, and the lock screen.
+                    "places": ["desktop", "lock"],
                     "size": [11, 13],
                     "min": [9, 11],
                     "max": [24, 28],

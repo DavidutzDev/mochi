@@ -25,7 +25,7 @@ Item {
 
         Text {
             anchors.verticalCenter: parent.verticalCenter
-            text: "Arranging widgets"
+            text: Daemon.state("widgets")?.target === "lock" ? "Arranging the lock screen" : "Arranging widgets"
             color: Theme.foreground
             font.pixelSize: Theme.textBody
             font.family: Theme.fontFamily

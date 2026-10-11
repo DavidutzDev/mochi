@@ -384,6 +384,8 @@ impl Module for Weather {
             ContributionSpec::new("widgets", "widget", "current", "Widget", "Weather")
                 .icon("partly_cloudy_day")
                 .options(json!({
+                    // The desktop, and the lock screen.
+                    "places": ["desktop", "lock"],
                     "size": [16, 6],
                     "min": [10, 5],
                     "max": [40, 20],

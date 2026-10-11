@@ -16,9 +16,6 @@
 # the theme's background.
 # background = "wallpaper"
 # image = ""
-# What's playing, with play, pause and skip.
-# media = true
-# The battery's level, in a corner.
-# battery = true
-# The weather now, under the date.
-# weather = true
+# What's on the lock screen, and where, is arranged like desktop widgets:
+# `mochi ipc lock edit`. It's kept in lock-widgets.toml next to
+# widgets.toml.

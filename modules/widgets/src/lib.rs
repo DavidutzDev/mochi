@@ -16,6 +16,7 @@
 
 mod catalog;
 pub mod layout;
+mod lock;
 mod place;
 mod saved;
 mod tour;
@@ -101,6 +102,8 @@ impl Module for Widgets {
             ContributionSpec::new("widgets", "widget", "clock", "Clock", "Clock")
                 .icon("clock")
                 .options(json!({
+                    // The desktop, and the lock screen.
+                    "places": ["desktop", "lock"],
                     "size": [14, 7],
                     "min": [8, 4],
                     "max": [40, 20],
@@ -210,6 +213,8 @@ impl Module for Widgets {
             ContributionSpec::new("widgets", "widget", "calendar", "Calendar", "Calendar")
                 .icon("grid")
                 .options(json!({
+                    // The desktop, and the lock screen.
+                    "places": ["desktop", "lock"],
                     "size": [16, 15],
                     "min": [11, 10],
                     "max": [40, 38],
@@ -249,6 +254,13 @@ impl Module for Widgets {
         let anchor = || ArgSpec::choice("anchor", "The point it's placed from", Anchor::ALL);
         vec![
             ActionSpec::new("edit", "Arrange the widgets, or stop")
+                .arg(
+                    ArgSpec::choice("state", "Start, stop, or flip it", ["on", "off", "toggle"])
+                        .optional(),
+                )
+                .arg(ArgSpec::string("output", "The monitor; the focused one without").optional())
+                .arg(ArgSpec::string("widget", "A widget there whose settings open").optional()),
+            ActionSpec::new("edit-lock", "Arrange the lock screen's widgets, or stop")
                 .arg(
                     ArgSpec::choice("state", "Start, stop, or flip it", ["on", "off", "toggle"])
                         .optional(),
@@ -395,6 +407,9 @@ impl Module for Widgets {
                         if state.saved_changed_on_disk() {
                             state.reload_saved();
                         }
+                        if state.lock_changed_on_disk() {
+                            state.reload_lock();
+                        }
                     }
                     _ = zones.tick() => state.read_zones().await,
                     changed = next_change(&mut compositor) => {
@@ -501,6 +516,13 @@ struct State {
     workspace_lists: BTreeMap<String, Vec<String>>,
     /// The monitor being arranged on.
     editing: Option<String>,
+    /// The lock screen is being arranged, not the desktop.
+    arranging_lock: bool,
+    /// The lock screen's layout, `lock-widgets.toml`, and when it was
+    /// last read or written.
+    lock: Layout,
+    lock_path: Option<PathBuf>,
+    lock_seen: Option<(SystemTime, u64)>,
     /// The widget whose settings open as arranging starts, like one just
     /// sent there from another monitor.
     selected: Option<String>,
@@ -522,6 +544,10 @@ impl State {
         let mut state = Self {
             grid: grid.max(4),
             path: dir.as_ref().map(|dir| dir.join(FILE)),
+            lock_path: dir.as_ref().map(|dir| dir.join(lock::FILE)),
+            lock: Layout::default(),
+            lock_seen: None,
+            arranging_lock: false,
             saved_dir: dir.map(|dir| dir.join(saved::DIR)),
             layout: Layout::default(),
             seen: None,
@@ -544,6 +570,7 @@ impl State {
         };
         state.reload();
         state.reload_saved();
+        state.reload_lock();
         state
     }
 
@@ -551,9 +578,12 @@ impl State {
         let args = &command.args;
         let id = || args.str("id").unwrap_or_default().to_owned();
         let result = match command.action.as_str() {
-            "edit" => {
-                (self.editing, self.selected) =
-                    arranging(args, self.editing.is_some(), || focused(ctx));
+            "edit" | "edit-lock" => {
+                let lock = command.action == "edit-lock";
+                // Switching from one to the other keeps arranging.
+                let on = self.editing.is_some() && self.arranging_lock == lock;
+                (self.editing, self.selected) = arranging(args, on, || focused(ctx));
+                self.arranging_lock = lock && self.editing.is_some();
                 self.drawer = false;
                 self.announce(ctx);
                 Ok(None)
@@ -732,6 +762,7 @@ impl State {
                     offered.join(", ")
                 )
             })?;
+        self.may_go(spec)?;
         if let Some(variant) = variant {
             spec.variant(variant)?;
         }
@@ -778,10 +809,42 @@ impl State {
         Ok(id)
     }
 
+    /// Whether a widget may go where it's being added: the desktop, or
+    /// the lock screen while that's being arranged.
+    fn may_go(&self, spec: &Spec) -> Result<(), String> {
+        let (place, name) = if self.arranging_lock {
+            ("lock", "lock screen")
+        } else {
+            ("desktop", "desktop")
+        };
+        if spec.goes(place) {
+            Ok(())
+        } else {
+            Err(format!(
+                "{} {} doesn't go on the {name}",
+                spec.module, spec.widget
+            ))
+        }
+    }
+
+    /// Whether a widget may be removed: not one its layout needs, like the
+    /// lock screen's field.
+    fn may_remove(&self, source: &Source, id: &str) -> Result<(), String> {
+        let required = self
+            .placed(id)
+            .and_then(|placed| self.spec_of_placed(placed))
+            .is_some_and(|spec| spec.required);
+        if *source == Source::Lock && required {
+            return Err("the lock screen needs its password field: move it instead".into());
+        }
+        Ok(())
+    }
+
     fn remove(&mut self, ctx: &ModuleCtx, id: &str) -> Result<(), String> {
         let source = self
             .source_of(id)
             .ok_or_else(|| format!("no widget {id}"))?;
+        self.may_remove(&source, id)?;
         let removed = self.take(&source, id)?;
         self.write(&source)?;
         self.forget(ctx, &removed);
@@ -1141,8 +1204,10 @@ impl State {
     /// Writes a layout that changed: `widgets.toml`, or a saved layout's
     /// file, and `widgets.toml` too when it's that saved layout.
     fn write(&mut self, source: &Source) -> Result<(), String> {
-        let Source::Saved(name) = source else {
-            return self.save();
+        let name = match source {
+            Source::Own => return self.save(),
+            Source::Lock => return self.save_lock(),
+            Source::Saved(name) => name,
         };
         let dir = self.saved_dir.clone().ok_or_else(no_config)?;
         let layout = self
@@ -1173,6 +1238,44 @@ impl State {
             }
         }
         Ok(())
+    }
+
+    /// Writes `lock-widgets.toml`.
+    fn save_lock(&mut self) -> Result<(), String> {
+        let path = self.lock_path.as_ref().ok_or_else(no_config)?;
+        lock::ensure_field(&mut self.lock);
+        self.lock
+            .save(path)
+            .map_err(|error| format!("cannot write {}: {error}", path.display()))?;
+        self.lock_seen = stamp(path);
+        Ok(())
+    }
+
+    fn lock_changed_on_disk(&self) -> bool {
+        self.lock_path.as_deref().map(stamp) != Some(self.lock_seen)
+    }
+
+    /// Reads `lock-widgets.toml` again: the default layout without one,
+    /// and the password field back when it lost it. A broken one leaves
+    /// the layout as it was.
+    fn reload_lock(&mut self) {
+        let Some(path) = self.lock_path.clone() else {
+            self.lock = lock::default_layout();
+            return;
+        };
+        self.lock_seen = stamp(&path);
+        match Layout::load(&path) {
+            Ok(found) => {
+                self.lock = found.unwrap_or_else(lock::default_layout);
+                lock::ensure_field(&mut self.lock);
+            }
+            Err(error) => {
+                tracing::warn!(%error, "lock-widgets.toml doesn't read; keeping the lock screen as it was");
+                if self.lock.widgets.is_empty() {
+                    self.lock = lock::default_layout();
+                }
+            }
+        }
     }
 
     fn changed_on_disk(&self) -> bool {
@@ -1261,6 +1364,9 @@ impl State {
     /// on two is on both. `widgets.toml`'s own widgets for a monitor that
     /// isn't connected are there too, waiting, for the drawer's list.
     fn shown(&self) -> Vec<(&Placed, String)> {
+        if self.arranging_lock {
+            return self.lock_shown();
+        }
         let outputs = self.known_outputs();
         let mut shown: Vec<(&Placed, String)> = self
             .layout
@@ -1283,42 +1389,71 @@ impl State {
         shown
     }
 
+    /// The lock screen's widgets on each monitor: those placed on it, or
+    /// else those of the monitor the layout was arranged on, see
+    /// [`Layout::monitor_for`].
+    fn lock_shown(&self) -> Vec<(&Placed, String)> {
+        let mut shown = Vec::new();
+        for output in self.known_outputs() {
+            let monitor = self.lock.monitor_for(&output);
+            shown.extend(
+                self.lock
+                    .widgets
+                    .iter()
+                    .filter(|widget| widget.output == monitor)
+                    .map(|widget| (widget, output.clone())),
+            );
+        }
+        shown
+    }
+
+    /// A placed widget as the views get it, on `output`.
+    fn widget_json(&self, widget: &Placed, output: &str) -> Value {
+        let spec = self.spec_of_placed(widget);
+        let look = self.look_of(widget);
+        let variant = look.as_ref().and_then(|look| look.variant);
+        json!({
+            "id": widget.id,
+            "module": widget.module,
+            "widget": widget.widget,
+            // The look it has, or null for a widget with one.
+            "variant": variant.map(|variant| variant.id.clone()),
+            "variantTitle": variant.map(|variant| variant.title.clone()),
+            "output": output,
+            "anchor": widget.anchor.as_str(),
+            "x": widget.x,
+            "y": widget.y,
+            "width": widget.width,
+            "height": widget.height,
+            "z": widget.z,
+            "settings": spec.map_or_else(
+                || serde_json::to_value(&widget.settings).unwrap_or_default(),
+                |spec| spec.settings_for(&widget.settings, widget.variant.as_deref()),
+            ),
+            // Not offered: its module isn't running.
+            "view": look.as_ref().map(|look| look.view),
+            // Its look's: a variant can go without the card.
+            "frame": look.as_ref().is_none_or(|look| look.frame),
+            "title": spec.map(|spec| spec.title.clone()),
+            "icon": spec.and_then(|spec| spec.icon.clone()),
+            "min": look.as_ref().map(|look| [look.min.0, look.min.1]),
+            "max": look.as_ref().map(|look| [look.max.0, look.max.1]),
+            // It can't be removed, like the lock screen's field.
+            "required": spec.is_some_and(|spec| spec.required),
+        })
+    }
+
     fn publish(&mut self, ctx: &ModuleCtx) {
         let widgets: Vec<Value> = self
             .shown()
             .into_iter()
-            .map(|(widget, output)| {
-                let spec = self.spec_of_placed(widget);
-                let look = self.look_of(widget);
-                let variant = look.as_ref().and_then(|look| look.variant);
-                json!({
-                    "id": widget.id,
-                    "module": widget.module,
-                    "widget": widget.widget,
-                    // The look it has, or null for a widget with one.
-                    "variant": variant.map(|variant| variant.id.clone()),
-                    "variantTitle": variant.map(|variant| variant.title.clone()),
-                    "output": output,
-                    "anchor": widget.anchor.as_str(),
-                    "x": widget.x,
-                    "y": widget.y,
-                    "width": widget.width,
-                    "height": widget.height,
-                    "z": widget.z,
-                    "settings": spec.map_or_else(
-                        || serde_json::to_value(&widget.settings).unwrap_or_default(),
-                        |spec| spec.settings_for(&widget.settings, widget.variant.as_deref()),
-                    ),
-                    // Not offered: its module isn't running.
-                    "view": look.as_ref().map(|look| look.view),
-                    // Its look's: a variant can go without the card.
-                    "frame": look.as_ref().is_none_or(|look| look.frame),
-                    "title": spec.map(|spec| spec.title.clone()),
-                    "icon": spec.and_then(|spec| spec.icon.clone()),
-                    "min": look.as_ref().map(|look| [look.min.0, look.min.1]),
-                    "max": look.as_ref().map(|look| [look.max.0, look.max.1]),
-                })
-            })
+            .map(|(widget, output)| self.widget_json(widget, &output))
+            .collect();
+        // For the lock screen, whatever is being arranged.
+        let lock_widgets: Vec<Value> = self
+            .lock_shown()
+            .into_iter()
+            .map(|(widget, output)| self.widget_json(widget, &output))
             .collect();
         let layouts: Vec<Value> = self
             .saved
@@ -1383,7 +1518,16 @@ impl State {
             "file": self.path,
             "error": self.error,
             "widgets": widgets,
-            "catalog": self.specs.iter().map(Spec::to_json).collect::<Vec<_>>(),
+            // What may be added where it's being arranged.
+            "catalog": self
+                .specs
+                .iter()
+                .filter(|spec| spec.goes(if self.arranging_lock { "lock" } else { "desktop" }))
+                .map(Spec::to_json)
+                .collect::<Vec<_>>(),
+            // "desktop" or "lock": what's being arranged.
+            "target": if self.arranging_lock { "lock" } else { "desktop" },
+            "lockWidgets": lock_widgets,
             "zones": zones,
             "unknownZones": unknown_zones,
             "timezones": self.zone_choices.as_ref().map_or(Value::Null, |(_, choices)| choices.clone()),
@@ -1420,6 +1564,8 @@ const PLACES: &str = "everywhere; screen or workspace, the one being arranged on
 enum Source {
     Own,
     Saved(String),
+    /// The lock screen's layout, while it's being arranged.
+    Lock,
 }
 
 impl Source {
@@ -1427,6 +1573,7 @@ impl Source {
         match self {
             Self::Own => "",
             Self::Saved(name) => name,
+            Self::Lock => "the lock screen",
         }
     }
 }
@@ -1477,6 +1624,9 @@ impl State {
     }
 
     fn source_on(&self, output: &str) -> Source {
+        if self.arranging_lock {
+            return Source::Lock;
+        }
         self.rule_on(output)
             .map_or(Source::Own, |rule| Source::Saved(rule.layout.clone()))
     }
@@ -1484,6 +1634,7 @@ impl State {
     fn layout_of(&self, source: &Source) -> Option<&Layout> {
         match source {
             Source::Own => Some(&self.layout),
+            Source::Lock => Some(&self.lock),
             Source::Saved(name) => self
                 .saved
                 .iter()
@@ -1495,6 +1646,7 @@ impl State {
     fn layout_of_mut(&mut self, source: &Source) -> Option<&mut Layout> {
         match source {
             Source::Own => Some(&mut self.layout),
+            Source::Lock => Some(&mut self.lock),
             Source::Saved(name) => self
                 .saved
                 .iter_mut()
@@ -1529,7 +1681,7 @@ impl State {
     /// show there, see [`Layout::monitor_for`].
     fn monitor_in(&self, source: &Source, output: &str) -> String {
         match (source, self.layout_of(source)) {
-            (Source::Saved(_), Some(layout)) => layout.monitor_for(output),
+            (Source::Saved(_) | Source::Lock, Some(layout)) => layout.monitor_for(output),
             _ => output.to_owned(),
         }
     }
@@ -1553,6 +1705,9 @@ impl State {
             self.layout_of(source)
                 .is_some_and(|layout| layout.widgets.iter().any(|widget| widget.id == id))
         };
+        if self.arranging_lock {
+            return Some(Source::Lock).filter(has);
+        }
         self.editing
             .iter()
             .chain(self.known_outputs().iter())
@@ -2055,6 +2210,101 @@ mod tests {
         );
         state.hide_layout(Some("*/3"), "DP-1").unwrap();
         assert_eq!(state.places_of("Left").len(), 3);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_lock_screen_is_arranged_like_the_desktop_with_its_own_rules() {
+        let dir = std::env::temp_dir().join(format!("mochi-lock-layout-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut state = State::new(16, Some(dir.clone()));
+        state.outputs = ["DP-1".to_owned(), "HDMI-A-1".to_owned()].into();
+        // The default: the field, and the same on every monitor.
+        assert!(
+            state
+                .lock
+                .widgets
+                .iter()
+                .any(|widget| widget.widget == "field")
+        );
+        let field = |state: &State, output: &str| {
+            state
+                .lock_shown()
+                .iter()
+                .filter(|(widget, on)| widget.widget == "field" && on == output)
+                .count()
+        };
+        assert_eq!((field(&state, "DP-1"), field(&state, "HDMI-A-1")), (1, 1));
+
+        // Offers: the clock may go on both, a note on the desktop only, and
+        // a plugin's widget not on the lock screen whatever it says.
+        let offer = |module: &str, id: &str, options: Value| {
+            ContributionSpec::new("widgets", "widget", id, "View", id)
+                .options(options)
+                .into_contribution(module)
+        };
+        state.offered(&[
+            offer("widgets", "clock", json!({ "places": ["desktop", "lock"] })),
+            offer("notes", "note", json!({})),
+            offer(
+                "lock",
+                "field",
+                json!({ "places": ["lock"], "required": true }),
+            ),
+            offer("some-plugin", "spy", json!({ "places": ["lock"] })),
+        ]);
+        let spec = |state: &State, id: &str| {
+            state
+                .specs
+                .iter()
+                .find(|spec| spec.widget == id)
+                .unwrap()
+                .clone()
+        };
+        assert!(state.may_go(&spec(&state, "clock")).is_ok());
+        assert!(
+            state.may_go(&spec(&state, "field")).is_err(),
+            "not on the desktop"
+        );
+        state.arranging_lock = true;
+        state.editing = Some("DP-1".into());
+        assert!(state.may_go(&spec(&state, "clock")).is_ok());
+        assert!(state.may_go(&spec(&state, "note")).is_err());
+        assert!(state.may_go(&spec(&state, "spy")).is_err());
+
+        // The field stays; moving it goes to lock-widgets.toml, on both.
+        let id = state
+            .lock
+            .widgets
+            .iter()
+            .find(|widget| widget.widget == "field")
+            .unwrap()
+            .id
+            .clone();
+        assert_eq!(state.source_of(&id), Some(Source::Lock));
+        assert!(state.may_remove(&Source::Lock, &id).is_err());
+        state
+            .move_widget(&id, "DP-1", Anchor::Center, (0, 10))
+            .unwrap();
+        let saved = Layout::load(&dir.join(lock::FILE)).unwrap().unwrap();
+        let moved = saved.widgets.iter().find(|widget| widget.id == id).unwrap();
+        assert_eq!((moved.anchor, moved.y), (Anchor::Center, 10));
+        assert_eq!(field(&state, "HDMI-A-1"), 1);
+        // The desktop's file didn't change.
+        assert!(state.layout.widgets.is_empty());
+
+        // Without a field, the file gets it back on reading.
+        let mut broken = saved.clone();
+        broken.widgets.retain(|widget| widget.widget != "field");
+        broken.save(&dir.join(lock::FILE)).unwrap();
+        state.reload_lock();
+        assert!(
+            state
+                .lock
+                .widgets
+                .iter()
+                .any(|widget| widget.widget == "field")
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 

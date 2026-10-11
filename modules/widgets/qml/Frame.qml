@@ -356,7 +356,9 @@ Item {
             onClicked: root.desktop.selected = root.desktop.selected === root.widget.id ? "" : root.widget.id
         }
 
+        // Not for one it can't do without, like the lock screen's field.
         IconButton {
+            visible: !(root.widget?.required ?? false)
             icon: "trash"
             size: 14
             tone: "danger"
