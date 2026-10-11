@@ -39,6 +39,39 @@ impl Palette {
             danger: rgba(&colors.danger, [255, 69, 58, 255]),
         }
     }
+
+    /// What [`Face::scene`] makes, from the colors alone: threads can make
+    /// it with a copy of them.
+    pub fn scene(&self, size: Size, backdrop: Option<&Pixmap>) -> Option<Pixmap> {
+        let mut pixmap = Pixmap::new(size.width.max(1), size.height.max(1))?;
+        pixmap.fill(color(self.background));
+        let Some(image) = backdrop else {
+            return Some(pixmap);
+        };
+        let (width, height) = (pixmap.width() as f32, pixmap.height() as f32);
+        let scale = (width / image.width() as f32).max(height / image.height() as f32);
+        let x = (width - image.width() as f32 * scale) / 2.0;
+        let y = (height - image.height() as f32 * scale) / 2.0;
+        let smooth = tiny_skia::PixmapPaint {
+            quality: tiny_skia::FilterQuality::Bilinear,
+            ..tiny_skia::PixmapPaint::default()
+        };
+        pixmap.draw_pixmap(
+            0,
+            0,
+            image.as_ref(),
+            &smooth,
+            Transform::from_row(scale, 0.0, 0.0, scale, x, y),
+            None,
+        );
+        // As LockScreen.qml dims it.
+        let mut dim = self.background;
+        dim[3] = (255.0 * DIM).round() as u8;
+        if let Some(rect) = Rect::from_xywh(0.0, 0.0, width, height) {
+            pixmap.fill_rect(rect, &paint(dim), Transform::identity(), None);
+        }
+        Some(pixmap)
+    }
 }
 
 /// A monitor in pixels, and its scale, which the face's sizes follow.
@@ -85,34 +118,7 @@ impl Face {
     /// dimmed as the lock screen dims it. Scaling the image is the slow
     /// part of drawing, so the lock makes this once and keeps it.
     pub fn scene(&self, size: Size, backdrop: Option<&Pixmap>) -> Option<Pixmap> {
-        let mut pixmap = Pixmap::new(size.width.max(1), size.height.max(1))?;
-        pixmap.fill(color(self.palette.background));
-        let Some(image) = backdrop else {
-            return Some(pixmap);
-        };
-        let (width, height) = (pixmap.width() as f32, pixmap.height() as f32);
-        let scale = (width / image.width() as f32).max(height / image.height() as f32);
-        let x = (width - image.width() as f32 * scale) / 2.0;
-        let y = (height - image.height() as f32 * scale) / 2.0;
-        let smooth = tiny_skia::PixmapPaint {
-            quality: tiny_skia::FilterQuality::Bilinear,
-            ..tiny_skia::PixmapPaint::default()
-        };
-        pixmap.draw_pixmap(
-            0,
-            0,
-            image.as_ref(),
-            &smooth,
-            Transform::from_row(scale, 0.0, 0.0, scale, x, y),
-            None,
-        );
-        // As LockScreen.qml dims it.
-        let mut dim = self.palette.background;
-        dim[3] = (255.0 * DIM).round() as u8;
-        if let Some(rect) = Rect::from_xywh(0.0, 0.0, width, height) {
-            pixmap.fill_rect(rect, &paint(dim), Transform::identity(), None);
-        }
-        Some(pixmap)
+        self.palette.scene(size, backdrop)
     }
 
     /// A scene in BGRA bytes, as `wl_shm` wants them: what shows while the

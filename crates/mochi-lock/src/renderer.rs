@@ -29,6 +29,10 @@ pub const ALLOWED: [(&str, &str); 3] = [
     ("media", "previous"),
 ];
 
+/// The most lines read from the renderer each frame: a renderer stuck
+/// sending commands gets them read a few at a time, between keys.
+const LINES_PER_FRAME: usize = 32;
+
 /// The environment the renderer keeps from the lock's; everything else,
 /// like `WAYLAND_DISPLAY` and `HYPRLAND_INSTANCE_SIGNATURE`, goes.
 const KEPT: [&str; 16] = [
@@ -233,7 +237,9 @@ impl Renderer {
         }
         if let Some(talking) = &mut self.client {
             let mut line = String::new();
-            loop {
+            // A few lines each frame, so a renderer that never stops talking
+            // can't keep the lock from reading keys.
+            for _ in 0..LINES_PER_FRAME {
                 line.clear();
                 match talking.reader.read_line(&mut line) {
                     Ok(0) => {

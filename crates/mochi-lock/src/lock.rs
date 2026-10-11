@@ -58,6 +58,12 @@ const STALE: Duration = Duration::from_millis(1500);
 /// its own face there.
 const READY_WAIT: Duration = Duration::from_secs(3);
 
+/// The longest a password check may take before the field opens again.
+const CHECK_WAIT: Duration = Duration::from_secs(30);
+
+/// The longest the backgrounds may take before the lock is asked for.
+const SCENE_WAIT: Duration = Duration::from_millis(300);
+
 /// What a monitor shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Source {
@@ -101,30 +107,51 @@ pub fn timing(step: &str) {
 }
 
 /// Tells mochid what happened, one JSON object per line on stdout.
-#[allow(clippy::print_stdout)]
 pub fn report(event: &str, reason: Option<&str>) {
-    use std::io::Write;
-    let line = serde_json::json!({ "event": event, "reason": reason });
-    let mut out = std::io::stdout().lock();
-    let _ = writeln!(out, "{line}");
-    let _ = out.flush();
+    say(&serde_json::json!({ "event": event, "reason": reason }));
 }
 
 /// Passes on a command the renderer asked for, which mochid checks again.
-#[allow(clippy::print_stdout)]
 fn report_command(asked: &Asked) {
-    use std::io::Write;
-    let line =
-        serde_json::json!({ "event": "command", "module": asked.module, "action": asked.action });
-    let mut out = std::io::stdout().lock();
-    let _ = writeln!(out, "{line}");
-    let _ = out.flush();
+    say(&serde_json::json!({ "event": "command", "module": asked.module, "action": asked.action }));
+}
+
+/// A line to mochid, in one write. When stdout is mochid's pipe it doesn't
+/// block (see [`dont_block_on_mochid`]): a mochid that stops reading loses
+/// lines, and the lock still takes keys. A line shorter than the pipe's
+/// buffer goes whole or not at all.
+fn say(message: &serde_json::Value) {
+    let mut line = message.to_string();
+    line.push('\n');
+    // SAFETY: stdout's descriptor is open for the process's whole life, and
+    // write only reads `line`, which outlives the call.
+    let _ = unsafe { libc::write(libc::STDOUT_FILENO, line.as_ptr().cast(), line.len()) };
+}
+
+/// Makes stdout not block when it's a pipe, as mochid gives it. A
+/// terminal is left alone: its flags are the shell's too.
+fn dont_block_on_mochid() {
+    // SAFETY: fstat fills `stat`, and fcntl only reads and sets stdout's
+    // status flags.
+    unsafe {
+        let mut stat: libc::stat = std::mem::zeroed();
+        if libc::fstat(libc::STDOUT_FILENO, &raw mut stat) != 0
+            || stat.st_mode & libc::S_IFMT != libc::S_IFIFO
+        {
+            return;
+        }
+        let flags = libc::fcntl(libc::STDOUT_FILENO, libc::F_GETFL);
+        if flags >= 0 {
+            libc::fcntl(libc::STDOUT_FILENO, libc::F_SETFL, flags | libc::O_NONBLOCK);
+        }
+    }
 }
 
 /// Locks the session and waits for the right password. Returns the exit
 /// code: [`exit::UNLOCKED`] only once it's unlocked.
 pub fn run(config: Config, marker: Option<std::path::PathBuf>) -> i32 {
     STARTED.get_or_init(Instant::now);
+    dont_block_on_mochid();
     let Some(user) = auth::user() else {
         report("refused", Some("can't tell who runs the lock"));
         return exit::UNSAFE;
@@ -166,7 +193,7 @@ pub fn run(config: Config, marker: Option<std::path::PathBuf>) -> i32 {
         report("broken", Some("can't share memory with the compositor"));
         return exit::BROKEN;
     };
-    let (checks, results) = channel::channel::<Result<Granted, Refused>>();
+    let (checks, results) = channel::channel::<(u64, Result<Granted, Refused>)>();
 
     let session_state = SessionLockState::new(&globals, &qh);
     let mut lock = Lock {
@@ -187,6 +214,8 @@ pub fn run(config: Config, marker: Option<std::path::PathBuf>) -> i32 {
         config,
         user,
         checks,
+        checking: None,
+        checks_made: 0,
         secured: false,
         marker,
         exit: None,
@@ -249,8 +278,8 @@ pub fn run(config: Config, marker: Option<std::path::PathBuf>) -> i32 {
         && event_loop
             .handle()
             .insert_source(results, |event, (), lock| {
-                if let channel::Event::Msg(result) = event {
-                    lock.checked(result);
+                if let channel::Event::Msg((number, result)) = event {
+                    lock.checked(number, result);
                 }
             })
             .is_ok()
@@ -317,7 +346,12 @@ struct Lock {
     clock: Clock,
     config: Config,
     user: String,
-    checks: Sender<Result<Granted, Refused>>,
+    checks: Sender<(u64, Result<Granted, Refused>)>,
+    /// The check PAM has now, by its number, and since when: one that takes
+    /// longer than [`CHECK_WAIT`] is given up on.
+    checking: Option<(u64, Instant)>,
+    /// How many checks there were, to number them.
+    checks_made: u64,
     /// The compositor said `locked`: only then do keys count.
     secured: bool,
     /// Where to say a lock is on, with this process's id, for mochid to find
@@ -544,26 +578,37 @@ impl Lock {
                 Some((name, size, path))
             })
             .collect();
-        let face = &self.face;
-        let made: Vec<_> = std::thread::scope(|scope| {
-            let threads: Vec<_> = wanted
-                .into_iter()
-                .map(|(name, size, path)| {
-                    scope.spawn(move || {
-                        let image = path
-                            .as_ref()
-                            .and_then(|path| tiny_skia::Pixmap::load_png(path).ok());
-                        let pixmap = face.scene(size, image.as_ref())?;
-                        Some((name, Scene::new(path, pixmap)))
-                    })
-                })
-                .collect();
-            threads
-                .into_iter()
-                .filter_map(|thread| thread.join().ok().flatten())
-                .collect()
-        });
-        self.scenes.extend(made);
+        // Threads of their own, waited on for SCENE_WAIT at most: a
+        // background that can't be read in time never holds the lock back.
+        // One that's late is made again when its monitor is drawn.
+        let (made, scenes) = std::sync::mpsc::channel();
+        let count = wanted.len();
+        for (name, size, path) in wanted {
+            let made = made.clone();
+            let palette = self.face.palette;
+            let spawned = std::thread::Builder::new()
+                .name("lock-scene".into())
+                .spawn(move || {
+                    let image = path
+                        .as_ref()
+                        .and_then(|path| tiny_skia::Pixmap::load_png(path).ok());
+                    if let Some(pixmap) = palette.scene(size, image.as_ref()) {
+                        let _ = made.send((name, Scene::new(path, pixmap)));
+                    }
+                });
+            if spawned.is_err() {
+                return;
+            }
+        }
+        drop(made);
+        let deadline = Instant::now() + SCENE_WAIT;
+        for _ in 0..count {
+            let left = deadline.saturating_duration_since(Instant::now());
+            let Ok((name, scene)) = scenes.recv_timeout(left) else {
+                break;
+            };
+            self.scenes.insert(name, scene);
+        }
         timing("backgrounds made");
     }
 
@@ -684,12 +729,16 @@ impl Lock {
                 self.changed();
                 let (service, user) = (self.config.pam_service.clone(), self.user.clone());
                 let checks = self.checks.clone();
+                self.checks_made += 1;
+                let number = self.checks_made;
                 let started = std::thread::Builder::new()
                     .name("pam".into())
                     .spawn(move || {
-                        let _ = checks.send(auth::check(&service, &user, password));
+                        let _ = checks.send((number, auth::check(&service, &user, password)));
                     });
-                if started.is_err() {
+                if started.is_ok() {
+                    self.checking = Some((number, Instant::now()));
+                } else {
                     self.state
                         .refused(vec!["Couldn't check the password".into()], Instant::now());
                     self.changed();
@@ -698,10 +747,14 @@ impl Lock {
         }
     }
 
-    fn checked(&mut self, result: Result<Granted, Refused>) {
+    /// What PAM said. A check given up on still unlocks when it says yes,
+    /// since the password was right; its no is old news.
+    fn checked(&mut self, number: u64, result: Result<Granted, Refused>) {
         match result {
             Ok(granted) => self.unlock(granted),
+            Err(_) if self.checking.is_none_or(|(now, _)| now != number) => {}
             Err(refused) => {
+                self.checking = None;
                 self.state.refused(refused.messages, Instant::now());
                 self.changed();
             }
@@ -729,6 +782,15 @@ impl Lock {
         let clock = face::clock(&self.config.hours);
         let changed = clock.time != self.clock.time || clock.date != self.clock.date;
         self.clock = clock;
+        // A check PAM never answers, like one waiting on a network that's
+        // gone, mustn't leave the field closed for good.
+        if let Some((_, since)) = self.checking
+            && since.elapsed() >= CHECK_WAIT
+        {
+            self.checking = None;
+            self.state.gave_up();
+            self.changed();
+        }
         let waited = self.state.tick(Instant::now());
         let waiting = matches!(self.state.phase, Phase::Waiting(_));
         if waited || waiting {

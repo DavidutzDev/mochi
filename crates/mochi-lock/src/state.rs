@@ -119,6 +119,15 @@ impl State {
         };
     }
 
+    /// The check took too long: the field opens again, and it isn't counted
+    /// as a wrong try.
+    pub fn gave_up(&mut self) {
+        if self.phase == Phase::Checking {
+            self.phase = Phase::Typing;
+            self.message = Some("The check took too long. Try again".to_owned());
+        }
+    }
+
     /// Ends a wait that ran out. `true` when that changed what shows.
     pub fn tick(&mut self, now: Instant) -> bool {
         match self.phase {
@@ -139,6 +148,26 @@ mod tests {
         for character in text.chars() {
             state.key(Key::Text(character.to_string()), now);
         }
+    }
+
+    #[test]
+    fn a_check_given_up_on_opens_the_field_without_counting_a_wrong_try() {
+        let now = Instant::now();
+        let mut state = State::default();
+        typed(&mut state, "hunter2", now);
+        assert!(matches!(state.key(Key::Enter, now), Effect::Check(_)));
+        state.gave_up();
+        assert_eq!(state.phase, Phase::Typing);
+        assert_eq!(state.failures, 0);
+        assert!(state.message.is_some());
+        assert!(matches!(
+            state.key(Key::Text("x".into()), now),
+            Effect::Redraw
+        ));
+        // Only a check gives up.
+        state.message = None;
+        state.gave_up();
+        assert_eq!(state.message, None);
     }
 
     #[test]
