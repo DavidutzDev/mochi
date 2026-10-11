@@ -7,6 +7,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 ### Added
 
 - An `auth` module for what lets someone in without a password: sudo's password, the SSH keys in the agent, polkit's admin actions and the keyring. Everything is forgotten once the screen locks, by default, with Mochi's lock, hyprlock started by the power module, or anything logind locks. SSH keys and the keyring can be kept 1, 4 or 8 hours from when they were entered, a lock or not, or until logging out; sudo and polkit for their own timeout. It's on in a config that doesn't list its modules; one that does needs `"auth"` added.
+- Admin passwords on the island: the auth module is the session's polkit agent, so when `pkexec`, `systemctl`, `run0` or an app needs an admin action, the island asks, saying which program asks and why, with a choice of user when several may allow it. polkit's own helper checks the password. Only one agent answers a session: the home-manager module's `polkitAgent.enable`, on by default, turns off hyprpolkitagent; `polkit = false` in `[module.auth]` leaves polkit to another agent.
 
 ### Changed
 

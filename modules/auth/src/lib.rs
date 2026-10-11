@@ -21,14 +21,20 @@
 //! remember_polkit = "until-locked"    # or "own-timeout"
 //! ```
 
+mod helper;
 mod logind;
+mod polkit;
+mod prompt;
 mod remember;
 
 use futures_util::StreamExt;
 use include_dir::{Dir, include_dir};
-use mochi_core::{ActionSpec, Assets, BoxFuture, Module, ModuleCtx, ModuleError, ModuleEvent};
+use mochi_core::{
+    ActionSpec, ArgSpec, Assets, BoxFuture, Module, ModuleCtx, ModuleError, ModuleEvent,
+};
 use serde::Deserialize;
-use serde_json::Value;
+use serde_json::{Value, json};
+use tokio::sync::mpsc;
 
 use remember::{Kept, Lifetime, Remember};
 
@@ -37,7 +43,7 @@ static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 #[derive(Debug, Default)]
 pub struct Auth;
 
-#[derive(Debug, Default, Deserialize, PartialEq, schemars::JsonSchema)]
+#[derive(Debug, Deserialize, PartialEq, schemars::JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     /// How long sudo remembers its password: until the screen locks, or
@@ -52,6 +58,21 @@ struct Settings {
     /// How long polkit remembers an admin action it may keep: until the
     /// screen locks, or its own timeout, a lock or not.
     remember_polkit: Kept,
+    /// Ask for polkit's admin passwords on the island, as the session's
+    /// polkit agent, in place of hyprpolkitagent or another.
+    polkit: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            remember_sudo: Kept::default(),
+            remember_ssh_keys: Lifetime::default(),
+            remember_keyring: Lifetime::default(),
+            remember_polkit: Kept::default(),
+            polkit: true,
+        }
+    }
 }
 
 impl Settings {
@@ -98,6 +119,14 @@ impl Module for Auth {
                 "forget",
                 "Forget everything now: sudo, SSH keys, polkit and the keyring",
             ),
+            ActionSpec::new(
+                "answer",
+                "Answer the prompt on the island; the prompt sends this",
+            )
+            .arg(ArgSpec::string(
+                "answer",
+                "JSON: the prompt's id, the user and the password",
+            )),
         ]
     }
 
@@ -124,6 +153,38 @@ impl Module for Auth {
             // it's up; stopped with the module.
             let _keep = Aborts(tokio::spawn(remember::keep(remember)));
 
+            // polkit's agent for the session, on a connection of its own:
+            // polkitd forgets the agent when it closes, as the module stops.
+            let (polkit_events, mut polkit_asks) = mpsc::unbounded_channel();
+            let mut problem = None;
+            let _agent = match (settings.polkit, &id) {
+                (true, Some(id)) => match zbus::Connection::system().await {
+                    Ok(agent) => match polkit::start(&agent, id, polkit_events).await {
+                        Ok(()) => {
+                            tracing::info!("answering polkit for the session");
+                            Some(agent)
+                        }
+                        Err(error) => {
+                            tracing::warn!(%error, "can't answer polkit");
+                            problem = Some(error);
+                            None
+                        }
+                    },
+                    Err(error) => {
+                        problem = Some(error.to_string());
+                        None
+                    }
+                },
+                (true, None) => {
+                    problem = Some("no logind session to answer polkit for".to_owned());
+                    None
+                }
+                (false, _) => None,
+            };
+            ctx.publish_state(json!({ "polkit": { "on": settings.polkit, "problem": problem } }));
+            let mut prompts = prompt::Prompts::default();
+            let (checked, mut checks) = mpsc::unbounded_channel();
+
             loop {
                 tokio::select! {
                     event = ctx.next_event() => match event {
@@ -137,13 +198,24 @@ impl Module for Auth {
                                 forget(Remember::default(), id.clone());
                                 command.reply(Ok(()));
                             }
+                            "answer" => {
+                                let answer = command.args.str("answer").unwrap_or_default();
+                                let result = prompts.answer(&ctx, answer, &checked);
+                                command.reply(result);
+                            }
                             other => {
                                 let error = format!("auth has no action {other}");
                                 command.reply(Err(error));
                             }
                         },
+                        Some(ModuleEvent::Ended { activity, .. }) => prompts.ended(&ctx, activity),
                         Some(_) => {}
                     },
+                    Some(event) = polkit_asks.recv() => match event {
+                        polkit::Event::Begin(request) => prompts.begin(&ctx, request),
+                        polkit::Event::Cancel(cookie) => prompts.cancel(&ctx, &cookie),
+                    },
+                    Some(done) = checks.recv() => prompts.checked(&ctx, done),
                     Some(_) = async {
                         match &mut locks {
                             Some(locks) => locks.next().await,

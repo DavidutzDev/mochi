@@ -15,3 +15,7 @@
 # The admin actions polkit may keep: "until-locked", or "own-timeout",
 # which keeps them through a lock for polkit's own 5 minutes.
 # remember_polkit = "until-locked"
+# Ask for polkit's admin passwords on the island: pkexec, systemctl, run0
+# and apps that change the system. Mochi answers as the session's polkit
+# agent, so another one, like hyprpolkitagent, has to be off.
+# polkit = true

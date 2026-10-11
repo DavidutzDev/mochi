@@ -1,6 +1,18 @@
 # Auth
 
-How long the session remembers what lets someone at the computer in without a password: sudo's password, the SSH keys in the agent, the admin actions polkit remembers, and the keyring's unlocked secrets.
+Passwords and what the session remembers of them. Apps that need an admin password ask for it on the island, and locking the screen forgets sudo's password, the SSH keys in the agent, the admin actions polkit remembers and the keyring's unlocked secrets.
+
+## Admin passwords
+
+When an app needs an admin action, like `pkexec`, `systemctl restart`, `run0` or a settings app, polkit asks Mochi, and the island shows a prompt: which program asks, polkit's reason, and for `pkexec` the command it would run. When several users may allow it, a choice picks who types. Enter checks the password, Escape or Cancel declines, and three wrong tries end it. A wrong one clears the field and says so.
+
+Mochi never checks the password itself: polkit's own helper does, with PAM, and tells polkit. The password goes from the island to the auth module and on to the helper, and isn't kept or logged.
+
+Only one polkit agent answers for a session. If another runs, like hyprpolkitagent, Mochi logs that it can't answer and the other one keeps asking. Turn it off: with the home-manager module, `programs.mochi.polkitAgent.enable` (on by default) turns off `services.hyprpolkitagent`; otherwise stop its service or remove it from the compositor's autostart. `polkit = false` in `[module.auth]` leaves polkit to another agent.
+
+Plain `sudo` keeps asking in its terminal.
+
+## What it remembers
 
 By default, all of them are forgotten once the screen is locked, and whoever unlocks types them again. Each can be remembered longer, with a setting in `[module.auth]`:
 

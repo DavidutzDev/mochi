@@ -1036,6 +1036,7 @@ version = "0.2.1"
 dependencies = [
  "futures-util",
  "include_dir",
+ "libc",
  "mochi-core",
  "schemars",
  "serde",
@@ -1043,6 +1044,7 @@ dependencies = [
  "tokio",
  "tracing",
  "zbus",
+ "zeroize",
 ]
 
 [[package]]

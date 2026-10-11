@@ -3,6 +3,7 @@
 {
   config,
   lib,
+  options,
   pkgs,
   ...
 }:
@@ -220,6 +221,17 @@ in
       '';
     };
 
+    polkitAgent.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Let Mochi's auth module answer polkit, asking for admin passwords
+        on the island: turns off home-manager's hyprpolkitagent, since only
+        one agent can answer for a session. Needs `"auth"` in
+        `settings.modules` when that lists the modules.
+      '';
+    };
+
     portalPicker.enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -270,6 +282,11 @@ in
     }) cfg.plugins;
 
     home.packages = [ package ];
+
+    # Only one polkit agent answers a session: Mochi's, not hyprpolkitagent.
+    services = lib.optionalAttrs (cfg.polkitAgent.enable && options.services ? hyprpolkitagent) {
+      hyprpolkitagent.enable = lib.mkForce false;
+    };
 
     xdg.configFile =
       lib.genAttrs (map (name: "mochi/${name}") written) (name: {
