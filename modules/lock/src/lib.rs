@@ -14,6 +14,7 @@
 //! restarted mochid, finds a lock that's still on and watches it, or starts
 //! a new one when its process is gone.
 
+mod forget;
 mod logind;
 mod screen;
 
@@ -51,6 +52,14 @@ struct Settings {
     /// The image behind it, blurred, when `background` is "image".
     #[schemars(extend("x-source" = "file", "x-filter" = "image"))]
     image: String,
+    /// Once locked, forget sudo's remembered password.
+    forget_sudo: bool,
+    /// Once locked, remove the SSH keys from the agent.
+    forget_ssh_keys: bool,
+    /// Once locked, lock the keyring: its secrets need the password again.
+    forget_keyring: bool,
+    /// Once locked, forget the admin actions polkit remembers.
+    forget_polkit: bool,
 }
 
 impl Default for Settings {
@@ -61,6 +70,10 @@ impl Default for Settings {
             logind: true,
             background: Background::Wallpaper,
             image: String::new(),
+            forget_sudo: true,
+            forget_ssh_keys: true,
+            forget_keyring: false,
+            forget_polkit: true,
         }
     }
 }
@@ -399,6 +412,8 @@ struct Locker {
     shots: std::collections::BTreeMap<String, PathBuf>,
     /// Where they go: the module's data directory.
     shots_dir: PathBuf,
+    /// What the session forgets once the screen is locked.
+    forget: forget::Forget,
 }
 
 impl Locker {
@@ -432,6 +447,12 @@ impl Locker {
             screenshot: settings.background == Background::Screenshot,
             shots: std::collections::BTreeMap::new(),
             shots_dir: ctx.data_dir().to_owned(),
+            forget: forget::Forget {
+                sudo: settings.forget_sudo,
+                ssh_keys: settings.forget_ssh_keys,
+                keyring: settings.forget_keyring,
+                polkit: settings.forget_polkit,
+            },
             config: dir.join("lock.json"),
         };
         locker.write_config(settings, ctx);
@@ -674,6 +695,7 @@ impl Locker {
                         self.secured = true;
                         self.problem = None;
                         self.hint(true).await;
+                        self.forget();
                     }
                     Some("refused" | "broken" | "warning") => {
                         tracing::warn!(
@@ -787,6 +809,20 @@ impl Locker {
         {
             tracing::debug!(%error, "can't set logind's LockedHint");
         }
+    }
+
+    /// Makes the session forget what the settings say, now the screen is
+    /// locked, without waiting on it.
+    fn forget(&self) {
+        let what = self.forget;
+        let session = self.session.clone();
+        tokio::spawn(async move {
+            let id = match &session {
+                Some(session) => session.id().await.ok(),
+                None => None,
+            };
+            forget::forget(what, id).await;
+        });
     }
 
     /// Says on the island why the screen didn't lock.

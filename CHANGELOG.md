@@ -2,6 +2,12 @@
 
 Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor release may change the config format, the protocol or the module interface; the changelog says when.
 
+## Unreleased
+
+### Added
+
+- Once the screen is locked, the session forgets sudo's remembered password, the SSH keys in the agent and the admin actions polkit remembers, so they're asked for again; `forget_keyring` also locks the keyring. Each is a setting in `[module.lock]`.
+
 ## 0.2.0 - 2026-10-11
 
 ### Added

@@ -18,6 +18,15 @@
 # background.
 # background = "wallpaper"
 # image = ""
+# Once the screen is locked, the session forgets: sudo's remembered
+# password, the SSH keys in the agent, and the admin actions polkit
+# remembers, so they're asked for again. `forget_keyring` also locks the
+# keyring, gnome-keyring's or KeePassXC's; its next use asks for its
+# password.
+# forget_sudo = true
+# forget_ssh_keys = true
+# forget_keyring = false
+# forget_polkit = true
 # What's on the lock screen, and where, is arranged like desktop widgets:
 # `mochi ipc lock edit`, or Arrange the lock screen at the top of this
 # page. It's kept in lock-widgets.toml next to widgets.toml.

@@ -41,6 +41,10 @@ trait User {
 pub trait Session {
     fn set_locked_hint(&self, locked: bool) -> zbus::Result<()>;
 
+    /// Its id, like `2`, as polkit names the session.
+    #[zbus(property)]
+    fn id(&self) -> zbus::Result<String>;
+
     /// Someone asked the session to lock: `loginctl lock-session`, an idle
     /// daemon, the power module.
     #[zbus(signal)]

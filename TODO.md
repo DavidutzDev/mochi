@@ -455,7 +455,15 @@ Later:
 - [ ] GPU buffers passed straight through instead of software rendering
 - [ ] The renderer in a bubblewrap sandbox, so a plugin can't even kill the lock process
 - [ ] Compose keys and input methods for the password
-- [ ] A polkit prompt in the same style
+### Prompts
+
+Mochi asks for every password and passphrase the session needs, in its own style, decided on 2026-10-11. As with the lock, Rust reads the keys and holds the secret; the renderer only draws the dialog and the dots, and the secret goes straight to whoever asked, never through QML or mochid. No PAM module of Mochi's own: nothing of Mochi's runs as root. sudo reaches the prompt through `sudo -A` and `SUDO_ASKPASS`, and `run0` through polkit; plain `sudo` keeps asking in its terminal. SSH keys are held by OpenSSH's own agent, not gcr's, so Mochi decides how long each stays.
+
+- [x] Step 1, forget on lock: `sudo -K`, `ssh-add -D`, polkit's `RevokeTemporaryAuthorizations` for the session, and Secret Service `Lock` on every collection, each a setting (`forget_*` in `[module.lock]`; the keyring off by default)
+- [ ] Step 2, `mochi-prompt`: the keyboard and the zeroized password from `mochi-lock` moved into a crate both use; a layer-shell overlay with exclusive keyboard focus, drawn by the renderer on a private display like the lock's; says who asks (the program, the polkit action, the key's path and fingerprint)
+- [ ] Step 2, askpass: `mochi-prompt` as `SUDO_ASKPASS` and `SSH_ASKPASS` (`SSH_ASKPASS_REQUIRE=prefer`); for an SSH key, "Remember for 1 h, 4 h, 8 h or until locked", added to the agent with that lifetime by the prompt itself; a FIDO key's PIN, and its "touch your key" as a notice; the NixOS module and the docs set the agent and the variables
+- [ ] Step 3, the polkit agent: a module in place of hyprpolkitagent, registered with polkitd for the session, passing the conversation to polkit's own `polkit-agent-helper-1`; picks the identity when several may authorize; covers pkexec, systemctl, run0 and apps
+- [ ] Later: fingerprint (fprintd) in the prompts and on the lock screen; gcr's prompter, for those who keep gnome-keyring's SSH agent
 
 ### Capture
 

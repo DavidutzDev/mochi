@@ -32,6 +32,19 @@ Until the lock screen draws, or when it stops drawing a change within a moment a
 
 The power module's `lock` setting, when set, runs that command instead, like `["hyprlock"]`.
 
+## What it forgets
+
+Once the screen is locked, the session forgets what someone at the computer could otherwise use without a password. Each is a setting in `[module.lock]`:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `forget_sudo` | `true` | `sudo -K`: the next `sudo` asks for the password, even within its usual 5 minutes. |
+| `forget_ssh_keys` | `true` | `ssh-add -D`: the agent drops every key, and the next use asks for its passphrase. |
+| `forget_polkit` | `true` | polkit drops the admin actions it remembers for the session, like those a "keep" rule allows for a while. |
+| `forget_keyring` | `false` | Locks every Secret Service collection, gnome-keyring's or KeePassXC's: the next app that needs a secret asks for the keyring's password. |
+
+None of them holds the lock back, and one that fails, or finds nothing to forget, doesn't stop the others.
+
 ## Setting it up
 
 `mochi-lock` checks the password with the PAM service `mochi`, a file in `/etc/pam.d`. Without it, Mochi refuses to lock, since nothing could unlock the screen, and says so on the island.
