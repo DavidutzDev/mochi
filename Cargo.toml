@@ -99,6 +99,10 @@ print_stdout = "warn"
 print_stderr = "warn"
 
 # Screenshots compress PNGs: unoptimized, that takes seconds in `cargo run`.
+# The lock screen blurs its background in the daemon, with image: in a
+# debug build unoptimized, that takes seconds.
+[profile.dev.package.image]
+opt-level = 3
 [profile.dev.package.png]
 opt-level = 3
 [profile.dev.package.fdeflate]

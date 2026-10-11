@@ -78,6 +78,16 @@ pub mod exit {
     pub const UNSAFE: i32 = 3;
 }
 
+/// When this process started, for the timings it reports.
+static STARTED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
+
+/// Says how long a step took since the start, as a `timing` event: what
+/// to look at when a lock is slow to show.
+pub fn timing(step: &str) {
+    let elapsed = STARTED.get_or_init(Instant::now).elapsed().as_millis();
+    report("timing", Some(&format!("{step} after {elapsed} ms")));
+}
+
 /// Tells mochid what happened, one JSON object per line on stdout.
 #[allow(clippy::print_stdout)]
 pub fn report(event: &str, reason: Option<&str>) {
@@ -102,6 +112,7 @@ fn report_command(asked: &Asked) {
 /// Locks the session and waits for the right password. Returns the exit
 /// code: [`exit::UNLOCKED`] only once it's unlocked.
 pub fn run(config: Config, marker: Option<std::path::PathBuf>) -> i32 {
+    STARTED.get_or_init(Instant::now);
     let Some(user) = auth::user() else {
         report("refused", Some("can't tell who runs the lock"));
         return exit::UNSAFE;
@@ -190,7 +201,10 @@ pub fn run(config: Config, marker: Option<std::path::PathBuf>) -> i32 {
     // draws its own face.
     if let Some(settings) = lock.config.renderer.clone().filter(renderer::usable) {
         match Renderer::new(settings, lock.config.theme.clone()) {
-            Ok(renderer) => lock.renderer = Some(renderer),
+            Ok(renderer) => {
+                timing("renderer started");
+                lock.renderer = Some(renderer);
+            }
             Err(error) => report("warning", Some(&error)),
         }
     }
@@ -489,6 +503,9 @@ impl Lock {
         };
         match (source, &self.renderer, &name) {
             (Source::Renderer, Some(renderer), Some(name)) => {
+                if !self.drawn.contains_key(name) || self.drawn.get(name) == Some(&None) {
+                    timing(&format!("renderer's first frame on {name}"));
+                }
                 let frame = &renderer.display.server.frames[name];
                 canvas.copy_from_slice(&frame.pixels);
                 self.drawn.insert(name.clone(), Some(frame.at));
@@ -594,6 +611,7 @@ impl Lock {
 
 impl SessionLockHandler for Lock {
     fn locked(&mut self, _: &Connection, _: &QueueHandle<Self>, _: SessionLock) {
+        timing("locked");
         self.secured = true;
         if let Some(marker) = &self.marker {
             let written = marker

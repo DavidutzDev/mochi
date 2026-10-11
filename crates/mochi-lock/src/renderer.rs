@@ -221,6 +221,7 @@ impl Renderer {
                 reader: BufReader::new(stream),
                 writer,
             });
+            crate::lock::timing("renderer connected");
             self.greet();
         }
         if let Some(talking) = &mut self.client {

@@ -45,6 +45,13 @@ pub fn write_shell(dir: &Path, shell: Option<&Path>, modules: &[String]) -> std:
     )?;
     let _ = std::fs::remove_file(dir.join("shell.qml"));
     std::fs::write(dir.join("shell.qml"), SHELL)?;
+    write_views(dir, shell, modules)
+}
+
+/// Brings the views in `dir`'s `modules/` in line with the ones the lock
+/// screen needs, as [`write_shell`] does, without touching the rest: a
+/// view that didn't change is left as it was.
+pub fn write_views(dir: &Path, shell: Option<&Path>, modules: &[String]) -> std::io::Result<()> {
     let mut copied = Vec::new();
     if let Some(shell) = shell {
         let wanted = ALWAYS
@@ -78,26 +85,58 @@ pub fn write_shell(dir: &Path, shell: Option<&Path>, modules: &[String]) -> std:
         .enumerate()
         .map(|(index, module)| format!("import \"modules/{module}\" as Module{index}\n"))
         .collect();
-    std::fs::write(
-        dir.join("Modules.qml"),
-        format!(
-            "// Written by the lock module: the views the lock screen has.\nimport QtQuick\n{imports}\nQtObject {{}}\n"
-        ),
-    )?;
+    let modules_file = format!(
+        "// Written by the lock module: the views the lock screen has.\nimport QtQuick\n{imports}\nQtObject {{}}\n"
+    );
+    if std::fs::read_to_string(dir.join("Modules.qml"))
+        .ok()
+        .as_deref()
+        != Some(&modules_file)
+    {
+        std::fs::write(dir.join("Modules.qml"), modules_file)?;
+    }
+    // The views of modules the lock screen no longer shows.
+    if let Ok(entries) = std::fs::read_dir(dir.join("modules")) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if !copied.contains(&name) {
+                let _ = std::fs::remove_dir_all(entry.path());
+            }
+        }
+    }
     Ok(())
 }
 
 /// Copies a directory's files, following links, so the copy holds the
 /// files themselves and nothing that points elsewhere.
 fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
-    let _ = std::fs::remove_dir_all(to);
     std::fs::create_dir_all(to)?;
+    let mut names = std::collections::BTreeSet::new();
     for entry in std::fs::read_dir(from)?.flatten() {
         let target = to.join(entry.file_name());
+        names.insert(entry.file_name());
         if entry.path().is_dir() {
             copy_dir(&entry.path(), &target)?;
-        } else {
-            std::fs::write(target, std::fs::read(entry.path())?)?;
+            continue;
+        }
+        // Only what changed: a file left as it was keeps its time.
+        let contents = std::fs::read(entry.path())?;
+        let unchanged = std::fs::symlink_metadata(&target).is_ok_and(|meta| meta.is_file())
+            && std::fs::read(&target).is_ok_and(|old| old == contents);
+        if !unchanged {
+            let _ = std::fs::remove_file(&target);
+            std::fs::write(&target, contents)?;
+        }
+    }
+    // What the module no longer has.
+    for entry in std::fs::read_dir(to)?.flatten() {
+        if !names.contains(&entry.file_name()) {
+            let path = entry.path();
+            let _ = if path.is_dir() {
+                std::fs::remove_dir_all(path)
+            } else {
+                std::fs::remove_file(path)
+            };
         }
     }
     Ok(())
@@ -124,10 +163,12 @@ pub fn blur(source: Option<String>, out: &Path) -> Option<PathBuf> {
     Some(out.to_owned())
 }
 
-/// Each monitor as it is now, blurred into `dir` as `shot-<monitor>.png`,
-/// for the lock screen's background: by monitor. A compositor that doesn't
-/// answer within a second leaves it empty, so a lock never waits longer.
-pub fn shoot(dir: &Path) -> std::collections::BTreeMap<String, PathBuf> {
+/// Each monitor as it is now, for the lock screen's background: taken
+/// before locking, since the lock screen is all there is to see after. A
+/// compositor that doesn't answer within a second gives none, so a lock
+/// never waits longer. Blurring them comes after, with [`blur_shots`],
+/// once the screen is locked.
+pub fn capture(dir: &Path) -> Vec<mochi_core::compositor::capture::Frame> {
     let (sent, received) = std::sync::mpsc::channel();
     let scratch = dir.to_owned();
     let started = std::thread::Builder::new()
@@ -136,24 +177,32 @@ pub fn shoot(dir: &Path) -> std::collections::BTreeMap<String, PathBuf> {
             let _ = sent.send(mochi_core::compositor::capture::capture(&scratch));
         });
     if started.is_err() {
-        return std::collections::BTreeMap::new();
+        return Vec::new();
     }
-    let frames = match received.recv_timeout(std::time::Duration::from_secs(1)) {
+    match received.recv_timeout(std::time::Duration::from_secs(1)) {
         Ok(Ok(frames)) => frames,
         Ok(Err(error)) => {
             tracing::warn!(%error, "can't take the screenshot for the lock screen");
-            return std::collections::BTreeMap::new();
+            Vec::new()
         }
         Err(_) => {
             tracing::warn!("the screenshot for the lock screen took too long");
-            return std::collections::BTreeMap::new();
+            Vec::new()
         }
-    };
+    }
+}
+
+/// The screenshots, small and blurred, into `dir` as `shot-<monitor>.png`,
+/// by monitor.
+pub fn blur_shots(
+    frames: &[mochi_core::compositor::capture::Frame],
+    dir: &Path,
+) -> std::collections::BTreeMap<String, PathBuf> {
     frames
         .iter()
         .filter_map(|frame| {
-            let (width, height) = frame.size();
-            let image = image::RgbImage::from_raw(width, height, frame.shown())?;
+            let (width, height, pixels) = frame.thumbnail(SMALL);
+            let image = image::RgbImage::from_raw(width, height, pixels)?;
             let name: String = frame
                 .output
                 .chars()
@@ -172,9 +221,13 @@ pub fn shoot(dir: &Path) -> std::collections::BTreeMap<String, PathBuf> {
         .collect()
 }
 
+/// The longer side of a background before it's blurred: the renderer
+/// stretches it smoothly, and blurring a small one takes no time.
+const SMALL: u32 = 480;
+
 /// A small copy of `image`, blurred, into `out`.
 fn blurred(image: image::DynamicImage, out: &Path) -> Option<()> {
-    let small = image.resize(480, 480, image::imageops::FilterType::Triangle);
+    let small = image.resize(SMALL, SMALL, image::imageops::FilterType::Triangle);
     small.blur(6.0).to_rgb8().save(out).ok()
 }
 

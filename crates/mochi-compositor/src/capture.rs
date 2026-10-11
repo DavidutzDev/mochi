@@ -424,17 +424,27 @@ impl Frame {
         }
     }
 
-    /// Red, green, blue for each pixel as the screen shows it, row by row,
-    /// top first: a rotated output's turned the right way up.
-    pub fn shown(&self) -> Vec<u8> {
+    /// A small copy, at most `largest` pixels on its longer side, as the
+    /// screen shows it: its width, its height, and red, green, blue for each
+    /// pixel. Each is one of the screen's, read straight from the buffer, so
+    /// it takes as long as the copy is small, not as the screen is big.
+    pub fn thumbnail(&self, largest: u32) -> (u32, u32, Vec<u8>) {
         let (width, height) = self.size();
-        let mut out = Vec::with_capacity(width as usize * height as usize * 3);
-        for y in 0..i64::from(height) {
-            for x in 0..i64::from(width) {
+        let longer = width.max(height).max(1);
+        let scale = (f64::from(largest.max(1)) / f64::from(longer)).min(1.0);
+        let (small_width, small_height) = (
+            ((f64::from(width) * scale).round() as u32).max(1),
+            ((f64::from(height) * scale).round() as u32).max(1),
+        );
+        let mut out = Vec::with_capacity(small_width as usize * small_height as usize * 3);
+        for row in 0..small_height {
+            let y = (u64::from(row) * u64::from(height) / u64::from(small_height)) as i64;
+            for column in 0..small_width {
+                let x = (u64::from(column) * u64::from(width) / u64::from(small_width)) as i64;
                 out.extend_from_slice(&self.pixel(x, y).unwrap_or_default());
             }
         }
-        out
+        (small_width, small_height, out)
     }
 }
 
@@ -443,6 +453,20 @@ mod tests {
     use super::*;
 
     /// A 3 by 2 buffer whose pixels are numbered by their red channel.
+    #[test]
+    fn a_thumbnail_is_small_and_the_right_way_up() {
+        let wide = Frame::solid("DP-1", 1920, 1080, [10, 20, 30]);
+        let (width, height, pixels) = wide.thumbnail(480);
+        assert_eq!((width, height), (480, 270));
+        assert_eq!(pixels.len(), 480 * 270 * 3);
+        assert_eq!(&pixels[..3], &[10, 20, 30]);
+        // Never bigger than the screen.
+        assert_eq!(wide.thumbnail(4000).0, 1920);
+        // A monitor on its side: taller than wide.
+        let (width, height, _) = frame(Transform::_90).thumbnail(480);
+        assert_eq!((width, height), (2, 3));
+    }
+
     fn frame(transform: Transform) -> Frame {
         let mut pixels = Vec::new();
         for number in 0..6 {

@@ -308,6 +308,8 @@ async fn inhibit(manager: &logind::ManagerProxy<'static>) -> Option<zbus::zvaria
 enum ChildEvent {
     Line(u32, String),
     Exit(u32, Option<i32>),
+    /// The screenshots, blurred, by monitor.
+    Shots(std::collections::BTreeMap<String, PathBuf>),
 }
 
 /// What to do after `mochi-lock` ended.
@@ -496,17 +498,35 @@ impl Locker {
         if self.running() {
             return Ok(());
         }
+        let asked = Instant::now();
         self.respawn_at = None;
-        if self.screenshot {
-            self.shots = screen::shoot(&self.shots_dir);
+        // Taken now, since once locked the lock is all there is to see; only
+        // blurred once locked, so the lock waits on a capture, a frame or
+        // two, and not on the blurring.
+        let frames = if self.screenshot {
+            screen::capture(&self.shots_dir)
+        } else {
+            Vec::new()
+        };
+        tracing::debug!(
+            ms = asked.elapsed().as_millis(),
+            "lock: starting mochi-lock"
+        );
+        let started = self.spawn(events);
+        if !frames.is_empty() {
+            let (dir, events) = (self.shots_dir.clone(), events.clone());
+            tokio::task::spawn_blocking(move || {
+                let _ = events.send(ChildEvent::Shots(screen::blur_shots(&frames, &dir)));
+            });
         }
-        self.spawn(events)
+        started
     }
 
     fn spawn(&mut self, events: &mpsc::UnboundedSender<ChildEvent>) -> Result<(), String> {
+        let writing = Instant::now();
         // The views again: a module turned on since has its widgets too.
         if let Some(shell) = &self.shell
-            && let Err(error) = screen::write_shell(
+            && let Err(error) = screen::write_views(
                 shell,
                 self.daemon_shell.as_deref(),
                 &self.watched.iter().cloned().collect::<Vec<_>>(),
@@ -514,6 +534,10 @@ impl Locker {
         {
             tracing::warn!(%error, "can't write the lock screen's views");
         }
+        tracing::debug!(
+            ms = writing.elapsed().as_millis(),
+            "lock: wrote the lock screen's views"
+        );
         let mut command = tokio::process::Command::new(&self.binary);
         command
             .arg("--config")
@@ -623,6 +647,9 @@ impl Locker {
                 let said: Value = serde_json::from_str(&line).unwrap_or_default();
                 let reason = said["reason"].as_str().map(str::to_owned);
                 match said["event"].as_str() {
+                    Some("timing") => {
+                        tracing::debug!(step = reason.as_deref().unwrap_or(""), "lock screen");
+                    }
                     Some("command") => {
                         let (module, action) = (
                             said["module"].as_str().unwrap_or_default(),
@@ -692,6 +719,23 @@ impl Locker {
                     }
                 }
                 let _ = events;
+            }
+            // Blurred once the screen was locked: to the running lock.
+            ChildEvent::Shots(shots) => {
+                for old in std::mem::replace(&mut self.shots, shots).into_values() {
+                    if !self.shots.values().any(|kept| kept == &old) {
+                        let _ = std::fs::remove_file(old);
+                    }
+                }
+                // Unlocked before they were ready: nothing to show them on.
+                if !self.running() {
+                    for shot in std::mem::take(&mut self.shots).into_values() {
+                        let _ = std::fs::remove_file(shot);
+                    }
+                } else if let Some(input) = &self.input {
+                    let line = json!({ "type": "backgrounds", "backgrounds": self.shots });
+                    let _ = input.send(line.to_string());
+                }
             }
             // From a lock that's no longer this module's.
             _ => {}
