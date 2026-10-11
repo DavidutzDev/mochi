@@ -15,6 +15,7 @@
 //! a new one when its process is gone.
 
 mod logind;
+mod screen;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -44,6 +45,15 @@ struct Settings {
     before_sleep: bool,
     /// Lock when logind asks.
     logind: bool,
+    /// Behind the lock screen: "wallpaper", blurred, an image's path,
+    /// blurred too, or "none" for the theme's background.
+    background: String,
+    /// What's playing, with play, pause and skip.
+    media: bool,
+    /// The battery's level, in a corner.
+    battery: bool,
+    /// The weather now, under the date.
+    weather: bool,
 }
 
 impl Default for Settings {
@@ -52,9 +62,34 @@ impl Default for Settings {
             pam_service: "mochi".into(),
             before_sleep: true,
             logind: true,
+            background: "wallpaper".into(),
+            media: true,
+            battery: true,
+            weather: true,
         }
     }
 }
+
+impl Settings {
+    /// The modules whose state the lock screen shows.
+    fn shown(&self) -> Vec<&'static str> {
+        [
+            ("media", self.media),
+            ("battery", self.battery),
+            ("weather", self.weather),
+        ]
+        .into_iter()
+        .filter_map(|(module, on)| on.then_some(module))
+        .collect()
+    }
+}
+
+/// The commands the lock screen may run, as in `mochi-lock`'s renderer.
+const ALLOWED: [(&str, &str); 3] = [
+    ("media", "play-pause"),
+    ("media", "next"),
+    ("media", "previous"),
+];
 
 /// How long the computer waits to sleep for the lock to show, at most.
 const SLEEP_WAIT: Duration = Duration::from_secs(2);
@@ -96,6 +131,19 @@ impl Module for Lock {
             let settings: Settings = ctx.settings()?;
             let dir = ctx.session_dir().to_owned();
             let mut locker = Locker::new(&dir, &settings, &ctx);
+            for module in settings.shown() {
+                ctx.watch_state(module);
+            }
+            // The wallpaper blurred, off the loop: a lock doesn't wait on it.
+            let blurring = {
+                let (background, out) = (
+                    settings.background.clone(),
+                    ctx.data_dir().join("lock-background.png"),
+                );
+                tokio::task::spawn_blocking(move || screen::blur(&background, &out))
+            };
+            tokio::pin!(blurring);
+            let mut blurred = false;
             let (events, mut received) = mpsc::unbounded_channel();
 
             let system = zbus::Connection::system().await.ok();
@@ -154,6 +202,7 @@ impl Module for Lock {
                         Some(ModuleEvent::Ended { activity, .. }) if locker.notice == Some(activity) => {
                             locker.notice = None;
                         }
+                        Some(ModuleEvent::State { module, state }) => locker.relay(&module, state),
                         Some(_) => {}
                     },
                     Some(event) = received.recv() => locker.child_event(event, &events, &ctx).await,
@@ -175,6 +224,11 @@ impl Module for Lock {
                     }
                     _ = watch.tick() => locker.check_adopted(&events, &ctx).await,
                     () = locker.wait_to_respawn() => locker.respawn(&events),
+                    background = &mut blurring, if !blurred => {
+                        blurred = true;
+                        locker.background = background.ok().flatten();
+                        locker.write_config(&settings, &ctx);
+                    }
                 }
                 // The sleep goes on once the screen is locked, or the wait
                 // is over.
@@ -288,17 +342,29 @@ struct Locker {
     notice: Option<ActivityId>,
     session: Option<logind::SessionProxy<'static>>,
     published: Value,
+    /// The renderer's shell, when it could be written.
+    shell: Option<PathBuf>,
+    /// The wallpaper, blurred, once it is.
+    background: Option<PathBuf>,
+    /// The last state of each module the lock screen shows, for a lock
+    /// that starts later.
+    states: std::collections::BTreeMap<String, Value>,
+    /// Lines to the running lock's stdin.
+    input: Option<mpsc::UnboundedSender<String>>,
 }
 
 impl Locker {
     fn new(dir: &Path, settings: &Settings, ctx: &ModuleCtx) -> Self {
-        let config = dir.join("lock.json");
-        if let Err(error) = write_config(&config, settings, ctx) {
-            tracing::warn!(%error, "can't write the lock's settings; it locks with its defaults");
-        }
-        Self {
+        let shell = ctx.data_dir().join("lock-shell");
+        let shell = match screen::write_shell(&shell) {
+            Ok(()) => Some(shell),
+            Err(error) => {
+                tracing::warn!(%error, "can't write the lock screen's views; it shows its own face");
+                None
+            }
+        };
+        let locker = Self {
             binary: binary(),
-            config,
             marker: dir.join("locked"),
             child: None,
             adopted: None,
@@ -309,6 +375,41 @@ impl Locker {
             notice: None,
             session: None,
             published: Value::Null,
+            shell,
+            background: None,
+            states: std::collections::BTreeMap::new(),
+            input: None,
+            config: dir.join("lock.json"),
+        };
+        locker.write_config(settings, ctx);
+        locker
+    }
+
+    fn write_config(&self, settings: &Settings, ctx: &ModuleCtx) {
+        let renderer = match (screen::quickshell(), &self.shell) {
+            (Some(quickshell), Some(shell)) => {
+                Some(json!({ "quickshell": quickshell, "shell": shell }))
+            }
+            _ => None,
+        };
+        if let Err(error) = write_config(
+            &self.config,
+            settings,
+            ctx,
+            renderer,
+            self.background.as_deref(),
+        ) {
+            tracing::warn!(%error, "can't write the lock's settings; it locks with its defaults");
+        }
+    }
+
+    /// A module's state, for the lock screen: kept, and passed on to a
+    /// running lock.
+    fn relay(&mut self, module: &str, state: Value) {
+        let line = json!({ "type": "state", "module": module, "state": state }).to_string();
+        self.states.insert(module.to_owned(), state);
+        if let Some(input) = &self.input {
+            let _ = input.send(line);
         }
     }
 
@@ -340,7 +441,7 @@ impl Locker {
             .arg(&self.config)
             .arg("--marker")
             .arg(&self.marker)
-            .stdin(std::process::Stdio::null())
+            .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::null())
             // It outlives this module: only the password ends it.
@@ -354,6 +455,27 @@ impl Locker {
             return Err("mochi-lock ended at once".into());
         };
         self.child = Some(pid);
+        // The states it shows, now and as they change.
+        let (input, mut lines_in) = mpsc::unbounded_channel::<String>();
+        if let Some(mut stdin) = child.stdin.take() {
+            tokio::spawn(async move {
+                use tokio::io::AsyncWriteExt;
+                while let Some(line) = lines_in.recv().await {
+                    if stdin
+                        .write_all(format!("{line}\n").as_bytes())
+                        .await
+                        .is_err()
+                    {
+                        break;
+                    }
+                }
+            });
+        }
+        for (module, state) in &self.states {
+            let _ = input
+                .send(json!({ "type": "state", "module": module, "state": state }).to_string());
+        }
+        self.input = Some(input);
         let events = events.clone();
         let stdout = child.stdout.take();
         tokio::spawn(async move {
@@ -417,6 +539,26 @@ impl Locker {
                 let said: Value = serde_json::from_str(&line).unwrap_or_default();
                 let reason = said["reason"].as_str().map(str::to_owned);
                 match said["event"].as_str() {
+                    Some("command") => {
+                        let (module, action) = (
+                            said["module"].as_str().unwrap_or_default(),
+                            said["action"].as_str().unwrap_or_default(),
+                        );
+                        // Checked again here: mochi-lock lets only these through,
+                        // and so does this.
+                        if ALLOWED.contains(&(module, action)) {
+                            let call = ctx.call(module, action, &[]);
+                            tokio::spawn(async move {
+                                let _ = call.await;
+                            });
+                        } else {
+                            tracing::warn!(
+                                module,
+                                action,
+                                "the lock screen asked for a command it may not run"
+                            );
+                        }
+                    }
                     Some("locked") => {
                         self.secured = true;
                         self.problem = None;
@@ -437,6 +579,7 @@ impl Locker {
             }
             ChildEvent::Exit(pid, code) if self.child == Some(pid) => {
                 self.child = None;
+                self.input = None;
                 match code {
                     Some(code::UNLOCKED) => {
                         self.restarts.after(code, Instant::now());
@@ -559,14 +702,21 @@ fn is_lock(pid: u32) -> bool {
         .is_ok_and(|name| name.trim() == "mochi-lock")
 }
 
-/// What `mochi-lock` reads: the PAM service, the font, and the theme's
-/// colors for its face.
-fn write_config(path: &Path, settings: &Settings, ctx: &ModuleCtx) -> std::io::Result<()> {
+/// What `mochi-lock` reads: the PAM service, the font, the theme's colors
+/// for its own face, and the renderer with the theme and the background.
+fn write_config(
+    path: &Path,
+    settings: &Settings,
+    ctx: &ModuleCtx,
+    renderer: Option<Value>,
+    background: Option<&Path>,
+) -> std::io::Result<()> {
     let theme = ctx
         .config_dir()
         .map(|dir| dir.join("theme.toml"))
         .and_then(|file| mochi_core::config::load_theme(&file).ok())
         .unwrap_or_default();
+    let theme_json = serde_json::to_value(&theme).unwrap_or(Value::Null);
     let colors = &theme.colors;
     let font = mochi_core::assets::find_fonts()
         .into_iter()
@@ -582,6 +732,9 @@ fn write_config(path: &Path, settings: &Settings, ctx: &ModuleCtx) -> std::io::R
             "accent": colors.accent.as_str(),
             "danger": colors.danger.as_str(),
         },
+        "renderer": renderer,
+        "theme": theme_json,
+        "background": background,
     });
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;

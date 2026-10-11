@@ -4,7 +4,15 @@ Mochi's own lock screen, in place of hyprlock or swaylock. It's off until you ad
 
 A small program of its own, `mochi-lock`, takes the compositor's session lock (`ext-session-lock-v1`, which Hyprland, niri and Sway have) and checks your password with PAM. From the moment the compositor confirms the lock, it shows nothing but the lock screen on every monitor, a monitor plugged in while locked too, and gives the keyboard to nothing else. Only `mochi-lock` can unlock, and only once PAM accepts the password: there is no command that unlocks, and logind's unlock request is ignored.
 
-The lock screen shows the time and the date, and a field with a dot for each character typed. Escape or Ctrl+U clears it, Enter checks it. After a wrong password it says so, or says what PAM said, like an account locked after too many tries; from the third wrong one in a row, Enter waits 2 seconds, then 4, 8 and so on, up to a minute, on top of PAM's own delays. It says when Caps Lock is on. Its colors are the theme's.
+The lock screen shows the time, big, with the date and the weather under it, and on the right what's playing, with play, pause and skip, and the field, with a dot for each character typed. The battery's level sits in a corner. Behind it all is your wallpaper, blurred and dimmed. Escape or Ctrl+U clears the field, Enter checks it. After a wrong password it says so, or says what PAM said, like an account locked after too many tries; from the third wrong one in a row, Enter waits 2 seconds, then 4, 8 and so on, up to a minute, on top of PAM's own delays. It says when Caps Lock is on. Its colors and fonts are the theme's.
+
+`background`, `media`, `battery` and `weather` in `[module.lock]` choose what shows. Weather shows once the [weather](weather.md) module runs with a place, and what's playing once the [media](media.md) module runs.
+
+## How it draws
+
+`mochi-lock` holds the lock and the keyboard. The lock screen itself is Quickshell, like the rest of Mochi, but it draws on a small display of `mochi-lock`'s own, not on your compositor: `mochi-lock` copies what it draws onto the lock's surfaces. That display has no keyboard, so the lock screen's views never see a key: they show as many dots as `mochi-lock` says, and nothing else about the password reaches them. They can't unlock, and the commands they may ask for are play, pause and skip, which `mochi-lock` and mochid both check. Only Quickshell's own process may connect to that display, and it runs without the variables that would lead it to your compositor or its IPC.
+
+Until the lock screen draws, or when it stops drawing a change within a moment and a half, or crashes, `mochi-lock` draws a plain face of its own: the time, the date and the field. It starts the lock screen again after a crash. Either way the password works the same.
 
 ## When it locks
 

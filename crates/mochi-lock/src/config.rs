@@ -17,6 +17,19 @@ pub struct Config {
     pub colors: Colors,
     /// "24" or "12".
     pub hours: String,
+    /// The lock screen's renderer; without it, the lock draws its own face.
+    pub renderer: Option<Renderer>,
+    /// The theme, as mochid sends it to the shell, for the renderer.
+    pub theme: serde_json::Value,
+    /// The wallpaper, blurred, for the renderer's background.
+    pub background: Option<PathBuf>,
+}
+
+/// Where the renderer is: Quickshell, and the lock screen's shell for it.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Renderer {
+    pub quickshell: PathBuf,
+    pub shell: PathBuf,
 }
 
 /// The theme's roles the face uses, as `#rrggbb` or `#aarrggbb`.
@@ -38,6 +51,9 @@ impl Default for Config {
             font: None,
             colors: Colors::default(),
             hours: "24".into(),
+            renderer: None,
+            theme: serde_json::Value::Null,
+            background: None,
         }
     }
 }

@@ -11,3 +11,13 @@
 # Lock when logind asks: `loginctl lock-session`, the power module's Lock,
 # or an idle daemon like hypridle. logind's unlock is never obeyed.
 # logind = true
+# Behind the lock screen: "wallpaper", the one awww, swww or hyprpaper
+# shows, blurred; an image's path, blurred too; or "none" for the theme's
+# background.
+# background = "wallpaper"
+# What's playing, with play, pause and skip.
+# media = true
+# The battery's level, in a corner.
+# battery = true
+# The weather now, under the date.
+# weather = true

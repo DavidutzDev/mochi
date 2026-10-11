@@ -14,8 +14,10 @@
 
 mod auth;
 mod config;
+mod display;
 mod face;
 mod lock;
+mod renderer;
 mod state;
 
 use std::path::PathBuf;

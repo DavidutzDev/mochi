@@ -434,12 +434,12 @@ Step 1, the secure core, which replaces hyprlock on its own with a plain look:
 
 Step 2, the private display and the QML renderer:
 
-- [ ] A minimal Wayland server in `mochi-lock`: compositor, shm, layer shell, an output per monitor at its size and scale, pointer input passed on, frames put on the lock surfaces
-- [ ] The renderer: a Quickshell instance on the private display, its own `Daemon`, Mochi's components and theme
-- [ ] Elements: clock, date, greeting, password dots and messages, media, battery, weather, keyboard layout, Caps Lock
-- [ ] Backgrounds: wallpaper, image, color, blur and dim; a blurred copy of the screen, off by default
-- [ ] The allowlist of commands, checked twice; the fallback face when the renderer hasn't drawn, crashed or froze
-- [ ] Tests: the renderer never gets a key, its crash shows the fallback and it comes back
+- [x] A minimal Wayland server in `mochi-lock`, on smithay: compositor, shm, layer shell, xdg-shell (Qt needs it; its windows never show), an output per monitor at its size and scale, a seat with a pointer and no keyboard, frames copied out of shm (alpha forced opaque) onto the lock surfaces, frame callbacks paced at 16 ms, the cursor from cursor-shape-v1. Only the renderer's process connects, checked with SO_PEERCRED, on the display and on the control socket, in a 0700 directory removed at unlock; left-over ones from killed locks are swept
+- [x] The renderer: Quickshell with the software renderer and a scrubbed environment (no WAYLAND_DISPLAY, compositor IPC or bus), the shell's own `Daemon.qml` talking to `mochi-lock`: the theme, `lock` as a module state (typed count, phase, message, Caps Lock, user, hours, background), and the relayed states. Its shell is written by the lock module from the core QML only, as copies, without reloading
+- [x] Elements: the stacked clock, the date, the weather, the field with dots, messages and Caps Lock, what's playing with play, pause and skip, the battery. Not yet: the keyboard layout, a greeting
+- [x] Backgrounds: the wallpaper or an image, downscaled and blurred in Rust when the module starts, dimmed; or none. Not yet: a blurred copy of the screen
+- [x] The allowlist (media play-pause, next, previous) in `mochi-lock` and in the module; the own face while the renderer starts (the background only, for a moment and a half), hasn't drawn a change within 1.5 s, or crashed, and the renderer started again with a growing wait
+- [x] Tests: the display has no keyboard and only the allowed process connects; the allowlist; the shell has no module's or plugin's views; the blur. On headless Sway (2026-10-11): the renderer's frames on both monitors, typing shown as dots, a wrong password, the renderer killed shows the own face at once and comes back within a second, unlocking stops it and removes its directory, all through mochid with a blurred wallpaper
 
 Step 3, customization:
 

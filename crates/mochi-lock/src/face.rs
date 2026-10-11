@@ -80,6 +80,14 @@ impl Face {
         }
     }
 
+    /// Only the background, opaque: what shows while the renderer starts.
+    pub fn background(&self, out: &mut [u8]) {
+        let [red, green, blue, _] = self.palette.background;
+        for pixel in out.as_chunks_mut::<4>().0 {
+            *pixel = [blue, green, red, 255];
+        }
+    }
+
     /// Draws a monitor of `size` into BGRA bytes, as `wl_shm`'s ARGB8888
     /// wants them.
     pub fn draw(&self, size: Size, state: &State, clock: &Clock, now: Instant, out: &mut [u8]) {

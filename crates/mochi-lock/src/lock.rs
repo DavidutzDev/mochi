@@ -8,6 +8,7 @@
 //! and nothing here unlocks on the way out (`main` aborts on a panic, and a
 //! dropped lock is destroyed, not unlocked).
 
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use smithay_client_toolkit::compositor::{CompositorHandler, CompositorState};
@@ -18,13 +19,18 @@ use smithay_client_toolkit::reexports::calloop::{EventLoop, LoopHandle};
 use smithay_client_toolkit::reexports::calloop_wayland_source::WaylandSource;
 use smithay_client_toolkit::reexports::client::globals::registry_queue_init;
 use smithay_client_toolkit::reexports::client::protocol::{
-    wl_keyboard, wl_output, wl_seat, wl_shm, wl_surface,
+    wl_keyboard, wl_output, wl_pointer, wl_seat, wl_shm, wl_surface,
 };
 use smithay_client_toolkit::reexports::client::{Connection, QueueHandle};
 use smithay_client_toolkit::registry::{ProvidesRegistryState, RegistryState};
 use smithay_client_toolkit::seat::keyboard::{
     KeyEvent, KeyboardHandler, Keysym, Modifiers, RawModifiers,
 };
+use smithay_client_toolkit::reexports::protocols::wp::cursor_shape::v1::client::wp_cursor_shape_device_v1::{
+    Shape, WpCursorShapeDeviceV1,
+};
+use smithay_client_toolkit::seat::pointer::cursor_shape::CursorShapeManager;
+use smithay_client_toolkit::seat::pointer::{PointerEvent, PointerEventKind, PointerHandler};
 use smithay_client_toolkit::seat::{Capability, SeatHandler, SeatState};
 use smithay_client_toolkit::session_lock::{
     SessionLock, SessionLockHandler, SessionLockState, SessionLockSurface,
@@ -33,14 +39,31 @@ use smithay_client_toolkit::session_lock::{
 use smithay_client_toolkit::shm::slot::SlotPool;
 use smithay_client_toolkit::shm::{Shm, ShmHandler};
 use smithay_client_toolkit::{
-    delegate_compositor, delegate_keyboard, delegate_output, delegate_registry, delegate_seat,
-    delegate_session_lock, delegate_shm, registry_handlers,
+    delegate_compositor, delegate_keyboard, delegate_output, delegate_pointer, delegate_registry,
+    delegate_seat, delegate_session_lock, delegate_shm, registry_handlers,
 };
 
 use crate::auth::{self, Granted, Refused};
 use crate::config::Config;
 use crate::face::{self, Clock, Face};
-use crate::state::{Effect, Key, State};
+use crate::renderer::{self, Asked, Renderer};
+use crate::state::{Effect, Key, Phase, State};
+
+/// How often the renderer's display is served and its frames shown.
+const FRAME: Duration = Duration::from_millis(16);
+/// How long the renderer has to draw a change, or to draw at all, before
+/// the lock shows its own face instead.
+const STALE: Duration = Duration::from_millis(1500);
+/// The modules whose state mochid may pass on to the renderer.
+const RELAYED: [&str; 3] = ["media", "battery", "weather"];
+
+/// What a monitor shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Source {
+    Renderer,
+    Background,
+    Face,
+}
 
 /// How the process ends, for mochid.
 pub mod exit {
@@ -62,6 +85,17 @@ pub mod exit {
 pub fn report(event: &str, reason: Option<&str>) {
     use std::io::Write;
     let line = serde_json::json!({ "event": event, "reason": reason });
+    let mut out = std::io::stdout().lock();
+    let _ = writeln!(out, "{line}");
+    let _ = out.flush();
+}
+
+/// Passes on a command the renderer asked for, which mochid checks again.
+#[allow(clippy::print_stdout)]
+fn report_command(asked: &Asked) {
+    use std::io::Write;
+    let line =
+        serde_json::json!({ "event": "command", "module": asked.module, "action": asked.action });
     let mut out = std::io::stdout().lock();
     let _ = writeln!(out, "{line}");
     let _ = out.flush();
@@ -135,6 +169,12 @@ pub fn run(config: Config, marker: Option<std::path::PathBuf>) -> i32 {
         secured: false,
         marker,
         exit: None,
+        renderer: None,
+        cursor_shapes: CursorShapeManager::bind(&globals, &qh).ok(),
+        pointer: None,
+        cursor: None,
+        drawn: HashMap::new(),
+        pushed: Instant::now(),
     };
 
     // Before anything draws.
@@ -147,6 +187,28 @@ pub fn run(config: Config, marker: Option<std::path::PathBuf>) -> i32 {
         lock.cover(&output, &qh);
     }
 
+    // The renderer, once the lock is asked for: until it draws, the lock
+    // draws its own face.
+    if let Some(settings) = lock.config.renderer.clone().filter(renderer::usable) {
+        match Renderer::new(settings, lock.config.theme.clone()) {
+            Ok(renderer) => lock.renderer = Some(renderer),
+            Err(error) => report("warning", Some(&error)),
+        }
+    }
+    lock.push();
+    let (lines, input) = channel::channel::<String>();
+    std::thread::Builder::new()
+        .name("stdin".into())
+        .spawn(move || {
+            use std::io::BufRead;
+            for line in std::io::stdin().lock().lines().map_while(Result::ok) {
+                if lines.send(line).is_err() {
+                    break;
+                }
+            }
+        })
+        .ok();
+
     let inserted = WaylandSource::new(connection, queue)
         .insert(event_loop.handle())
         .is_ok()
@@ -156,6 +218,21 @@ pub fn run(config: Config, marker: Option<std::path::PathBuf>) -> i32 {
                 if let channel::Event::Msg(result) = event {
                     lock.checked(result);
                 }
+            })
+            .is_ok()
+        && event_loop
+            .handle()
+            .insert_source(input, |event, (), lock| {
+                if let channel::Event::Msg(line) = event {
+                    lock.input(&line);
+                }
+            })
+            .is_ok()
+        && event_loop
+            .handle()
+            .insert_source(Timer::from_duration(FRAME), |_, (), lock| {
+                lock.frame();
+                TimeoutAction::ToDuration(FRAME)
             })
             .is_ok()
         && event_loop
@@ -213,6 +290,15 @@ struct Lock {
     /// it again after a restart: written on `locked`, removed on unlocking.
     marker: Option<std::path::PathBuf>,
     exit: Option<i32>,
+    renderer: Option<Renderer>,
+    cursor_shapes: Option<CursorShapeManager>,
+    pointer: Option<wl_pointer::WlPointer>,
+    cursor: Option<WpCursorShapeDeviceV1>,
+    /// When the renderer's frame drawn last on each monitor was made, or
+    /// `None` when the lock's own face is there.
+    drawn: HashMap<String, Option<Instant>>,
+    /// When the renderer was last told the lock's state.
+    pushed: Instant,
 }
 
 impl Lock {
@@ -243,6 +329,123 @@ impl Lock {
             .map_or(1, |info| info.scale_factor.max(1))
     }
 
+    fn name(&self, output: &wl_output::WlOutput) -> Option<String> {
+        self.outputs.info(output).and_then(|info| info.name)
+    }
+
+    /// What a monitor shows: the renderer's last frame when it has one of
+    /// the right size that isn't stale, nothing but the background while
+    /// the renderer starts and nothing's typed yet, and else the lock's own
+    /// face.
+    fn source(&self, name: Option<&str>, pixels: (u32, u32)) -> Source {
+        let Some(renderer) = &self.renderer else {
+            return Source::Face;
+        };
+        let frame = name.and_then(|name| renderer.display.server.frames.get(name));
+        if let Some(frame) = frame
+            && (frame.width, frame.height) == pixels
+            && (frame.at >= self.pushed || self.pushed.elapsed() < STALE)
+        {
+            return Source::Renderer;
+        }
+        let quiet = self.state.typed() == 0 && self.state.message.is_none();
+        if quiet
+            && renderer
+                .starting_since()
+                .is_some_and(|since| since.elapsed() < STALE)
+        {
+            return Source::Background;
+        }
+        Source::Face
+    }
+
+    /// Tells the renderer the lock's state: how many characters, never
+    /// which.
+    fn push(&mut self) {
+        let (phase, wait) = match self.state.phase {
+            Phase::Typing => ("typing", 0),
+            Phase::Checking => ("checking", 0),
+            Phase::Waiting(until) => (
+                "waiting",
+                until.saturating_duration_since(Instant::now()).as_secs() + 1,
+            ),
+        };
+        let state = serde_json::json!({
+            "typed": self.state.typed(),
+            "phase": phase,
+            "wait": wait,
+            "message": self.state.message,
+            "capsLock": self.state.caps_lock,
+            "failures": self.state.failures,
+            "user": self.user,
+            "hours": self.config.hours,
+            "background": self.config.background,
+        });
+        if let Some(renderer) = &mut self.renderer {
+            renderer.state("lock", state);
+        }
+        self.pushed = Instant::now();
+    }
+
+    /// Something the renderer shows changed.
+    fn changed(&mut self) {
+        self.push();
+        self.draw_all();
+    }
+
+    /// Every frame's worth of time: the renderer's display, its commands,
+    /// and its new frames onto the lock's surfaces.
+    fn frame(&mut self) {
+        let Some(renderer) = &mut self.renderer else {
+            return;
+        };
+        for asked in renderer.poll() {
+            report_command(&asked);
+        }
+        for index in 0..self.surfaces.len() {
+            let covered = &self.surfaces[index];
+            let Some((width, height)) = covered.size else {
+                continue;
+            };
+            let Some(name) = self.name(&covered.output) else {
+                continue;
+            };
+            let scale = self.scale(&covered.output) as u32;
+            let wanted = match self.source(Some(&name), (width * scale, height * scale)) {
+                Source::Renderer => self
+                    .renderer
+                    .as_ref()
+                    .and_then(|renderer| renderer.display.server.frames.get(&name))
+                    .map(|frame| frame.at),
+                Source::Face | Source::Background => None,
+            };
+            if self.drawn.get(&name) != Some(&wanted) {
+                self.draw(index);
+            }
+        }
+    }
+
+    /// A line from mochid: the theme, or a state the renderer may show.
+    fn input(&mut self, line: &str) {
+        let Ok(message) = serde_json::from_str::<serde_json::Value>(line) else {
+            return;
+        };
+        let Some(renderer) = &mut self.renderer else {
+            return;
+        };
+        match message["type"].as_str() {
+            Some("theme") => renderer.theme(message["theme"].clone()),
+            Some("state") => {
+                if let Some(module) = message["module"].as_str()
+                    && RELAYED.contains(&module)
+                {
+                    renderer.state(module, message["state"].clone());
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn draw_all(&mut self) {
         for index in 0..self.surfaces.len() {
             self.draw(index);
@@ -259,6 +462,8 @@ impl Lock {
         let scale = self.scale(&covered.output);
         let (pixel_width, pixel_height) = (width * scale as u32, height * scale as u32);
         let stride = pixel_width as i32 * 4;
+        let name = self.name(&covered.output);
+        let source = self.source(name.as_deref(), (pixel_width, pixel_height));
         let Ok((buffer, canvas)) = self.pool.create_buffer(
             pixel_width as i32,
             pixel_height as i32,
@@ -272,8 +477,23 @@ impl Lock {
             height: pixel_height,
             scale: scale as f32,
         };
-        self.face
-            .draw(size, &self.state, &self.clock, Instant::now(), canvas);
+        match (source, &self.renderer, &name) {
+            (Source::Renderer, Some(renderer), Some(name)) => {
+                let frame = &renderer.display.server.frames[name];
+                canvas.copy_from_slice(&frame.pixels);
+                self.drawn.insert(name.clone(), Some(frame.at));
+            }
+            (Source::Background, ..) => {
+                self.face.background(canvas);
+            }
+            _ => {
+                self.face
+                    .draw(size, &self.state, &self.clock, Instant::now(), canvas);
+                if let Some(name) = name {
+                    self.drawn.insert(name, None);
+                }
+            }
+        }
         let surface = self.surfaces[index].surface.wl_surface();
         surface.set_buffer_scale(scale);
         surface.damage_buffer(0, 0, pixel_width as i32, pixel_height as i32);
@@ -301,9 +521,9 @@ impl Lock {
         };
         match self.state.key(key, Instant::now()) {
             Effect::Nothing => {}
-            Effect::Redraw => self.draw_all(),
+            Effect::Redraw => self.changed(),
             Effect::Check(password) => {
-                self.draw_all();
+                self.changed();
                 let (service, user) = (self.config.pam_service.clone(), self.user.clone());
                 let checks = self.checks.clone();
                 let started = std::thread::Builder::new()
@@ -314,7 +534,7 @@ impl Lock {
                 if started.is_err() {
                     self.state
                         .refused(vec!["Couldn't check the password".into()], Instant::now());
-                    self.draw_all();
+                    self.changed();
                 }
             }
         }
@@ -325,13 +545,16 @@ impl Lock {
             Ok(granted) => self.unlock(granted),
             Err(refused) => {
                 self.state.refused(refused.messages, Instant::now());
-                self.draw_all();
+                self.changed();
             }
         }
     }
 
     /// The only way the screen unlocks: with what PAM granted.
     fn unlock(&mut self, _granted: Granted) {
+        if let Some(mut renderer) = self.renderer.take() {
+            renderer.stop();
+        }
         if let Some(session) = self.session.take() {
             session.unlock();
         }
@@ -349,7 +572,10 @@ impl Lock {
         let changed = clock.time != self.clock.time || clock.date != self.clock.date;
         self.clock = clock;
         let waited = self.state.tick(Instant::now());
-        let waiting = matches!(self.state.phase, crate::state::Phase::Waiting(_));
+        let waiting = matches!(self.state.phase, Phase::Waiting(_));
+        if waited || waiting {
+            self.push();
+        }
         if changed || waited || waiting {
             self.draw_all();
         }
@@ -411,6 +637,18 @@ impl SessionLockHandler for Lock {
             return;
         };
         self.surfaces[index].size = Some(configure.new_size);
+        // The renderer's monitor follows this one.
+        let output = self.surfaces[index].output.clone();
+        if let (Some(name), Some(renderer)) = (self.name(&output), &mut self.renderer) {
+            let scale = self
+                .outputs
+                .info(&output)
+                .map_or(1, |info| info.scale_factor);
+            renderer
+                .display
+                .server
+                .screen(&name, configure.new_size, scale);
+        }
         self.draw(index);
     }
 }
@@ -446,6 +684,10 @@ impl OutputHandler for Lock {
         _: &QueueHandle<Self>,
         output: wl_output::WlOutput,
     ) {
+        if let (Some(name), Some(renderer)) = (self.name(&output), &mut self.renderer) {
+            renderer.display.server.forget(&name);
+            self.drawn.remove(&name);
+        }
         self.surfaces.retain(|covered| covered.output != output);
     }
 }
@@ -511,6 +753,17 @@ impl SeatHandler for Lock {
         seat: wl_seat::WlSeat,
         capability: Capability,
     ) {
+        // The pointer, for the renderer's buttons, like play and pause.
+        if capability == Capability::Pointer && self.pointer.is_none() {
+            if let Ok(pointer) = self.seats.get_pointer(qh, &seat) {
+                self.cursor = self
+                    .cursor_shapes
+                    .as_ref()
+                    .map(|shapes| shapes.get_shape_device(&pointer, qh));
+                self.pointer = Some(pointer);
+            }
+            return;
+        }
         if capability != Capability::Keyboard || self.keyboard.is_some() {
             return;
         }
@@ -539,6 +792,12 @@ impl SeatHandler for Lock {
             && let Some(keyboard) = self.keyboard.take()
         {
             keyboard.release();
+        }
+        if capability == Capability::Pointer
+            && let Some(pointer) = self.pointer.take()
+        {
+            self.cursor = None;
+            pointer.release();
         }
     }
 
@@ -628,7 +887,7 @@ impl KeyboardHandler for Lock {
         MODIFIERS.with(|held| held.set(modifiers));
         if self.state.caps_lock != modifiers.caps_lock {
             self.state.caps_lock = modifiers.caps_lock;
-            self.draw_all();
+            self.changed();
         }
     }
 }
@@ -650,6 +909,58 @@ delegate_compositor!(Lock);
 delegate_output!(Lock);
 delegate_seat!(Lock);
 delegate_keyboard!(Lock);
+delegate_pointer!(Lock);
 delegate_shm!(Lock);
 delegate_session_lock!(Lock);
 delegate_registry!(Lock);
+
+impl PointerHandler for Lock {
+    /// The pointer over a lock surface goes to the renderer's panel on the
+    /// same monitor; the keyboard never does.
+    fn pointer_frame(
+        &mut self,
+        _: &Connection,
+        _: &QueueHandle<Self>,
+        _: &wl_pointer::WlPointer,
+        events: &[PointerEvent],
+    ) {
+        for event in events {
+            let output = self
+                .surfaces
+                .iter()
+                .find(|covered| covered.surface.wl_surface() == &event.surface)
+                .map(|covered| covered.output.clone());
+            let name = output.as_ref().and_then(|output| self.name(output));
+            if let PointerEventKind::Enter { serial } = event.kind
+                && let Some(cursor) = &self.cursor
+            {
+                cursor.set_shape(serial, Shape::Default);
+            }
+            let Some(renderer) = &mut self.renderer else {
+                continue;
+            };
+            let server = &mut renderer.display.server;
+            let (x, y) = event.position;
+            match event.kind {
+                PointerEventKind::Enter { .. } => {
+                    if let Some(name) = &name {
+                        server.pointer_motion(name, x, y, 0);
+                    }
+                }
+                PointerEventKind::Motion { time } => {
+                    if let Some(name) = &name {
+                        server.pointer_motion(name, x, y, time);
+                    }
+                }
+                PointerEventKind::Press { time, button, .. } => {
+                    server.pointer_button(button, true, time);
+                }
+                PointerEventKind::Release { time, button, .. } => {
+                    server.pointer_button(button, false, time);
+                }
+                PointerEventKind::Leave { .. } => server.pointer_left(0),
+                PointerEventKind::Axis { .. } => {}
+            }
+        }
+    }
+}
