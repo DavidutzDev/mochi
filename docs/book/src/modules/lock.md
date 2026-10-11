@@ -10,9 +10,11 @@ By default the lock screen shows the time, big, with the date and the weather un
 
 ## Arranging it
 
-`mochi ipc lock edit` arranges the lock screen the way `mochi ipc widgets edit` arranges the desktop: over its background, with the same grid, dragging, resizing, settings and layers, and the island's notice opening the drawer. The drawer has what may go on a lock screen: the password field, the clock in each of its looks, the calendar, the weather, what's playing, the battery and the focus timer. Run it again, Escape or Done to stop.
+`mochi ipc lock edit` arranges the lock screen the way `mochi ipc widgets edit` arranges the desktop: over its background, with the same grid, dragging, resizing, settings and layers, and the island's notice opening the drawer. The drawer has every widget, and the password field. Run it again, Escape or Done to stop.
 
-The password field is always there: it can't be removed, only moved and resized, and a layout without one gets it back. Notes, to-do lists and the other widgets you type into or that act on things stay on the desktop, and so do plugins' widgets for now.
+On the lock screen, widgets only show: they never get a key, so a note can be read but not typed into, and their buttons do nothing but play, pause and skip what's playing. What they show is yours to decide: a note or a to-do list on the lock screen can be read by anyone at the screen. Plugins' widgets go there only with `lock_plugins = true` in `[module.widgets]`. A widget can keep itself off the lock screen with `places = ["desktop"]` in its offer.
+
+The password field is always there: it can't be removed, only moved and resized, and a layout without one gets it back.
 
 The layout is kept in `lock-widgets.toml`, next to `widgets.toml`, in the same form; the default one has the clock on the left, the weather under it, what's playing over the field on the right and the battery in a corner. A widget whose `output` is empty, as in the default, shows on every monitor.
 

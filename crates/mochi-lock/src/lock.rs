@@ -54,8 +54,6 @@ const FRAME: Duration = Duration::from_millis(16);
 /// How long the renderer has to draw a change, or to draw at all, before
 /// the lock shows its own face instead.
 const STALE: Duration = Duration::from_millis(1500);
-/// The modules whose state mochid may pass on to the renderer.
-const RELAYED: [&str; 5] = ["widgets", "media", "battery", "weather", "timer"];
 
 /// What a monitor shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -436,8 +434,10 @@ impl Lock {
         match message["type"].as_str() {
             Some("theme") => renderer.theme(message["theme"].clone()),
             Some("state") => {
+                // Any module's, which mochid sends for the lock screen's
+                // widgets, but the lock's own: that one is this process's.
                 if let Some(module) = message["module"].as_str()
-                    && RELAYED.contains(&module)
+                    && module != "lock"
                 {
                     renderer.state(module, message["state"].clone());
                 }

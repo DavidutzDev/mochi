@@ -24,14 +24,16 @@ ShellRoot {
 }
 "#;
 
-/// The modules whose views the lock screen's widgets use, as in the
-/// widgets module's list of what may go on the lock screen.
-pub const VIEWS: [&str; 6] = ["widgets", "weather", "media", "battery", "timer", "lock"];
+/// The modules whose views the lock screen always has: the widgets view
+/// that lays it out, and the password field.
+pub const ALWAYS: [&str; 2] = ["widgets", "lock"];
 
-/// Writes the renderer's shell into `dir`, with the views of [`VIEWS`]
-/// copied from the daemon's `shell`: each module's own, from `builtin/`
-/// when a plugin overrides some, never the plugin's.
-pub fn write_shell(dir: &Path, shell: Option<&Path>) -> std::io::Result<()> {
+/// Writes the renderer's shell into `dir`, with the views of [`ALWAYS`]
+/// and of `modules`, the ones whose widgets are on the lock screen, copied
+/// from the daemon's `shell`. A module's own views come from `builtin/`
+/// when a plugin overrides some of them, never the plugin's; a plugin's
+/// widgets are there only when the widgets module let them on.
+pub fn write_shell(dir: &Path, shell: Option<&Path>, modules: &[String]) -> std::io::Result<()> {
     // Copies, so a link left from a development build goes too.
     let _ = std::fs::remove_file(dir.join("shell.qml"));
     assets::write_shell(
@@ -45,15 +47,26 @@ pub fn write_shell(dir: &Path, shell: Option<&Path>) -> std::io::Result<()> {
     std::fs::write(dir.join("shell.qml"), SHELL)?;
     let mut copied = Vec::new();
     if let Some(shell) = shell {
-        for module in VIEWS {
-            let builtin = shell.join("builtin").join(module);
+        let wanted = ALWAYS
+            .iter()
+            .map(|module| (*module).to_owned())
+            .chain(modules.iter().cloned());
+        for module in wanted {
+            // A module id is a name, never a path.
+            if module.is_empty() || module.contains(['/', '\\']) || module.starts_with('.') {
+                continue;
+            }
+            if copied.contains(&module) {
+                continue;
+            }
+            let builtin = shell.join("builtin").join(&module);
             let from = if builtin.is_dir() {
                 builtin
             } else {
-                shell.join("modules").join(module)
+                shell.join("modules").join(&module)
             };
             if from.is_dir() {
-                copy_dir(&from, &dir.join("modules").join(module))?;
+                copy_dir(&from, &dir.join("modules").join(&module))?;
                 copied.push(module);
             }
         }
@@ -121,7 +134,7 @@ mod tests {
     #[test]
     fn writes_a_shell_of_its_own() {
         let dir = std::env::temp_dir().join(format!("mochi-lock-shell-{}", std::process::id()));
-        write_shell(&dir, None).unwrap();
+        write_shell(&dir, None, &[]).unwrap();
         let shell = std::fs::read_to_string(dir.join("shell.qml")).unwrap();
         assert!(shell.contains("LockScreen {}"));
         assert!(shell.contains("watchFiles: false"));
@@ -136,7 +149,7 @@ mod tests {
                 .is_symlink()
         );
         // Written again, the same.
-        write_shell(&dir, None).unwrap();
+        write_shell(&dir, None, &[]).unwrap();
         std::fs::remove_dir_all(dir).unwrap();
     }
 

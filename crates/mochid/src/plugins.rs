@@ -222,6 +222,13 @@ impl Module for PluginModule {
             .contributions()
             .into_iter()
             .map(|offer| {
+                // Marked as a plugin's, whatever it says itself: the lock screen
+                // only takes a plugin's widget when the user allows it.
+                let mut options = offer.options;
+                if !options.is_object() {
+                    options = Value::Object(serde_json::Map::new());
+                }
+                options["plugin"] = Value::Bool(true);
                 let mut spec = ContributionSpec::new(
                     offer.target,
                     offer.kind,
@@ -230,7 +237,7 @@ impl Module for PluginModule {
                     offer.title,
                 )
                 .order(offer.order)
-                .options(offer.options);
+                .options(options);
                 if let Some(icon) = offer.icon {
                     spec = spec.icon(icon);
                 }

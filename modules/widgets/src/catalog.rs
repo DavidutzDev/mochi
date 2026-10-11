@@ -171,6 +171,8 @@ pub struct Spec {
     pub places: Vec<String>,
     /// It can't be removed, like the lock screen's password field.
     pub required: bool,
+    /// A plugin offers it.
+    pub plugin: bool,
 }
 
 /// How a placed widget looks: its variant, or the widget itself when it
@@ -204,9 +206,11 @@ struct Options {
     category: Option<String>,
     description: Option<String>,
     variants: Vec<VariantOptions>,
-    /// Where it may go: `desktop`, `lock`, or both. The desktop only
-    /// when it says nothing.
+    /// Where it may go: `desktop`, `lock`, or both, which it is when it
+    /// says nothing.
     places: Option<Vec<String>>,
+    /// A plugin's: mochid sets this, whatever the plugin says.
+    plugin: bool,
     /// It can't be removed from where it's required, like the lock
     /// screen's password field.
     required: bool,
@@ -230,9 +234,10 @@ struct VariantOptions {
 }
 
 impl Spec {
-    /// Whether it may go on the desktop, or on the lock screen.
-    pub fn goes(&self, place: &str) -> bool {
-        if place == "lock" && !crate::lock::MODULES.contains(&self.module.as_str()) {
+    /// Whether it may go on the desktop, or on the lock screen: a
+    /// plugin's only when `plugins` allows them there.
+    pub fn goes(&self, place: &str, plugins: bool) -> bool {
+        if place == "lock" && self.plugin && !plugins {
             return false;
         }
         self.places.iter().any(|it| it == place)
@@ -310,8 +315,9 @@ impl Spec {
             places: options
                 .places
                 .filter(|places| !places.is_empty())
-                .unwrap_or_else(|| vec!["desktop".into()]),
+                .unwrap_or_else(|| vec!["desktop".into(), "lock".into()]),
             required: options.required,
+            plugin: options.plugin,
         })
     }
 

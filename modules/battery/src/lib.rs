@@ -136,8 +136,6 @@ impl Module for BatteryModule {
             ContributionSpec::new("widgets", "widget", "level", "Card", "Battery")
                 .icon("bolt")
                 .options(json!({
-                    // The desktop, and the lock screen.
-                    "places": ["desktop", "lock"],
                     "size": [18, 6],
                     "min": [12, 5],
                     "max": [30, 16],

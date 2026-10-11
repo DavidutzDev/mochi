@@ -2,7 +2,9 @@
 //! `lock-widgets.toml` next to `widgets.toml`, arranged with the same
 //! editor (`mochi ipc widgets edit-lock`), and drawn by the lock screen.
 //!
-//! Only widgets whose offer lists the `lock` place go there. The password
+//! Every widget may go there unless its offer leaves `lock` out of its
+//! `places`; a plugin's only with `lock_plugins`. They show there, but
+//! never get a key, and their buttons only act when the lock allows it. The password
 //! field is required: it can't be removed, and a layout without one gets
 //! one back. A widget whose `output` is empty shows on every monitor, which
 //! is how the default layout is.
@@ -13,11 +15,6 @@ pub const FILE: &str = "lock-widgets.toml";
 
 /// The lock module's password field, the one widget the lock screen needs.
 pub const FIELD: (&str, &str) = ("lock", "field");
-
-/// The modules whose widgets may go on the lock screen: Mochi's own, whose
-/// views the lock screen has and whose data it's given. A plugin's offer
-/// listing the `lock` place doesn't count, yet.
-pub const MODULES: [&str; 6] = ["widgets", "weather", "media", "battery", "timer", "lock"];
 
 fn widget(
     id: &str,

@@ -444,9 +444,8 @@ Step 2, the private display and the QML renderer:
 Step 3, customization:
 
 - [x] The lock layout editor: the widgets module's own, with a lock target (`edit-lock`, `mochi ipc lock edit`), its layout in `lock-widgets.toml`, over the lock screen's blurred background, the drawer titled for it with only what may go there and no saved layouts. The password field (the lock module's `field` widget, `required`) can't be removed and comes back to a layout without it. The renderer draws the layout with the widgets module's own `Desktop.qml`, its views copied from the daemon's shell as built-in originals, the layout relayed as the `widgets` state; the fixed layout is the fallback. Tested headless 2026-10-11: added a calendar in the editor, locked, the renderer drew it with the clock and the field on both monitors
-- [x] Widgets on the lock screen per module: `places` in a widget offer (`desktop`, `lock`), honored for Mochi's own modules only (`lock::MODULES`): clock, calendar, weather, now playing, battery, focus timer
+- [x] Every widget on the lock screen, view-only (no keyboard, commands through the allowlist), unless its offer says `places = ["desktop"]`; plugins' with `lock_plugins` in `[module.widgets]`, which mochid enforces by marking every plugin offer `plugin: true`. The lock module watches the modules the layout uses and copies their views; mochi-lock relays any module's state but `lock`
 - [ ] A layout per monitor: today a widget with an `output` shows on that monitor, and one without on every monitor, but the editor keeps the default's empty `output`; an Apply to like the desktop's
-- [ ] Plugin widgets on the lock screen, with a note on what they can and can't do, once their views can be copied in safely
 - [ ] A button on the Lock settings page that opens the editor
 - [ ] Notifications (count and apps), suspend, reboot and shut down buttons, each a setting; fingerprint and security key prompts from PAM
 

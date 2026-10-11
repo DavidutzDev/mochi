@@ -5,3 +5,7 @@
 # The size of a grid cell, in pixels. Widgets snap to it, and widgets.toml
 # counts in cells.
 # grid = 16
+# Let plugins' widgets go on the lock screen too. Like every widget there,
+# they never get a key and can't unlock; they only show, and their buttons
+# do nothing but play, pause and skip.
+# lock_plugins = false

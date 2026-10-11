@@ -99,10 +99,6 @@ const ALLOWED: [(&str, &str); 3] = [
     ("media", "previous"),
 ];
 
-/// The modules whose state the lock screen's widgets show: the widgets
-/// module for the layout, and the modules whose widgets may go there.
-const WATCHED: [&str; 5] = ["widgets", "weather", "media", "battery", "timer"];
-
 /// How long the computer waits to sleep for the lock to show, at most.
 const SLEEP_WAIT: Duration = Duration::from_secs(2);
 /// How often a lock this module didn't start is checked on.
@@ -162,9 +158,8 @@ impl Module for Lock {
             let settings: Settings = ctx.settings()?;
             let dir = ctx.session_dir().to_owned();
             let mut locker = Locker::new(&dir, &settings, &ctx);
-            for module in WATCHED {
-                ctx.watch_state(module);
-            }
+            // The layout, and through it, the modules its widgets are from.
+            ctx.watch_state("widgets");
             // The wallpaper blurred, off the loop: a lock doesn't wait on it.
             let blurring = {
                 let (background, out) = (
@@ -240,7 +235,7 @@ impl Module for Lock {
                         Some(ModuleEvent::Ended { activity, .. }) if locker.notice == Some(activity) => {
                             locker.notice = None;
                         }
-                        Some(ModuleEvent::State { module, state }) => locker.relay(&module, state),
+                        Some(ModuleEvent::State { module, state }) => locker.relay(&ctx, &module, state),
                         Some(_) => {}
                     },
                     Some(event) = received.recv() => locker.child_event(event, &events, &ctx).await,
@@ -391,12 +386,14 @@ struct Locker {
     input: Option<mpsc::UnboundedSender<String>>,
     /// The daemon's QML tree, which the renderer's views are copied from.
     daemon_shell: Option<PathBuf>,
+    /// The modules whose state is watched for the lock screen's widgets.
+    watched: std::collections::BTreeSet<String>,
 }
 
 impl Locker {
     fn new(dir: &Path, settings: &Settings, ctx: &ModuleCtx) -> Self {
         let shell = ctx.data_dir().join("lock-shell");
-        let shell = match screen::write_shell(&shell, ctx.shell_dir()) {
+        let shell = match screen::write_shell(&shell, ctx.shell_dir(), &[]) {
             Ok(()) => Some(shell),
             Err(error) => {
                 tracing::warn!(%error, "can't write the lock screen's views; it shows its own face");
@@ -420,6 +417,7 @@ impl Locker {
             states: std::collections::BTreeMap::new(),
             input: None,
             daemon_shell: ctx.shell_dir().map(Path::to_owned),
+            watched: std::collections::BTreeSet::new(),
             config: dir.join("lock.json"),
         };
         locker.write_config(settings, ctx);
@@ -446,10 +444,16 @@ impl Locker {
 
     /// A module's state, for the lock screen: kept, and passed on to a
     /// running lock.
-    fn relay(&mut self, module: &str, state: Value) {
+    fn relay(&mut self, ctx: &ModuleCtx, module: &str, state: Value) {
         // The widgets module's state, as the lock screen draws it: its
-        // layout as `widgets`, never being arranged.
+        // layout as `widgets`, never being arranged. The modules its widgets
+        // are from are watched from then on, for their state.
         let state = if module == "widgets" {
+            for used in layout_modules(&state) {
+                if self.watched.insert(used.clone()) {
+                    ctx.watch_state(&used);
+                }
+            }
             lock_widgets(&state)
         } else {
             state
@@ -485,7 +489,11 @@ impl Locker {
     fn spawn(&mut self, events: &mpsc::UnboundedSender<ChildEvent>) -> Result<(), String> {
         // The views again: a module turned on since has its widgets too.
         if let Some(shell) = &self.shell
-            && let Err(error) = screen::write_shell(shell, self.daemon_shell.as_deref())
+            && let Err(error) = screen::write_shell(
+                shell,
+                self.daemon_shell.as_deref(),
+                &self.watched.iter().cloned().collect::<Vec<_>>(),
+            )
         {
             tracing::warn!(%error, "can't write the lock screen's views");
         }
@@ -823,6 +831,22 @@ fn write_config(
         std::fs::create_dir_all(dir)?;
     }
     std::fs::write(path, config.to_string())
+}
+
+/// The modules the lock screen's widgets are from, but the lock module:
+/// its state is mochi-lock's to give.
+fn layout_modules(state: &Value) -> Vec<String> {
+    let mut modules: Vec<String> = state["lockWidgets"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|widget| widget["module"].as_str())
+        .filter(|module| *module != "lock" && *module != "widgets")
+        .map(str::to_owned)
+        .collect();
+    modules.sort();
+    modules.dedup();
+    modules
 }
 
 /// The widgets module's state as the lock screen's widgets view takes it:

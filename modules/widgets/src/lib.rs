@@ -57,11 +57,16 @@ pub struct Widgets;
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     grid: u32,
+    /// Let plugins' widgets go on the lock screen too.
+    lock_plugins: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { grid: 16 }
+        Self {
+            grid: 16,
+            lock_plugins: false,
+        }
     }
 }
 
@@ -102,8 +107,6 @@ impl Module for Widgets {
             ContributionSpec::new("widgets", "widget", "clock", "Clock", "Clock")
                 .icon("clock")
                 .options(json!({
-                    // The desktop, and the lock screen.
-                    "places": ["desktop", "lock"],
                     "size": [14, 7],
                     "min": [8, 4],
                     "max": [40, 20],
@@ -213,8 +216,6 @@ impl Module for Widgets {
             ContributionSpec::new("widgets", "widget", "calendar", "Calendar", "Calendar")
                 .icon("grid")
                 .options(json!({
-                    // The desktop, and the lock screen.
-                    "places": ["desktop", "lock"],
                     "size": [16, 15],
                     "min": [11, 10],
                     "max": [40, 38],
@@ -372,6 +373,7 @@ impl Module for Widgets {
                 .map(Path::to_owned)
                 .or_else(default_config_dir);
             let mut state = State::new(settings.grid, dir);
+            state.lock_plugins = settings.lock_plugins;
             // Which workspace each monitor shows, for the layouts shown on
             // workspaces.
             let mut compositor = Some(ctx.compositor().subscribe());
@@ -518,6 +520,8 @@ struct State {
     editing: Option<String>,
     /// The lock screen is being arranged, not the desktop.
     arranging_lock: bool,
+    /// Plugins' widgets may go on the lock screen.
+    lock_plugins: bool,
     /// The lock screen's layout, `lock-widgets.toml`, and when it was
     /// last read or written.
     lock: Layout,
@@ -548,6 +552,7 @@ impl State {
             lock: Layout::default(),
             lock_seen: None,
             arranging_lock: false,
+            lock_plugins: false,
             saved_dir: dir.map(|dir| dir.join(saved::DIR)),
             layout: Layout::default(),
             seen: None,
@@ -584,7 +589,8 @@ impl State {
                 let on = self.editing.is_some() && self.arranging_lock == lock;
                 (self.editing, self.selected) = arranging(args, on, || focused(ctx));
                 self.arranging_lock = lock && self.editing.is_some();
-                self.drawer = false;
+                // The drawer opens with it: what to add is the first thing to see.
+                self.drawer = self.editing.is_some() && self.selected.is_none();
                 self.announce(ctx);
                 Ok(None)
             }
@@ -817,7 +823,7 @@ impl State {
         } else {
             ("desktop", "desktop")
         };
-        if spec.goes(place) {
+        if spec.goes(place, self.lock_plugins) {
             Ok(())
         } else {
             Err(format!(
@@ -1522,7 +1528,12 @@ impl State {
             "catalog": self
                 .specs
                 .iter()
-                .filter(|spec| spec.goes(if self.arranging_lock { "lock" } else { "desktop" }))
+                .filter(|spec| {
+                    spec.goes(
+                        if self.arranging_lock { "lock" } else { "desktop" },
+                        self.lock_plugins,
+                    )
+                })
                 .map(Spec::to_json)
                 .collect::<Vec<_>>(),
             // "desktop" or "lock": what's being arranged.
@@ -2236,8 +2247,9 @@ mod tests {
         };
         assert_eq!((field(&state, "DP-1"), field(&state, "HDMI-A-1")), (1, 1));
 
-        // Offers: the clock may go on both, a note on the desktop only, and
-        // a plugin's widget not on the lock screen whatever it says.
+        // Offers: the clock and a note may go on both, a widget that opts
+        // out on the desktop only, and a plugin's on the lock screen only
+        // when the setting allows.
         let offer = |module: &str, id: &str, options: Value| {
             ContributionSpec::new("widgets", "widget", id, "View", id)
                 .options(options)
@@ -2246,12 +2258,13 @@ mod tests {
         state.offered(&[
             offer("widgets", "clock", json!({ "places": ["desktop", "lock"] })),
             offer("notes", "note", json!({})),
+            offer("performance", "graphs", json!({ "places": ["desktop"] })),
             offer(
                 "lock",
                 "field",
                 json!({ "places": ["lock"], "required": true }),
             ),
-            offer("some-plugin", "spy", json!({ "places": ["lock"] })),
+            offer("some-plugin", "spy", json!({ "plugin": true })),
         ]);
         let spec = |state: &State, id: &str| {
             state
@@ -2269,8 +2282,12 @@ mod tests {
         state.arranging_lock = true;
         state.editing = Some("DP-1".into());
         assert!(state.may_go(&spec(&state, "clock")).is_ok());
-        assert!(state.may_go(&spec(&state, "note")).is_err());
+        assert!(state.may_go(&spec(&state, "note")).is_ok());
+        assert!(state.may_go(&spec(&state, "graphs")).is_err());
         assert!(state.may_go(&spec(&state, "spy")).is_err());
+        state.lock_plugins = true;
+        assert!(state.may_go(&spec(&state, "spy")).is_ok());
+        state.lock_plugins = false;
 
         // The field stays; moving it goes to lock-widgets.toml, on both.
         let id = state
