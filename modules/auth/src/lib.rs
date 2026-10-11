@@ -21,7 +21,9 @@
 //! remember_polkit = "until-locked"    # or "own-timeout"
 //! ```
 
+mod exchange;
 mod helper;
+mod keyring;
 mod logind;
 mod polkit;
 mod prompt;
@@ -30,7 +32,8 @@ mod remember;
 use futures_util::StreamExt;
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActionSpec, ArgSpec, Assets, BoxFuture, Module, ModuleCtx, ModuleError, ModuleEvent,
+    ActionSpec, ActivitySpec, ArgSpec, Assets, BoxFuture, Module, ModuleCommand, ModuleCtx,
+    ModuleError, ModuleEvent, Priority,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -61,6 +64,10 @@ struct Settings {
     /// Ask for polkit's admin passwords on the island, as the session's
     /// polkit agent, in place of hyprpolkitagent or another.
     polkit: bool,
+    /// Ask for the keyring's passwords on the island, as gnome-keyring's
+    /// prompter: unlocking a keyring, a new keyring's password, and the
+    /// SSH key passphrases gcr's agent asks for.
+    keyring: bool,
 }
 
 impl Default for Settings {
@@ -71,6 +78,7 @@ impl Default for Settings {
             remember_keyring: Lifetime::default(),
             remember_polkit: Kept::default(),
             polkit: true,
+            keyring: true,
         }
     }
 }
@@ -127,6 +135,17 @@ impl Module for Auth {
                 "answer",
                 "JSON: the prompt's id, the user and the password",
             )),
+            ActionSpec::new(
+                "ask",
+                "Ask on the island for sudo -A or ssh, and print the answer; `mochi askpass` sends this",
+            )
+            .arg(ArgSpec::choice(
+                "kind",
+                "A password, a yes or no question, or a notice",
+                ["password", "confirm", "notice"],
+            ))
+            .arg(ArgSpec::string("app", "The program asking"))
+            .arg(ArgSpec::string("prompt", "What it asks").rest()),
         ]
     }
 
@@ -151,7 +170,8 @@ impl Module for Auth {
 
             // SSH keys and the keyring kept for a time, taken back once
             // it's up; stopped with the module.
-            let _keep = Aborts(tokio::spawn(remember::keep(remember)));
+            let times = remember::KeyTimes::default();
+            let _keep = Aborts(tokio::spawn(remember::keep(remember, times.clone())));
 
             // polkit's agent for the session, on a connection of its own:
             // polkitd forgets the agent when it closes, as the module stops.
@@ -182,6 +202,19 @@ impl Module for Auth {
                 (false, _) => None,
             };
             ctx.publish_state(json!({ "polkit": { "on": settings.polkit, "problem": problem } }));
+            // gnome-keyring's prompter, on the session bus.
+            let (keyring_events, mut keyring_asks) = mpsc::unbounded_channel();
+            let mut prompter = if settings.keyring {
+                match keyring::Prompter::start(keyring_events).await {
+                    Ok(prompter) => Some(prompter),
+                    Err(error) => {
+                        tracing::warn!(%error, "can't answer the keyring's prompts");
+                        None
+                    }
+                }
+            } else {
+                None
+            };
             let mut prompts = prompt::Prompts::default();
             let (checked, mut checks) = mpsc::unbounded_channel();
 
@@ -191,24 +224,44 @@ impl Module for Auth {
                         None => return Ok(()),
                         Some(ModuleEvent::Command(command)) => match command.action.as_str() {
                             "locked" => {
-                                forget(remember, id.clone());
+                                forget(remember, id.clone(), &times);
                                 command.reply(Ok(()));
                             }
                             "forget" => {
-                                forget(Remember::default(), id.clone());
+                                forget(Remember::default(), id.clone(), &times);
                                 command.reply(Ok(()));
                             }
                             "answer" => {
                                 let answer = command.args.str("answer").unwrap_or_default();
-                                let result = prompts.answer(&ctx, answer, &checked);
-                                command.reply(result);
+                                match prompts.answer(&ctx, answer, &checked) {
+                                    Ok(prompt::Answered::Keyring(serial, reply)) => {
+                                        if let Some(prompter) = &mut prompter {
+                                            prompter.answered(serial, reply);
+                                        }
+                                        command.reply(Ok(()));
+                                    }
+                                    Ok(prompt::Answered::Keep(key, lifetime)) => {
+                                        if let Ok(mut times) = times.lock() {
+                                            times.insert(key, lifetime);
+                                        }
+                                        command.reply(Ok(()));
+                                    }
+                                    other => command.reply(other.map(drop)),
+                                }
                             }
+                            "ask" => askpass(&ctx, &mut prompts, command, remember.ssh_keys),
                             other => {
                                 let error = format!("auth has no action {other}");
                                 command.reply(Err(error));
                             }
                         },
-                        Some(ModuleEvent::Ended { activity, .. }) => prompts.ended(&ctx, activity),
+                        Some(ModuleEvent::Ended { activity, .. }) => {
+                            if let Some((serial, reply)) = prompts.ended(&ctx, activity)
+                                && let Some(prompter) = &mut prompter
+                            {
+                                prompter.answered(serial, reply);
+                            }
+                        }
                         Some(_) => {}
                     },
                     Some(event) = polkit_asks.recv() => match event {
@@ -216,6 +269,11 @@ impl Module for Auth {
                         polkit::Event::Cancel(cookie) => prompts.cancel(&ctx, &cookie),
                     },
                     Some(done) = checks.recv() => prompts.checked(&ctx, done),
+                    Some(event) = keyring_asks.recv() => {
+                        if let Some(prompter) = &mut prompter {
+                            prompter.event(&ctx, &mut prompts, event);
+                        }
+                    }
                     Some(_) = async {
                         match &mut locks {
                             Some(locks) => locks.next().await,
@@ -223,7 +281,7 @@ impl Module for Auth {
                         }
                     } => {
                         tracing::debug!("logind asked to lock");
-                        forget(remember, id.clone());
+                        forget(remember, id.clone(), &times);
                     }
                 }
             }
@@ -231,9 +289,57 @@ impl Module for Auth {
     }
 }
 
+/// sudo's or ssh's question through `mochi askpass`: a password or a yes or
+/// no on the island, its command answered once the island is; a notice,
+/// like ssh's "touch your security key", only shows, for a while.
+fn askpass(ctx: &ModuleCtx, prompts: &mut prompt::Prompts, command: ModuleCommand, keep: Lifetime) {
+    let kind = command.args.str("kind").unwrap_or("password").to_owned();
+    let app = command.args.str("app").unwrap_or_default().to_owned();
+    let message = command.args.str("prompt").unwrap_or_default().to_owned();
+    if kind == "notice" {
+        let spec = ActivitySpec::new("Prompt")
+            .key("askpass-notice")
+            .priority(Priority::HIGH)
+            .timeout(std::time::Duration::from_secs(20))
+            .payload(json!({ "kind": "notice", "app": app, "message": message }));
+        ctx.present(spec);
+        command.reply(Ok(()));
+        return;
+    }
+    let key = ssh_key(&message).map(|key| (key, keep));
+    prompts.askpass(
+        ctx,
+        prompt::AskpassAsk {
+            command,
+            confirm: kind == "confirm",
+            app,
+            message,
+            key,
+        },
+    );
+}
+
+/// The key ssh or ssh-add asks the passphrase of, from its prompt, as its
+/// public key says it. ssh says `Enter passphrase for key
+/// '/home/me/.ssh/id_ed25519': `, ssh-add `Enter passphrase for
+/// /home/me/.ssh/id_ed25519: `, with ` (will confirm each use)` sometimes.
+fn ssh_key(prompt: &str) -> Option<String> {
+    let rest = prompt.split_once("passphrase for ")?.1;
+    let path = match rest.strip_prefix("key '") {
+        Some(quoted) => quoted.split_once('\'')?.0,
+        None => {
+            let rest = rest.trim_end().trim_end_matches(':');
+            rest.split_once(" (").map_or(rest, |(path, _)| path)
+        }
+    };
+    let public = std::fs::read_to_string(format!("{path}.pub")).ok()?;
+    let id = remember::key_id(&public);
+    (!id.is_empty()).then_some(id)
+}
+
 /// Forgets what's kept until locked, without waiting on it.
-fn forget(remember: Remember, session: Option<String>) {
-    tokio::spawn(remember::on_lock(remember, session));
+fn forget(remember: Remember, session: Option<String>, times: &remember::KeyTimes) {
+    tokio::spawn(remember::on_lock(remember, session, times.clone()));
 }
 
 /// Stops a task when dropped, as the module's run ends.
@@ -248,6 +354,26 @@ impl Drop for Aborts {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_the_key_in_sshs_and_ssh_adds_prompts() {
+        let dir = std::env::temp_dir().join(format!("mochi-auth-key-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let key = dir.join("id_test");
+        std::fs::write(dir.join("id_test.pub"), "ssh-ed25519 AAAAtest me@here\n").unwrap();
+        let key = key.to_str().unwrap();
+        let id = Some("ssh-ed25519 AAAAtest".to_owned());
+        assert_eq!(ssh_key(&format!("Enter passphrase for key '{key}': ")), id);
+        assert_eq!(ssh_key(&format!("Enter passphrase for {key}: ")), id);
+        assert_eq!(
+            ssh_key(&format!(
+                "Enter passphrase for {key} (will confirm each use): "
+            )),
+            id
+        );
+        assert_eq!(ssh_key("[sudo] password for me: "), None);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn everything_goes_on_locking_by_default() {

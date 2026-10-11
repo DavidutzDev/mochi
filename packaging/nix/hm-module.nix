@@ -232,6 +232,17 @@ in
       '';
     };
 
+    askpass.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Point `SUDO_ASKPASS` and `SSH_ASKPASS` at `mochi-askpass`, so
+        `sudo -A`, and ssh when it has no terminal, ask on the island. Plain
+        `sudo` keeps asking in its terminal; `SSH_ASKPASS_REQUIRE=prefer`
+        makes ssh ask on the island from a terminal too.
+      '';
+    };
+
     portalPicker.enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -282,6 +293,11 @@ in
     }) cfg.plugins;
 
     home.packages = [ package ];
+
+    home.sessionVariables = lib.mkIf cfg.askpass.enable {
+      SUDO_ASKPASS = "${package}/bin/mochi-askpass";
+      SSH_ASKPASS = "${package}/bin/mochi-askpass";
+    };
 
     # Only one polkit agent answers a session: Mochi's, not hyprpolkitagent.
     services = lib.optionalAttrs (cfg.polkitAgent.enable && options.services ? hyprpolkitagent) {

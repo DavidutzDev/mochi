@@ -19,3 +19,7 @@
 # and apps that change the system. Mochi answers as the session's polkit
 # agent, so another one, like hyprpolkitagent, has to be off.
 # polkit = true
+# Ask for the keyring's passwords on the island: unlocking a keyring, a new
+# keyring's password, and the SSH key passphrases gcr's agent asks for.
+# Mochi takes gnome-keyring's prompter from GNOME's gcr-prompter.
+# keyring = true

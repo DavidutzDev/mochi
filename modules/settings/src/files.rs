@@ -381,14 +381,29 @@ mod tests {
         /// A program that writes its arguments next to itself, prints
         /// `out` and exits with `code`.
         fn add(&self, program: &str, out: &str, code: i32) {
-            use std::os::unix::fs::PermissionsExt;
+            use std::io::Write;
             let file = self.0.join(program);
             let script = format!(
                 "#!/bin/sh\nfor arg in \"$@\"; do echo \"$arg\"; done > {}\nprintf '%s\\n' '{out}'\nexit {code}\n",
                 self.0.join(format!("{program}.args")).display()
             );
-            std::fs::write(&file, script).unwrap();
-            std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+            // Written by a process of its own: a file this one held open for
+            // writing would be inherited by any test forking meanwhile, and
+            // running it would fail with "text file busy" until that child
+            // execs.
+            let mut writer = std::process::Command::new("sh")
+                .args(["-c", "cat > \"$1\" && chmod 755 \"$1\"", "sh"])
+                .arg(&file)
+                .stdin(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            writer
+                .stdin
+                .take()
+                .unwrap()
+                .write_all(script.as_bytes())
+                .unwrap();
+            assert!(writer.wait().unwrap().success());
         }
 
         fn args(&self, program: &str) -> Vec<String> {

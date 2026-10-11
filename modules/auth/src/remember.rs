@@ -56,6 +56,17 @@ pub enum Lifetime {
 }
 
 impl Lifetime {
+    /// As the settings say it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::UntilLocked => "until-locked",
+            Self::Hour => "1h",
+            Self::FourHours => "4h",
+            Self::EightHours => "8h",
+            Self::UntilLogout => "until-logout",
+        }
+    }
+
     /// How long, when it's a time.
     fn time(self) -> Option<Duration> {
         match self {
@@ -74,6 +85,22 @@ pub struct Remember {
     pub polkit: Kept,
     pub ssh_keys: Lifetime,
     pub keyring: Lifetime,
+}
+
+/// The time a prompt picked for an SSH key, by [`key_id`].
+pub type KeyTimes = std::sync::Arc<std::sync::Mutex<HashMap<String, Lifetime>>>;
+
+/// A public key without its comment: its type and its base64, as both
+/// `ssh-add -L` and a `.pub` file say them.
+pub fn key_id(line: &str) -> String {
+    line.split_whitespace()
+        .take(2)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn picked(times: &KeyTimes) -> HashMap<String, Lifetime> {
+    times.lock().map(|times| times.clone()).unwrap_or_default()
 }
 
 /// The longest each one may take.
@@ -123,8 +150,9 @@ trait Collection {
 }
 
 /// Forgets, now the screen is locked, what's kept until then, for the
-/// logind session `session`.
-pub async fn on_lock(remember: Remember, session: Option<String>) {
+/// logind session `session`. An SSH key goes with the time its prompt
+/// picked, in `times`, or else `remember_ssh_keys`'s.
+pub async fn on_lock(remember: Remember, session: Option<String>, times: KeyTimes) {
     let sudo = async {
         if remember.sudo == Kept::UntilLocked {
             // Removes this user's remembered password; never asks for one.
@@ -132,9 +160,25 @@ pub async fn on_lock(remember: Remember, session: Option<String>) {
         }
     };
     let ssh_keys = async {
-        if remember.ssh_keys == Lifetime::UntilLocked && std::env::var_os("SSH_AUTH_SOCK").is_some()
-        {
-            run("ssh-add", &["-D"]).await;
+        if std::env::var_os("SSH_AUTH_SOCK").is_none() {
+            return;
+        }
+        let picked = picked(&times);
+        if picked.is_empty() {
+            if remember.ssh_keys == Lifetime::UntilLocked {
+                run("ssh-add", &["-D"]).await;
+            }
+            return;
+        }
+        // Key by key: some stay through the lock.
+        for key in list_keys().await.unwrap_or_default() {
+            let lifetime = picked
+                .get(&key_id(&key))
+                .copied()
+                .unwrap_or(remember.ssh_keys);
+            if lifetime == Lifetime::UntilLocked {
+                remove_key(&key).await;
+            }
         }
     };
     let keyring = async {
@@ -153,27 +197,34 @@ pub async fn on_lock(remember: Remember, session: Option<String>) {
 }
 
 /// Removes SSH keys and locks keyring collections once they've been there
-/// longer than they may be. Runs for as long as the module does; with no
-/// time set, it returns at once.
-pub async fn keep(remember: Remember) {
-    let (keys, collections) = (remember.ssh_keys.time(), remember.keyring.time());
-    if keys.is_none() && collections.is_none() {
-        return;
-    }
+/// longer than they may be: a key the time its prompt picked, in `times`,
+/// or else `remember_ssh_keys`'s. Runs for as long as the module does.
+pub async fn keep(remember: Remember, times: KeyTimes) {
+    let collections = remember.keyring.time();
     let mut seen = Seen::default();
     let mut every = tokio::time::interval(EVERY);
     loop {
         every.tick().await;
         let now = Instant::now();
-        if let Some(time) = keys {
+        let picked = picked(&times);
+        let time_of = |key: &String| {
+            picked
+                .get(&key_id(key))
+                .copied()
+                .unwrap_or(remember.ssh_keys)
+                .time()
+        };
+        let timed_keys = remember.ssh_keys.time().is_some()
+            || picked.values().any(|lifetime| lifetime.time().is_some());
+        if timed_keys {
             let listed = list_keys().await;
-            for key in seen.keys.expired(listed, now, time) {
+            for key in seen.keys.expired(listed, now, time_of) {
                 remove_key(&key).await;
             }
         }
         if let Some(time) = collections {
             let unlocked = unlocked_collections().await;
-            let expired = seen.collections.expired(unlocked, now, time);
+            let expired = seen.collections.expired(unlocked, now, |_| Some(time));
             if !expired.is_empty() {
                 timed("the keyring", lock_keyring(Some(expired))).await;
             }
@@ -199,9 +250,14 @@ impl<T> Default for Since<T> {
 
 impl<T: std::hash::Hash + Eq + Clone> Since<T> {
     /// Notes what's there `now`, forgets what's gone, and says what's been
-    /// there `time` or longer. `None` when it couldn't be listed: then
-    /// nothing changes.
-    fn expired(&mut self, there: Option<Vec<T>>, now: Instant, time: Duration) -> Vec<T> {
+    /// there its `time` or longer; one without a time stays. `None` when it
+    /// couldn't be listed: then nothing changes.
+    fn expired(
+        &mut self,
+        there: Option<Vec<T>>,
+        now: Instant,
+        time: impl Fn(&T) -> Option<Duration>,
+    ) -> Vec<T> {
         let Some(there) = there else {
             return Vec::new();
         };
@@ -212,7 +268,9 @@ impl<T: std::hash::Hash + Eq + Clone> Since<T> {
         let expired: Vec<T> = self
             .0
             .iter()
-            .filter(|(_, since)| now.duration_since(**since) >= time)
+            .filter(|(thing, since)| {
+                time(thing).is_some_and(|time| now.duration_since(**since) >= time)
+            })
             .map(|(thing, _)| thing.clone())
             .collect();
         for thing in &expired {
@@ -354,24 +412,58 @@ mod tests {
         let hour = Duration::from_secs(3600);
         let start = Instant::now();
         let mut since = Since::<&str>::default();
+        let all = |_: &&str| Some(hour);
         let some = |things: &[&'static str]| Some(things.to_vec());
-        assert!(since.expired(some(&["a"]), start, hour).is_empty());
+        assert!(since.expired(some(&["a"]), start, all).is_empty());
         let later = start + Duration::from_secs(1800);
-        assert!(since.expired(some(&["a", "b"]), later, hour).is_empty());
+        assert!(since.expired(some(&["a", "b"]), later, all).is_empty());
         // Can't list: nothing changes.
-        assert!(since.expired(None, start + hour * 2, hour).is_empty());
-        assert_eq!(since.expired(some(&["a", "b"]), start + hour, hour), ["a"]);
+        assert!(since.expired(None, start + hour * 2, all).is_empty());
+        assert_eq!(since.expired(some(&["a", "b"]), start + hour, all), ["a"]);
         // "a" was removed, then added again: its hour starts over.
         let again = start + hour + Duration::from_secs(60);
-        assert!(since.expired(some(&["a", "b"]), again, hour).is_empty());
+        assert!(since.expired(some(&["a", "b"]), again, all).is_empty());
         // "b" went away before its time, and came back.
-        assert!(since.expired(some(&["a"]), again, hour).is_empty());
+        assert!(since.expired(some(&["a"]), again, all).is_empty());
         assert!(
             since
-                .expired(some(&["a", "b"]), later + hour, hour)
+                .expired(some(&["a", "b"]), later + hour, all)
                 .is_empty()
         );
-        assert_eq!(since.expired(some(&["a", "b"]), again + hour, hour), ["a"]);
+        assert_eq!(since.expired(some(&["a", "b"]), again + hour, all), ["a"]);
+    }
+
+    #[test]
+    fn a_key_with_its_own_time_and_one_without() {
+        let hour = Duration::from_secs(3600);
+        let start = Instant::now();
+        let mut since = Since::<&str>::default();
+        let some = |things: &[&'static str]| Some(things.to_vec());
+        // "kept" was picked to stay until logout: it never expires here.
+        let time = |key: &&str| (*key != "kept").then_some(hour);
+        assert!(
+            since
+                .expired(some(&["kept", "timed"]), start, time)
+                .is_empty()
+        );
+        assert_eq!(
+            since.expired(some(&["kept", "timed"]), start + hour, time),
+            ["timed"]
+        );
+        assert!(
+            since
+                .expired(some(&["kept"]), start + hour * 9, time)
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_key_is_known_by_its_type_and_base64() {
+        assert_eq!(
+            key_id("ssh-ed25519 AAAAC3Nza me@laptop"),
+            key_id("ssh-ed25519 AAAAC3Nza other comment")
+        );
+        assert_eq!(key_id("ssh-ed25519 AAAAC3Nza"), "ssh-ed25519 AAAAC3Nza");
     }
 
     #[test]

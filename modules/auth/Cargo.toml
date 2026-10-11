@@ -8,13 +8,21 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+aes = "0.8"
+base64 = "0.22"
+cbc = { version = "0.1", features = ["alloc"] }
+enumflags2.workspace = true
 futures-util.workspace = true
+getrandom.workspace = true
+hkdf = "0.12"
 include_dir.workspace = true
 libc.workspace = true
 mochi-core.workspace = true
+num-bigint = "0.4"
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt", "sync", "time"] }
 tracing.workspace = true
 zbus.workspace = true

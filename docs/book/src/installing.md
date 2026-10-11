@@ -101,7 +101,7 @@ makepkg -si
 
 Once they're on the AUR, `paru -S mochi` or `yay -S mochi` does the same.
 
-Both depend on `quickshell`, `gpu-screen-recorder` and `inter-font` from the official repositories, and download the Material Symbols icon font from Google's repository, pinned to one commit. The build runs the test suite. They install `mochid`, `mochi`, the systemd user unit and `mochi-share-picker`. `mochi-bin` takes both fonts from the release archive instead, so it doesn't need `inter-font`. Optional dependencies:
+Both depend on `quickshell`, `gpu-screen-recorder` and `inter-font` from the official repositories, and download the Material Symbols icon font from Google's repository, pinned to one commit. The build runs the test suite. They install `mochid`, `mochi`, the systemd user unit, `mochi-share-picker` and `mochi-askpass`. `mochi-bin` takes both fonts from the release archive instead, so it doesn't need `inter-font`. Optional dependencies:
 
 - `wl-clipboard`, to copy screenshots.
 - `satty`, the default screenshot editor.

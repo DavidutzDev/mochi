@@ -61,6 +61,17 @@ enum Command {
         #[arg(long)]
         allow_token: bool,
     },
+    /// Ask for a password on the island, for `sudo -A` and ssh.
+    ///
+    /// Set `SUDO_ASKPASS` and `SSH_ASKPASS` to `mochi-askpass`, which runs
+    /// this. It prints what's typed, for the program that asked; Cancel
+    /// exits with 1. ssh's yes or no questions and notices, by
+    /// `SSH_ASKPASS_PROMPT`, show as such.
+    Askpass {
+        /// What the program asks, like `[sudo] password for me: `.
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        prompt: Vec<String>,
+    },
     /// Install, update and remove the plugins plugins.toml lists.
     ///
     /// plugins.toml sits next to config.toml. `install` and `update` show
@@ -244,6 +255,7 @@ fn run(command: Command, json: bool) -> Result<(), String> {
         }
         Command::Plugins { config, action } => plugins(config, action, json),
         Command::SharePick { allow_token } => share_pick(allow_token),
+        Command::Askpass { prompt } => askpass(&prompt.join(" ")),
         Command::Completions { shell } => {
             clap_complete::generate(shell, &mut Cli::command(), "mochi", &mut std::io::stdout());
             Ok(())
@@ -460,6 +472,37 @@ fn reload_if_running() {
         Ok(_) => println!("mochid reloaded"),
         Err(error) if error.starts_with("cannot reach mochid") => {}
         Err(error) => eprintln!("mochi: mochid didn't reload: {error}"),
+    }
+}
+
+/// Asks the auth module, which asks on the island, and prints the answer for
+/// the program that ran this: sudo or ssh read it from stdout.
+fn askpass(prompt: &str) -> Result<(), String> {
+    let kind = match std::env::var("SSH_ASKPASS_PROMPT").as_deref() {
+        Ok("confirm") => "confirm",
+        Ok("none") => "notice",
+        _ => "password",
+    };
+    // Who asks: the program that ran this.
+    let app = std::fs::read_to_string(format!(
+        "/proc/{}/comm",
+        std::os::unix::process::parent_id()
+    ))
+    .map(|name| name.trim().to_owned())
+    .unwrap_or_default();
+    let answer = request(ClientMessage::Command {
+        module: "auth".into(),
+        action: "ask".into(),
+        args: vec![kind.to_owned(), app, prompt.to_owned()],
+    });
+    match answer {
+        Ok(DaemonMessage::Output { output }) => {
+            println!("{output}");
+            Ok(())
+        }
+        Ok(DaemonMessage::Ok) => Ok(()),
+        Ok(other) => Err(unexpected(&other)),
+        Err(message) => Err(message),
     }
 }
 

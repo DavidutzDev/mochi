@@ -92,6 +92,9 @@ rustPlatform.buildRustPackage {
     # xdg-desktop-portal-hyprland runs one program, without arguments of
     # our choosing, as its screen-share picker.
     makeWrapper $out/bin/mochi $out/bin/mochi-share-picker --add-flags share-pick
+    # sudo -A and ssh run one program, their prompt its argument, to ask for
+    # a password: SUDO_ASKPASS and SSH_ASKPASS.
+    makeWrapper $out/bin/mochi $out/bin/mochi-askpass --add-flags askpass
     # `mochi plugins` clones, downloads and unpacks with these, after
     # whatever the user has.
     wrapProgram $out/bin/mochi \

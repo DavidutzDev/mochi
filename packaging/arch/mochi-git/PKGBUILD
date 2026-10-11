@@ -74,4 +74,10 @@ package() {
 #!/bin/sh
 exec /usr/bin/mochi share-pick "$@"
 SH
+  # sudo -A and ssh run one program, their prompt its argument, to ask for
+  # a password: SUDO_ASKPASS and SSH_ASKPASS.
+  install -Dm755 /dev/stdin "$pkgdir/usr/bin/mochi-askpass" <<'SH'
+#!/bin/sh
+exec /usr/bin/mochi askpass "$@"
+SH
 }

@@ -1,6 +1,6 @@
 # Auth
 
-Passwords and what the session remembers of them. Apps that need an admin password ask for it on the island, and locking the screen forgets sudo's password, the SSH keys in the agent, the admin actions polkit remembers and the keyring's unlocked secrets.
+Passwords and what the session remembers of them. polkit's admin passwords, the keyring's, and those `sudo -A` and ssh ask for are typed on the island, and locking the screen forgets sudo's password, the SSH keys in the agent, the admin actions polkit remembers and the keyring's unlocked secrets.
 
 ## Admin passwords
 
@@ -10,7 +10,22 @@ Mochi never checks the password itself: polkit's own helper does, with PAM, and 
 
 Only one polkit agent answers for a session. If another runs, like hyprpolkitagent, Mochi logs that it can't answer and the other one keeps asking. Turn it off: with the home-manager module, `programs.mochi.polkitAgent.enable` (on by default) turns off `services.hyprpolkitagent`; otherwise stop its service or remove it from the compositor's autostart. `polkit = false` in `[module.auth]` leaves polkit to another agent.
 
-Plain `sudo` keeps asking in its terminal.
+## The keyring
+
+gnome-keyring asks for passwords through a prompter on the session bus, GNOME's `gcr-prompter` by default. Mochi takes its place, so the island asks: to unlock a keyring, for a new keyring's password, typed twice, and for the passphrases gcr's SSH agent needs. The prompt shows what the keyring says, with its choice to tick when it has one, like unlocking the keyring at login. A wrong password brings the keyring's own warning. The password goes back to gnome-keyring encrypted, with the key exchange gcr uses, so it isn't readable on the bus.
+
+While gcr-prompter runs, it keeps the prompts: it exits after a few idle seconds, and Mochi takes them from then on. `keyring = false` in `[module.auth]` leaves them to gcr-prompter.
+
+## sudo and ssh
+
+`sudo -A`, and ssh when it has no terminal, run the program in `SUDO_ASKPASS` or `SSH_ASKPASS` to ask for a password. Point both at `mochi-askpass`, which comes with Mochi, and they ask on the island: what the program asks, in its words, with Continue and Cancel. Cancel makes sudo or ssh stop. The home-manager module's `askpass.enable`, on by default, sets both.
+
+- Plain `sudo` keeps asking in its terminal. `alias sudo='sudo -A'` sends it to the island; `run0` asks through polkit already.
+- ssh asks on the island from a terminal too with `SSH_ASKPASS_REQUIRE=prefer`.
+- For an SSH key's passphrase, the prompt has a choice of how long the key stays in the agent once added: until the screen locks, 1, 4 or 8 hours, or until logout, starting from `remember_ssh_keys`. ssh adds the key with `AddKeysToAgent yes` in its config, or `ssh-add` does.
+- ssh's yes or no questions, like confirming each use of a key, have Yes and No. Its notices, like touching a security key, show for a while and need no answer.
+
+The password goes from the island to the auth module, back to `mochi-askpass` and to the program that ran it. Any program of the user's could run `mochi-askpass` too, so the prompt says which program asks: the one that ran it.
 
 ## What it remembers
 

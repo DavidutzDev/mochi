@@ -56,6 +56,9 @@ stdenv.mkDerivation {
   # the tools `mochi plugins` uses, and Quickshell and the fonts for mochid.
   postFixup = ''
     makeWrapper $out/bin/mochi $out/bin/mochi-share-picker --add-flags share-pick
+    # sudo -A and ssh run one program, their prompt its argument, to ask for
+    # a password: SUDO_ASKPASS and SSH_ASKPASS.
+    makeWrapper $out/bin/mochi $out/bin/mochi-askpass --add-flags askpass
     wrapProgram $out/bin/mochi \
       --suffix PATH : ${
         lib.makeBinPath [
