@@ -120,11 +120,62 @@ pub fn blur(source: Option<String>, out: &Path) -> Option<PathBuf> {
     else {
         return None;
     };
-    let image = image::open(&path).ok()?;
-    let small = image.resize(480, 480, image::imageops::FilterType::Triangle);
-    let blurred = small.blur(6.0);
-    blurred.to_rgb8().save(out).ok()?;
+    blurred(image::open(&path).ok()?, out)?;
     Some(out.to_owned())
+}
+
+/// Each monitor as it is now, blurred into `dir` as `shot-<monitor>.png`,
+/// for the lock screen's background: by monitor. A compositor that doesn't
+/// answer within a second leaves it empty, so a lock never waits longer.
+pub fn shoot(dir: &Path) -> std::collections::BTreeMap<String, PathBuf> {
+    let (sent, received) = std::sync::mpsc::channel();
+    let scratch = dir.to_owned();
+    let started = std::thread::Builder::new()
+        .name("lock-shot".into())
+        .spawn(move || {
+            let _ = sent.send(mochi_core::compositor::capture::capture(&scratch));
+        });
+    if started.is_err() {
+        return std::collections::BTreeMap::new();
+    }
+    let frames = match received.recv_timeout(std::time::Duration::from_secs(1)) {
+        Ok(Ok(frames)) => frames,
+        Ok(Err(error)) => {
+            tracing::warn!(%error, "can't take the screenshot for the lock screen");
+            return std::collections::BTreeMap::new();
+        }
+        Err(_) => {
+            tracing::warn!("the screenshot for the lock screen took too long");
+            return std::collections::BTreeMap::new();
+        }
+    };
+    frames
+        .iter()
+        .filter_map(|frame| {
+            let (width, height) = frame.size();
+            let image = image::RgbImage::from_raw(width, height, frame.shown())?;
+            let name: String = frame
+                .output
+                .chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || c == '-' {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect();
+            let out = dir.join(format!("shot-{name}.png"));
+            blurred(image::DynamicImage::ImageRgb8(image), &out)?;
+            Some((frame.output.clone(), out))
+        })
+        .collect()
+}
+
+/// A small copy of `image`, blurred, into `out`.
+fn blurred(image: image::DynamicImage, out: &Path) -> Option<()> {
+    let small = image.resize(480, 480, image::imageops::FilterType::Triangle);
+    small.blur(6.0).to_rgb8().save(out).ok()
 }
 
 #[cfg(test)]

@@ -6,7 +6,7 @@ A small program of its own, `mochi-lock`, takes the compositor's session lock (`
 
 By default the lock screen shows the time, big, with the date and the weather under it, and on the right what's playing, with play, pause and skip, and the field, with a dot for each character typed. The battery's level sits in a corner. Behind it all is your wallpaper, blurred and dimmed. Escape or Ctrl+U clears the field, Enter checks it. After a wrong password it says so, or says what PAM said, like an account locked after too many tries; from the third wrong one in a row, Enter waits 2 seconds, then 4, 8 and so on, up to a minute, on top of PAM's own delays. It says when Caps Lock is on. Its colors and fonts are the theme's.
 
-`background` in `[module.lock]` picks what's behind it, and [Arranging it](#arranging-it) what's on it. Weather shows once the [weather](weather.md) module runs with a place, and what's playing once the [media](media.md) module runs.
+`background` in `[module.lock]` picks what's behind it: the wallpaper that awww, swww or hyprpaper shows, or Hyprland's own when none does; an image; a screenshot of each monitor taken just before locking, open windows and all; or the theme's color. The images are blurred. A screenshot is taken only for a lock you start, never for a lock screen started again after a crash, which would only show the lock, and it's deleted once unlocked. Wayland has no way to capture only what's under the windows, so a screenshot shows them, blurred. `mochi ipc lock edit` arranges [what's on it](#arranging-it). Weather shows once the [weather](weather.md) module runs with a place, and what's playing once the [media](media.md) module runs.
 
 ## Arranging it
 

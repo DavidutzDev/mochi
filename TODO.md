@@ -447,6 +447,7 @@ Step 3, customization:
 - [x] Every widget on the lock screen, view-only (no keyboard, commands through the allowlist), unless its offer says `places = ["desktop"]`; plugins' with `lock_plugins` in `[module.widgets]`, which mochid enforces by marking every plugin offer `plugin: true`. The lock module watches the modules the layout uses and copies their views; mochi-lock relays any module's state but `lock`
 - [ ] A layout per monitor: today a widget with an `output` shows on that monitor, and one without on every monitor, but the editor keeps the default's empty `output`; an Apply to like the desktop's
 - [ ] A button on the Lock settings page that opens the editor
+- [x] Backgrounds: Hyprland's own wallpaper (`share/hypr/wall<n>.png` by `misc:force_default_wallpaper`) when no wallpaper tool shows one, in `palette::source`; `screenshot`, each monitor captured before a lock you start (the colors module's screencopy, moved to `mochi_compositor::capture`), a second at most, blurred, by monitor, deleted at unlock, kept for a restart. Wayland can't capture only the layers under the windows, so it shows them blurred
 - [ ] Notifications (count and apps), suspend, reboot and shut down buttons, each a setting; fingerprint and security key prompts from PAM
 
 Later:

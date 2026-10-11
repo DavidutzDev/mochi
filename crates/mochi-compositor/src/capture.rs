@@ -1,12 +1,9 @@
-//! The screens' pixels, exactly. When the picker opens, every output is
-//! copied once through `wlr-screencopy-unstable-v1` into a shared memory
-//! file, on a Wayland connection of the module's own.
-//!
-//! The overlay shows the frozen screen through Quickshell, but what it
-//! draws is scaled to logical pixels, so under fractional scaling it never
-//! holds the screen's own bytes. These frames do: the overlay sends the
-//! pixel under the pointer, in the frame's pixels, and the module answers
-//! from here.
+//! The screens' pixels, exactly: every output copied once through
+//! `wlr-screencopy-unstable-v1` into a shared memory file, on a Wayland
+//! connection of its own. The colors module's picker reads a pixel from
+//! them, since what Quickshell draws is scaled to logical pixels and never
+//! holds the screen's own bytes under fractional scaling; the lock screen
+//! blurs them into its background.
 
 use std::fs::File;
 use std::os::fd::AsFd;
@@ -22,8 +19,6 @@ use wayland_protocols_wlr::screencopy::v1::client::{
     zwlr_screencopy_frame_v1::{self, ZwlrScreencopyFrameV1},
     zwlr_screencopy_manager_v1::ZwlrScreencopyManagerV1,
 };
-
-use crate::color::Color;
 
 /// One output's pixels, as the compositor drew them.
 #[derive(Debug)]
@@ -50,7 +45,7 @@ impl Frame {
 
     /// The color at `x`, `y`, counted as the screen shows it, or `None`
     /// off the screen.
-    pub fn pixel(&self, x: i64, y: i64) -> Option<Color> {
+    pub fn pixel(&self, x: i64, y: i64) -> Option<[u8; 3]> {
         let (shown_width, shown_height) = self.size();
         if x < 0 || y < 0 || x >= i64::from(shown_width) || y >= i64::from(shown_height) {
             return None;
@@ -58,7 +53,7 @@ impl Frame {
         let (x, y) = to_buffer(self.transform, x as u32, y as u32, self.width, self.height);
         let at = (y as usize * self.width as usize + x as usize) * 3;
         let rgb = self.pixels.get(at..at + 3)?;
-        Some(Color::rgb(rgb[0], rgb[1], rgb[2]))
+        Some([rgb[0], rgb[1], rgb[2]])
     }
 }
 
@@ -417,17 +412,29 @@ ignore!(
     ZwlrScreencopyManagerV1
 );
 
-#[cfg(test)]
 impl Frame {
-    /// A screen of one color, for tests elsewhere.
-    pub fn solid(output: &str, width: u32, height: u32, color: Color) -> Self {
+    /// A screen of one color, for tests.
+    pub fn solid(output: &str, width: u32, height: u32, rgb: [u8; 3]) -> Self {
         Self {
             output: output.into(),
             width,
             height,
             transform: Transform::Normal,
-            pixels: [color.r, color.g, color.b].repeat(width as usize * height as usize),
+            pixels: rgb.repeat(width as usize * height as usize),
         }
+    }
+
+    /// Red, green, blue for each pixel as the screen shows it, row by row,
+    /// top first: a rotated output's turned the right way up.
+    pub fn shown(&self) -> Vec<u8> {
+        let (width, height) = self.size();
+        let mut out = Vec::with_capacity(width as usize * height as usize * 3);
+        for y in 0..i64::from(height) {
+            for x in 0..i64::from(width) {
+                out.extend_from_slice(&self.pixel(x, y).unwrap_or_default());
+            }
+        }
+        out
     }
 }
 
@@ -456,7 +463,7 @@ mod tests {
         (0..i64::from(height))
             .map(|y| {
                 (0..i64::from(width))
-                    .map(|x| frame.pixel(x, y).unwrap().r)
+                    .map(|x| frame.pixel(x, y).unwrap()[0])
                     .collect()
             })
             .collect()

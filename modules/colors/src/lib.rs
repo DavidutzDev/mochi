@@ -20,7 +20,7 @@
 
 mod color;
 mod history;
-mod screen;
+
 mod tour;
 
 use std::path::PathBuf;
@@ -37,7 +37,7 @@ use tokio::time::Instant;
 
 use crate::color::{Color, Format};
 use crate::history::History;
-use crate::screen::Frame;
+use mochi_core::compositor::capture::{self as screen, Frame};
 
 static QML: Dir = include_dir!("$CARGO_MANIFEST_DIR/qml");
 
@@ -372,7 +372,7 @@ impl State {
     fn select(&mut self, ctx: &ModuleCtx, args: &Args) -> Result<(), String> {
         let picker = self.picker.as_ref().ok_or("the picker isn't open")?;
         let (frame, x, y) = picker.point(args)?;
-        let color = frame.pixel(x, y).ok_or("that's off the screen")?;
+        let color = pixel(frame, x, y).ok_or("that's off the screen")?;
         self.picked(ctx, color);
         Ok(())
     }
@@ -483,15 +483,20 @@ impl Picker {
     }
 }
 
+/// The color of a frame's pixel, as the screen shows it.
+fn pixel(frame: &Frame, x: i64, y: i64) -> Option<Color> {
+    frame.pixel(x, y).map(|[r, g, b]| Color::rgb(r, g, b))
+}
+
 /// The magnifier's pixels around `x`, `y`, row by row, as `#rrggbb` or ""
 /// off the screen, and the hex of the one in the middle.
 fn lens(frame: &Frame, x: i64, y: i64, uppercase: bool) -> Value {
     let half = LENS / 2;
     let cells: Vec<String> = (y - half..=y + half)
         .flat_map(|row| (x - half..=x + half).map(move |column| (column, row)))
-        .map(|(column, row)| frame.pixel(column, row).map(Color::id).unwrap_or_default())
+        .map(|(column, row)| pixel(frame, column, row).map(Color::id).unwrap_or_default())
         .collect();
-    let center = frame.pixel(x, y);
+    let center = pixel(frame, x, y);
     json!({
         "output": frame.output,
         "x": x,
@@ -737,7 +742,7 @@ mod tests {
 
     #[test]
     fn the_lens_shows_the_pixels_around_the_pointer() {
-        let frame = Frame::solid("DP-1", 20, 10, Color::rgb(0x1e, 0x1e, 0x2e));
+        let frame = Frame::solid("DP-1", 20, 10, [0x1e, 0x1e, 0x2e]);
         let lens = lens(&frame, 0, 9, true);
         assert_eq!(lens["output"], "DP-1");
         assert_eq!(lens["hex"], "#1E1E2E");

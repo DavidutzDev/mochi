@@ -173,6 +173,7 @@ pub fn run(config: Config, marker: Option<std::path::PathBuf>) -> i32 {
         cursor: None,
         drawn: HashMap::new(),
         pushed: Instant::now(),
+        backgrounds: serde_json::Value::Null,
     };
 
     // Before anything draws.
@@ -297,6 +298,9 @@ struct Lock {
     drawn: HashMap<String, Option<Instant>>,
     /// When the renderer was last told the lock's state.
     pushed: Instant,
+    /// A background for each monitor, by its name, from mochid: what each
+    /// showed before locking, blurred.
+    backgrounds: serde_json::Value,
 }
 
 impl Lock {
@@ -378,6 +382,7 @@ impl Lock {
             "user": self.user,
             "hours": self.config.hours,
             "background": self.config.background,
+            "backgrounds": self.backgrounds,
         });
         if let Some(renderer) = &mut self.renderer {
             renderer.state("lock", state);
@@ -428,6 +433,11 @@ impl Lock {
         let Ok(message) = serde_json::from_str::<serde_json::Value>(line) else {
             return;
         };
+        if message["type"] == "backgrounds" && message["backgrounds"].is_object() {
+            self.backgrounds = message["backgrounds"].clone();
+            self.push();
+            return;
+        }
         let Some(renderer) = &mut self.renderer else {
             return;
         };

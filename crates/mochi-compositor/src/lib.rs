@@ -19,6 +19,7 @@
 //! [`Compositor::subscribe`], and act with methods like
 //! [`Compositor::activate_workspace`].
 
+pub mod capture;
 mod hyprland;
 mod ipc;
 mod model;

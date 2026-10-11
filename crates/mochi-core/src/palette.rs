@@ -125,6 +125,15 @@ pub fn source(wallpaper: &str) -> Result<Source, String> {
     {
         return Ok(found);
     }
+    // Nothing showing one: Hyprland draws one of its own, from its data.
+    if crate::compositor::running() == Some("Hyprland")
+        && let Some(found) = hyprland_default(
+            run("hyprctl", &["getoption", "misc:force_default_wallpaper"]).as_deref(),
+            &data_dirs(),
+        )
+    {
+        return Ok(found);
+    }
     Err(
         "no wallpaper found: awww, swww and hyprpaper show none; set `wallpaper` to an image"
             .into(),
@@ -165,6 +174,32 @@ fn from_hyprpaper(text: &str) -> Option<Source> {
         let path = PathBuf::from(line.split_once(" = ")?.1.trim());
         path.is_file().then_some(Source::Image(path))
     })
+}
+
+/// Hyprland's own wallpaper, which it draws when nothing else does:
+/// `share/hypr/wall<n>.png` in the data directories, `n` being
+/// `misc:force_default_wallpaper` from 0 to 2. With -1, its default, Hyprland
+/// picks, and this takes the first.
+fn hyprland_default(option: Option<&str>, dirs: &[PathBuf]) -> Option<Source> {
+    let chosen = option
+        .and_then(|text| {
+            text.lines()
+                .find_map(|line| line.trim().strip_prefix("int:"))
+        })
+        .and_then(|value| value.trim().parse::<i64>().ok())
+        .filter(|value| (0..=2).contains(value))
+        .unwrap_or(0);
+    dirs.iter()
+        .map(|dir| dir.join("hypr").join(format!("wall{chosen}.png")))
+        .find(|path| path.is_file())
+        .map(Source::Image)
+}
+
+/// The system's data directories, `XDG_DATA_DIRS`.
+fn data_dirs() -> Vec<PathBuf> {
+    std::env::var_os("XDG_DATA_DIRS")
+        .map(|dirs| std::env::split_paths(&dirs).collect())
+        .unwrap_or_else(|| vec!["/usr/local/share".into(), "/usr/share".into()])
 }
 
 /// A palette from the wallpaper, in the order of [`ROLES`].
@@ -339,6 +374,25 @@ fn lch_to_rgb(lightness: f64, chroma: f64, hue: f64) -> [u8; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hyprlands_own_wallpaper_by_its_option() {
+        let dir = std::env::temp_dir().join(format!("mochi-hypr-walls-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("hypr")).unwrap();
+        for name in ["wall0.png", "wall2.png"] {
+            std::fs::write(dir.join("hypr").join(name), "").unwrap();
+        }
+        let dirs = [PathBuf::from("/nonexistent"), dir.clone()];
+        let found = |option: Option<&str>| match hyprland_default(option, &dirs) {
+            Some(Source::Image(path)) => path.file_name().unwrap().to_string_lossy().into_owned(),
+            _ => String::new(),
+        };
+        assert_eq!(found(Some("int: 2\nset: true\n")), "wall2.png");
+        assert_eq!(found(Some("int: -1\nset: false\n")), "wall0.png");
+        assert_eq!(found(None), "wall0.png");
+        assert_eq!(found(Some("int: 1\n")), "", "not installed");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn every_preset_has_both_palettes_and_reads_well() {

@@ -76,6 +76,9 @@ enum Background {
     Image,
     /// The theme's background color.
     None,
+    /// Each monitor as it was just before locking, blurred: what was open
+    /// shows, blurred.
+    Screenshot,
 }
 
 impl Settings {
@@ -87,7 +90,7 @@ impl Settings {
             Background::Image if !self.image.trim().is_empty() => {
                 Some(self.image.trim().to_owned())
             }
-            Background::Image | Background::None => None,
+            Background::Image | Background::None | Background::Screenshot => None,
         }
     }
 }
@@ -388,6 +391,12 @@ struct Locker {
     daemon_shell: Option<PathBuf>,
     /// The modules whose state is watched for the lock screen's widgets.
     watched: std::collections::BTreeSet<String>,
+    /// Take a screenshot of each monitor before locking, for the background.
+    screenshot: bool,
+    /// Those screenshots, blurred, by monitor, until unlocked.
+    shots: std::collections::BTreeMap<String, PathBuf>,
+    /// Where they go: the module's data directory.
+    shots_dir: PathBuf,
 }
 
 impl Locker {
@@ -418,6 +427,9 @@ impl Locker {
             input: None,
             daemon_shell: ctx.shell_dir().map(Path::to_owned),
             watched: std::collections::BTreeSet::new(),
+            screenshot: settings.background == Background::Screenshot,
+            shots: std::collections::BTreeMap::new(),
+            shots_dir: ctx.data_dir().to_owned(),
             config: dir.join("lock.json"),
         };
         locker.write_config(settings, ctx);
@@ -477,12 +489,17 @@ impl Locker {
         }
     }
 
-    /// Starts `mochi-lock`, unless one already runs.
+    /// Starts `mochi-lock`, unless one already runs. With the screenshot
+    /// background, each monitor is taken first, before anything locks: a
+    /// lock started again after a crash keeps the ones it had.
     fn lock(&mut self, events: &mpsc::UnboundedSender<ChildEvent>) -> Result<(), String> {
         if self.running() {
             return Ok(());
         }
         self.respawn_at = None;
+        if self.screenshot {
+            self.shots = screen::shoot(&self.shots_dir);
+        }
         self.spawn(events)
     }
 
@@ -536,6 +553,11 @@ impl Locker {
         for (module, state) in &self.states {
             let _ = input
                 .send(json!({ "type": "state", "module": module, "state": state }).to_string());
+        }
+        // The screenshots behind each monitor, with that background.
+        if !self.shots.is_empty() {
+            let _ =
+                input.send(json!({ "type": "backgrounds", "backgrounds": self.shots }).to_string());
         }
         self.input = Some(input);
         let events = events.clone();
@@ -703,6 +725,10 @@ impl Locker {
 
     async fn unlocked(&mut self, ctx: &ModuleCtx) {
         self.secured = false;
+        // What was on screen goes as soon as it isn't needed.
+        for shot in std::mem::take(&mut self.shots).into_values() {
+            let _ = std::fs::remove_file(shot);
+        }
         let _ = std::fs::remove_file(&self.marker);
         self.hint(false).await;
         if let Some(id) = self.notice.take() {

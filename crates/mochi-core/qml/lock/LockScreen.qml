@@ -25,6 +25,9 @@ Variants {
         readonly property var battery: Daemon.state("battery")
         readonly property var weather: Daemon.state("weather")
         readonly property real gutter: Math.round(width * 0.07)
+        // What's behind it: this monitor's screenshot, with that background,
+        // or the one image for every monitor.
+        readonly property string backdrop: lock.backgrounds?.[modelData.name] ?? lock.background ?? ""
 
         screen: modelData
         anchors {
@@ -49,7 +52,7 @@ Variants {
         Image {
             anchors.fill: parent
             visible: status === Image.Ready
-            source: window.lock.background ? `file://${window.lock.background}` : ""
+            source: window.backdrop !== "" ? `file://${window.backdrop}` : ""
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
             smooth: true
@@ -59,7 +62,7 @@ Variants {
         Rectangle {
             anchors.fill: parent
             color: Theme.background
-            opacity: window.lock.background ? 0.45 : 0
+            opacity: window.backdrop !== "" ? 0.45 : 0
         }
 
         // The layout arranged with `mochi ipc lock edit`, drawn by the
