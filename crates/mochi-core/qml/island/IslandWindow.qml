@@ -91,7 +91,10 @@ PanelWindow {
     exclusionMode: ExclusionMode.Ignore
 
     WlrLayershell.namespace: "mochi-island"
-    WlrLayershell.layer: modal || overlaid ? WlrLayer.Overlay : WlrLayer.Top
+    // Arranging widgets puts the desktop layer over the windows, on the top
+    // layer: the island goes over it.
+    readonly property bool arranging: Daemon.state("widgets")?.editing === true
+    WlrLayershell.layer: modal || overlaid || arranging ? WlrLayer.Overlay : WlrLayer.Top
     WlrLayershell.keyboardFocus: modal || overlaid ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     // Whether a point is on the island or a pill, not outside them.

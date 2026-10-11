@@ -24,7 +24,9 @@ PanelWindow {
     visible: Daemon.modules.includes("widgets")
 
     WlrLayershell.namespace: "mochi-widgets"
-    WlrLayershell.layer: editing ? WlrLayer.Overlay : WlrLayer.Bottom
+    // Over the windows while arranging, but under the island, which goes
+    // to the overlay layer then, so its notice and the drawer's button show.
+    WlrLayershell.layer: editing ? WlrLayer.Top : WlrLayer.Bottom
     // A widget with a text field asks for the keyboard while it's focused.
     WlrLayershell.keyboardFocus: editing ? WlrKeyboardFocus.Exclusive : desktop?.wantsKeyboard ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
 
