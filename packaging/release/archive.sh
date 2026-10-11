@@ -3,7 +3,7 @@
 #
 #   packaging/release/archive.sh <bin-dir> <out-dir>
 #
-# <bin-dir> holds `mochi` and `mochid`. The archive, mochi-<arch>-linux.tar.gz,
+# <bin-dir> holds `mochi`, `mochid` and `mochi-lock`. The archive, mochi-<arch>-linux.tar.gz,
 # unpacks to mochi-<version>/ with the binaries, the fonts the shell loads,
 # the systemd unit, the mochi:// link handler, shell completions, the
 # licenses and install.sh. Its name has no version, so
@@ -43,7 +43,8 @@ mkdir -p "$dir/bin" "$dir/share/mochi/fonts" "$dir/share/applications" \
     "$dir/share/bash-completion/completions" "$dir/share/fish/vendor_completions.d" \
     "$dir/share/zsh/site-functions"
 
-install -m755 "$bin/mochi" "$bin/mochid" "$dir/bin/"
+install -m755 "$bin/mochi" "$bin/mochid" "$bin/mochi-lock" "$dir/bin/"
+install -Dm644 "$root/packaging/pam/mochi" "$dir/share/mochi/pam.d/mochi"
 install -m644 "$root/systemd/mochid.service" "$dir/lib/systemd/user/"
 install -m644 "$root/share/applications/mochi-links.desktop" "$dir/share/applications/"
 install -m755 "$root/packaging/release/install.sh" "$dir/"

@@ -12,6 +12,8 @@
   python3,
   pkg-config,
   libpulseaudio,
+  linux-pam,
+  libxkbcommon,
   quickshell,
   gpu-screen-recorder,
   callPackage,
@@ -54,8 +56,12 @@ rustPlatform.buildRustPackage {
     installShellFiles
     pkg-config
   ];
-  # libpulse for the OSD module.
-  buildInputs = [ libpulseaudio ];
+  # libpulse for the OSD module; PAM and xkbcommon for the lock screen.
+  buildInputs = [
+    libpulseaudio
+    linux-pam
+    libxkbcommon
+  ];
   # The plugin installer's tests clone a repository of their own, one runs
   # the Python example plugin, and one compiles every view with Quickshell.
   nativeCheckInputs = [

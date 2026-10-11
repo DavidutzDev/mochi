@@ -100,10 +100,13 @@
               pkgs.rustfmt
               pkgs.rust-analyzer
 
-              # Native dependencies: libpulse for the OSD module, dbus for zbus
+              # Native dependencies: libpulse for the OSD module, dbus for zbus,
+              # PAM and xkbcommon for the lock screen
               pkgs.pkg-config
               pkgs.libpulseaudio
               pkgs.dbus
+              pkgs.linux-pam
+              pkgs.libxkbcommon
 
               # The documentation site: `mdbook serve docs/book`
               pkgs.mdbook

@@ -965,6 +965,7 @@ fn icon(module: &str) -> &'static str {
         "control-center" => "space_dashboard",
         "idle" => "bedtime",
         "launcher" => "search",
+        "lock" => "lock",
         "media" => "music_note",
         "network" => "wifi",
         "nightlight" => "nightlight",

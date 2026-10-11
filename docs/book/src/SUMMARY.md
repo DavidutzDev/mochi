@@ -28,6 +28,7 @@
 - [Performance](modules/performance.md)
 - [Notifications](modules/notifications.md)
 - [Launcher](modules/launcher.md)
+- [Lock](modules/lock.md)
 - [Control center](modules/control-center.md)
 - [Power](modules/power.md)
 - [Privacy](modules/privacy.md)

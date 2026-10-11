@@ -12,7 +12,8 @@ url='https://github.com/DavidutzDev/mochi'
 license=('MIT')
 # mochid refuses to start with a Quickshell outside 0.3.x; see
 # QUICKSHELL_SERIES in crates/mochi-core/src/supervisor.rs.
-depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder' 'sh')
+depends=('glibc' 'libgcc' 'libpulse' 'pam' 'libxkbcommon' 'quickshell' 'gpu-screen-recorder' 'sh')
+backup=('etc/pam.d/mochi')
 optdepends=(
   'wl-clipboard: copy screenshots'
   'satty: edit screenshots'
@@ -28,7 +29,8 @@ sha256sums_aarch64=('eaaaccdad80f3eecdb5b354b486a9427c4945e2bde7dbc1cc0fc769ec03
 
 package() {
   cd "mochi-$pkgver"
-  install -Dm755 bin/mochid bin/mochi -t "$pkgdir/usr/bin/"
+  install -Dm755 bin/mochid bin/mochi bin/mochi-lock -t "$pkgdir/usr/bin/"
+  install -Dm644 share/mochi/pam.d/mochi -t "$pkgdir/etc/pam.d/"
   install -Dm644 lib/systemd/user/mochid.service -t "$pkgdir/usr/lib/systemd/user/"
   install -Dm644 share/applications/mochi-links.desktop -t "$pkgdir/usr/share/applications/"
   # The fonts the shell loads: Inter and the icons, from the release.

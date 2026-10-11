@@ -1,0 +1,3 @@
+#%PAM-1.0
+# Mochi's lock screen checks the password with this service.
+auth include login

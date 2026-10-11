@@ -10,7 +10,8 @@ url='https://github.com/DavidutzDev/mochi'
 license=('MIT')
 # mochid refuses to start with a Quickshell outside 0.3.x; see
 # QUICKSHELL_SERIES in crates/mochi-core/src/supervisor.rs.
-depends=('glibc' 'libgcc' 'libpulse' 'quickshell' 'gpu-screen-recorder' 'sh' 'inter-font')
+depends=('glibc' 'libgcc' 'libpulse' 'pam' 'libxkbcommon' 'quickshell' 'gpu-screen-recorder' 'sh' 'inter-font')
+backup=('etc/pam.d/mochi')
 makedepends=('cargo' 'git')
 # makepkg builds C with GCC's LTO by default, which leaves zstd's objects
 # as GCC bitcode the Rust linker can't read.
@@ -56,7 +57,8 @@ check() {
 
 package() {
   cd "$_pkgname"
-  install -Dm755 target/release/mochid target/release/mochi -t "$pkgdir/usr/bin/"
+  install -Dm755 target/release/mochid target/release/mochi target/release/mochi-lock -t "$pkgdir/usr/bin/"
+  install -Dm644 packaging/pam/mochi -t "$pkgdir/etc/pam.d/"
   install -Dm644 systemd/mochid.service -t "$pkgdir/usr/lib/systemd/user/"
   install -Dm644 share/applications/mochi-links.desktop -t "$pkgdir/usr/share/applications/"
   # The fonts the shell loads: Inter from inter-font, and the icons.

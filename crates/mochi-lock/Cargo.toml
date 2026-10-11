@@ -1,0 +1,29 @@
+[package]
+name = "mochi-lock"
+description = "Mochi's lock screen: holds the session lock and checks the password"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "mochi-lock"
+path = "src/main.rs"
+
+[features]
+# Lets MOCHI_LOCK_PAM_DIR point PAM at another directory, for the tests.
+# Never on in a package: it would let the environment pick how to unlock.
+test-pam = []
+
+[dependencies]
+ab_glyph = "0.2"
+libc.workspace = true
+serde = { workspace = true }
+serde_json.workspace = true
+smithay-client-toolkit = { version = "0.20", default-features = false, features = ["calloop", "xkbcommon"] }
+tiny-skia = { version = "0.11", default-features = false, features = ["std"] }
+zeroize.workspace = true
+
+[lints]
+workspace = true

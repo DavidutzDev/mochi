@@ -1,0 +1,13 @@
+# Lock: Mochi's own lock screen. A small program of its own, mochi-lock,
+# holds the lock and checks the password with PAM; nothing else unlocks it.
+[module.lock]
+# The PAM service that checks the password, a file in /etc/pam.d. Mochi
+# refuses to lock without it, since nothing could unlock the screen. On
+# NixOS, `security.pam.services.mochi = {};`; the Arch package brings it.
+# pam_service = "mochi"
+# Lock before the computer sleeps, and let it sleep once the screen is
+# locked, so waking up never shows the desktop.
+# before_sleep = true
+# Lock when logind asks: `loginctl lock-session`, the power module's Lock,
+# or an idle daemon like hypridle. logind's unlock is never obeyed.
+# logind = true

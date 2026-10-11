@@ -26,6 +26,16 @@ in
       '';
     };
 
+    lock.enable = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Add the PAM service `mochi`, which the lock module checks the
+        password with. Mochi refuses to lock without it, since nothing
+        could unlock the screen.
+      '';
+    };
+
     systemd.enable = lib.mkOption {
       type = lib.types.bool;
       default = true;
@@ -40,6 +50,8 @@ in
   config = lib.mkIf cfg.enable {
     environment.systemPackages = [ cfg.package ];
     programs.gpu-screen-recorder.enable = lib.mkIf cfg.recording.enable (lib.mkDefault true);
+    # The lock screen's password check, as a stock login would.
+    security.pam.services.mochi = lib.mkIf cfg.lock.enable { };
     # The package's user unit, mochid.service.
     systemd.packages = [ cfg.package ];
     # Through the target rather than `systemd.user.services.mochid`: NixOS

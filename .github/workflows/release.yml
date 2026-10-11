@@ -68,12 +68,12 @@ jobs:
           ref: ${{ env.TAG }}
       - uses: dtolnay/rust-toolchain@stable
       - name: Install the build's libraries
-        run: sudo apt-get update && sudo apt-get install -y libpulse-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libpulse-dev libpam0g-dev libxkbcommon-dev pkg-config
       - name: Build
-        run: cargo build --release --locked --no-default-features -p mochid -p mochi
+        run: cargo build --release --locked --no-default-features -p mochid -p mochi -p mochi-lock
       - name: Pack
         run: |
-          strip target/release/mochi target/release/mochid
+          strip target/release/mochi target/release/mochid target/release/mochi-lock
           sh packaging/release/archive.sh target/release dist
       - uses: actions/upload-artifact@v4
         with:

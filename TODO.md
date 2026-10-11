@@ -394,9 +394,65 @@ Lives only in the hub: no island view, a page and the CLI.
 - [x] Actions: `lock`, `logout`, `suspend`, `hibernate`, `reboot`, `firmware`, `shutdown`, `profile <name>`
 - [x] Tested on this machine: hibernate hidden (logind says `na`), switching to performance and back from the CLI moves the selector, and two real clicks on Log out with a harmless replacement command (the first only asks)
 - [x] The older `net.hadess.PowerProfiles` name, for power-profiles-daemon before 0.20
-- [ ] A lock screen of its own, if hyprlock and the others ever fall short (see open question 3)
-  - Reference (Lucid): a big two-line clock in the wallpaper's colour on the left with the date and weather, the password, media and notifications on the right, battery, network and Bluetooth at the top, power actions at the bottom; a polkit prompt in the same style
+- [ ] Mochi's own lock screen: see Lock below. Reference (Lucid): a big two-line clock in the wallpaper's colour on the left with the date and weather, the password, media and notifications on the right, battery, network and Bluetooth at the top, power actions at the bottom; a polkit prompt in the same style
 - [ ] Reboot into another OS, only once it can work with any bootloader and distro. Today no single way does: logind's one-shot boot loader entry only covers loaders that follow the Boot Loader Interface (systemd-boot), GRUB needs root to run `grub-reboot`, and the firmware's `BootNext` needs root too. Decided on 2026-10-03 to wait
+
+### Lock
+
+Mochi's own lock screen, in place of hyprlock and the others, decided on 2026-10-11. Everything that decides whether the screen unlocks is Rust, in a small process of its own; no Quickshell API takes part (no `WlSessionLock`, no `PamContext`). It ships as 0.2.0, by hand.
+
+What it defends against: someone at the keyboard and screen while you're away, who can type, click, plug in a monitor, close the lid, or wait for something to crash. Not a program already running as you (it could read keystrokes anyway, like with any locker), and not logging in on another TTY.
+
+The pieces:
+
+- `crates/mochi-lock`, a crate and a binary: takes `ext-session-lock-v1` on the real compositor, a surface on every monitor, hotplugged ones too; checks the password with PAM through its own small FFI, in the `mochi` PAM service; turns every key into text with xkbcommon, so keys never leave it; draws a fallback face itself (the theme's background, password dots, a lock symbol, PAM's messages); later runs a private Wayland server that only the lock renderer connects to. No command anywhere unlocks: only PAM saying yes
+- `modules/lock` in mochid: settings, what starts a lock (IPC, the power module's Lock, logind's Lock signal, going to sleep through a delay inhibitor, idle), `LockedHint`, a published `locked`, supervising `mochi-lock`, the lock layout and its editor, and which modules' data reaches the lock screen
+- `crates/mochi-core/qml/lock/`: the renderer's views, in a Quickshell instance of their own connected only to the private display, with a `Daemon` that talks to `mochi-lock` instead of mochid: filtered data in, allowlisted commands out (media; power actions when allowed), checked by `mochi-lock` and by mochid
+- Widget offers get a `lock` flag: whether their module allows them on the lock screen; the user turns each on in the lock layout. Plugin widgets too, off unless turned on: they can draw and get the pointer, but can't unlock or see a key
+
+Rules:
+
+- The lock is taken before anything draws, and "locked" means the compositor confirmed it
+- If the lock process dies, the compositor keeps the screen locked and mochid starts it again; a marker in the runtime dir locks again after mochid itself restarts. Hyprland needs `misc:allow_session_lock_restore = true`, which `mochi doctor` checks; `mochi-lock` run from a TTY takes the lock over
+- Never lock without a way to unlock: no PAM service, or no session lock protocol, refuses with a message instead
+- The password is never logged, never sent to mochid, wiped from memory after each try; no paste; PAM's own delays and faillock, and a longer wait after each wrong try
+- logind's Unlock signal is ignored; there is no unlock IPC
+- Nothing on the lock screen opens an app or runs a command: no launcher, terminal, clipboard, notification actions or settings. Notifications show as a count and app names, off by default
+- Before sleep: lock, wait for the compositor's confirmation (2 seconds at most), then let the sleep go on, so waking never shows the desktop
+- Idle grace period off by default, and never for a manual lock or before sleep
+- A broken layout or a crashed renderer shows the fallback face: unlocking stays possible, and never means unlocked
+
+Step 1, the secure core, which replaces hyprlock on its own with a plain look:
+
+- [x] `mochi-lock`: the session lock on every monitor, hotplugged ones too; PAM through its own FFI, an empty password never accepted; xkbcommon keys through smithay-client-toolkit; the fallback face drawn with tiny-skia and ab_glyph; events on stdout and a marker with its process id. A panic aborts, and unlocking needs a `Granted` only a PAM success makes
+- [x] `modules/lock`: `lock` and `status` actions, logind's Lock signal (so the power module's Lock and hypridle work as they are) and `LockedHint`, lock before sleep through a delay inhibitor, restarting `mochi-lock` after a crash with a growing wait, finding a lock that outlived mochid through the marker, a notice on the island when it refuses
+- [ ] Idle: lock after a while of no input, through `ext-idle-notify-v1`; until then hypridle's `loginctl lock-session`
+- [x] Refusing to lock without PAM service or protocol, with the reason on the island; `mochi doctor` checks the binary, the PAM service, the protocol and Hyprland's restore setting
+- [x] PAM files: `programs.mochi.lock.enable` adds `security.pam.services.mochi` in the NixOS module, `/etc/pam.d/mochi` in the Arch packages, `share/mochi/pam.d/mochi` in the release archive with a hint; `mochi-lock` in the release archive and every package
+- [x] Tests: PAM for real from a test-only directory (the `test-pam` feature, never in a package): refuse, accept, one password through pam_exec, the empty password. On headless Sway (2026-10-11): locked on both monitors with the desktop hidden, wrong passwords and 25 random ones never unlock, the right one does, `kill -9` leaves it locked (red) and the module starts a new one within 250 ms, a monitor added while locked is covered, no PAM service refuses with exit 3 and a notice, mochid killed while locked adopts the running lock after its restart
+- [ ] Tested on Hyprland by hand, with the restore setting
+
+Step 2, the private display and the QML renderer:
+
+- [ ] A minimal Wayland server in `mochi-lock`: compositor, shm, layer shell, an output per monitor at its size and scale, pointer input passed on, frames put on the lock surfaces
+- [ ] The renderer: a Quickshell instance on the private display, its own `Daemon`, Mochi's components and theme
+- [ ] Elements: clock, date, greeting, password dots and messages, media, battery, weather, keyboard layout, Caps Lock
+- [ ] Backgrounds: wallpaper, image, color, blur and dim; a blurred copy of the screen, off by default
+- [ ] The allowlist of commands, checked twice; the fallback face when the renderer hasn't drawn, crashed or froze
+- [ ] Tests: the renderer never gets a key, its crash shows the fallback and it comes back
+
+Step 3, customization:
+
+- [ ] The lock layout editor in the main shell, built on the widgets one, previewed with the password field off; a layout per monitor
+- [ ] Widgets on the lock screen, turned on per widget for the modules that allow it; then plugin widgets, with a note on what they can and can't do
+- [ ] Notifications (count and apps), suspend, reboot and shut down buttons, each a setting; fingerprint and security key prompts from PAM
+
+Later:
+
+- [ ] GPU buffers passed straight through instead of software rendering
+- [ ] The renderer in a bubblewrap sandbox, so a plugin can't even kill the lock process
+- [ ] Compose keys and input methods for the password
+- [ ] A polkit prompt in the same style
 
 ### Capture
 
@@ -717,7 +773,7 @@ Later:
 
 1. ~~Multiple monitors: one island per output, or only on the focused output?~~ One per output, and `[island] notices` and `panels` pick where things show.
 2. ~~Can a plugin read state from other modules?~~ Yes: `[uses] state` in the manifest, and `ModuleCtx::watch_state` for builtins.
-3. Is the lock screen a module, or a separate minimal program? A crash in the lock screen is a security problem. Lucid's lock screen is a design reference (see Power).
+3. ~~Is the lock screen a module, or a separate minimal program?~~ Both: a small Rust process, `mochi-lock`, holds the lock and checks the password, and a module drives it. See Lock.
 4. ~~Does the theme control the animation springs, or are they fixed per view?~~ The theme's `[motion]` does.
 
 ## Suggested order
@@ -726,4 +782,4 @@ Done: the spike, phase 1, the compositor adapter, the layout system, bubbles, an
 
 Next, from the Lucid ideas: the widget drawer with variants and previews, the shared expressive pieces, the new widget looks, the weather module and the clock panel. The website comes last.
 
-Next, open items that need a decision first: the lock screen (open question 3), per-output layout, the notch beside a bar and fused with its bubbles, and how views reveal during a morph.
+Next: the lock screen (see Lock). Open items that need a decision first: per-output layout, the notch beside a bar and fused with its bubbles, and how views reveal during a morph.

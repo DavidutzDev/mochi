@@ -6,6 +6,8 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 
 ### Added
 
+- A lock screen of Mochi's own, the `lock` module, in place of hyprlock or swaylock. A small program, `mochi-lock`, takes the compositor's session lock and checks the password with PAM; only it can unlock, and only with the right password. It locks on `mochi ipc lock lock`, when logind asks (`loginctl lock-session`, the power module's Lock, hypridle), and before the computer sleeps, holding the sleep back until the lock shows. If it crashes, the screen stays locked and Mochi starts it again, also after mochid restarts. It needs the PAM service `mochi`: the NixOS module adds it and the Arch packages bring it, and Mochi refuses to lock without it. `mochi doctor` checks it, and Hyprland's `misc:allow_session_lock_restore`. This first version shows the time, the date and the password field; layouts and widgets come next.
+
 - Widget layouts by screen and by workspace. In the drawer's Layouts tab, Save keeps the widgets of the screen you're on as a layout, and each layout's Apply to shows it on every screen, on any screen or on one workspace of a screen, with a switch each: the same layout on both screens, one per screen, or one per workspace. The closest one wins, and a layout shown in several places is linked, so a change on one screen is a change on the others. `widgets.toml` keeps where each shows as `[[show]]` entries, and `mochi ipc widgets show-layout` and `hide-layout` do it from a script. Where nothing is set, the widgets are as before.
 
 ## 0.1.2 - 2026-10-10

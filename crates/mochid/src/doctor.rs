@@ -66,7 +66,7 @@ impl Report {
 
 /// The protocols Mochi looks for, any of a group doing, and what they're
 /// for. The first is required: without it there is no island.
-const PROTOCOLS: [(&[&str], &str, bool); 8] = [
+const PROTOCOLS: [(&[&str], &str, bool); 9] = [
     (
         &["zwlr_layer_shell_v1"],
         "the island, the bubbles and the widgets",
@@ -101,6 +101,11 @@ const PROTOCOLS: [(&[&str], &str, bool); 8] = [
     ),
     (&["zwlr_gamma_control_manager_v1"], "night light", false),
     (
+        &["ext_session_lock_manager_v1"],
+        "Mochi's lock screen",
+        false,
+    ),
+    (
         &["zwlr_virtual_pointer_manager_v1"],
         "passing on the click that closes a panel, so one click does",
         false,
@@ -128,6 +133,13 @@ pub async fn run(config_file: &Path) -> anyhow::Result<bool> {
     }
     if let Some(config) = &config {
         needs(&mut report, config, config_file);
+    }
+    if config
+        .as_ref()
+        .is_some_and(|config| config.modules.iter().any(|id| id == "lock"))
+        && let Some(config) = &config
+    {
+        lock(&mut report, config);
     }
     for line in &report.lines {
         println!("{line}");
@@ -492,4 +504,53 @@ fn data_dirs() -> Vec<PathBuf> {
     }
     dirs.push(PathBuf::from("/run/current-system/sw/share"));
     dirs
+}
+
+/// What the lock screen needs to lock, and to be undone: its program, the
+/// PAM service that checks the password, and on Hyprland, a way back from
+/// a crashed lock screen.
+fn lock(report: &mut Report, config: &mochi_core::Config) {
+    report.section("Lock screen");
+    let beside = std::env::current_exe()
+        .ok()
+        .and_then(|exe| Some(exe.parent()?.join("mochi-lock")))
+        .is_some_and(|path| path.is_file());
+    if beside || mochi_plugins::on_path("mochi-lock") {
+        report.ok("mochi-lock is installed");
+    } else {
+        report.fail(
+            "mochi-lock isn't installed",
+            "It comes with Mochi's packages, next to mochid.",
+        );
+    }
+    let service = config
+        .settings("lock")
+        .get("pam_service")
+        .and_then(|value| value.as_str().map(str::to_owned))
+        .unwrap_or_else(|| "mochi".into());
+    if Path::new("/etc/pam.d").join(&service).is_file() {
+        report.ok(format!("the PAM service {service} checks the password"));
+    } else {
+        report.fail(
+            format!("there is no PAM service {service}, so Mochi won't lock"),
+            "On NixOS, add `security.pam.services.mochi = {};` to your system's configuration; the Arch package brings /etc/pam.d/mochi. Or set pam_service in [module.lock] to one you have, like hyprlock's.",
+        );
+    }
+    if mochi_core::compositor::running() == Some("Hyprland") {
+        let restore = std::process::Command::new("hyprctl")
+            .args(["getoption", "misc:allow_session_lock_restore"])
+            .output()
+            .ok()
+            .map(|output| String::from_utf8_lossy(&output.stdout).into_owned());
+        match restore.as_deref() {
+            Some(text) if text.contains("int: 1") => {
+                report.ok("Hyprland lets a new lock screen take over from a crashed one");
+            }
+            Some(_) => report.warn(
+                "Hyprland won't let a new lock screen take over from a crashed one",
+                "Set `misc:allow_session_lock_restore = true`: the screen stays locked either way, but without it a crash leaves it locked with nothing to type the password into.",
+            ),
+            None => {}
+        }
+    }
 }

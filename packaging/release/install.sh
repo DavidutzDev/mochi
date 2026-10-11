@@ -50,7 +50,7 @@ else
     units="$prefix/lib/systemd/user"
 fi
 
-files="bin/mochi bin/mochid
+files="bin/mochi bin/mochid bin/mochi-lock share/mochi/pam.d/mochi
 share/mochi/fonts/InterVariable.ttf share/mochi/fonts/MaterialSymbolsRounded.ttf
 share/applications/mochi-links.desktop
 share/bash-completion/completions/mochi share/fish/vendor_completions.d/mochi.fish
@@ -98,5 +98,9 @@ case ":$PATH:" in
 *":$prefix/bin:"*) ;;
 *) echo "Add $prefix/bin to your PATH to run mochi." ;;
 esac
+# The lock screen's PAM service goes in /etc, which only root writes.
+if [ ! -f /etc/pam.d/mochi ]; then
+    echo "For the lock screen:  sudo install -m644 $prefix/share/mochi/pam.d/mochi /etc/pam.d/mochi"
+fi
 echo "Start it with the session:  systemctl --user daemon-reload && systemctl --user enable --now mochid"
 echo "or run mochid from your compositor's autostart. \`mochi doctor\` checks the rest."
