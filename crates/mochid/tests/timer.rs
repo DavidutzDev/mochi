@@ -154,7 +154,14 @@ fn custom_timers_run_side_by_side() {
     ui.send(&ClientMessage::BubbleClick {
         bubble: bubbles[1].id,
     });
-    let bubbles = custom_bubbles(&mut ui);
+    // A tick's snapshot may come before the click's.
+    let mut bubbles = custom_bubbles(&mut ui);
+    for _ in 0..10 {
+        if bubbles[1].payload["paused"] == true {
+            break;
+        }
+        bubbles = custom_bubbles(&mut ui);
+    }
     assert_eq!(bubbles[0].payload["paused"], false);
     assert_eq!(bubbles[1].payload["paused"], true);
     assert_eq!(
