@@ -11,6 +11,7 @@ Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor r
 - The Widgets and Lock pages of the settings have a button that opens their editor.
 - The screenshot behind the lock screen is blurred after locking, not before: the screen locks in a fraction of a second instead of waiting on it. `mochi-lock` reports how long each step took, in mochid's debug log.
 - The lock screen comes up in one piece: its blurred background shows from the moment the screen locks, with no black screen, no plain face first and no widgets sliding into place, and the widgets fade in over it once laid out. `mochi-lock` draws that background itself until the lock screen says each monitor is ready.
+- The lock screen shows the music's cover. Its renderer has no shaders, which the rounded cover needed, so there it's drawn rounded another way.
 - While arranging widgets, the island stays over them, so its notice and the Add widgets button show.
 - While arranging widgets, the drawer opens at once, and the island's notice has an Add widgets button while it's closed.
 
