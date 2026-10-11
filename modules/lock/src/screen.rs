@@ -47,19 +47,13 @@ pub fn quickshell() -> Option<PathBuf> {
         .find(|candidate| candidate.is_file())
 }
 
-/// The wallpaper, or the image `background` names, blurred into `out`: a
+/// An image, or the wallpaper with `auto`, blurred into `out`: a
 /// small copy, which the renderer stretches smoothly, so a lock never
 /// waits on it. `None` when there's no image to use.
-pub fn blur(background: &str, out: &Path) -> Option<PathBuf> {
-    if background == "none" {
-        return None;
-    }
-    let wanted = if background == "wallpaper" {
-        "auto"
-    } else {
-        background
-    };
-    let mochi_core::palette::Source::Image(path) = mochi_core::palette::source(wanted).ok()? else {
+pub fn blur(source: Option<String>, out: &Path) -> Option<PathBuf> {
+    let wanted = source?;
+    let mochi_core::palette::Source::Image(path) = mochi_core::palette::source(&wanted).ok()?
+    else {
         return None;
     };
     let image = image::open(&path).ok()?;
@@ -104,10 +98,13 @@ mod tests {
             .save(&source)
             .unwrap();
         let out = dir.join("blurred.png");
-        assert_eq!(blur(source.to_str().unwrap(), &out), Some(out.clone()));
+        assert_eq!(
+            blur(Some(source.to_str().unwrap().to_owned()), &out),
+            Some(out.clone())
+        );
         let made = image::open(&out).unwrap();
         assert!(made.width() <= 480);
-        assert_eq!(blur("none", &out), None);
+        assert_eq!(blur(None, &out), None);
         std::fs::remove_dir_all(dir).unwrap();
     }
 }

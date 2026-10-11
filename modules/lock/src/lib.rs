@@ -40,14 +40,17 @@ pub struct Lock;
 #[serde(default, deny_unknown_fields)]
 struct Settings {
     /// The PAM service that checks the password, a file in /etc/pam.d.
+    #[schemars(extend("x-source" = "pam-service"))]
     pam_service: String,
     /// Lock before the computer sleeps.
     before_sleep: bool,
     /// Lock when logind asks.
     logind: bool,
-    /// Behind the lock screen: "wallpaper", blurred, an image's path,
-    /// blurred too, or "none" for the theme's background.
-    background: String,
+    /// Behind the lock screen.
+    background: Background,
+    /// The image behind it, blurred, when `background` is "image".
+    #[schemars(extend("x-source" = "file", "x-filter" = "image"))]
+    image: String,
     /// What's playing, with play, pause and skip.
     media: bool,
     /// The battery's level, in a corner.
@@ -62,7 +65,8 @@ impl Default for Settings {
             pam_service: "mochi".into(),
             before_sleep: true,
             logind: true,
-            background: "wallpaper".into(),
+            background: Background::Wallpaper,
+            image: String::new(),
             media: true,
             battery: true,
             weather: true,
@@ -70,7 +74,32 @@ impl Default for Settings {
     }
 }
 
+/// What's behind the lock screen.
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq, schemars::JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+enum Background {
+    /// The wallpaper awww, swww or hyprpaper shows, blurred.
+    #[default]
+    Wallpaper,
+    /// The image `image` names, blurred.
+    Image,
+    /// The theme's background color.
+    None,
+}
+
 impl Settings {
+    /// The image to blur behind the lock screen, if any: the wallpaper's
+    /// (`auto`), the one `image` names, or none.
+    fn backdrop(&self) -> Option<String> {
+        match self.background {
+            Background::Wallpaper => Some("auto".into()),
+            Background::Image if !self.image.trim().is_empty() => {
+                Some(self.image.trim().to_owned())
+            }
+            Background::Image | Background::None => None,
+        }
+    }
+
     /// The modules whose state the lock screen shows.
     fn shown(&self) -> Vec<&'static str> {
         [
@@ -137,10 +166,10 @@ impl Module for Lock {
             // The wallpaper blurred, off the loop: a lock doesn't wait on it.
             let blurring = {
                 let (background, out) = (
-                    settings.background.clone(),
+                    settings.backdrop(),
                     ctx.data_dir().join("lock-background.png"),
                 );
-                tokio::task::spawn_blocking(move || screen::blur(&background, &out))
+                tokio::task::spawn_blocking(move || screen::blur(background, &out))
             };
             tokio::pin!(blurring);
             let mut blurred = false;
@@ -672,12 +701,39 @@ impl Locker {
             "locked": self.secured,
             "status": self.status(),
             "problem": self.problem,
+            // For the settings' menu of PAM services.
+            "services": pam_services(Path::new("/etc/pam.d")),
         });
         if state != self.published {
             ctx.publish_state(state.clone());
             self.published = state;
         }
     }
+}
+
+/// PAM services a lock screen can check the password with, and what each
+/// is, by the name of its file in `/etc/pam.d`.
+const SERVICES: [(&str, &str); 7] = [
+    ("mochi", "Mochi's own"),
+    ("hyprlock", "hyprlock's"),
+    ("swaylock", "swaylock's"),
+    ("gtklock", "gtklock's"),
+    ("waylock", "waylock's"),
+    (
+        "system-local-login",
+        "The system's, for logging in at the screen",
+    ),
+    ("login", "The system's, for logging in"),
+];
+
+/// The PAM services from [`SERVICES`] that `dir` has, for the settings'
+/// menu.
+fn pam_services(dir: &Path) -> Vec<Value> {
+    SERVICES
+        .iter()
+        .filter(|(name, _)| dir.join(name).is_file())
+        .map(|(name, what)| json!({ "value": name, "label": name, "detail": what }))
+        .collect()
 }
 
 /// `mochi-lock` beside mochid, as the packages install it and as `cargo
@@ -788,6 +844,30 @@ mod tests {
         assert!(!is_lock(std::process::id()));
         assert!(!is_lock(u32::MAX));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn lists_the_pam_services_there_are() {
+        let dir = std::env::temp_dir().join(format!("mochi-pam-list-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hyprlock"), "").unwrap();
+        std::fs::write(dir.join("sudo"), "").unwrap();
+        let listed = pam_services(&dir);
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0]["value"], "hyprlock");
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn the_background_picks_what_to_blur() {
+        let mut settings = Settings::default();
+        assert_eq!(settings.backdrop().as_deref(), Some("auto"));
+        settings.background = Background::Image;
+        assert_eq!(settings.backdrop(), None, "no image named yet");
+        settings.image = "~/Pictures/a.png".into();
+        assert_eq!(settings.backdrop().as_deref(), Some("~/Pictures/a.png"));
+        settings.background = Background::None;
+        assert_eq!(settings.backdrop(), None);
     }
 
     #[test]

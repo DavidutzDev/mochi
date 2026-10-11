@@ -12,9 +12,10 @@
 # or an idle daemon like hypridle. logind's unlock is never obeyed.
 # logind = true
 # Behind the lock screen: "wallpaper", the one awww, swww or hyprpaper
-# shows, blurred; an image's path, blurred too; or "none" for the theme's
-# background.
+# shows, blurred; "image", the one `image` names, blurred; or "none" for
+# the theme's background.
 # background = "wallpaper"
+# image = ""
 # What's playing, with play, pause and skip.
 # media = true
 # The battery's level, in a corner.

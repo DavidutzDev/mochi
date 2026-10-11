@@ -461,6 +461,11 @@ Item {
             // Read when the panel opens, west to east, like "Tokyo, Asia"
             // with "UTC+9 · Japan" under it.
             return Daemon.state("settings")?.timezones ?? [];
+        case "sound-theme":
+            return Daemon.state("notifications")?.soundThemes ?? [];
+        case "pam-service":
+            // The ones installed here that a lock screen can use.
+            return Daemon.state("lock")?.services ?? [];
         case "player":
             return (Daemon.state("media")?.players ?? []).map(player => ({
                         "value": player.name,

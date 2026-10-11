@@ -1007,10 +1007,39 @@ mod tests {
         }
     }
 
+    /// A text setting whose description lists its values in quotes, like
+    /// `"wallpaper"` or `"none"`, is a choice in disguise: the panel would
+    /// show a text field where a menu belongs. Make it an enum, or give it
+    /// a source or suggestions.
+    #[test]
+    fn settings_with_a_few_values_are_menus_not_text() {
+        let catalog = modules::catalog(Path::new("/nonexistent/config.toml")).unwrap();
+        let mut disguised = Vec::new();
+        for section in sections(&catalog) {
+            for field in &section.fields {
+                let free = field.kind == Kind::Text
+                    && field.source.is_none()
+                    && field.suggestions.is_empty();
+                let quoted = field.description.matches('"').count() / 2;
+                // Free text whose description quotes examples, not values.
+                let examples = ["config.module.weather.place"];
+                if free && quoted >= 2 && !examples.contains(&field.path.as_str()) {
+                    disguised.push(field.path.clone());
+                }
+            }
+        }
+        assert!(
+            disguised.is_empty(),
+            "text fields that list their values: {disguised:?}"
+        );
+    }
+
     #[test]
     fn every_source_is_one_the_panel_knows() {
-        const KNOWN: [&str; 10] = [
+        const KNOWN: [&str; 12] = [
             "command",
+            "pam-service",
+            "sound-theme",
             "module",
             "app",
             "audio-device",

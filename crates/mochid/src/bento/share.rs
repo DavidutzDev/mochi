@@ -15,7 +15,7 @@ use crate::settings::Store;
 
 /// Where an option's values come from, for the ones that name this
 /// machine's things.
-const MACHINE_SOURCES: [&str; 1] = ["audio-device"];
+const MACHINE_SOURCES: [&str; 2] = ["audio-device", "pam-service"];
 
 /// Keys that hold where someone is.
 const PLACE_KEYS: [&str; 5] = ["latitude", "longitude", "location", "city", "place"];

@@ -86,6 +86,7 @@ struct Settings {
     markdown: bool,
     sounds: bool,
     sound_command: Vec<String>,
+    #[schemars(extend("x-source" = "sound-theme"))]
     sound_theme: String,
 }
 
@@ -533,7 +534,9 @@ impl Daemon {
     fn sync(&mut self, ctx: &ModuleCtx) {
         // The history and do not disturb, for views outside the island like the
         // control center's card and page: the same shape the history view gets.
-        let state = self.history_payload();
+        let mut state = self.history_payload();
+        // For the settings' menu of sound themes.
+        state["soundThemes"] = sound_themes().clone();
         if state != self.published {
             ctx.publish_state(state.clone());
             self.published = state;
@@ -709,4 +712,37 @@ mod sounds {
         center.set_dnd(false);
         assert!(plays(&mut center, note(3, 2)));
     }
+}
+
+/// The sound themes installed, for the settings' menu: the directories
+/// under `sounds/` in the data directories that have an `index.theme`.
+/// Read once: themes come with packages, not while Mochi runs.
+fn sound_themes() -> &'static Value {
+    static THEMES: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
+    THEMES.get_or_init(|| {
+        let home = std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("HOME")
+                    .map(|home| Path::new(&home).join(".local/share"))
+            });
+        let system = std::env::var_os("XDG_DATA_DIRS")
+            .map(|dirs| std::env::split_paths(&dirs).collect::<Vec<_>>())
+            .unwrap_or_else(|| vec!["/usr/local/share".into(), "/usr/share".into()]);
+        let mut names: Vec<String> = home
+            .into_iter()
+            .chain(system)
+            .filter_map(|dir| std::fs::read_dir(dir.join("sounds")).ok())
+            .flatten()
+            .flatten()
+            .filter(|entry| entry.path().join("index.theme").is_file())
+            .filter_map(|entry| entry.file_name().into_string().ok())
+            .collect();
+        names.sort();
+        names.dedup();
+        names
+            .into_iter()
+            .map(|name| json!({ "value": name, "label": name }))
+            .collect()
+    })
 }
