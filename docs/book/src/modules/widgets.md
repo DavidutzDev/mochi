@@ -4,7 +4,7 @@ Widgets are small views on the desktop, under your windows, from any module or p
 
 ## Arranging them
 
-`mochi ipc widgets edit` brings the widgets over the windows on the focused monitor, dims the screen and shows the grid, and the island says "Arranging widgets":
+`mochi ipc widgets edit`, or Arrange widgets on the Widgets page of the settings, brings the widgets over the windows on the focused monitor, dims the screen and shows the grid, and the island says "Arranging widgets":
 
 - Drag a widget to move it. It snaps to the grid.
 - Drag its round corner handle to resize it, within the sizes it allows.

@@ -10,7 +10,7 @@ By default the lock screen shows the time, big, with the date and the weather un
 
 ## Arranging it
 
-`mochi ipc lock edit` arranges the lock screen the way `mochi ipc widgets edit` arranges the desktop: over its background, with the same grid, dragging, resizing, settings and layers, and the island's notice opening the drawer. The drawer has every widget, and the password field. Run it again, Escape or Done to stop.
+`mochi ipc lock edit`, or Arrange the lock screen on the Lock page of the settings, arranges the lock screen the way `mochi ipc widgets edit` arranges the desktop: over its background, with the same grid, dragging, resizing, settings and layers, and the island's notice opening the drawer. The drawer has every widget, and the password field. Run it again, Escape or Done to stop.
 
 On the lock screen, widgets only show: they never get a key, so a note can be read but not typed into, and their buttons do nothing but play, pause and skip what's playing. What they show is yours to decide: a note or a to-do list on the lock screen can be read by anyone at the screen. Plugins' widgets go there only with `lock_plugins = true` in `[module.widgets]`. A widget can keep itself off the lock screen with `places = ["desktop"]` in its offer.
 

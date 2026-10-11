@@ -19,5 +19,5 @@
 # background = "wallpaper"
 # image = ""
 # What's on the lock screen, and where, is arranged like desktop widgets:
-# `mochi ipc lock edit`. It's kept in lock-widgets.toml next to
-# widgets.toml.
+# `mochi ipc lock edit`, or Arrange the lock screen at the top of this
+# page. It's kept in lock-widgets.toml next to widgets.toml.

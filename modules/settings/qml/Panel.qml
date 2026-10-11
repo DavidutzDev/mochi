@@ -541,6 +541,22 @@ Item {
                     onClicked: Daemon.command("tour", "start", [])
                 }
 
+                // The editor of the desktop's widgets, or the lock screen's,
+                // which takes the screen: the settings close.
+                Button {
+                    readonly property string target: root.current?.module === "widgets" ? "edit" : root.current?.module === "lock" ? "edit-lock" : ""
+
+                    visible: !content.searching && target !== ""
+                    enabled: root.current?.enabled === true && (Daemon.modules ?? []).includes("widgets")
+                    text: target === "edit-lock" ? "Arrange the lock screen" : "Arrange widgets"
+                    icon: "dashboard_customize"
+                    tone: "accent"
+                    onClicked: {
+                        Daemon.command("settings", "close", []);
+                        Daemon.command("widgets", target, ["on"]);
+                    }
+                }
+
                 Button {
                     visible: !content.searching && root.current !== null && !root.bentoPage && root.sectionModified(root.current)
                     text: "Reset"
