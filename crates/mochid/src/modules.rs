@@ -37,6 +37,7 @@ pub fn builtin() -> Vec<Box<dyn Module>> {
         Box::new(mochi_module_control_center::ControlCenter),
         Box::new(mochi_module_power::Power),
         Box::new(mochi_module_lock::Lock),
+        Box::new(mochi_module_auth::Auth),
         Box::new(mochi_module_capture::Capture),
         Box::new(mochi_module_share::Share),
         Box::new(mochi_module_clipboard::Clipboard),

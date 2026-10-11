@@ -14,8 +14,8 @@
 //! restarted mochid, finds a lock that's still on and watches it, or starts
 //! a new one when its process is gone.
 
-mod forget;
 mod logind;
+
 mod screen;
 
 use std::path::{Path, PathBuf};
@@ -52,14 +52,17 @@ struct Settings {
     /// The image behind it, blurred, when `background` is "image".
     #[schemars(extend("x-source" = "file", "x-filter" = "image"))]
     image: String,
-    /// Once locked, forget sudo's remembered password.
-    forget_sudo: bool,
-    /// Once locked, remove the SSH keys from the agent.
-    forget_ssh_keys: bool,
-    /// Once locked, lock the keyring: its secrets need the password again.
-    forget_keyring: bool,
-    /// Once locked, forget the admin actions polkit remembers.
-    forget_polkit: bool,
+    /// 0.2.1's switches, now `remember_*` in `[module.auth]`: still read,
+    /// so a config that sets them starts, and otherwise ignored. The
+    /// settings page doesn't show them.
+    #[schemars(skip)]
+    forget_sudo: Option<bool>,
+    #[schemars(skip)]
+    forget_ssh_keys: Option<bool>,
+    #[schemars(skip)]
+    forget_keyring: Option<bool>,
+    #[schemars(skip)]
+    forget_polkit: Option<bool>,
 }
 
 impl Default for Settings {
@@ -70,10 +73,10 @@ impl Default for Settings {
             logind: true,
             background: Background::Wallpaper,
             image: String::new(),
-            forget_sudo: true,
-            forget_ssh_keys: true,
-            forget_keyring: false,
-            forget_polkit: true,
+            forget_sudo: None,
+            forget_ssh_keys: None,
+            forget_keyring: None,
+            forget_polkit: None,
         }
     }
 }
@@ -95,6 +98,18 @@ enum Background {
 }
 
 impl Settings {
+    /// The 0.2.1 switch set, if any: they moved to the auth module.
+    fn moved(&self) -> Option<&'static str> {
+        [
+            ("forget_sudo", self.forget_sudo),
+            ("forget_ssh_keys", self.forget_ssh_keys),
+            ("forget_keyring", self.forget_keyring),
+            ("forget_polkit", self.forget_polkit),
+        ]
+        .into_iter()
+        .find_map(|(name, set)| set.map(|_| name))
+    }
+
     /// The image to blur behind the lock screen, if any: the wallpaper's
     /// (`auto`), the one `image` names, or none.
     fn backdrop(&self) -> Option<String> {
@@ -172,6 +187,12 @@ impl Module for Lock {
     fn run(self: Box<Self>, mut ctx: ModuleCtx) -> BoxFuture<'static, Result<(), ModuleError>> {
         Box::pin(async move {
             let settings: Settings = ctx.settings()?;
+            if let Some(old) = settings.moved() {
+                tracing::warn!(
+                    setting = old,
+                    "[module.lock] forget_* moved: it's remember_* in [module.auth] now"
+                );
+            }
             let dir = ctx.session_dir().to_owned();
             let mut locker = Locker::new(&dir, &settings, &ctx);
             // The layout, and through it, the modules its widgets are from.
@@ -412,8 +433,6 @@ struct Locker {
     shots: std::collections::BTreeMap<String, PathBuf>,
     /// Where they go: the module's data directory.
     shots_dir: PathBuf,
-    /// What the session forgets once the screen is locked.
-    forget: forget::Forget,
 }
 
 impl Locker {
@@ -447,12 +466,6 @@ impl Locker {
             screenshot: settings.background == Background::Screenshot,
             shots: std::collections::BTreeMap::new(),
             shots_dir: ctx.data_dir().to_owned(),
-            forget: forget::Forget {
-                sudo: settings.forget_sudo,
-                ssh_keys: settings.forget_ssh_keys,
-                keyring: settings.forget_keyring,
-                polkit: settings.forget_polkit,
-            },
             config: dir.join("lock.json"),
         };
         locker.write_config(settings, ctx);
@@ -695,7 +708,12 @@ impl Locker {
                         self.secured = true;
                         self.problem = None;
                         self.hint(true).await;
-                        self.forget();
+                        // The auth module, when it runs, forgets what it keeps
+                        // until the screen locks.
+                        let call = ctx.call("auth", "locked", &[]);
+                        tokio::spawn(async move {
+                            let _ = call.await;
+                        });
                     }
                     Some("refused" | "broken" | "warning") => {
                         tracing::warn!(
@@ -809,20 +827,6 @@ impl Locker {
         {
             tracing::debug!(%error, "can't set logind's LockedHint");
         }
-    }
-
-    /// Makes the session forget what the settings say, now the screen is
-    /// locked, without waiting on it.
-    fn forget(&self) {
-        let what = self.forget;
-        let session = self.session.clone();
-        tokio::spawn(async move {
-            let id = match &session {
-                Some(session) => session.id().await.ok(),
-                None => None,
-            };
-            forget::forget(what, id).await;
-        });
     }
 
     /// Says on the island why the screen didn't lock.
@@ -974,6 +978,24 @@ fn lock_widgets(state: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_config_from_0_2_1_still_reads() {
+        let text = "forget_sudo = false\nforget_ssh_keys = true";
+        let table: mochi_core::toml::Table = text.parse().unwrap();
+        let settings = mochi_core::settings::<Settings>(&table).unwrap();
+        assert!(settings.moved().is_some());
+        let table: mochi_core::toml::Table = "".parse().unwrap();
+        assert!(
+            mochi_core::settings::<Settings>(&table)
+                .unwrap()
+                .moved()
+                .is_none()
+        );
+        // The settings page doesn't show them.
+        let schema = mochi_core::options::schema_of::<Settings>().to_string();
+        assert!(!schema.contains("forget_sudo"));
+    }
 
     #[test]
     fn starts_again_after_a_crash_and_never_after_unlocking() {

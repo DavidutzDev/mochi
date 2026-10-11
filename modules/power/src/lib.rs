@@ -236,7 +236,17 @@ impl Module for Power {
                                 settings: &settings,
                                 uwsm,
                             };
+                            // A lock command of its own, like hyprlock, is
+                            // a lock logind never hears of: the auth module
+                            // is told, to forget what it keeps until then.
+                            let own_lock = command.action == "lock" && !settings.lock.is_empty();
                             run(&target, command).await;
+                            if own_lock {
+                                let call = ctx.call("auth", "locked", &[]);
+                                tokio::spawn(async move {
+                                    let _ = call.await;
+                                });
+                            }
                         }
                         Some(_) => {}
                     },

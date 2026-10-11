@@ -34,16 +34,7 @@ The power module's `lock` setting, when set, runs that command instead, like `["
 
 ## What it forgets
 
-Once the screen is locked, the session forgets what someone at the computer could otherwise use without a password. Each is a setting in `[module.lock]`:
-
-| Setting | Default | What it does |
-|---|---|---|
-| `forget_sudo` | `true` | `sudo -K`: the next `sudo` asks for the password, even within its usual 5 minutes. |
-| `forget_ssh_keys` | `true` | `ssh-add -D`: the agent drops every key, and the next use asks for its passphrase. |
-| `forget_polkit` | `true` | polkit drops the admin actions it remembers for the session, like those a "keep" rule allows for a while. |
-| `forget_keyring` | `false` | Locks every Secret Service collection, gnome-keyring's or KeePassXC's: the next app that needs a secret asks for the keyring's password. |
-
-None of them holds the lock back, and one that fails, or finds nothing to forget, doesn't stop the others.
+Once the screen is locked, the [auth](auth.md) module, when it runs, forgets sudo's password, the SSH keys in the agent, polkit's admin actions and the keyring, or keeps them as long as its settings say.
 
 ## Setting it up
 

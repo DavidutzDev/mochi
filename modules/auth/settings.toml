@@ -1,0 +1,17 @@
+# Authentication: how long the session remembers what lets someone in
+# without a password. By default everything is forgotten once the screen
+# locks, with Mochi's lock, hyprlock or any other locker logind or the
+# power module starts.
+[module.auth]
+# sudo's password: "until-locked", or "own-timeout", which keeps it
+# through a lock for sudo's own timeout, 5 minutes by default.
+# remember_sudo = "until-locked"
+# The SSH keys in the agent, from when each was added: "until-locked",
+# "1h", "4h" or "8h", a lock or not, or "until-logout".
+# remember_ssh_keys = "until-locked"
+# The keyring, gnome-keyring's or KeePassXC's, from when it was unlocked:
+# "until-locked", "1h", "4h" or "8h", a lock or not, or "until-logout".
+# remember_keyring = "until-locked"
+# The admin actions polkit may keep: "until-locked", or "own-timeout",
+# which keeps them through a lock for polkit's own 5 minutes.
+# remember_polkit = "until-locked"

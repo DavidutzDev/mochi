@@ -953,6 +953,7 @@ fn available(catalog: &Catalog) -> Vec<Available> {
 fn icon(module: &str) -> &'static str {
     match module {
         "audio" => "volume_up",
+        "auth" => "key",
         "battery" => "battery_full",
         "brightness" => "light_mode",
         "bluetooth" => "bluetooth",

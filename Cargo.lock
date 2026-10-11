@@ -1031,6 +1031,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "mochi-module-auth"
+version = "0.2.1"
+dependencies = [
+ "futures-util",
+ "include_dir",
+ "mochi-core",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zbus",
+]
+
+[[package]]
 name = "mochi-module-battery"
 version = "0.2.1"
 dependencies = [
@@ -1569,6 +1584,7 @@ dependencies = [
  "libc",
  "mochi-core",
  "mochi-module-audio",
+ "mochi-module-auth",
  "mochi-module-battery",
  "mochi-module-bluetooth",
  "mochi-module-brightness",
