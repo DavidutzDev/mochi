@@ -26,14 +26,15 @@ mod helper;
 mod keyring;
 mod logind;
 mod polkit;
+mod process;
 mod prompt;
 mod remember;
 
 use futures_util::StreamExt;
 use include_dir::{Dir, include_dir};
 use mochi_core::{
-    ActionSpec, ActivitySpec, ArgSpec, Assets, BoxFuture, Module, ModuleCommand, ModuleCtx,
-    ModuleError, ModuleEvent, Priority,
+    ActionSpec, ArgSpec, Assets, BoxFuture, Module, ModuleCommand, ModuleCtx, ModuleError,
+    ModuleEvent,
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -129,7 +130,7 @@ impl Module for Auth {
             ),
             ActionSpec::new(
                 "answer",
-                "Answer the prompt on the island; the prompt sends this",
+                "Answer the prompt on the island; only the island's prompt may",
             )
             .arg(ArgSpec::string(
                 "answer",
@@ -231,6 +232,16 @@ impl Module for Auth {
                                 forget(Remember::default(), id.clone(), &times);
                                 command.reply(Ok(()));
                             }
+                            // Only the user, on the island, answers: another
+                            // program of theirs could say yes to ssh's
+                            // questions with `mochi ipc` otherwise.
+                            "answer" if !command.is_from_shell() => {
+                                tracing::warn!(
+                                    caller = ?command.caller(),
+                                    "a program other than the shell tried to answer a prompt"
+                                );
+                                command.reply(Err("only the island answers prompts".into()));
+                            }
                             "answer" => {
                                 let answer = command.args.str("answer").unwrap_or_default();
                                 match prompts.answer(&ctx, answer, &checked) {
@@ -294,15 +305,10 @@ impl Module for Auth {
 /// like ssh's "touch your security key", only shows, for a while.
 fn askpass(ctx: &ModuleCtx, prompts: &mut prompt::Prompts, command: ModuleCommand, keep: Lifetime) {
     let kind = command.args.str("kind").unwrap_or("password").to_owned();
-    let app = command.args.str("app").unwrap_or_default().to_owned();
     let message = command.args.str("prompt").unwrap_or_default().to_owned();
+    let asker = asker(&command, kind == "password");
     if kind == "notice" {
-        let spec = ActivitySpec::new("Prompt")
-            .key("askpass-notice")
-            .priority(Priority::HIGH)
-            .timeout(std::time::Duration::from_secs(20))
-            .payload(json!({ "kind": "notice", "app": app, "message": message }));
-        ctx.present(spec);
+        prompt::notice(ctx, &asker.app, &message);
         command.reply(Ok(()));
         return;
     }
@@ -312,11 +318,66 @@ fn askpass(ctx: &ModuleCtx, prompts: &mut prompt::Prompts, command: ModuleComman
         prompt::AskpassAsk {
             command,
             confirm: kind == "confirm",
-            app,
+            asker,
             message,
             key,
         },
     );
+}
+
+/// Who asks through `mochi askpass`, from the kernel: the process that
+/// wrote the question, when it's `mochi askpass`, was started by the one
+/// asking, sudo or ssh. Anything else asking is named itself, with a doubt.
+/// The name the CLI sends never counts: whoever runs it picks it.
+///
+/// One that checks out, its answer going only to the program named, is
+/// checked again before the answer goes out: see [`process::Asking`].
+/// `secret` is for a password, rather than a yes or no or a notice.
+fn asker(command: &ModuleCommand, secret: bool) -> prompt::Asker {
+    let caller = command.caller().and_then(process::Process::read);
+    let gone = || Some("The program that asked is gone.".to_owned());
+    let (asking, doubt, checked) = match caller {
+        Some(caller) if caller.is_mochi() => match caller.parent() {
+            // Its parent exited and it was adopted: who asked is unknown.
+            Some(parent) if parent.is_reaper() => (None, gone(), None),
+            Some(parent) => {
+                let checked = process::Asking::new(&caller, &parent);
+                let doubt = match parent.doubt(secret) {
+                    Some(doubt) => Some(doubt.to_owned()),
+                    None => checked.check().err(),
+                };
+                let checked = doubt.is_none().then_some(checked);
+                (Some(parent), doubt, checked)
+            }
+            None => (None, gone(), None),
+        },
+        Some(caller) => (
+            Some(caller),
+            Some("It asked Mochi directly, not through mochi-askpass.".to_owned()),
+            None,
+        ),
+        None => (
+            None,
+            Some("Mochi couldn't tell which program asks.".to_owned()),
+            None,
+        ),
+    };
+    match asking {
+        Some(process) => prompt::Asker {
+            app: process.name(),
+            command: process.command_line(),
+            privileged: process.privileged,
+            doubt,
+            checked,
+        },
+        None => prompt::Asker {
+            app: String::new(),
+            command: String::new(),
+            privileged: false,
+            doubt,
+            checked,
+        },
+    }
 }
 
 /// The key ssh or ssh-add asks the passphrase of, from its prompt, as its

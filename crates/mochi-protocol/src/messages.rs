@@ -205,6 +205,10 @@ pub struct Status {
     /// The plugins in plugins.toml.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub plugins: Vec<PluginStatus>,
+    /// Why the island can't answer password prompts, when a connection
+    /// that said it's the UI isn't the Quickshell mochid started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foreign_ui: Option<String>,
 }
 
 /// One plugin from plugins.toml, as the daemon sees it.
@@ -505,6 +509,7 @@ mod tests {
                     state: PluginState::Failed,
                     message: Some("it crashed 5 times in a minute".into()),
                 }],
+                foreign_ui: Some("process 7 isn't the Quickshell mochid started".into()),
             },
         });
         round_trip_daemon(DaemonMessage::Actions {

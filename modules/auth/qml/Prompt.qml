@@ -133,6 +133,7 @@ Item {
         // Why: polkit's reason, the keyring's message under its title, or
         // what sudo or ssh asks.
         Text {
+            textFormat: Text.PlainText
             width: parent.width
             visible: text !== ""
             text: {
@@ -148,17 +149,48 @@ Item {
             font.family: Theme.fontFamily
         }
 
-        // More: what pkexec would run, or the keyring's description.
+        // More: the command that asks, as the kernel says it, like what
+        // pkexec or sudo would run, or the keyring's description.
         Text {
+            textFormat: Text.PlainText
             width: parent.width
             visible: text !== ""
-            text: (root.keyring ? root.payload.description : root.payload.command) ?? ""
+            text: {
+                if (root.keyring)
+                    return root.payload.description ?? "";
+                const command = root.payload.command ?? "";
+                return command !== "" && root.payload.privileged ? `${command} · runs as root` : command;
+            }
             wrapMode: root.keyring ? Text.Wrap : Text.WrapAnywhere
             maximumLineCount: 4
             elide: Text.ElideRight
             color: Theme.muted
             font.pixelSize: Theme.textCaption
             font.family: Theme.fontFamily
+        }
+        // Why to look twice: the asker runs from a folder the user can
+        // write to, or asked Mochi directly, or couldn't be told.
+        Row {
+            width: parent.width
+            visible: (root.payload.doubt ?? "") !== ""
+            spacing: Theme.spaceSmall
+
+            Symbol {
+                anchors.verticalCenter: parent.verticalCenter
+                name: "warning"
+                size: 16
+                color: Theme.danger
+            }
+
+            Text {
+                textFormat: Text.PlainText
+                width: parent.width - 16 - parent.spacing
+                text: root.payload.doubt ?? ""
+                wrapMode: Text.Wrap
+                color: Theme.danger
+                font.pixelSize: Theme.textCaption
+                font.family: Theme.fontFamily
+            }
         }
 
         Segmented {
@@ -211,6 +243,7 @@ Item {
         }
 
         Text {
+            textFormat: Text.PlainText
             width: parent.width
             visible: root.twice && confirmField.input.text !== "" && !root.matching
             text: "The two passwords aren't the same."
@@ -228,6 +261,7 @@ Item {
             spacing: Theme.spaceSmall
 
             Text {
+                textFormat: Text.PlainText
                 text: "Keep the key"
                 color: Theme.muted
                 font.pixelSize: Theme.textCaption
@@ -291,6 +325,7 @@ Item {
             }
 
             Text {
+                textFormat: Text.PlainText
                 width: parent.width - 16 - parent.spacing
                 text: {
                     const left = root.payload.triesLeft ?? 0;
@@ -392,6 +427,12 @@ Item {
             font.family: Theme.fontFamily
             clip: true
 
+            // A shown password isn't copied: the clipboard's history would
+            // keep it.
+            Keys.onPressed: event => {
+                if (event.matches(StandardKey.Copy) || event.matches(StandardKey.Cut))
+                    event.accepted = true;
+            }
             Keys.onReturnPressed: secret.accepted()
             Keys.onEnterPressed: secret.accepted()
             Keys.onEscapePressed: Daemon.event("dismiss")
@@ -401,6 +442,7 @@ Item {
             }
 
             Text {
+                textFormat: Text.PlainText
                 visible: entry.text === ""
                 text: secret.placeholder
                 color: Theme.muted

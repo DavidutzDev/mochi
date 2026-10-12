@@ -324,6 +324,8 @@ pub struct ModuleCommand {
     pub action: String,
     pub args: Args,
     reply: oneshot::Sender<Reply>,
+    caller: Option<u32>,
+    shell: bool,
 }
 
 impl ModuleCommand {
@@ -335,9 +337,40 @@ impl ModuleCommand {
                 action,
                 args,
                 reply,
+                caller: None,
+                shell: false,
             },
             receiver,
         )
+    }
+
+    /// Notes the process that sent it, by its id.
+    #[must_use]
+    pub fn from_process(mut self, pid: Option<u32>) -> Self {
+        self.caller = pid;
+        self
+    }
+
+    /// The process that wrote it on mochid's socket, as the kernel says
+    /// (`SCM_CREDENTIALS`), so the process can't pretend to be another, nor
+    /// write on a connection another process opened as that one; `None` for
+    /// a call from another module, or when the kernel didn't say.
+    pub fn caller(&self) -> Option<u32> {
+        self.caller
+    }
+
+    /// Notes that the shell sent it: the Quickshell mochid started.
+    #[must_use]
+    pub fn from_shell(mut self, shell: bool) -> Self {
+        self.shell = shell;
+        self
+    }
+
+    /// Whether the shell sent it: the Quickshell mochid started, so what
+    /// the user did on the island, not another program of theirs running
+    /// `mochi ipc`. Saying hello as the UI isn't enough.
+    pub fn is_from_shell(&self) -> bool {
+        self.shell
     }
 
     pub fn reply(self, result: Result<(), String>) {

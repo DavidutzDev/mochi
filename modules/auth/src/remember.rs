@@ -311,12 +311,24 @@ async fn remove_key(key: &str) {
 }
 
 /// A file holding `contents` in the runtime directory, gone when dropped.
+/// Each has a name of its own, as a lock and [`keep`] may remove keys at
+/// once, and is new: one already there, or a link, isn't written through.
 fn tempfile_with(contents: &str) -> std::io::Result<Removed> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    static FILES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let dir = std::env::var_os("XDG_RUNTIME_DIR")
         .map_or_else(std::env::temp_dir, std::path::PathBuf::from);
-    let path = dir.join(format!("mochi-key-{}.pub", std::process::id()));
-    std::fs::write(&path, format!("{contents}\n"))?;
-    Ok(Removed(path))
+    let number = FILES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let path = dir.join(format!("mochi-key-{}-{number}.pub", std::process::id()));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&path)?;
+    let removed = Removed(path);
+    file.write_all(format!("{contents}\n").as_bytes())?;
+    Ok(removed)
 }
 
 struct Removed(std::path::PathBuf);

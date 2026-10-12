@@ -223,23 +223,24 @@ in
 
     polkitAgent.enable = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = false;
       description = ''
         Let Mochi's auth module answer polkit, asking for admin passwords
         on the island: turns off home-manager's hyprpolkitagent, since only
         one agent can answer for a session. Needs `"auth"` in
-        `settings.modules` when that lists the modules.
+        `settings.modules`, which is off unless listed.
       '';
     };
 
     askpass.enable = lib.mkOption {
       type = lib.types.bool;
-      default = true;
+      default = false;
       description = ''
         Point `SUDO_ASKPASS` and `SSH_ASKPASS` at `mochi-askpass`, so
         `sudo -A`, and ssh when it has no terminal, ask on the island. Plain
         `sudo` keeps asking in its terminal; `SSH_ASKPASS_REQUIRE=prefer`
-        makes ssh ask on the island from a terminal too.
+        makes ssh ask on the island from a terminal too. Needs `"auth"` in
+        `settings.modules`.
       '';
     };
 

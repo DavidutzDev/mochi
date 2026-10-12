@@ -84,6 +84,9 @@ pub struct Inputs {
 struct Client {
     sender: UnboundedSender<DaemonMessage>,
     role: Option<Role>,
+    /// For a UI that isn't the Quickshell mochid started, the process that
+    /// said hello: the island answers no password prompt from it.
+    foreign: Option<Option<u32>>,
 }
 
 #[derive(Debug)]
@@ -501,9 +504,16 @@ impl Daemon {
     fn on_connection(&mut self, event: ConnectionEvent) {
         match event {
             ConnectionEvent::Opened { id, sender } => {
-                self.clients.insert(id, Client { sender, role: None });
+                self.clients.insert(
+                    id,
+                    Client {
+                        sender,
+                        role: None,
+                        foreign: None,
+                    },
+                );
             }
-            ConnectionEvent::Message { id, message } => self.on_message(id, message),
+            ConnectionEvent::Message { id, message, pid } => self.on_message(id, message, pid),
             ConnectionEvent::Malformed { id, error } => {
                 tracing::warn!(connection = id, %error, "malformed message");
                 self.reply_error(id, ErrorCode::BadMessage, error);
@@ -520,13 +530,13 @@ impl Daemon {
         }
     }
 
-    fn on_message(&mut self, id: ConnectionId, message: ClientMessage) {
+    fn on_message(&mut self, id: ConnectionId, message: ClientMessage, pid: Option<u32>) {
         let Some(client) = self.clients.get(&id) else {
             return;
         };
 
         match (client.role, message) {
-            (None, ClientMessage::Hello { api, role }) => self.on_hello(id, api, role),
+            (None, ClientMessage::Hello { api, role }) => self.on_hello(id, api, role, pid),
             (None, _) => {
                 self.reply_error(id, ErrorCode::HelloFirst, "send hello first");
                 self.clients.remove(&id);
@@ -598,7 +608,7 @@ impl Daemon {
                     args,
                 },
             ) => {
-                self.on_command(id, &module, &action, &args);
+                self.on_command(id, &module, &action, &args, pid);
             }
             (Some(_), ClientMessage::Status) => {
                 let status = Status {
@@ -608,6 +618,7 @@ impl Daemon {
                     modules: self.order.iter().map(|id| (*id).to_owned()).collect(),
                     compositor: self.compositor_status(),
                     plugins: self.plugin_status(),
+                    foreign_ui: self.foreign_ui(),
                 };
                 self.reply(id, DaemonMessage::Status { status });
             }
@@ -675,15 +686,26 @@ impl Daemon {
         }
     }
 
-    fn on_hello(&mut self, id: ConnectionId, api: u32, role: Role) {
+    fn on_hello(&mut self, id: ConnectionId, api: u32, role: Role, pid: Option<u32>) {
         if api != API {
             let message = format!("this daemon speaks api {API}, the client speaks {api}");
             self.reply_error(id, ErrorCode::UnsupportedApi, message);
             self.clients.remove(&id);
             return;
         }
+        let shell = self.supervisor.as_ref().and_then(Supervisor::pid);
+        let foreign = (role == Role::Ui && (pid.is_none() || pid != shell)).then_some(pid);
         if let Some(client) = self.clients.get_mut(&id) {
             client.role = Some(role);
+            client.foreign = foreign;
+        }
+        if let Some(pid) = foreign {
+            tracing::error!(
+                connection = id,
+                ?pid,
+                ?shell,
+                "a UI connected that isn't the Quickshell mochid started: the island can't answer password prompts from it"
+            );
         }
         self.reply(
             id,
@@ -725,8 +747,17 @@ impl Daemon {
         }
     }
 
-    fn on_command(&mut self, id: ConnectionId, module: &str, action: &str, args: &[String]) {
-        let reply = match self.deliver(module, action, args) {
+    fn on_command(
+        &mut self,
+        id: ConnectionId,
+        module: &str,
+        action: &str,
+        args: &[String],
+        caller: Option<u32>,
+    ) {
+        let shell = self.supervisor.as_ref().and_then(Supervisor::pid);
+        let from_shell = caller.is_some() && caller == shell;
+        let reply = match self.deliver(module, action, args, caller, from_shell) {
             Ok(reply) => reply,
             Err(undelivered) => {
                 let (code, message) = match undelivered {
@@ -785,7 +816,7 @@ impl Daemon {
             let _ = reply.send(Err(CallError::Itself));
             return;
         }
-        let answer = match self.deliver(module, action, args) {
+        let answer = match self.deliver(module, action, args, None, false) {
             Ok(answer) => answer,
             Err(undelivered) => {
                 let error = match undelivered {
@@ -821,6 +852,8 @@ impl Daemon {
         module: &str,
         action: &str,
         args: &[String],
+        caller: Option<u32>,
+        from_shell: bool,
     ) -> Result<oneshot::Receiver<Reply>, Undelivered> {
         // A renamed module still answers to its old id.
         let renamed = mochi_protocol::module_id(module);
@@ -837,6 +870,7 @@ impl Daemon {
         let args = actions::parse(spec, args)
             .map_err(|error| Undelivered::InvalidArgs(error.to_string()))?;
         let (command, reply) = ModuleCommand::new(action.to_owned(), args);
+        let command = command.from_process(caller).from_shell(from_shell);
         let delivered = slot
             .events
             .as_ref()
@@ -1267,6 +1301,19 @@ impl Daemon {
         } else if let Some(supervisor) = &self.supervisor {
             supervisor.reload();
         }
+    }
+
+    /// Why the island can't answer password prompts, if a UI connection
+    /// isn't the Quickshell mochid started.
+    fn foreign_ui(&self) -> Option<String> {
+        let foreign = self.clients.values().find_map(|client| client.foreign)?;
+        let who = foreign.map_or_else(
+            || "a process Mochi can't tell".to_owned(),
+            |pid| format!("process {pid}"),
+        );
+        Some(format!(
+            "{who} connected as the UI, but isn't the Quickshell mochid started"
+        ))
     }
 
     fn ui_connected(&self) -> bool {

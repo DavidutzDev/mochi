@@ -90,6 +90,11 @@ impl Supervisor {
         self.signal(libc::SIGTERM);
     }
 
+    /// The running Quickshell's process id, `None` between runs.
+    pub fn pid(&self) -> Option<u32> {
+        *self.pid.lock().expect("pid lock")
+    }
+
     /// Stops Quickshell for good.
     pub fn stop(&self) {
         self.stopping.store(true, Ordering::SeqCst);

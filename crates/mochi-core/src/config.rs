@@ -256,7 +256,7 @@ impl BubblesConfig {
 
 /// The builtin modules a config turns on when it doesn't list `modules`,
 /// and a generated `config.toml` lists: the whole shell.
-pub const DEFAULT_MODULES: [&str; 31] = [
+pub const DEFAULT_MODULES: [&str; 30] = [
     "idle",
     "osd",
     "workspaces",
@@ -266,7 +266,6 @@ pub const DEFAULT_MODULES: [&str; 31] = [
     "launcher",
     "control-center",
     "power",
-    "auth",
     "capture",
     "share",
     "clipboard",

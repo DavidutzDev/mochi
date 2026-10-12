@@ -190,7 +190,7 @@ impl Module for Lock {
             if let Some(old) = settings.moved() {
                 tracing::warn!(
                     setting = old,
-                    "[module.lock] forget_* moved: it's remember_* in [module.auth] now"
+                    "[module.lock] forget_* moved: it's remember_* in [module.auth] now, with \"auth\" in modules"
                 );
             }
             let dir = ctx.session_dir().to_owned();

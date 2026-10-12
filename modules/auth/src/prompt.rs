@@ -82,14 +82,30 @@ pub struct KeyringReply {
     pub choice: bool,
 }
 
+/// The program that asks through `mochi askpass`, from `/proc`.
+#[derive(Debug, Clone)]
+pub struct Asker {
+    /// Its name, from the file it runs.
+    pub app: String,
+    /// Its command line, like `sudo -A apt upgrade`.
+    pub command: String,
+    /// It runs as root: sudo itself, or another setuid program.
+    pub privileged: bool,
+    /// Why to look twice before answering it.
+    pub doubt: Option<String>,
+    /// For one without a doubt: what was checked, to check again before
+    /// the answer goes out.
+    pub checked: Option<crate::process::Asking>,
+}
+
 /// What `mochi askpass` asks, for sudo -A or ssh: the command waits until
 /// it's answered.
 pub struct AskpassAsk {
     pub command: ModuleCommand,
     /// A yes or no question, like ssh confirming the use of a key.
     pub confirm: bool,
-    /// The program asking, by name.
-    pub app: String,
+    /// Who asks, as the kernel says.
+    pub asker: Asker,
     /// What it asks, in its own words.
     pub message: String,
     /// For an SSH key's passphrase, the key, by [`remember::key_id`], and
@@ -103,6 +119,9 @@ enum Ask {
         /// The user picked to authenticate as.
         user: String,
         failures: u32,
+        /// The program that asks, read once as polkit asks: its id may go to
+        /// another program once it exits.
+        asker: Option<crate::process::Process>,
     },
     Keyring(KeyringAsk),
     Askpass(AskpassAsk),
@@ -145,10 +164,12 @@ impl Prompts {
             .filter(|me| request.users.contains(me))
             .or_else(|| request.users.first().cloned())
             .unwrap_or_default();
+        let asker = asker(&request);
         self.waiting.push_back(Ask::Polkit {
             request,
             user,
             failures: 0,
+            asker,
         });
         self.show_next(ctx);
     }
@@ -161,7 +182,12 @@ impl Prompts {
 
     /// sudo or ssh asks, through `mochi askpass`.
     pub fn askpass(&mut self, ctx: &ModuleCtx, ask: AskpassAsk) {
-        tracing::info!(app = %ask.app, "askpass asks");
+        tracing::info!(
+            app = %ask.asker.app,
+            command = %ask.asker.command,
+            doubt = ?ask.asker.doubt,
+            "askpass asks"
+        );
         self.waiting.push_back(Ask::Askpass(ask));
         self.show_next(ctx);
     }
@@ -233,6 +259,23 @@ impl Prompts {
             }) = self.shown.take()
         {
             ctx.withdraw(activity);
+            // What checked out as it asked may not now: then the answer stays here.
+            if let Some(reason) = asked
+                .asker
+                .checked
+                .as_ref()
+                .and_then(|checked| checked.check().err())
+            {
+                tracing::warn!(%reason, app = %asked.asker.app, "askpass's answer not sent");
+                notice(
+                    ctx,
+                    &asked.asker.app,
+                    &format!("Mochi didn't send your answer. {reason}"),
+                );
+                asked.command.reply(Err(format!("not sent: {reason}")));
+                self.show_next(ctx);
+                return Ok(Answered::Nothing);
+            }
             let keep = asked.key.map(|(key, default)| {
                 let picked = answer
                     .keep
@@ -372,14 +415,24 @@ impl Prompts {
     }
 }
 
+/// A notice on the island for a while, like ssh's "touch your security
+/// key", from `app`.
+pub fn notice(ctx: &ModuleCtx, app: &str, message: &str) {
+    let spec = ActivitySpec::new("Prompt")
+        .key("askpass-notice")
+        .priority(Priority::HIGH)
+        .timeout(std::time::Duration::from_secs(20))
+        .payload(json!({ "kind": "notice", "app": app, "message": message }));
+    ctx.present(spec);
+}
+
 /// The program that asks, by its name, from the process polkit says.
-fn asker(request: &polkit::Request) -> Option<String> {
+fn asker(request: &polkit::Request) -> Option<crate::process::Process> {
     let pid = request
         .details
         .get("polkit.subject-pid")
         .or_else(|| request.details.get("polkit.caller-pid"))?;
-    let name = std::fs::read_to_string(format!("/proc/{}/comm", pid.trim())).ok()?;
-    Some(name.trim().to_owned()).filter(|name| !name.is_empty())
+    crate::process::Process::read(pid.trim().parse().ok()?)
 }
 
 /// What the view shows.
@@ -389,24 +442,31 @@ fn payload(shown: &Shown) -> Value {
             request,
             user,
             failures,
-        } => json!({
-            "id": shown.id,
-            "kind": "polkit",
-            "message": request.message,
-            "action": request.action,
-            "icon": request.icon,
-            "app": asker(request),
-            "command": request.details.get("command_line"),
-            "users": request.users,
-            "user": user,
-            "checking": shown.checking,
-            "error": shown.error,
-            "triesLeft": TRIES - failures,
-        }),
+            asker,
+        } => {
+            json!({
+                "id": shown.id,
+                "kind": "polkit",
+                "message": request.message,
+                "action": request.action,
+                "icon": request.icon,
+                "app": asker.as_ref().map(crate::process::Process::name),
+                "command": request.details.get("command_line").cloned().or_else(|| asker.as_ref().map(crate::process::Process::command_line)),
+                "doubt": asker.as_ref().and_then(|asker| asker.doubt(true)),
+                "users": request.users,
+                "user": user,
+                "checking": shown.checking,
+                "error": shown.error,
+                "triesLeft": TRIES - failures,
+            })
+        }
         Ask::Askpass(asked) => json!({
             "id": shown.id,
             "kind": "askpass",
-            "app": asked.app,
+            "app": asked.asker.app,
+            "command": asked.asker.command,
+            "privileged": asked.asker.privileged,
+            "doubt": asked.asker.doubt,
             "message": asked.message,
             "confirm": asked.confirm,
             "keep": asked.key.as_ref().map(|(_, lifetime)| lifetime.name()),

@@ -508,3 +508,53 @@ fn a_module_turned_on_reloads_the_views_in_place() {
         Duration::from_secs(10),
     );
 }
+
+#[test]
+fn only_the_shell_answers_a_prompt() {
+    // polkit and the keyring off: the test stays off the real buses.
+    let daemon = Daemon::start_prepared("auth-answer", "auth", None, |dir, _| {
+        let config = dir.join("config/mochi");
+        std::fs::create_dir_all(&config).unwrap();
+        let settings = "[module.auth]\npolkit = false\nkeyring = false\n";
+        std::fs::write(config.join("config.toml"), settings).unwrap();
+    });
+    let mut ui = daemon.client(Role::Ui);
+    let mut asker = daemon.client(Role::Ctl);
+
+    // A yes or no, as ssh asks for a key added with `ssh-add -c`. The test
+    // isn't `mochi askpass`, so the prompt says to look twice.
+    asker.send(&ClientMessage::Command {
+        module: "auth".into(),
+        action: "ask".into(),
+        args: vec!["confirm".into(), "ssh".into(), "Allow use of key?".into()],
+    });
+    let prompt = ui.wait_for_view("auth", "Prompt");
+    assert_eq!(prompt.payload["confirm"], true);
+    assert!(
+        prompt.payload["doubt"]
+            .as_str()
+            .is_some_and(|doubt| !doubt.is_empty()),
+        "{}",
+        prompt.payload
+    );
+    assert_ne!(prompt.payload["app"], "ssh", "the name the CLI sends");
+
+    // A program saying hello as the UI isn't the shell mochid started.
+    let answer = format!(r#"{{"id":{},"accept":true}}"#, prompt.payload["id"]);
+    match ui.command("auth", "answer", &[&answer]) {
+        DaemonMessage::Error { code, message } => {
+            assert_eq!(code, ErrorCode::ModuleFailed);
+            assert!(message.contains("only the island"), "{message}");
+        }
+        other => panic!("expected a refusal, got {other:?}"),
+    }
+
+    // And mochi doctor hears of it, with the process that said hello.
+    let mut ctl = daemon.client(Role::Ctl);
+    ctl.send(&ClientMessage::Status);
+    let DaemonMessage::Status { status } = ctl.recv() else {
+        panic!("expected the status");
+    };
+    let why = status.foreign_ui.expect("a UI that isn't the shell");
+    assert!(why.contains(&std::process::id().to_string()), "{why}");
+}

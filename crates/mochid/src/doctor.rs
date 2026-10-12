@@ -161,11 +161,19 @@ fn daemon(report: &mut Report) {
         return;
     };
     match status(&socket) {
-        Ok(status) if status.ui_connected => report.ok(format!(
-            "mochid {} runs {} modules, and the UI is connected",
-            status.version,
-            status.modules.len()
-        )),
+        Ok(status) if status.ui_connected => {
+            report.ok(format!(
+                "mochid {} runs {} modules, and the UI is connected",
+                status.version,
+                status.modules.len()
+            ));
+            if let Some(why) = status.foreign_ui {
+                report.warn(
+                    format!("The island can't answer password prompts: {why}"),
+                    "Let mochid start Quickshell; a program given to `--quickshell` has to exec it.",
+                );
+            }
+        }
         Ok(status) => report.fail(
             format!("mochid {} runs, but the UI isn't connected", status.version),
             "Quickshell isn't up: `journalctl --user -u mochid` says why.",

@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 
 use tokio::sync::{mpsc, oneshot};
+use zbus::message::Header;
 use zbus::zvariant::{OwnedValue, Value};
 use zbus::{Connection, interface};
 
@@ -91,11 +92,32 @@ pub fn name_of(uid: u32) -> Option<String> {
     }
 }
 
+/// Whether polkitd sent the call: the bus's policy lets only it call an
+/// agent, and this checks again, so nothing else puts a prompt up or takes
+/// one down.
+async fn from_polkitd(connection: &Connection, header: &Header<'_>) -> bool {
+    let Some(sender) = header.sender() else {
+        return false;
+    };
+    let Ok(bus) = zbus::fdo::DBusProxy::new(connection).await else {
+        return false;
+    };
+    let Ok(polkitd) = zbus::names::BusName::from_static_str("org.freedesktop.PolicyKit1") else {
+        return false;
+    };
+    bus.get_name_owner(polkitd)
+        .await
+        .is_ok_and(|owner| owner.as_str() == sender.as_str())
+}
+
 #[interface(name = "org.freedesktop.PolicyKit1.AuthenticationAgent")]
 impl Agent {
     /// Answers once it's over: allowed, cancelled, or failed too often.
+    #[allow(clippy::too_many_arguments)]
     async fn begin_authentication(
         &self,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(header)] header: Header<'_>,
         action_id: String,
         message: String,
         icon_name: String,
@@ -103,6 +125,9 @@ impl Agent {
         cookie: String,
         identities: Vec<(String, HashMap<String, OwnedValue>)>,
     ) -> Result<(), PolkitError> {
+        if !from_polkitd(connection, &header).await {
+            return Err(PolkitError::Failed("only polkitd asks".into()));
+        }
         let users: Vec<String> = identities.iter().filter_map(user_name).collect();
         if users.is_empty() {
             return Err(PolkitError::Failed("Mochi can only ask users".into()));
@@ -126,8 +151,15 @@ impl Agent {
         }
     }
 
-    async fn cancel_authentication(&self, cookie: String) {
-        let _ = self.events.send(Event::Cancel(cookie));
+    async fn cancel_authentication(
+        &self,
+        #[zbus(connection)] connection: &Connection,
+        #[zbus(header)] header: Header<'_>,
+        cookie: String,
+    ) {
+        if from_polkitd(connection, &header).await {
+            let _ = self.events.send(Event::Cancel(cookie));
+        }
     }
 }
 
