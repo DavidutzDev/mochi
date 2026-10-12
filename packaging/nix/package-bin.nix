@@ -9,6 +9,8 @@
   autoPatchelfHook,
   makeWrapper,
   libpulseaudio,
+  linux-pam,
+  libxkbcommon,
   git,
   curl,
   gnutar,
@@ -35,8 +37,11 @@ stdenv.mkDerivation {
     autoPatchelfHook
     makeWrapper
   ];
+  # libpulse for the OSD module; PAM and xkbcommon for the lock screen.
   buildInputs = [
     libpulseaudio
+    linux-pam
+    libxkbcommon
     stdenv.cc.cc.lib
   ];
 
