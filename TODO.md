@@ -764,6 +764,7 @@ Later:
 - [x] Release 0.0.9: an updater with the changelog and an update for each way of installing, the universal installer, an About page, the hub renamed to the control center, one shell per session with mochid --dev taking over, presets that replace the file's colors
 - [x] Release 0.1.0: a clock panel with world clocks, a stopwatch, reminders and custom timers, a focus timer, the weather, widget looks and a side drawer with saved layouts, expressive shapes, a control center that's arranged by hand, modules turned on without a restart, panels that open at once, files dragged out of the control center and the launcher, and scrolling that glides
 - [x] Release 0.2.0: a lock screen of its own in place of hyprlock, arranged like the desktop widgets, with a blurred screenshot or the wallpaper behind it; widget layouts by screen and by workspace; menus for settings with a few values
+- [x] Release 0.3.0: the auth module, off until listed: everything forgotten on locking, and polkit, the keyring, sudo and ssh asking on the island, with the program that asks named and checked
 - [x] Documentation site with mdBook in `docs/book`: installing, getting started, configuration, bubbles, theme, a page per module that includes its `settings.toml`, writing views and the protocol. `nix build .#docs`, part of `nix flake check`; `.github/workflows/docs.yml` publishes it to GitHub Pages
 - [x] Publish the site: https://davidutzdev.github.io/mochi/
 - [ ] A website for Mochi, not only the docs: a landing page (pitch, screenshot, install command, a theme switcher with Mochi's palettes), news from releases, features with screenshots, a gallery, keybinds, support with a bug report builder that pairs with the About page's Copy details, and the docs under `/docs`. Screenshots made by CI in a headless session, so no media lives in the repository. Last on the list
@@ -773,7 +774,7 @@ Later:
 
 - [ ] Lua or WASM plugin backends
 - [ ] SDKs for other languages
-- [ ] A polkit agent, in Mochi's style
+- [x] A polkit agent, in Mochi's style: the auth module
 - [ ] An on-screen keyboard that doesn't take focus, with latching modifiers
 - [ ] System sounds: short tones for devices plugged in, the charger, battery warnings, quiet while notifications are silenced
 - [ ] A storage analyzer: what fills each drive, with a usage map
