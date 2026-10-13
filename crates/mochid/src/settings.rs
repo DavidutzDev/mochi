@@ -690,15 +690,25 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
     let theme_defaults = Table::try_from(Theme::default()).expect("the theme serializes");
     let theme_comments = Comments::parse(examples::THEME);
     let mut out = Vec::new();
+    // The page's id, then its table in theme.toml. The colors page is
+    // "themes", since the colors module has a page of its own.
     let appearance = [
         (
+            "themes",
             "colors",
-            "Colors",
+            "Themes",
             "palette",
             options::schema_of::<Colors>(),
         ),
-        ("text", "Text", "text_fields", options::schema_of::<Text>()),
         (
+            "text",
+            "text",
+            "Text",
+            "text_fields",
+            options::schema_of::<Text>(),
+        ),
+        (
+            "layout",
             "layout",
             "Layout",
             "dashboard",
@@ -706,13 +716,14 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
         ),
         (
             "motion",
+            "motion",
             "Motion",
             "animation",
             options::schema_of::<Motion>(),
         ),
     ];
     // The preset, its light or dark version, and the wallpaper go first on
-    // the Colors page.
+    // the Themes page.
     let mut look: Vec<Field> = options::fields(
         &options::schema_of::<Theme>(),
         "theme",
@@ -747,31 +758,31 @@ fn sections(catalog: &Catalog) -> Vec<Section> {
                 .collect();
         }
     }
-    for (id, title, icon, schema) in appearance {
+    for (id, table, title, icon, schema) in appearance {
         let description = theme_comments
-            .heading(id)
+            .heading(table)
             .map(|(_, description)| description)
             .unwrap_or_default();
         out.push(Section {
             id: id.to_owned(),
-            path: format!("theme.{id}"),
+            path: format!("theme.{table}"),
             title: title.to_owned(),
             description,
             group: Group::Appearance,
             icon: icon.to_owned(),
             module: None,
-            fields: if id == "colors" {
+            fields: if table == "colors" {
                 look.drain(..)
                     .chain(options::fields(
                         &schema,
                         "theme",
-                        id,
+                        table,
                         &theme_comments,
                         &theme_defaults,
                     ))
                     .collect()
             } else {
-                options::fields(&schema, "theme", id, &theme_comments, &theme_defaults)
+                options::fields(&schema, "theme", table, &theme_comments, &theme_defaults)
             },
         });
     }
@@ -1122,6 +1133,34 @@ mod tests {
             }
         }
         assert!(found >= 15, "{found}");
+    }
+
+    #[test]
+    fn sections_have_their_own_ids() {
+        // The panel finds a page by its id: two with one id show the first
+        // for both, as the theme's colors and the colors module once did.
+        let catalog = modules::catalog(Path::new("/nonexistent/config.toml")).unwrap();
+        let sections = sections(&catalog);
+        let mut ids = std::collections::BTreeSet::new();
+        for section in &sections {
+            assert!(
+                ids.insert(section.id.as_str()),
+                "two sections are {}",
+                section.id
+            );
+        }
+        let themes = sections
+            .iter()
+            .find(|section| section.id == "themes")
+            .unwrap();
+        assert_eq!(themes.title, "Themes");
+        assert_eq!(themes.path, "theme.colors");
+        assert!(
+            themes
+                .fields
+                .iter()
+                .any(|field| field.path == "theme.colors.accent")
+        );
     }
 
     #[test]

@@ -5,7 +5,7 @@
 //! TOML, to keep them in the files.
 //!
 //! `mochi ipc settings open` opens it, at a section with
-//! `mochi ipc settings open colors`. The launcher finds sections and
+//! `mochi ipc settings open themes`. The launcher finds sections and
 //! options by name. An option whose source is `file` has a Choose button,
 //! whose `choose-file` opens the desktop's file chooser, see [`files`], and
 //! sets the option to the file picked.
@@ -54,7 +54,7 @@ impl Module for Settings {
             ActionSpec::new("open", "Open the settings").arg(
                 ArgSpec::string(
                     "section",
-                    "A section, like colors, island or a module's id, or an option's path",
+                    "A section, like themes, island or a module's id, or an option's path",
                 )
                 .optional()
                 .source("settings-section"),

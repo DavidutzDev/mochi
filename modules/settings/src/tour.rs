@@ -14,7 +14,7 @@ pub fn steps() -> Vec<ContributionSpec> {
                 "since": "0.0.7",
                 "caption": "Settings: every option of Mochi, applied as you change it. Copy gives them back as Nix or TOML for your files.",
                 "payload": {
-                    "section": "colors",
+                    "section": "themes",
                     "option": ""
                 }
             })),

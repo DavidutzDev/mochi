@@ -2,6 +2,12 @@
 
 Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor release may change the config format, the protocol or the module interface; the changelog says when.
 
+## Unreleased
+
+### Fixed
+
+- The settings panel had two pages called Colors, the theme's and the colors module's, with the same id, so a click on the colors module's page opened the theme's. The theme's page is Themes now, and `mochi ipc settings open themes` opens it. Its options are still under `[colors]` in `theme.toml`.
+
 ## 0.4.0 - 2026-10-13
 
 ### Added

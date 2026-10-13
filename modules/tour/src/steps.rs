@@ -265,7 +265,7 @@ fn looks() -> Vec<Step> {
             Version(0, 0, 1),
             "Colors",
             "palette",
-            "Every color is yours to pick, live, with the accent used sparingly. Settings › Colors.",
+            "Every color is yours to pick, live, with the accent used sparingly. Settings › Themes.",
             accents
                 .iter()
                 .map(|accent| vec![("theme.colors.accent", json!(accent))])

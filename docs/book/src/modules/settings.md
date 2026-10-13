@@ -2,7 +2,7 @@
 
 A panel with every option: the theme, the island, the bubbles, which modules run, each module's settings and each plugin's. A change applies as you make it. Theme options apply while you drag. A module's own options apply 400 ms after you stop, since the module restarts to read them. Its Bento pages install plugins, themes and whole setups from the registry, and share yours: see [Bento](../bento.md#in-the-settings).
 
-`mochi ipc settings open` opens it, and `mochi ipc settings open osd` opens a section: a module's id, `colors`, `text`, `layout`, `motion`, `island`, `bubbles`, `modules` or `about`. An option's path, like `theme.colors.accent`, opens its section and points at it. The control center's gear opens the panel at the page you're on, and the launcher finds "Settings", each section and each option by name.
+`mochi ipc settings open` opens it, and `mochi ipc settings open osd` opens a section: a module's id, `themes`, `text`, `layout`, `motion`, `island`, `bubbles`, `modules` or `about`. An option's path, like `theme.colors.accent`, opens its section and points at it. The control center's gear opens the panel at the page you're on, and the launcher finds "Settings", each section and each option by name.
 
 ## Using it
 

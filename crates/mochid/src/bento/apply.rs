@@ -725,7 +725,7 @@ pub fn try_it(config_file: &Path, text: &str) -> Result<(), String> {
         }
     })?;
     // The bar with Keep and Drop is in the settings panel.
-    let _ = client::command("settings", "open", vec!["colors".into()]);
+    let _ = client::command("settings", "open", vec!["themes".into()]);
     eprintln!(
         "Trying it now: Keep or Drop it at the bottom of the settings panel, or run\n  mochi ipc settings keep    or    mochi ipc settings drop"
     );
