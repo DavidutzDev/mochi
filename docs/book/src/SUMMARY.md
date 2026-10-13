@@ -12,6 +12,7 @@
   - [Theme](theme.md)
 - [Plugins](plugins.md)
 - [Bento](bento.md)
+- [Profiling](profiling.md)
 
 # Modules
 

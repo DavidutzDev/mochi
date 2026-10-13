@@ -20,6 +20,7 @@ pkgbase = mochi-git
 	provides = mochi=0.0.4
 	conflicts = mochi
 	options = !lto
+	options = !strip
 	source = mochi::git+https://github.com/DavidutzDev/mochi.git
 	sha256sums = SKIP
 

@@ -4,10 +4,12 @@
 mod appearance;
 mod bento;
 mod daemon;
+mod desktops;
 mod doctor;
 mod ipc;
 mod modules;
 mod plugins;
+mod profile;
 mod session;
 mod settings;
 #[cfg(test)]

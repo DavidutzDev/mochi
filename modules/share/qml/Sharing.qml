@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.island
 
 // The bubble while something shares the screen: a screen in the accent
@@ -12,12 +13,15 @@ Item {
     implicitHeight: 26
 
     Symbol {
+        id: icon
+
         anchors.centerIn: parent
         name: "screen_share"
         size: 16
         color: Theme.accent
 
         SequentialAnimation on opacity {
+            running: icon.visible && Daemon.shows(icon.QsWindow.window)
             loops: Animation.Infinite
 
             NumberAnimation {

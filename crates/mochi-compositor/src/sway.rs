@@ -14,8 +14,8 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixStream;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::Window;
 use crate::ipc::{self, Event};
+use crate::{Placed, Window};
 
 const MAGIC: &[u8; 6] = b"i3-ipc";
 const SUBSCRIBE: u32 = 2;
@@ -140,6 +140,30 @@ fn focused_from_event(event: &Value) -> Option<String> {
     current["output"].as_str().map(str::to_owned)
 }
 
+/// Each active output's place in the global layout.
+pub(crate) async fn outputs(path: &Path) -> std::io::Result<Vec<Placed>> {
+    Ok(outputs_from(&request(path, GET_OUTPUTS).await?))
+}
+
+fn outputs_from(outputs: &Value) -> Vec<Placed> {
+    outputs
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|output| output["active"] != false)
+        .filter_map(|output| {
+            let rect = &output["rect"];
+            Some(Placed {
+                name: output["name"].as_str()?.to_owned(),
+                x: rect["x"].as_f64()?,
+                y: rect["y"].as_f64()?,
+                width: rect["width"].as_f64()?,
+                height: rect["height"].as_f64()?,
+            })
+        })
+        .collect()
+}
+
 /// The windows on visible workspaces, topmost first.
 pub(crate) async fn windows(path: &Path) -> std::io::Result<Vec<Window>> {
     Ok(windows_from(&request(path, GET_TREE).await?))
@@ -261,5 +285,16 @@ mod tests {
         assert_eq!(focused_from_event(&event).as_deref(), Some("DP-1"));
         let renamed = json!({ "change": "rename", "current": { "output": "DP-1" } });
         assert_eq!(focused_from_event(&renamed), None);
+    }
+
+    #[test]
+    fn active_outputs_are_placed() {
+        let outputs = serde_json::json!([
+            {"name": "DP-3", "active": true, "rect": {"x": 0, "y": 0, "width": 1920, "height": 1080}},
+            {"name": "HDMI-A-1", "active": false, "rect": {"x": 0, "y": 0, "width": 0, "height": 0}}
+        ]);
+        let placed = outputs_from(&outputs);
+        assert_eq!(placed.len(), 1);
+        assert_eq!((placed[0].name.as_str(), placed[0].width), ("DP-3", 1920.0));
     }
 }

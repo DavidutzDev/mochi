@@ -10,6 +10,25 @@ A module's views are QML files in its `qml/` directory. They import the core lib
 - Actions go through `Daemon.command(module, action, args)`; arguments are strings.
 - Values that change many times a second, like the audio meters' levels, come through `Daemon`'s `live(module, value)` signal rather than the published state, from `ModuleCtx::publish_live`. Listen with `Connections { target: Daemon }`. Nothing keeps them: a view sees only those sent while it's open.
 
+## Motion that only decorates
+
+An animation that runs on its own, like bars bouncing to music or a wave drifting, draws a frame for every one of the monitor's: 144 a second on a 144 Hz monitor, and two windows' worth on two monitors, even hidden behind a fullscreen game. Drive it with a `Ticker` instead, which moves on 30 times a second, together with every other one, and run it only while the view can be seen:
+
+```qml
+import Quickshell
+import qs.island
+
+Ticker {
+    id: ticker
+
+    running: root.playing && root.visible && Daemon.shows(root.QsWindow.window) && !Theme.reducedMotion
+}
+// ticker.now, in milliseconds, holds still while it's stopped.
+readonly property real swing: 0.5 - 0.5 * Math.cos(ticker.now % 900 / 900 * 2 * Math.PI)
+```
+
+`Daemon.shows(window)` is false while the window is hidden or a fullscreen window covers its monitor. A short animation that answers something the user did, like a panel opening, can stay an `Animation`. A view whose size changes on every update makes the island move each time, so keep rows that come and go at a fixed height. [Profiling](profiling.md) shows how many frames each window draws.
+
 ## When a view doesn't load
 
 A view with a QML error, or a missing file, logs the error in `mochid`'s log as a `quickshell` warning, with the file and line, and the island keeps what it showed. When the view is a plugin's [override](writing-plugins.md) of a builtin view, the island and the bubbles load the builtin view instead and log `could not load root:/modules/<module>/<view>.qml, trying root:/builtin/<module>/<view>.qml`. The daemon keeps each overridden module's own files in `builtin/<module>/` in the shell tree for this.

@@ -39,8 +39,11 @@ use crate::{Action, Compositor, State};
 
 /// `wl_output` version 4 added the `name` and `description` events.
 const OUTPUT_VERSION: u32 = 4;
-/// `zwlr_foreign_toplevel_handle_v1.state` value for the focused window.
+/// `zwlr_foreign_toplevel_handle_v1.state` values for a minimized window,
+/// the focused one and a fullscreen one.
+const MINIMIZED: u32 = 1;
 const ACTIVATED: u32 = 2;
+const FULLSCREEN: u32 = 3;
 
 /// Answers nothing: only the registry's list is read.
 struct Probe;
@@ -668,12 +671,17 @@ impl Dispatch<ZwlrForeignToplevelHandleV1, ()> for Client {
             }
             zwlr_foreign_toplevel_handle_v1::Event::State { state } => {
                 // An array of native-endian u32 values.
-                let activated = state
-                    .as_chunks::<4>()
-                    .0
-                    .iter()
-                    .any(|bytes| u32::from_ne_bytes(*bytes) == ACTIVATED);
-                client.model.toplevel_activated(id, activated);
+                let has = |value: u32| {
+                    state
+                        .as_chunks::<4>()
+                        .0
+                        .iter()
+                        .any(|bytes| u32::from_ne_bytes(*bytes) == value)
+                };
+                // A minimized fullscreen window covers nothing.
+                client
+                    .model
+                    .toplevel_state(id, has(ACTIVATED), has(FULLSCREEN) && !has(MINIMIZED));
             }
             zwlr_foreign_toplevel_handle_v1::Event::Done => {
                 client.model.toplevel_done(id);

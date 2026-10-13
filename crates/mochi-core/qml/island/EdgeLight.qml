@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 
 // A line along the top edge of a panel, card or tile that says something
 // happens: while `working`, a band sweeps back and forth, and `flash()`
@@ -29,7 +30,7 @@ Item {
     height: 2
 
     SequentialAnimation on sweep {
-        running: root.working && root.visible
+        running: root.working && root.visible && Daemon.shows(root.QsWindow.window)
         loops: Animation.Infinite
 
         NumberAnimation {

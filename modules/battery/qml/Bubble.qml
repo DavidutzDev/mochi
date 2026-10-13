@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.island
 
 // The warning while the battery is low: its level, red when critical. A
@@ -43,7 +44,7 @@ Item {
 
     // Critical: hard to miss.
     SequentialAnimation on opacity {
-        running: root.payload.critical ?? false
+        running: (root.payload.critical ?? false) && root.visible && Daemon.shows(root.QsWindow.window)
         loops: Animation.Infinite
         onRunningChanged: {
             if (!running)

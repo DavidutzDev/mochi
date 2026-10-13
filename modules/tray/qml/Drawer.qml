@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.island
 
 // The tray's bubble, which opens the drawer. It breathes in the accent color
@@ -23,7 +24,7 @@ Item {
         color: root.attention ? Theme.accent : Theme.foreground
 
         SequentialAnimation on opacity {
-            running: root.attention
+            running: root.attention && symbol.visible && Daemon.shows(symbol.QsWindow.window)
             loops: Animation.Infinite
             onRunningChanged: {
                 if (!running)

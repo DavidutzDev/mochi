@@ -37,12 +37,17 @@ pub(crate) struct Model {
     ipc_seen: bool,
     /// Focus changes so far, to order windows by when they had it.
     focus_count: u64,
+    /// The fullscreen window covering each output, by output id: the one
+    /// that had focus there last while fullscreen. A normal window taking
+    /// focus on the output, or another workspace there, uncovers it.
+    covered: BTreeMap<u32, u32>,
 }
 
 #[derive(Debug, Default)]
 struct Toplevel {
     outputs: Vec<u32>,
     activated: bool,
+    fullscreen: bool,
     app_id: String,
     title: String,
     /// When it last had focus, counting focus changes; 0 for never.
@@ -136,7 +141,16 @@ impl Model {
     }
 
     pub fn workspace_state(&mut self, workspace: u32, state: u32) {
-        self.workspaces.entry(workspace).or_default().state = state;
+        let info = self.workspaces.entry(workspace).or_default();
+        let shown = state & ACTIVE != 0 && info.state & ACTIVE == 0;
+        info.state = state;
+        // Another workspace on an output hides the fullscreen window there,
+        // until one takes focus again.
+        if shown {
+            for output in self.outputs_of(workspace) {
+                self.covered.remove(&output);
+            }
+        }
     }
 
     pub fn workspace_capabilities(&mut self, workspace: u32, capabilities: u32) {
@@ -155,6 +169,8 @@ impl Model {
         outputs.retain(|id| *id != output);
         if entered {
             outputs.push(output);
+        } else if self.covered.get(&output) == Some(&toplevel) {
+            self.covered.remove(&output);
         }
     }
 
@@ -166,8 +182,10 @@ impl Model {
         self.toplevels.entry(toplevel).or_default().title = title;
     }
 
-    pub fn toplevel_activated(&mut self, toplevel: u32, activated: bool) {
-        self.toplevels.entry(toplevel).or_default().activated = activated;
+    pub fn toplevel_state(&mut self, toplevel: u32, activated: bool, fullscreen: bool) {
+        let window = self.toplevels.entry(toplevel).or_default();
+        window.activated = activated;
+        window.fullscreen = fullscreen;
     }
 
     /// The window's state is complete. A focused window moves the focus to
@@ -177,6 +195,20 @@ impl Model {
         let Some(window) = self.toplevels.get_mut(&toplevel) else {
             return;
         };
+        // Focus on an output says what covers it: a fullscreen window, or
+        // nothing. A window leaving fullscreen covers nothing anymore.
+        if window.activated {
+            for output in &window.outputs {
+                if window.fullscreen {
+                    self.covered.insert(*output, toplevel);
+                } else {
+                    self.covered.remove(output);
+                }
+            }
+        }
+        if !window.fullscreen {
+            self.covered.retain(|_, covering| *covering != toplevel);
+        }
         if window.activated {
             if self.focused_window != Some(toplevel) {
                 self.focus_count += 1;
@@ -206,6 +238,7 @@ impl Model {
 
     pub fn toplevel_closed(&mut self, toplevel: u32) {
         self.toplevels.remove(&toplevel);
+        self.covered.retain(|_, covering| *covering != toplevel);
         if self.focused_window == Some(toplevel) {
             self.focused_window = None;
         }
@@ -349,7 +382,25 @@ impl Model {
             screencast: self.screencasts > 0,
             captured: self.captured.keys().cloned().collect(),
             keyboard_layout: self.keyboard_layout.clone(),
+            covered: self
+                .covered
+                .keys()
+                .filter_map(|output| self.outputs.get(output))
+                .map(|output| output.name.clone())
+                .filter(|name| !name.is_empty())
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect(),
         }
+    }
+
+    /// The outputs of the group holding the workspace, by id.
+    fn outputs_of(&self, workspace: u32) -> Vec<u32> {
+        self.groups
+            .values()
+            .find(|group| group.workspaces.contains(&workspace))
+            .map(|group| group.outputs.clone())
+            .unwrap_or_default()
     }
 
     /// The first output of the group holding the workspace.
@@ -548,18 +599,61 @@ mod tests {
         assert_eq!(model.snapshot().focused_output, None);
 
         model.toplevel_output(30, 2, true);
-        model.toplevel_activated(30, true);
+        model.toplevel_state(30, true, false);
         model.toplevel_done(30);
         assert_eq!(model.snapshot().focused_output.as_deref(), Some("HDMI-A-1"));
 
         // Losing focus alone moves nothing; the next focused window does.
-        model.toplevel_activated(30, false);
+        model.toplevel_state(30, false, false);
         model.toplevel_done(30);
         assert_eq!(model.snapshot().focused_output.as_deref(), Some("HDMI-A-1"));
         model.toplevel_output(31, 1, true);
-        model.toplevel_activated(31, true);
+        model.toplevel_state(31, true, false);
         model.toplevel_done(31);
         assert_eq!(model.snapshot().focused_output.as_deref(), Some("DP-3"));
+    }
+
+    #[test]
+    fn a_fullscreen_window_covers_its_output_until_something_else_shows() {
+        let mut model = dual_monitor();
+        // A game, fullscreen on DP-3 with focus.
+        model.toplevel_output(30, 1, true);
+        model.toplevel_state(30, true, true);
+        model.toplevel_done(30);
+        assert_eq!(model.snapshot().covered, ["DP-3"]);
+
+        // Focus on the other monitor leaves it covered.
+        model.toplevel_state(30, false, true);
+        model.toplevel_done(30);
+        model.toplevel_output(31, 2, true);
+        model.toplevel_state(31, true, false);
+        model.toplevel_done(31);
+        assert_eq!(model.snapshot().covered, ["DP-3"]);
+
+        // Another workspace there uncovers it, and the game's focus covers
+        // it again.
+        model.workspace_state(21, 0);
+        model.workspace_state(20, ACTIVE);
+        assert!(model.snapshot().covered.is_empty());
+        model.toplevel_state(30, true, true);
+        model.toplevel_done(30);
+        assert_eq!(model.snapshot().covered, ["DP-3"]);
+
+        // A normal window taking focus there, or the game leaving
+        // fullscreen or closing, uncovers it.
+        model.toplevel_output(32, 1, true);
+        model.toplevel_state(32, true, false);
+        model.toplevel_done(32);
+        assert!(model.snapshot().covered.is_empty());
+        model.toplevel_state(30, true, true);
+        model.toplevel_done(30);
+        model.toplevel_state(30, true, false);
+        model.toplevel_done(30);
+        assert!(model.snapshot().covered.is_empty());
+        model.toplevel_state(30, true, true);
+        model.toplevel_done(30);
+        model.toplevel_closed(30);
+        assert!(model.snapshot().covered.is_empty());
     }
 
     #[test]
@@ -567,17 +661,17 @@ mod tests {
         let mut model = dual_monitor();
         model.toplevel_app_id(30, "kitty".into());
         model.toplevel_app_id(31, "firefox".into());
-        model.toplevel_activated(30, true);
+        model.toplevel_state(30, true, false);
         model.toplevel_done(30);
         assert_eq!(model.snapshot().focused_app.as_deref(), Some("kitty"));
 
         // The island taking the keyboard deactivates the window, and nothing
         // else gets focus.
-        model.toplevel_activated(30, false);
+        model.toplevel_state(30, false, false);
         model.toplevel_done(30);
         assert_eq!(model.snapshot().focused_app.as_deref(), Some("kitty"));
 
-        model.toplevel_activated(31, true);
+        model.toplevel_state(31, true, false);
         model.toplevel_done(31);
         assert_eq!(model.snapshot().focused_app.as_deref(), Some("firefox"));
         model.toplevel_closed(31);
@@ -587,7 +681,7 @@ mod tests {
     #[test]
     fn a_window_focused_before_it_enters_an_output_counts_once_it_does() {
         let mut model = dual_monitor();
-        model.toplevel_activated(30, true);
+        model.toplevel_state(30, true, false);
         model.toplevel_done(30);
         assert_eq!(model.snapshot().focused_output, None);
         model.toplevel_output(30, 1, true);
@@ -599,7 +693,7 @@ mod tests {
     fn ipc_focus_wins_over_the_window_guess() {
         let mut model = dual_monitor();
         model.toplevel_output(30, 1, true);
-        model.toplevel_activated(30, true);
+        model.toplevel_state(30, true, false);
         model.toplevel_done(30);
         // Focusing an empty workspace on the other output: no window gets
         // focus, but the compositor's IPC says where focus is.

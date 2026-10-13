@@ -558,3 +558,79 @@ fn only_the_shell_answers_a_prompt() {
     let why = status.foreign_ui.expect("a UI that isn't the shell");
     assert!(why.contains(&std::process::id().to_string()), "{why}");
 }
+
+#[test]
+fn a_profile_records_frames_and_writes_a_report() {
+    let daemon = Daemon::start("profile", "idle");
+    let mut ui = daemon.client(Role::Ui);
+    let mut ctl = daemon.client(Role::Ctl);
+    let profiling = |ui: &mut Client, on: bool| loop {
+        if ui.recv() == (DaemonMessage::Profiling { on }) {
+            break;
+        }
+    };
+
+    ctl.send(&ClientMessage::Profile { seconds: 0 });
+    let refused = ctl.recv();
+    assert!(
+        matches!(
+            refused,
+            DaemonMessage::Error {
+                code: ErrorCode::InvalidArgs,
+                ..
+            }
+        ),
+        "{refused:?}"
+    );
+
+    ctl.send(&ClientMessage::Profile { seconds: 2 });
+    // The UI hears it, and counts its windows' frames meanwhile.
+    profiling(&mut ui, true);
+    ui.send(&ClientMessage::Frames {
+        output: "DP-3".into(),
+        surface: "island".into(),
+        frames: 42,
+    });
+    // Only the UI counts frames.
+    let mut other = daemon.client(Role::Ctl);
+    other.send(&ClientMessage::Frames {
+        output: "DP-3".into(),
+        surface: "island".into(),
+        frames: 1,
+    });
+    let refused = other.recv();
+    assert!(
+        matches!(
+            refused,
+            DaemonMessage::Error {
+                code: ErrorCode::NotAllowed,
+                ..
+            }
+        ),
+        "{refused:?}"
+    );
+
+    let path = match ctl.recv() {
+        DaemonMessage::Output { output } => output,
+        other => panic!("expected the report's path, got {other:?}"),
+    };
+    assert!(
+        path.starts_with(
+            &daemon
+                .dir
+                .join("state/mochi/profiles")
+                .display()
+                .to_string()
+        )
+    );
+    let page = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        page.contains(r#""fps":42"#),
+        "the frames aren't in the report"
+    );
+    assert!(page.contains(r#""points":[{"#), "no readings in the report");
+    // A flame graph, or the reason there's none.
+    assert!(page.contains(r#""flame":""#) || page.contains(r#""flame_error":""#));
+    // And the readings stop.
+    profiling(&mut ui, false);
+}

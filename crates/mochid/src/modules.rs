@@ -326,7 +326,7 @@ impl Runner {
         };
 
         let generation = self.generation;
-        let task = tokio::spawn(module.run(ctx));
+        let task = tokio::spawn(crate::profile::timed(id, module.run(ctx)));
         let exits = self.exits.clone();
         tokio::spawn(async move {
             let _ = exits.send((id, generation, task.await));

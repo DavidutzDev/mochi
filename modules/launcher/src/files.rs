@@ -1,16 +1,21 @@
 //! The files provider's index: every file and folder under the roots, by
 //! name, in memory, so searching it is as quick as searching apps. Hidden
-//! ones and build folders are left out. A thread builds it when the module
-//! starts, then follows changes through inotify: it watches every folder
-//! it indexed, and a file or folder made, deleted or moved in one updates
-//! the index as it happens. A new folder gets a watch too.
+//! ones and build folders are left out. By default a thread builds it when
+//! a search first asks for files after the launcher opens, if it's gone or
+//! older than 15 seconds; the launcher module drops it a while after
+//! the launcher closes.
+//!
+//! With `watch`, a thread builds it when the module starts, then follows
+//! changes through inotify: it watches every folder it indexed, and a file
+//! or folder made, deleted or moved in one updates the index as it happens.
+//! A new folder gets a watch too.
 //!
 //! Each folder takes one inotify watch. When adding one fails because the
 //! system has none left (`fs.inotify.max_user_watches`), the thread logs it
-//! once and stops watching; from then on, opening the launcher builds the
-//! index again in the background when it's older than 15 seconds, and
-//! searches use the old one meanwhile. When inotify drops events because
-//! too many came at once, the thread builds the index again from scratch.
+//! once and stops watching; from then on the index is built as when it
+//! isn't watched, and searches use the old one meanwhile. When inotify
+//! drops events because too many came at once, the thread builds the index
+//! again from scratch.
 
 use std::collections::{BTreeMap, HashMap};
 use std::ffi::OsStr;
@@ -53,6 +58,11 @@ pub struct FilesSettings {
     pub ignore: Vec<String>,
     /// The most entries kept.
     pub max: usize,
+    /// Follow changes as they happen, with an inotify watch on each folder,
+    /// from when the module starts. Off, the index is built in the
+    /// background when a search first asks for files after the launcher
+    /// opens, if it's gone or 15 seconds old.
+    pub watch: bool,
 }
 
 impl Default for FilesSettings {
@@ -71,6 +81,7 @@ impl Default for FilesSettings {
             .map(String::from)
             .to_vec(),
             max: 200_000,
+            watch: false,
         }
     }
 }
@@ -299,7 +310,7 @@ fn follow(roots: &[PathBuf], settings: &FilesSettings, sender: &UnboundedSender<
             full: false,
         },
         Err(error) => {
-            tracing::warn!(%error, "can't watch the indexed folders, so the index is built again when the launcher opens");
+            tracing::warn!(%error, "can't watch the indexed folders, so the index is built again when a search asks for files");
             let entries = build(roots, settings);
             let _ = sender.send(Update::Built {
                 entries,
@@ -456,7 +467,7 @@ impl Watcher {
     fn warn_full(&self) {
         tracing::warn!(
             watched = self.folders.len(),
-            "ran out of inotify watches (fs.inotify.max_user_watches), so the file index is built again when the launcher opens instead"
+            "ran out of inotify watches (fs.inotify.max_user_watches), so the file index is built again when a search asks for files instead"
         );
     }
 }

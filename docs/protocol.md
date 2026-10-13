@@ -72,6 +72,7 @@ Control clients send one request at a time and read exactly one answer before se
 | `{"type":"dismiss"}` | `ok`: closes what the island shows, as a right click does |
 | `{"type":"list_actions"}` or `{"type":"list_actions","module":"osd"}` | `actions` |
 | `{"type":"step_aside","pid":1234}` | `ok`, then the daemon stops its shell and modules, waits for process 1234 to end and starts again. a dev daemon sends it to take over the session |
+| `{"type":"profile","seconds":30}` | `output`, the report's path, once the recording ends and the report is written: what `mochi profile` sends. `invalid_args` outside 1 to 300 seconds |
 
 Command arguments are always strings, as typed on the command line. The daemon checks them against the action's declared arguments before the module sees them, and answers `invalid_args` with a usage line when they don't fit.
 
@@ -92,6 +93,8 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `dismiss` | | control |
 | `list_actions` | `module` (optional) | control |
 | `step_aside` | `pid` | control |
+| `profile` | `seconds` | UI and control |
+| `frames` | `output`, `surface` (`island` or `desktop`), `frames`: how many frames that window drew in the last second, while the daemon profiles | UI |
 
 ### Daemon to client
 
@@ -105,8 +108,10 @@ Command arguments are always strings, as typed on the command line. The daemon c
 | `present` | `activity` (object or `null`), `output` (optional), `resting` (optional) | UI |
 | `bubbles` | `bubbles`, `overflow` (optional) | UI |
 | `theme` | `theme` | UI |
+| `covered` | `outputs`: the monitors a fullscreen window covers, by name; `desktops`: those whose desktop windows hide, which hides the desktop widgets there but not the island. Sent after `hello` and whenever either changes; views there stop what only decorates, like a wave | UI |
+| `profiling` | `on`: whether the daemon profiles now. While it does, the UI counts the frames each window draws and sends `frames` every second. Sent after `hello` and whenever it changes | UI |
 | `ok` | | whoever sent `command` or `reload` |
-| `output` | `output`: what the command says, like the share picker's choice | whoever sent `command` |
+| `output` | `output`: what the command says, like the share picker's choice | whoever sent `command` or `profile` |
 | `status` | `status`: `version`, `api`, `ui_connected`, `modules`, `compositor` (`backend`, `outputs`, `workspaces`), `plugins` (each `id`, `state` and an optional `message`; left out without plugins) | control |
 | `actions` | `modules`: list of `{module, actions}` | control |
 | `error` | `code`, `message` | everyone |

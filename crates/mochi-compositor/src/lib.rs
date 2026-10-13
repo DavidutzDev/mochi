@@ -76,6 +76,11 @@ pub struct State {
     /// compositor says. No standard protocol does; Hyprland, niri and Sway
     /// do through their IPC.
     pub keyboard_layout: Option<String>,
+    /// The outputs a fullscreen window covers, by name, sorted: the one that
+    /// had focus there last is fullscreen, so the island and the desktop
+    /// under it can't be seen. From wlr-foreign-toplevel-management; empty
+    /// where the compositor doesn't offer it.
+    pub covered: Vec<String>,
 }
 
 /// Monitors Mochi makes for itself, like the share module's switchable
@@ -169,6 +174,49 @@ pub struct Window {
     pub width: i32,
     pub height: i32,
     pub floating: bool,
+}
+
+/// A monitor's place in the compositor's global layout, in logical
+/// pixels: the same space as [`Window`]'s.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Placed {
+    pub name: String,
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+/// The outputs of which `windows` hide at least `share`, by name, sorted.
+/// Each output is read at a grid of points, 32 across and 18 down, so a
+/// tiled window with gaps around it hides the whole of its output.
+pub fn covered_by(outputs: &[Placed], windows: &[Window], share: f64) -> Vec<String> {
+    const ACROSS: usize = 32;
+    const DOWN: usize = 18;
+    let mut covered: Vec<String> = outputs
+        .iter()
+        .filter(|output| output.width > 0.0 && output.height > 0.0)
+        .filter(|output| {
+            let mut hidden = 0;
+            for row in 0..DOWN {
+                for column in 0..ACROSS {
+                    let x = output.x + (column as f64 + 0.5) * output.width / ACROSS as f64;
+                    let y = output.y + (row as f64 + 0.5) * output.height / DOWN as f64;
+                    let under = windows.iter().any(|window| {
+                        x >= f64::from(window.x)
+                            && x < f64::from(window.x + window.width)
+                            && y >= f64::from(window.y)
+                            && y < f64::from(window.y + window.height)
+                    });
+                    hidden += usize::from(under);
+                }
+            }
+            hidden as f64 >= share * (ACROSS * DOWN) as f64
+        })
+        .map(|output| output.name.clone())
+        .collect();
+    covered.sort();
+    covered
 }
 
 /// An open window, on any workspace, from wlr-foreign-toplevel-management.
@@ -309,6 +357,23 @@ impl Compositor {
         ipc.windows()
             .await
             .map_err(|error| CompositorError::Ipc(error.to_string()))
+    }
+
+    /// The outputs whose desktop windows hide: those on their visible
+    /// workspace cover at least `share` of it. Needs IPC, as
+    /// [`Compositor::windows`] does.
+    pub async fn desktops_covered(&self, share: f64) -> Result<Vec<String>, CompositorError> {
+        let ipc = self.ipc.as_ref().ok_or(CompositorError::NoWindowGeometry)?;
+        let failed = |error: std::io::Error| CompositorError::Ipc(error.to_string());
+        let outputs = ipc.outputs().await.map_err(failed)?;
+        let windows = ipc.windows().await.map_err(failed)?;
+        Ok(covered_by(&outputs, &windows, share))
+    }
+
+    /// A receiver that wakes when a window opens, closes, or changes its
+    /// title or focus.
+    pub fn subscribe_toplevels(&self) -> watch::Receiver<Vec<Toplevel>> {
+        self.toplevels.clone()
     }
 
     /// Hyprland's socket directory, for what only it does.
@@ -458,6 +523,7 @@ mod tests {
             screencast: false,
             captured: Vec::new(),
             keyboard_layout: None,
+            covered: Vec::new(),
         });
         let (actions, mut received) = mpsc::unbounded_channel();
         let (_, toplevels) = watch::channel(Vec::new());
@@ -482,5 +548,34 @@ mod tests {
             Err(CompositorError::UnknownWorkspace(WorkspaceId(9)))
         );
         drop(sender);
+    }
+
+    #[test]
+    fn windows_cover_an_output_once_they_hide_most_of_it() {
+        let output = |name: &str, x: f64| Placed {
+            name: name.into(),
+            x,
+            y: 0.0,
+            width: 1920.0,
+            height: 1080.0,
+        };
+        let window = |x: i32, y: i32, width: i32, height: i32| Window {
+            title: String::new(),
+            app_id: String::new(),
+            x,
+            y,
+            width,
+            height,
+            floating: false,
+        };
+        let outputs = [output("DP-3", 0.0), output("HDMI-A-1", 1920.0)];
+        // A tiled window with gaps, under a bar, on the first; a small
+        // floating one on the second.
+        let windows = [window(20, 60, 1880, 1000), window(2400, 300, 600, 400)];
+        assert_eq!(covered_by(&outputs, &windows, 0.85), ["DP-3"]);
+        // Two side by side cover it too.
+        let split = [window(1930, 10, 950, 1060), window(2890, 10, 940, 1060)];
+        assert_eq!(covered_by(&outputs, &split, 0.85), ["HDMI-A-1"]);
+        assert!(covered_by(&outputs, &[], 0.85).is_empty());
     }
 }

@@ -12,6 +12,9 @@ PanelWindow {
 
     readonly property Item desktop: view.item
     readonly property bool editing: desktop?.editing ?? false
+    // Under the windows, which may hide it: not while arranging, when it
+    // comes over them. Daemon.shows reads it.
+    readonly property bool underWindows: !editing
 
     anchors {
         top: true
@@ -83,5 +86,11 @@ PanelWindow {
         property: "output"
         value: root.screen?.name ?? ""
         when: view.item !== null
+    }
+
+    // While mochid profiles, how many frames the desktop draws.
+    FrameCounter {
+        output: root.screen?.name ?? ""
+        surface: "desktop"
     }
 }

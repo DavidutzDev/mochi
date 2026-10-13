@@ -119,6 +119,18 @@ enum Command {
         #[arg(long, value_name = "FILE")]
         config: Option<PathBuf>,
     },
+    /// Record what Mochi costs for a while, and write a report.
+    ///
+    /// mochid reads the CPU, memory and wake-ups of itself, Quickshell and
+    /// the programs they start, the frames each window of the shell draws,
+    /// and samples its own stacks for a flame graph. The report is one HTML
+    /// file in `~/.local/state/mochi/profiles`, to open in a browser or send
+    /// with a bug report. It works in every build.
+    Profile {
+        /// How long to record, in seconds, up to 300.
+        #[arg(default_value_t = 30)]
+        seconds: u32,
+    },
     /// Open a mochi:// link, as a browser does through the desktop entry.
     ///
     /// `mochi://bento/<source>` opens the settings' Bento page on what
@@ -244,6 +256,16 @@ fn run(command: Command, json: bool) -> Result<(), String> {
         Command::Config { args } => mochid(&["config".into()], &args),
         Command::Bento { args } => mochid(&["bento".into()], &args),
         Command::OpenUrl { url } => open_url(&url),
+        Command::Profile { seconds } => {
+            eprintln!("recording for {seconds} s: use the computer as when it's slow");
+            match request(ClientMessage::Profile { seconds })? {
+                DaemonMessage::Output { output } => {
+                    println!("{output}");
+                    Ok(())
+                }
+                other => Err(unexpected(&other)),
+            }
+        }
         Command::Doctor { config } => {
             let mut before: Vec<String> = Vec::new();
             if let Some(config) = config {

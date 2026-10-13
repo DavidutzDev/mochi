@@ -44,7 +44,7 @@ For a tag pushed by hand, or one `patch.yml` made:
 
 1. Checks that the tag is the version `Cargo.toml` says, and that `CHANGELOG.md` has its section.
 2. Builds `mochi` and `mochid` for x86_64 and aarch64 on Ubuntu 22.04, so they run with glibc 2.35 or newer.
-3. Packs each with `packaging/release/archive.sh`: the stripped binaries, the fonts, the systemd unit, the link handler, the completions, the licenses and `install.sh`, as `mochi-<arch>-linux.tar.gz` with a `.sha256`.
+3. Packs each with `packaging/release/archive.sh`: the stripped binaries (mochid keeps its function names, for `mochi profile`), the fonts, the systemd unit, the link handler, the completions, the licenses and `install.sh`, as `mochi-<arch>-linux.tar.gz` with a `.sha256`.
 4. Creates the GitHub release, titled `Mochi <version>`, with the changelog's section as its notes.
 5. Runs `packaging/release/record.sh`, which writes `packaging/nix/release.json` for the flake's `mochi-bin` and sets the version and sums in the Arch `PKGBUILD`s, and commits that to `main` as `Record release <version> for the packages`.
 

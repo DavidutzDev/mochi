@@ -87,12 +87,39 @@ Item {
                 color: Theme.muted
             }
 
+            // While the file index is built, a folder and a word at the end
+            // of the field, so files that don't show yet say why.
+            Row {
+                id: indexing
+
+                anchors.right: parent.right
+                anchors.rightMargin: Theme.padding
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.spaceTiny
+                visible: root.payload.indexing === true
+
+                Symbol {
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "folder"
+                    size: 14
+                    color: Theme.muted
+                }
+
+                Text {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Indexing"
+                    color: Theme.muted
+                    font.pixelSize: Theme.textCaption
+                    font.family: Theme.fontFamily
+                }
+            }
+
             TextInput {
                 id: input
 
                 anchors.left: magnifier.right
                 anchors.leftMargin: Theme.spaceMedium
-                anchors.right: parent.right
+                anchors.right: indexing.visible ? indexing.left : parent.right
                 anchors.rightMargin: Theme.padding
                 anchors.verticalCenter: parent.verticalCenter
                 focus: true

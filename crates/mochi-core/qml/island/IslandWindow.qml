@@ -94,7 +94,9 @@ PanelWindow {
     // Arranging widgets puts the desktop layer over the windows, on the top
     // layer: the island goes over it.
     readonly property bool arranging: Daemon.state("widgets")?.editing === true
-    WlrLayershell.layer: modal || overlaid || arranging ? WlrLayer.Overlay : WlrLayer.Top
+    // The overlay layer draws over a fullscreen window too.
+    readonly property bool overFullscreen: modal || overlaid || arranging
+    WlrLayershell.layer: overFullscreen ? WlrLayer.Overlay : WlrLayer.Top
     WlrLayershell.keyboardFocus: modal || overlaid ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
 
     // Whether a point is on the island or a pill, not outside them.
@@ -372,4 +374,10 @@ PanelWindow {
 
     // Carries a drag out of a panel past the panel's closing.
     DragCarrier {}
+
+    // While mochid profiles, how many frames this island draws.
+    FrameCounter {
+        output: root.screen?.name ?? ""
+        surface: "island"
+    }
 }

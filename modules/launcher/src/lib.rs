@@ -215,11 +215,14 @@ impl Module for Launcher {
                 providers: providers::providers(&settings.providers, &engines, &[]),
                 settings: settings.providers,
                 engines,
+                // Before `files`, which takes the settings.
+                watching: settings.files.watch,
                 files: settings.files,
                 index: files::Index::default(),
                 indexing: false,
                 files_asked: false,
-                watching: true,
+                reindexed: false,
+                drop_index_at: None,
                 indexed,
                 apps: Vec::new(),
                 query: String::new(),
@@ -233,7 +236,11 @@ impl Module for Launcher {
                 listed: HashMap::new(),
                 sender,
             };
-            state.reindex();
+            // Watched, the index is built now and followed; otherwise the
+            // first time a query asks for files.
+            if state.watching {
+                state.reindex();
+            }
 
             loop {
                 let due = state.due;
@@ -251,6 +258,7 @@ impl Module for Launcher {
                     Some(answer) = answers.recv() => state.answered(&ctx, answer),
                     Some(update) = indexes.recv() => state.indexed(&ctx, update),
                     () = wait(due) => state.ask(&ctx),
+                    () = wait(state.drop_index_at) => state.drop_index(),
                 }
             }
         })
@@ -284,8 +292,12 @@ struct State {
     files: FilesSettings,
     index: files::Index,
     indexing: bool,
+    /// When the unwatched index goes, once the launcher has closed.
+    drop_index_at: Option<Instant>,
     /// The query asks the files provider, which may still be indexing.
     files_asked: bool,
+    /// Whether this time the launcher is open built the index already.
+    reindexed: bool,
     /// Whether to follow changes with inotify. Turned off for good when
     /// the system runs out of watches.
     watching: bool,
@@ -351,11 +363,10 @@ impl State {
 
     async fn open(&mut self, ctx: &ModuleCtx, query: String) {
         ctx.close_other_panels();
+        self.drop_index_at = None;
+        self.reindexed = false;
 
         self.apps = read_apps().await;
-        if self.index.stale() {
-            self.reindex();
-        }
         self.query = query;
         self.search(ctx);
         let spec = ActivitySpec::new("Launcher")
@@ -376,6 +387,9 @@ impl State {
 
     /// Drops the query's results and stops asking for more.
     fn forget(&mut self) {
+        // Unwatched, the next open builds the index again anyway once it's
+        // 15 seconds old: holding it meanwhile only takes memory.
+        self.drop_index_at = (!self.watching).then(|| Instant::now() + files::STALE);
         self.generation += 1;
         for task in self.tasks.drain(..) {
             task.abort();
@@ -386,6 +400,26 @@ impl State {
         self.due = None;
         self.files_asked = false;
         self.listed.clear();
+    }
+
+    /// Lets the unwatched index go a while after the launcher closed: 200 000
+    /// entries are tens of MB. One still being built goes once it's built.
+    fn drop_index(&mut self) {
+        if self.indexing {
+            self.drop_index_at = Some(Instant::now() + files::STALE);
+            return;
+        }
+        self.drop_index_at = None;
+        if self.shown.is_some() || self.watching {
+            return;
+        }
+        self.index = files::Index::default();
+        // SAFETY: malloc_trim only releases free memory malloc holds; it
+        // takes no pointers.
+        unsafe {
+            libc::malloc_trim(0);
+        }
+        tracing::debug!("let the file index go");
     }
 
     /// Builds the file index again, in the background. While its watches
@@ -404,6 +438,8 @@ impl State {
     }
 
     fn indexed(&mut self, ctx: &ModuleCtx, update: files::Update) {
+        // A finished build takes "Indexing" off the search field.
+        let built = matches!(update, files::Update::Built { .. });
         match update {
             files::Update::Built { entries, live } => {
                 tracing::info!(entries = entries.len(), live, "indexed files");
@@ -420,8 +456,10 @@ impl State {
                 self.watching = false;
             }
         }
-        if self.shown.is_some() && self.query.starts_with('/') {
+        if self.shown.is_some() && self.files_asked {
             self.search(ctx);
+            self.refresh(ctx);
+        } else if self.shown.is_some() && built {
             self.refresh(ctx);
         }
     }
@@ -467,6 +505,12 @@ impl State {
                 }
             };
             self.results.insert(provider.name.clone(), items);
+        }
+        // Built when files are first asked for, once each time the
+        // launcher opens: apps alone never walk the home folder.
+        if self.files_asked && !self.reindexed && self.index.stale() {
+            self.reindexed = true;
+            self.reindex();
         }
         // Modules now, scripts after the pause.
         let (modules, scripts): (Vec<_>, Vec<_>) = std::mem::take(&mut self.waiting)
@@ -680,6 +724,8 @@ impl State {
             "sections": sections > 1,
             // Waiting on scripts, modules, or the file index being built.
             "searching": self.due.is_some() || !self.asking.is_empty() || (self.files_asked && self.indexing),
+            // The file index is being built, which the search field shows.
+            "indexing": self.indexing,
         })
     }
 

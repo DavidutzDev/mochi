@@ -42,13 +42,17 @@
 #   title = "crates.io"
 #   url = "https://crates.io/search?q=%s"
 
-# The files provider searches an index of your home folder, built when the
-# launcher starts and kept up to date through inotify, one watch per folder.
-# Without enough watches (fs.inotify.max_user_watches), it's built again
-# when the launcher opens and the index is 15 seconds old.
+# The files provider searches an index of your home folder, built in the
+# background the first time a search asks for files each time the launcher
+# opens, when the index is gone or 15 seconds old; the search field says "Indexing" meanwhile. With
+# `watch = true` it's built when Mochi starts and kept up to date through
+# inotify, one watch per folder, which costs memory and wakes Mochi on every
+# change in them; without enough watches (fs.inotify.max_user_watches), it
+# falls back to building on open.
 # Hidden files and folders are left out, and these:
 #
 #   [module.launcher.files]
 #   roots = ["~"]
 #   ignore = ["node_modules", "target", "__pycache__", "venv", "result", "dist", "build"]
 #   max = 200000
+#   watch = false

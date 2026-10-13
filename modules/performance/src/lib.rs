@@ -46,6 +46,10 @@ const NOTICE: Duration = Duration::from_millis(3500);
 const CRITICAL_NOTICE: Duration = Duration::from_secs(6);
 /// How long the page's process list keeps updating after it asked.
 const DETAIL: Duration = Duration::from_secs(30);
+/// How long nvidia-smi keeps running after a view showing the GPU asked,
+/// and after the module starts, for a first reading.
+const GPU: Duration = Duration::from_secs(30);
+const GPU_AT_START: Duration = Duration::from_secs(10);
 /// How many processes the page lists.
 const TOP: usize = 6;
 /// The widget's graphs: its setting, the graph's name, and whether it
@@ -309,6 +313,10 @@ impl Module for Performance {
                 "detail",
                 "List the busiest processes for a while; the page sends this",
             ),
+            ActionSpec::new(
+                "gpu",
+                "Read an NVIDIA GPU for a while; views that show it send this",
+            ),
             ActionSpec::new("sort", "Order the page's processes").arg(ArgSpec::choice(
                 "by",
                 "What they use most of",
@@ -377,7 +385,13 @@ struct State {
     cpu_before: Option<CpuTimes>,
     cpu_sensor: Option<std::path::PathBuf>,
     amd: Option<AmdGpu>,
+    /// The running nvidia-smi's readings. It runs only while a view shows
+    /// the GPU, until `gpu_until`: asking the driver on every reading can
+    /// make games stutter.
     nvidia: Option<watch::Receiver<Option<Gpu>>>,
+    gpu_until: Option<Instant>,
+    /// nvidia-smi couldn't start: there's no NVIDIA GPU, or no driver.
+    no_nvidia: bool,
     reading: Reading,
     watches: HashMap<Metric, Watch>,
     histories: HashMap<Metric, History>,
@@ -411,17 +425,15 @@ struct State {
 impl State {
     fn new(settings: Settings) -> Self {
         let amd = AmdGpu::find();
-        let nvidia = amd
-            .is_none()
-            .then(|| sample::follow_nvidia(settings.interval_ms))
-            .flatten();
         let stat = std::fs::read_to_string("/proc/stat").unwrap_or_default();
         let mut state = Self {
             cores: sample::cores(&stat),
             cpu_before: sample::cpu_times(&stat),
             cpu_sensor: sample::cpu_sensor(),
             amd,
-            nvidia,
+            nvidia: None,
+            gpu_until: Some(Instant::now() + GPU_AT_START),
+            no_nvidia: false,
             settings,
             reading: Reading::default(),
             watches: HashMap::new(),
@@ -493,11 +505,17 @@ impl State {
             "detail" => {
                 let first = self.detail_until.is_none();
                 self.detail_until = Some(Instant::now() + DETAIL);
+                // The page shows the GPU too.
+                self.want_gpu();
                 if first {
                     // A list at once, rather than at the next reading.
                     self.processes();
                     self.publish(ctx);
                 }
+                command.reply(Ok(()));
+            }
+            "gpu" => {
+                self.want_gpu();
                 command.reply(Ok(()));
             }
             "sort" => {
@@ -528,6 +546,28 @@ impl State {
         }
     }
 
+    /// A view shows the GPU: read it for a while, starting now.
+    fn want_gpu(&mut self) {
+        let now = Instant::now();
+        self.gpu_until = Some(now + GPU);
+        self.follow_nvidia(now);
+    }
+
+    /// Starts nvidia-smi while a view wants the GPU, and stops it once none
+    /// has asked for a while: its reader ends with the receiver.
+    fn follow_nvidia(&mut self, now: Instant) {
+        let wanted = self.gpu_until.is_some_and(|until| until > now);
+        if !wanted {
+            self.gpu_until = None;
+            if self.nvidia.take().is_some() {
+                tracing::debug!("no view shows the GPU: stopping nvidia-smi");
+            }
+        } else if self.nvidia.is_none() && self.amd.is_none() && !self.no_nvidia {
+            self.nvidia = sample::follow_nvidia(self.settings.interval_ms);
+            self.no_nvidia = self.nvidia.is_none();
+        }
+    }
+
     fn sample(&mut self, ctx: &ModuleCtx) {
         let now = Instant::now();
         let stat = std::fs::read_to_string("/proc/stat").unwrap_or_default();
@@ -540,10 +580,23 @@ impl State {
             sample::memory(&std::fs::read_to_string("/proc/meminfo").unwrap_or_default());
         self.reading.cpu_temperature = self.cpu_sensor.as_deref().and_then(sample::temperature);
         self.space = sample::space(&self.home);
-        self.reading.gpu = match (&self.amd, &self.nvidia) {
-            (Some(amd), _) => amd.read(),
-            (None, Some(nvidia)) => nvidia.borrow().clone(),
-            (None, None) => None,
+        self.follow_nvidia(now);
+        // Without nvidia-smi running, the last reading stays for the views,
+        // but no level is checked against it.
+        let gpu_live = match (&self.amd, &self.nvidia) {
+            (Some(amd), _) => {
+                self.reading.gpu = amd.read();
+                true
+            }
+            (None, Some(nvidia)) => {
+                let gpu = nvidia.borrow().clone();
+                let live = gpu.is_some();
+                if live {
+                    self.reading.gpu = gpu;
+                }
+                live
+            }
+            (None, None) => false,
         };
         self.traffic(now);
 
@@ -567,6 +620,12 @@ impl State {
 
         let sustain = Duration::from_secs(self.settings.sustain_seconds);
         for metric in Metric::ALL {
+            if !gpu_live && matches!(metric, Metric::Gpu | Metric::GpuTemperature) {
+                // Unread, it can't calm down: forget its level, so a
+                // critical bubble doesn't stay for a stale value.
+                self.watches.remove(&metric);
+                continue;
+            }
             let Some(value) = self.reading.value(metric) else {
                 continue;
             };

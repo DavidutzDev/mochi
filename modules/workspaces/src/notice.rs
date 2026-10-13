@@ -193,6 +193,7 @@ mod tests {
             screencast: false,
             captured: Vec::new(),
             keyboard_layout: None,
+            covered: Vec::new(),
         }
     }
 

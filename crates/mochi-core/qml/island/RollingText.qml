@@ -1,9 +1,12 @@
 import QtQuick
+import Quickshell
 
 // Text whose digits roll when they change, like a clock's minutes or a
 // percentage: the old digit slides out as the new one comes in, upward
 // when the number grows. Other characters change in place. Digits all take
-// the width of a 0, so the text doesn't jiggle.
+// the width of a 0, so the text doesn't jiggle. A digit that changes every
+// second, like a clock's seconds, changes in place: rolling it would
+// draw frames for a third of every second. Out of sight, nothing rolls.
 Item {
     id: root
 
@@ -60,6 +63,8 @@ Item {
                 property string leaving: ""
                 // 0 when a change starts, 1 when the new character is in.
                 property real progress: 1
+                // When the character last changed, to tell a fast one.
+                property real changedAt: 0
 
                 width: digit ? zero.advanceWidth : metrics.advanceWidth
                 height: zero.height
@@ -73,7 +78,10 @@ Item {
                 }
 
                 onCharacterChanged: {
-                    if (!root.animated || !digit || shown === "" || !visible) {
+                    const now = Date.now();
+                    const often = now - changedAt < 1500;
+                    changedAt = now;
+                    if (!root.animated || !digit || shown === "" || often || !visible || !Daemon.shows(root.QsWindow.window)) {
                         shown = character;
                         leaving = "";
                         progress = 1;

@@ -408,6 +408,10 @@ Item {
                     visible: root.current?.kind === "image"
                     source: root.current?.kind === "image" ? (root.current.image ?? "") : ""
                     fillMode: Image.PreserveAspectFit
+                    // Decoded at twice the room it has, not at the copied
+                    // image's own size, which can be a whole screenshot.
+                    sourceSize.width: width * 2
+                    sourceSize.height: height * 2
                     asynchronous: true
                     cache: false
                 }

@@ -51,6 +51,31 @@ Singleton {
     property var focusedOutput: null
     property var pointedOutput: null
 
+    // Whether mochid profiles: the shell's windows count their frames
+    // meanwhile, with FrameCounter.
+    property bool profiling: false
+
+    // The monitors a fullscreen window covers, by name: their island and
+    // desktop can't be seen. Replaced, never mutated.
+    property var coveredOutputs: []
+    // The monitors whose desktops windows hide, which hides the desktop
+    // widgets there but not the island.
+    property var coveredDesktops: []
+
+    // Whether a view in `window`, its QsWindow.window, can be seen: the window
+    // is shown and no fullscreen window covers its monitor, unless it's drawn
+    // over them (`overFullscreen`), nor, for the desktop's own window
+    // (`underWindows`), the windows on it. What only decorates, like a wave,
+    // moves only then.
+    function shows(window: var): bool {
+        const output = window?.screen?.name ?? "";
+        if (!(window?.visible ?? false))
+            return false;
+        if (window?.overFullscreen !== true && coveredOutputs.includes(output))
+            return false;
+        return !(window?.underWindows === true && coveredDesktops.includes(output));
+    }
+
     function activityFor(output: string): var {
         return activities[output] ?? activities[""] ?? null;
     }
@@ -218,6 +243,13 @@ Singleton {
         case "theme":
             theme = message.theme;
             break;
+        case "covered":
+            coveredOutputs = message.outputs ?? [];
+            coveredDesktops = message.desktops ?? [];
+            break;
+        case "profiling":
+            profiling = message.on === true;
+            break;
         // Answers to commands views send; views don't wait for them.
         case "ok":
         case "output":
@@ -245,6 +277,10 @@ Singleton {
                 });
             } else {
                 root.ready = false;
+                // mochid says them again once it's back.
+                root.coveredOutputs = [];
+                root.coveredDesktops = [];
+                root.profiling = false;
             }
         }
 

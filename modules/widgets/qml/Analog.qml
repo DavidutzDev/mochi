@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.island
 
 // The clock widget's analog look: a round face with a tick for each hour,
@@ -111,7 +112,7 @@ Item {
         rotation: angle
 
         Behavior on rotation {
-            enabled: hand.animated
+            enabled: hand.animated && hand.visible && Daemon.shows(hand.QsWindow.window)
             RotationAnimation {
                 direction: RotationAnimation.Clockwise
                 duration: Theme.fast

@@ -17,6 +17,7 @@ pkgbase = mochi
 	optdepends = uwsm: start apps from the launcher as units of their own
 	optdepends = xdg-desktop-portal-hyprland: pick what to share with the share module
 	options = !lto
+	options = !strip
 	source = mochi-0.0.4.tar.gz::https://github.com/DavidutzDev/mochi/archive/refs/tags/v0.0.4.tar.gz
 	sha256sums = ffce8a2fc02a6d50332be641ff7894ba1e3d0110c34d40c76027d287eab0237d
 

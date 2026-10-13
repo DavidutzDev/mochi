@@ -16,6 +16,7 @@ demo = ["dep:mochi-module-demo"]
 
 [dependencies]
 anyhow.workspace = true
+backtrace.workspace = true
 clap.workspace = true
 futures-util.workspace = true
 libc.workspace = true
@@ -56,6 +57,7 @@ mochi-module-weather.workspace = true
 mochi-module-tray.workspace = true
 mochi-module-workspaces.workspace = true
 mochi-protocol.workspace = true
+pprof.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["io-util", "macros", "net", "process", "rt-multi-thread", "signal", "sync", "time"] }

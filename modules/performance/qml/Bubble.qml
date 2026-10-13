@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.island
 
 // While a reading stays critical: its icon and value in red, breathing. A
@@ -48,6 +49,7 @@ Item {
     }
 
     SequentialAnimation on opacity {
+        running: root.visible && Daemon.shows(root.QsWindow.window)
         loops: Animation.Infinite
 
         NumberAnimation {

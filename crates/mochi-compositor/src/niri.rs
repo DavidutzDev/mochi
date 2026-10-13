@@ -14,8 +14,8 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::Window;
 use crate::ipc::{self, Event};
+use crate::{Placed, Window};
 
 /// Sends `request` and returns what its `Ok` holds.
 async fn request(path: &Path, request: &str) -> std::io::Result<Value> {
@@ -176,6 +176,29 @@ pub(crate) async fn session(path: &Path, events: &UnboundedSender<Event>) -> std
     ))
 }
 
+/// Each output's place in the global layout; one that's off has none.
+pub(crate) async fn outputs(path: &Path) -> std::io::Result<Vec<Placed>> {
+    Ok(outputs_from(&request(path, "Outputs").await?["Outputs"]))
+}
+
+fn outputs_from(outputs: &Value) -> Vec<Placed> {
+    outputs
+        .as_object()
+        .into_iter()
+        .flatten()
+        .filter_map(|(name, output)| {
+            let logical = &output["logical"];
+            Some(Placed {
+                name: name.clone(),
+                x: logical["x"].as_f64()?,
+                y: logical["y"].as_f64()?,
+                width: logical["width"].as_f64()?,
+                height: logical["height"].as_f64()?,
+            })
+        })
+        .collect()
+}
+
 /// The windows on active workspaces, topmost first.
 pub(crate) async fn windows(path: &Path) -> std::io::Result<Vec<Window>> {
     let windows = request(path, "Windows").await?;
@@ -332,5 +355,16 @@ mod tests {
         assert_eq!(titles, ["Clock", "Docs"]);
         assert_eq!((found[1].x, found[1].y), (1920 + 18, 18));
         assert_eq!((found[0].x, found[0].width), (1920 + 500, 300));
+    }
+
+    #[test]
+    fn outputs_that_are_on_are_placed() {
+        let outputs = json!({
+            "DP-3": {"logical": {"x": 1920, "y": 0, "width": 1920, "height": 1080, "scale": 1.0}},
+            "HDMI-A-1": {"logical": null}
+        });
+        let placed = outputs_from(&outputs);
+        assert_eq!(placed.len(), 1);
+        assert_eq!((placed[0].name.as_str(), placed[0].x), ("DP-3", 1920.0));
     }
 }

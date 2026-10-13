@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.island
 
 // A pinned app's own bubble: its icon. A click activates the app, a right
@@ -25,7 +26,7 @@ Item {
         size: 18
 
         SequentialAnimation on opacity {
-            running: root.payload.attention ?? false
+            running: (root.payload.attention ?? false) && icon.visible && Daemon.shows(icon.QsWindow.window)
             loops: Animation.Infinite
             onRunningChanged: {
                 if (!running)

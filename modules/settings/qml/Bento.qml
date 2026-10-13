@@ -734,6 +734,8 @@ Column {
                             visible: card.shot !== ""
                             source: card.shot
                             fillMode: Image.PreserveAspectCrop
+                            // A screenshot, decoded at twice the card's width.
+                            sourceSize.width: width * 2
                             asynchronous: true
                         }
 

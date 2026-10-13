@@ -15,7 +15,9 @@ backup=('etc/pam.d/mochi')
 makedepends=('cargo' 'git')
 # makepkg builds C with GCC's LTO by default, which leaves zstd's objects
 # as GCC bitcode the Rust linker can't read.
-options=('!lto')
+# package() strips the binaries itself: mochid keeps its function names,
+# for `mochi profile`'s flame graph.
+options=('!lto' '!strip')
 optdepends=(
   'wl-clipboard: copy screenshots'
   'satty: edit screenshots'
@@ -58,6 +60,8 @@ check() {
 package() {
   cd "$_pkgname"
   install -Dm755 target/release/mochid target/release/mochi target/release/mochi-lock -t "$pkgdir/usr/bin/"
+  strip --strip-all "$pkgdir/usr/bin/mochi" "$pkgdir/usr/bin/mochi-lock"
+  strip --strip-debug "$pkgdir/usr/bin/mochid"
   install -Dm644 packaging/pam/mochi -t "$pkgdir/etc/pam.d/"
   install -Dm644 systemd/mochid.service -t "$pkgdir/usr/lib/systemd/user/"
   install -Dm644 share/applications/mochi-links.desktop -t "$pkgdir/usr/share/applications/"

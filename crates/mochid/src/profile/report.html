@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mochi profile</title>
+<style>
+.viz-root {
+  color-scheme: light;
+  --surface-1: #fcfcfb; --surface-2: #f1f0ec; --text-primary: #0b0b0b; --text-secondary: #52514e;
+  --text-muted: #7a7974; --grid: #e4e3de; --axis: #b9b8b2;
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #eda100;
+  --series-5: #e87ba4; --series-6: #008300; --series-7: #4a3aa7;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --surface-1: #1a1a19; --surface-2: #252523; --text-primary: #fff; --text-secondary: #c3c2b7;
+    --text-muted: #8f8e86; --grid: #2f2f2d; --axis: #55544f;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --series-5: #d55181; --series-6: #008300; --series-7: #9085e9;
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --surface-1: #1a1a19; --surface-2: #252523; --text-primary: #fff; --text-secondary: #c3c2b7;
+  --text-muted: #8f8e86; --grid: #2f2f2d; --axis: #55544f;
+  --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+  --series-5: #d55181; --series-6: #008300; --series-7: #9085e9;
+}
+body { margin: 0; }
+.viz-root { background: var(--surface-1); color: var(--text-primary); font: 14px/1.45 system-ui, sans-serif; padding: 32px; max-width: 1100px; margin: 0 auto; min-height: 100vh; position: relative; }
+h1 { font-size: 22px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 36px 0 2px; }
+p.sub { color: var(--text-secondary); margin: 0 0 12px; max-width: 80ch; }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 20px 0 8px; }
+.tile { background: var(--surface-2); border-radius: 10px; padding: 14px 16px; }
+.tile .v { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.tile .l { color: var(--text-secondary); font-size: 13px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 18px; color: var(--text-secondary); font-size: 13px; margin: 6px 0; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+svg.chart { display: block; width: 100%; height: auto; overflow: visible; }
+svg.chart text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.tip { position: fixed; pointer-events: none; background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--grid); border-radius: 8px; padding: 8px 10px; font-size: 12px; box-shadow: 0 4px 14px #0003; display: none; z-index: 9; white-space: nowrap; }
+.tip b { font-variant-numeric: tabular-nums; }
+.tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+td, th { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--grid); }
+th { color: var(--text-secondary); font-weight: 500; }
+td.n, th.n { text-align: right; }
+details { margin-top: 10px; color: var(--text-secondary); }
+summary { cursor: pointer; }
+iframe { width: 100%; height: 640px; border: 1px solid var(--grid); border-radius: 8px; background: #fff; }
+.empty { color: var(--text-muted); padding: 12px 0; }
+.toggle { position: absolute; top: 16px; right: 16px; }
+button { font: inherit; background: var(--surface-2); color: var(--text-primary); border: 1px solid var(--grid); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<div class="toggle"><button id="theme">Light / dark</button></div>
+<h1>Mochi profile</h1>
+<p class="sub" id="about"></p>
+<div class="tiles" id="tiles"></div>
+
+<h2>CPU</h2>
+<p class="sub">In percent of one core (100% is one core busy), every half second. Helpers are what mochid and Quickshell start, like nvidia-smi or curl.</p>
+<div class="legend" id="cpu-legend"></div>
+<svg class="chart" id="cpu" viewBox="0 0 1000 280"></svg>
+<details><summary>Table view</summary><table id="cpu-table"></table></details>
+
+<h2>Frames drawn</h2>
+<p class="sub">How many frames each window of the shell drew each second. Idle, it's close to 0; something that moves draws up to the monitor's refresh rate.</p>
+<div class="legend" id="frames-legend"></div>
+<svg class="chart" id="frames" viewBox="0 0 1000 240"></svg>
+
+<h2>Wake-ups</h2>
+<p class="sub">Context switches per second: how often each process woke up. Many wake-ups with little CPU still keep a core from resting.</p>
+<div class="legend" id="wake-legend"></div>
+<svg class="chart" id="wake" viewBox="0 0 1000 220"></svg>
+
+<h2>mochid's flame graph</h2>
+<p class="sub" id="flame-about">Where mochid's own time went: each box is a function, as wide as its share of the samples, under the one that called it. Click a box to zoom in, Ctrl+F to search. Quickshell's QML isn't in it.</p>
+<div id="flame"></div>
+
+<h2>Where the time went</h2>
+<div class="two">
+  <div><b>Threads, % of a core on average</b><table id="threads"></table></div>
+  <div><b>Modules, their own task, % of a core on average</b><table id="modules"></table></div>
+</div>
+
+<h2>Memory</h2>
+<table id="memory"></table>
+
+<h2>This machine</h2>
+<table id="meta"></table>
+<div class="tip" id="tip"></div>
+</div>
+<script>
+const D = /*DATA*/null;
+const NS = "http://www.w3.org/2000/svg";
+const GROUPS = [["mochid", "mochid", "--series-1"], ["quickshell", "Quickshell", "--series-2"], ["helpers", "Helpers", "--series-3"]];
+const WINDOW_COLORS = ["--series-4", "--series-5", "--series-6", "--series-7"];
+const root = document.querySelector(".viz-root");
+const css = name => getComputedStyle(root).getPropertyValue(name).trim();
+const el = (parent, name, attrs = {}) => { const node = document.createElementNS(NS, name); for (const key in attrs) node.setAttribute(key, attrs[key]); parent.appendChild(node); return node; };
+const tip = document.getElementById("tip");
+const show = (event, html) => { tip.innerHTML = html; tip.style.display = "block"; tip.style.left = Math.min(event.clientX + 14, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = (event.clientY + 14) + "px"; };
+const hide = () => tip.style.display = "none";
+const fmt = value => value >= 100 ? value.toFixed(0) : value >= 10 ? value.toFixed(1) : value.toFixed(2);
+const esc = text => String(text).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const nice = value => [1, 2, 5, 10, 20, 25, 50, 100, 150, 200, 300, 400, 600, 800, 1000].find(step => step >= value) || Math.ceil(value / 500) * 500;
+const legend = (id, series) => document.getElementById(id).innerHTML = series.map(([, name, color]) => `<span><i style="background:var(${color})"></i>${esc(name)}</span>`).join("");
+
+// A frame for a chart over the recording: axes, grid, and a crosshair that
+// shows `describe(t)` at the pointer.
+function frame(svg, max, unit, describe) {
+  svg.innerHTML = "";
+  const [W, H] = svg.getAttribute("viewBox").split(" ").slice(2).map(Number);
+  const m = { l: 48, r: 16, t: 12, b: 28 }, w = W - m.l - m.r, h = H - m.t - m.b;
+  const span = Math.max(D.seconds, 1);
+  const X = t => m.l + Math.max(0, Math.min(t, span)) / span * w, Y = v => m.t + h - Math.min(v, max) / max * h;
+  for (let i = 0; i <= 4; i++) {
+    const v = max / 4 * i;
+    el(svg, "line", { x1: m.l, x2: W - m.r, y1: Y(v), y2: Y(v), stroke: css("--grid") });
+    el(svg, "text", { x: m.l - 6, y: Y(v) + 4, "text-anchor": "end" }).textContent = `${fmt(v)}${unit}`;
+  }
+  const ticks = Math.min(10, Math.max(2, Math.round(span / 5)));
+  for (let i = 0; i <= ticks; i++) {
+    const t = span / ticks * i;
+    el(svg, "text", { x: X(t), y: H - 8, "text-anchor": "middle" }).textContent = `${Math.round(t)} s`;
+  }
+  const layer = el(svg, "g");
+  el(svg, "line", { x1: m.l, x2: W - m.r, y1: Y(0), y2: Y(0), stroke: css("--axis") });
+  const cross = el(svg, "line", { y1: m.t, y2: m.t + h, stroke: css("--text-secondary"), visibility: "hidden" });
+  const hit = el(svg, "rect", { x: m.l, y: m.t, width: w, height: h, fill: "transparent" });
+  hit.addEventListener("mousemove", event => {
+    const box = svg.getBoundingClientRect();
+    const t = ((event.clientX - box.left) / box.width * W - m.l) / w * span;
+    const html = describe(t);
+    if (!html) return hide();
+    cross.setAttribute("x1", X(t)); cross.setAttribute("x2", X(t)); cross.setAttribute("visibility", "visible");
+    show(event, html);
+  });
+  hit.addEventListener("mouseleave", () => { hide(); cross.setAttribute("visibility", "hidden"); });
+  return { layer, X, Y };
+}
+
+const nearest = (list, t) => list.reduce((best, item) => !best || Math.abs(item.t - t) < Math.abs(best.t - t) ? item : best, null);
+
+function cpuChart() {
+  const svg = document.getElementById("cpu");
+  if (!svg) return;
+  const points = D.points;
+  legend("cpu-legend", GROUPS);
+  if (!points.length) { svg.outerHTML = '<p class="empty">No readings: the recording was too short.</p>'; return; }
+  const total = p => GROUPS.reduce((sum, [key]) => sum + (p.cpu[key] || 0), 0);
+  const max = nice(Math.max(...points.map(total)) * 1.1);
+  const half = D.interval;
+  const { layer, X, Y } = frame(svg, max, "%", t => {
+    const p = nearest(points, t);
+    return p && `<div style="color:var(--text-secondary)">${p.t.toFixed(1)} s</div>` + GROUPS.map(([key, name, color]) => `<div><i style="background:var(${color})"></i>${name} <b>${fmt(p.cpu[key] || 0)}%</b></div>`).join("") + `<div>Total <b>${fmt(total(p))}%</b></div>`;
+  });
+  // Stacked steps, each reading over the half second before it.
+  const base = points.map(() => 0);
+  for (const [key, , color] of GROUPS) {
+    let top = "", bottom = "";
+    points.forEach((p, i) => { const y0 = base[i], y1 = y0 + (p.cpu[key] || 0); top += `${i ? "L" : "M"}${X(p.t - half)},${Y(y1)} ${X(p.t)},${Y(y1)} `; p["_" + key] = y0; base[i] = y1; });
+    for (let i = points.length - 1; i >= 0; i--) bottom += `L${X(points[i].t)},${Y(points[i]["_" + key])} ${X(points[i].t - half)},${Y(points[i]["_" + key])} `;
+    el(layer, "path", { d: top + bottom + "Z", fill: css(color), stroke: css("--surface-1"), "stroke-width": 1 });
+  }
+  document.getElementById("cpu-table").innerHTML = "<tr><th>Time</th>" + GROUPS.map(([, name]) => `<th class="n">${name} %</th>`).join("") + "</tr>" +
+    points.map(p => `<tr><td>${p.t.toFixed(1)} s</td>` + GROUPS.map(([key]) => `<td class="n">${fmt(p.cpu[key] || 0)}</td>`).join("") + "</tr>").join("");
+}
+
+// Lines, one per series: [key, name, color, [{t, value}]].
+function lines(id, legendId, series, unit, empty) {
+  const svg = document.getElementById(id);
+  if (!svg) return;
+  legend(legendId, series);
+  if (!series.length || series.every(s => !s[3].length)) { svg.outerHTML = `<p class="empty">${empty}</p>`; return; }
+  const max = nice(Math.max(1, ...series.flatMap(s => s[3].map(p => p.value))) * 1.1);
+  const { layer, X, Y } = frame(svg, max, unit, t => {
+    const rows = series.map(([, name, color, values]) => { const p = nearest(values, t); return p ? `<div><i style="background:var(${color})"></i>${esc(name)} <b>${fmt(p.value)}${unit}</b></div>` : ""; }).join("");
+    return rows && `<div style="color:var(--text-secondary)">${t.toFixed(1)} s</div>${rows}`;
+  });
+  for (const [, , color, values] of series) {
+    if (!values.length) continue;
+    el(layer, "path", { d: values.map((p, i) => `${i ? "L" : "M"}${X(p.t)},${Y(p.value)}`).join(" "), fill: "none", stroke: css(color), "stroke-width": 2, "stroke-linejoin": "round" });
+  }
+}
+
+function framesChart() {
+  const windows = [...new Set(D.frames.map(f => `${f.output} · ${f.surface}`))];
+  // The four busiest windows; more would need colors that can't be told apart.
+  const busy = windows.map(name => [name, D.frames.filter(f => `${f.output} · ${f.surface}` === name)])
+    .sort((a, b) => b[1].reduce((s, f) => s + f.fps, 0) - a[1].reduce((s, f) => s + f.fps, 0)).slice(0, 4);
+  const series = busy.map(([name, list], i) => [name, name, WINDOW_COLORS[i], list.map(f => ({ t: f.t, value: f.fps }))]);
+  lines("frames", "frames-legend", series, "", "The shell sent no frame counts: its views may be older than this mochid.");
+}
+
+function wakeChart() {
+  const series = GROUPS.map(([key, name, color]) => [key, name, color, D.points.map(p => ({ t: p.t, value: p.wakeups[key] || 0 }))]);
+  lines("wake", "wake-legend", series, "/s", "No readings.");
+}
+
+function tables() {
+  const avg = key => D.points.length ? D.points.reduce((sum, p) => sum + GROUPS.reduce((s, [g]) => s + ((p[key] || {})[g] || 0), 0), 0) / D.points.length : 0;
+  const peak = D.points.length ? Math.max(...D.points.map(p => GROUPS.reduce((s, [g]) => s + (p.cpu[g] || 0), 0))) : 0;
+  const fps = D.frames.length ? Math.max(...D.frames.map(f => f.fps)) : null;
+  document.getElementById("tiles").innerHTML = [
+    [`${D.seconds.toFixed(0)} s`, "recorded"],
+    [`${fmt(avg("cpu"))}%`, "CPU on average, of one core"],
+    [`${fmt(peak)}%`, "CPU at its busiest half second"],
+    [fps === null ? "—" : `${fps}`, "most frames a window drew in a second"],
+  ].map(([value, label]) => `<div class="tile"><div class="v">${value}</div><div class="l">${label}</div></div>`).join("");
+
+  const M = D.meta;
+  document.getElementById("about").textContent = `Mochi ${M.version}, ${M.build} build, on ${M.compositor || "an unknown compositor"} with ${M.outputs.join(" and ") || "no monitor named"}. ${M.cpu || "Unknown CPU"}, ${M.cores} threads.`;
+  document.getElementById("threads").innerHTML = '<tr><th>Process</th><th>Thread</th><th class="n">%</th></tr>' +
+    D.threads.filter(t => t.cpu >= 0.005).slice(0, 15).map(t => `<tr><td>${esc(t.process)}</td><td>${esc(t.thread)}</td><td class="n">${t.cpu.toFixed(2)}</td></tr>`).join("");
+  document.getElementById("modules").innerHTML = '<tr><th>Module</th><th class="n">%</th></tr>' +
+    (D.modules.filter(m => m.cpu >= 0.001).map(m => `<tr><td>${esc(m.module)}</td><td class="n">${m.cpu.toFixed(3)}</td></tr>`).join("") || '<tr><td class="empty" colspan="2">No module spent measurable time.</td></tr>');
+  const memory = key => D.points.length ? [Math.min(...D.points.map(p => p.memory[key] || 0)), Math.max(...D.points.map(p => p.memory[key] || 0))] : [0, 0];
+  document.getElementById("memory").innerHTML = '<tr><th>Process</th><th class="n">Least, MB</th><th class="n">Most, MB</th></tr>' +
+    GROUPS.map(([key, name]) => { const [least, most] = memory(key); return `<tr><td>${name}</td><td class="n">${least.toFixed(0)}</td><td class="n">${most.toFixed(0)}</td></tr>`; }).join("");
+  document.getElementById("meta").innerHTML = [
+    ["Mochi", `${M.version}, ${M.build} build`], ["Compositor", M.compositor], ["Monitors", M.outputs.join(", ")],
+    ["Kernel", M.kernel], ["CPU", `${M.cpu}, ${M.cores} threads`], ["Modules", M.modules.join(", ")],
+  ].map(([key, value]) => `<tr><th>${key}</th><td>${esc(value || "unknown")}</td></tr>`).join("");
+}
+
+function flame() {
+  const box = document.getElementById("flame");
+  if (D.flame) box.innerHTML = `<iframe title="Flame graph of mochid" src="data:image/svg+xml;base64,${D.flame}"></iframe>`;
+  else box.innerHTML = `<p class="empty">No flame graph: ${esc(D.flame_error || "unknown")}.</p>`;
+}
+
+function draw() { tables(); cpuChart(); framesChart(); wakeChart(); }
+document.getElementById("theme").onclick = () => {
+  const html = document.documentElement;
+  const dark = html.dataset.theme ? html.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  html.dataset.theme = dark ? "light" : "dark";
+  draw();
+};
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+flame();
+draw();
+</script>
+</body>
+</html>

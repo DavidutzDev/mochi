@@ -78,6 +78,18 @@ pub enum ClientMessage {
     /// waits for that process to end, then starts again. Answered with `ok`
     /// before it stops.
     StepAside { pid: u32 },
+    /// Records what mochid, Quickshell and the programs they start cost
+    /// for `seconds`, with a flame graph of mochid, and writes a report.
+    /// Answered with `output`, the report's path, once it's written.
+    Profile { seconds: u32 },
+    /// How many frames a window of the UI drew in the last second, while
+    /// the daemon profiles: `surface` is `island` or `desktop`. UI only,
+    /// never answered.
+    Frames {
+        output: String,
+        surface: String,
+        frames: u32,
+    },
 }
 
 /// Sent by the daemon.
@@ -138,6 +150,20 @@ pub enum DaemonMessage {
     Actions { modules: Vec<ModuleActions> },
     /// A request failed, or a message could not be handled.
     Error { code: ErrorCode, message: String },
+    /// Whether the daemon profiles now: while it does, the UI counts the
+    /// frames each window draws and sends `frames` every second. Sent to
+    /// the UI after `hello` and whenever it changes. UI only.
+    Profiling { on: bool },
+    /// The outputs a fullscreen window covers, by name: their island and
+    /// desktop can't be seen, so views there stop moving. Sent to the UI
+    /// after `hello` and whenever it changes. UI only.
+    Covered {
+        outputs: Vec<String>,
+        /// The monitors whose desktop windows hide, which covers the
+        /// desktop widgets there but not the island.
+        #[serde(default)]
+        desktops: Vec<String>,
+    },
     /// Reload the views in place, keeping the windows: the shell directory
     /// has a module it didn't have. The UI says hello again once it has.
     /// UI only.

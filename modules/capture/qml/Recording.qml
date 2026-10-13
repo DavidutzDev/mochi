@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.island
 
 // The bubble while recording: a red dot that breathes. Clicking it opens
@@ -13,6 +14,8 @@ Item {
     implicitHeight: 26
 
     Rectangle {
+        id: dot
+
         anchors.centerIn: parent
         width: 12
         height: 12
@@ -20,6 +23,7 @@ Item {
         color: Theme.danger
 
         SequentialAnimation on opacity {
+            running: dot.visible && Daemon.shows(dot.QsWindow.window)
             loops: Animation.Infinite
 
             NumberAnimation {

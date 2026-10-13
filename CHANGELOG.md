@@ -2,6 +2,25 @@
 
 Mochi follows [semantic versioning](https://semver.org). Before 1.0, any minor release may change the config format, the protocol or the module interface; the changelog says when.
 
+## Unreleased
+
+### Added
+
+- A profiler. `mochi profile [seconds]`, in every build, records what mochid, Quickshell and the programs they start cost, 30 seconds by default, and writes one HTML file to send with a bug report: CPU, wake-ups and memory over time, how many frames each window of the shell drew each second, the busiest threads, each module's time, and a flame graph of mochid. In `mochid --dev`, a click on the dev bubble opens the same readings live, twice a second, with a button that records. Nothing runs until one of them asks. mochid keeps its function names in the release builds for the flame graph, which makes the download about 2.4 MB bigger. See [Profiling](docs/book/src/profiling.md).
+
+### Changed
+
+- An NVIDIA GPU is read only while a view shows it, like the Performance page or a performance widget on screen: `nvidia-smi` runs then and for 30 seconds after, since asking the driver can make games stutter. An NVIDIA GPU's notice and critical levels only count then. Views ask with the performance module's new `gpu` action.
+- The launcher's file index is built in the background the first time a search asks for files after the launcher opens, with "Indexing" in the search field meanwhile, and no longer watches every folder of the home folder through inotify. `watch = true` in `[module.launcher.files]` brings the watching back. Unwatched, the index goes 15 seconds after the launcher closes, which gives mochid back about 45 MB for 200 000 files: the next search for files builds it again anyway.
+- The protocol has `profile`, answered with `output`, for `mochi profile`, and, for the UI, `profiling`, `frames` and `covered`. See [the protocol](docs/protocol.md).
+
+### Fixed
+
+- High CPU use, and stutter in games, while music plays. The island's media bars and the progress wave of the media views and the now-playing widget redrew the island or the desktop for every frame of the monitor, 144 or 240 times a second on a gaming monitor. Now they move 30 times a second, together, and only where they can be seen: not in a hidden panel. The wave slides a line drawn once instead of drawing a new one each frame. A clock's seconds change in place instead of rolling, which drew frames for a third of every second.
+- Under a fullscreen window, like a game, the island and the desktop kept drawing. mochid now follows which monitors a fullscreen window covers, and there the media bars, the wave, the edge light, the recording and sharing dots, the tray's attention and the critical bubbles' pulse stop. The desktop widgets also stop moving, and stop asking for the GPU's readings, while ordinary windows hide most of their monitor, as tiled windows do, on Hyprland, niri and Sway, which say where the windows are.
+- The desktop drew frames all the time on every monitor, about 12 a second with no widget on it, and kept a live preview of every widget in memory: the widgets drawer, with its previews, was always there, hidden. It's made when arranging the widgets now, which gives the shell back about 60 MB and most of its idle CPU with the widgets module on. The desktop no longer loads the lock screen's background, the whole wallpaper on each monitor, unless the lock screen is being arranged, and an analog clock's second hand stops moving out of sight.
+- The clipboard picker decodes a copied image, and the Bento page a screenshot, at the size they show it, not at the image's own.
+
 ## 0.3.0 - 2026-10-12
 
 ### Added

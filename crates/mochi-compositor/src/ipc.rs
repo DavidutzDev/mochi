@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::{Window, hyprland, niri, sway};
+use crate::{Placed, Window, hyprland, niri, sway};
 
 const FIRST_RETRY: Duration = Duration::from_secs(1);
 const MAX_RETRY: Duration = Duration::from_secs(30);
@@ -94,6 +94,15 @@ impl Ipc {
                     retry = (retry * 2).min(MAX_RETRY);
                 }
             }
+        }
+    }
+
+    /// Each monitor's place in the global layout.
+    pub(crate) async fn outputs(&self) -> std::io::Result<Vec<Placed>> {
+        match self {
+            Self::Hyprland(dir) => hyprland::outputs(dir).await,
+            Self::Niri(socket) => niri::outputs(socket).await,
+            Self::Sway(socket) => sway::outputs(socket).await,
         }
     }
 

@@ -13,8 +13,8 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::UnixStream;
 use tokio::sync::mpsc::UnboundedSender;
 
-use crate::Window;
 use crate::ipc::{self, Event};
+use crate::{Placed, Window};
 
 /// The longest a blocking request may take.
 const BLOCKING_TIMEOUT: Duration = Duration::from_millis(100);
@@ -80,6 +80,42 @@ pub(crate) async fn windows(dir: &Path) -> std::io::Result<Vec<Window>> {
     let clients = query(dir, "j/clients").await?;
     windows_from(&clients, &monitors)
         .ok_or_else(|| std::io::Error::other("Hyprland sent unexpected JSON"))
+}
+
+/// Each monitor's place in the global layout.
+pub(crate) async fn outputs(dir: &Path) -> std::io::Result<Vec<Placed>> {
+    Ok(outputs_from(&query(dir, "j/monitors").await?))
+}
+
+/// From `hyprctl -j monitors`: the size is in pixels, so it's divided by
+/// the scale, and swapped for a monitor turned on its side.
+fn outputs_from(monitors: &str) -> Vec<Placed> {
+    let monitors: serde_json::Value = serde_json::from_str(monitors).unwrap_or_default();
+    monitors
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|monitor| {
+            let scale = monitor["scale"]
+                .as_f64()
+                .filter(|scale| *scale > 0.0)
+                .unwrap_or(1.0);
+            let (mut width, mut height) = (
+                monitor["width"].as_f64()? / scale,
+                monitor["height"].as_f64()? / scale,
+            );
+            if monitor["transform"].as_i64().unwrap_or(0) % 2 == 1 {
+                std::mem::swap(&mut width, &mut height);
+            }
+            Some(Placed {
+                name: monitor["name"].as_str()?.to_owned(),
+                x: monitor["x"].as_f64()?,
+                y: monitor["y"].as_f64()?,
+                width,
+                height,
+            })
+        })
+        .collect()
 }
 
 /// Picks the visible windows from `hyprctl -j clients` and orders them
@@ -495,5 +531,20 @@ mod tests {
         assert_eq!(focused_from_monitors(json).as_deref(), Some("DP-3"));
         assert_eq!(focused_from_monitors("[]"), None);
         assert_eq!(focused_from_monitors("not json"), None);
+    }
+
+    #[test]
+    fn monitors_are_placed_in_logical_pixels() {
+        let monitors = r#"[
+            {"name":"DP-3","x":0,"y":0,"width":2560,"height":1440,"scale":1.25,"transform":0},
+            {"name":"HDMI-A-1","x":2048,"y":0,"width":1920,"height":1080,"scale":1.0,"transform":1}
+        ]"#;
+        let placed = outputs_from(monitors);
+        assert_eq!((placed[0].width, placed[0].height), (2048.0, 1152.0));
+        // On its side.
+        assert_eq!(
+            (placed[1].x, placed[1].width, placed[1].height),
+            (2048.0, 1080.0, 1920.0)
+        );
     }
 }

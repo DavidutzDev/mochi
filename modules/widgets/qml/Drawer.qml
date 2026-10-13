@@ -28,7 +28,9 @@ Item {
 
     readonly property bool open: desktop.editing && (desktop.layout?.drawer ?? false)
     readonly property bool lockScreen: desktop.lockScreen
-    readonly property bool shown: open && dragging === null
+    // False until made, so a drawer made already open slides in.
+    property bool made: false
+    readonly property bool shown: made && open && dragging === null
     // Away from the island's notice, which opens it.
     readonly property bool onRight: Theme.islandArea === "left"
     readonly property real gap: Theme.spaceMedium
@@ -141,6 +143,12 @@ Item {
         else if (desktop.editing)
             desktop.takeKeys();
     }
+    // The Loader makes it as arranging starts, already open.
+    Component.onCompleted: Qt.callLater(() => {
+        made = true;
+        if (open)
+            search.forceActiveFocus();
+    })
 
     Rectangle {
         id: panel

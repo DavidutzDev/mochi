@@ -15,7 +15,7 @@ use mochi_core::{
 };
 use mochi_plugins::manifest::CORE_ID;
 use mochi_protocol::{
-    API, ActionSpec, ActivityId, Area, ClientMessage, CompositorStatus, Contribution,
+    API, ActionSpec, ActivityId, Area, BubbleId, ClientMessage, CompositorStatus, Contribution,
     DaemonMessage, ErrorCode, EventKind, ModuleActions, PluginState, PluginStatus, Role, Status,
     Theme,
 };
@@ -24,8 +24,10 @@ use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::sync::oneshot;
 use tokio::task::JoinError;
 
+use crate::desktops;
 use crate::ipc::{ConnectionEvent, ConnectionId};
 use crate::modules::{self, Runner};
+use crate::profile::{self, Profiler};
 use crate::settings::{self, Store};
 
 /// The module that shows the settings panel, which hears about changes.
@@ -102,6 +104,15 @@ pub struct Daemon {
     islands: Islands,
     /// `[bubbles] tooltip_ms`.
     tooltip_ms: u64,
+    /// The outputs a fullscreen window covers, as the UI last heard.
+    covered: Vec<String>,
+    /// The outputs whose desktops windows hide, as the UI last heard.
+    desktops: Vec<String>,
+    /// Whether the widgets module runs, so the desktops are worth following.
+    widgets_shown: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Which desktops windows hide, until `run` takes them.
+    desktop_updates: Option<UnboundedReceiver<Vec<String>>>,
+    desktop_sender: UnboundedSender<Vec<String>>,
     bubbles: Bubbles,
     clients: HashMap<ConnectionId, Client>,
     theme: Theme,
@@ -138,6 +149,12 @@ pub struct Daemon {
     hidden_list: Option<(ActivityId, Area)>,
     /// The process this daemon steps aside for, once asked.
     step_aside: Option<u32>,
+    /// The dev panel's readings and `mochi profile`'s recordings.
+    profiler: Profiler,
+    /// The profiler's readings, until `run` takes them.
+    profile_samples: Option<UnboundedReceiver<profile::sampler::Sample>>,
+    /// The bubble of `mochid --dev`, whose click opens the profiler.
+    dev_bubble: Option<BubbleId>,
 }
 
 /// How the daemon's loop ended.
@@ -158,6 +175,8 @@ pub struct Files {
 impl Daemon {
     pub fn new(runner: Runner, files: Files, store: Store, loaded: settings::Loaded) -> Self {
         let compositor = runner.compositor.clone();
+        let (samples, profile_samples) = tokio::sync::mpsc::unbounded_channel();
+        let (desktop_sender, desktop_updates) = tokio::sync::mpsc::unbounded_channel();
         Self {
             order: Vec::new(),
             modules: BTreeMap::new(),
@@ -165,6 +184,11 @@ impl Daemon {
             states: BTreeMap::new(),
             islands: Islands::new(),
             tooltip_ms: 600,
+            covered: Vec::new(),
+            desktops: Vec::new(),
+            widgets_shown: std::sync::Arc::default(),
+            desktop_updates: Some(desktop_updates),
+            desktop_sender,
             bubbles: Bubbles::default(),
             clients: HashMap::new(),
             theme: loaded.theme,
@@ -186,6 +210,9 @@ impl Daemon {
             handshake_deadline: None,
             hidden_list: None,
             step_aside: None,
+            profiler: Profiler::new(samples),
+            profile_samples: Some(profile_samples),
+            dev_bubble: None,
         }
     }
 
@@ -197,8 +224,9 @@ impl Daemon {
             .area(Area::Left)
             .priority(Priority::URGENT)
             .payload(payload);
-        let id = mochi_protocol::BubbleId(self.runner.ids.next().0);
+        let id = BubbleId(self.runner.ids.next().0);
         self.bubbles.show(id, CORE_ID, spec);
+        self.dev_bubble = Some(id);
     }
 
     pub fn attach(&mut self, supervisor: Supervisor) {
@@ -299,6 +327,10 @@ impl Daemon {
             tracing::info!(module = id, "started");
         }
         self.order = wanted;
+        self.widgets_shown.store(
+            self.order.contains(&"widgets"),
+            std::sync::atomic::Ordering::Relaxed,
+        );
         self.listed = catalog.listed;
         self.panels = config.island.panels;
         if self.tooltip_ms != config.bubbles.tooltip_ms {
@@ -392,6 +424,32 @@ impl Daemon {
 
     /// Gives each monitor the compositor reports an island; Mochi's own
     /// monitors get none.
+    /// Tells the UI which outputs a fullscreen window covers, when that
+    /// changed, so their views stop moving.
+    fn follow_covered(&mut self) {
+        let covered = self.compositor.state().covered;
+        if covered != self.covered {
+            tracing::debug!(?covered, "monitors a fullscreen window covers");
+            self.covered = covered;
+            self.broadcast(&self.covered_message());
+        }
+    }
+
+    /// Which monitors a fullscreen window covers, and whose desktops windows
+    /// hide.
+    fn covered_message(&self) -> DaemonMessage {
+        DaemonMessage::Covered {
+            outputs: self.covered.clone(),
+            desktops: self.desktops.clone(),
+        }
+    }
+
+    fn on_desktops(&mut self, desktops: Vec<String>) {
+        tracing::debug!(?desktops, "monitors whose desktops windows hide");
+        self.desktops = desktops;
+        self.broadcast(&self.covered_message());
+    }
+
     fn follow_outputs(&mut self) {
         let outputs: Vec<String> = self
             .compositor
@@ -409,14 +467,26 @@ impl Daemon {
         let mut terminate =
             tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
         let mut monitors = self.compositor.subscribe();
+        let mut samples = self.profile_samples.take().expect("the daemon runs once");
+        let mut desktops = self.desktop_updates.take().expect("the daemon runs once");
+        desktops::spawn(
+            self.compositor.clone(),
+            self.widgets_shown.clone(),
+            self.desktop_sender.clone(),
+        );
         let mut watching = true;
         self.follow_outputs();
+        self.follow_covered();
 
         loop {
-            let deadline = [self.islands.next_deadline(), self.handshake_deadline]
-                .into_iter()
-                .flatten()
-                .min();
+            let deadline = [
+                self.islands.next_deadline(),
+                self.handshake_deadline,
+                self.profiler.deadline(),
+            ]
+            .into_iter()
+            .flatten()
+            .min();
             let sleep = async {
                 match deadline {
                     Some(deadline) => {
@@ -441,8 +511,13 @@ impl Daemon {
                     self.on_exit(module, generation, result);
                 }
                 Some(event) = inputs.ui.recv() => self.on_ui_process(event),
+                Some(sample) = samples.recv() => self.on_profile_sample(sample),
+                Some(covered) = desktops.recv() => self.on_desktops(covered),
                 changed = monitors.changed(), if watching => match changed {
-                    Ok(()) => self.follow_outputs(),
+                    Ok(()) => {
+                        self.follow_outputs();
+                        self.follow_covered();
+                    }
                     // The compositor connection is gone; the islands stay.
                     Err(_) => watching = false,
                 },
@@ -460,6 +535,7 @@ impl Daemon {
 
             let now = Instant::now();
             self.islands.tick(now);
+            self.finish_profile(now);
             if self
                 .handshake_deadline
                 .is_some_and(|deadline| deadline <= now)
@@ -583,6 +659,9 @@ impl Daemon {
                 if let Some((list, _)) = self.hidden_list {
                     self.islands.dismiss(list, Instant::now());
                 }
+                if self.dev_bubble == Some(bubble) {
+                    self.toggle_profiler();
+                }
                 // Clicks on a bubble that just went away are dropped.
                 if let Some(module) = self.bubbles.owner(bubble) {
                     let module = module.to_owned();
@@ -592,11 +671,20 @@ impl Daemon {
             (Some(Role::Ui), ClientMessage::OverflowClick { area }) => self.list_hidden(area),
             (Some(Role::Ui), ClientMessage::PassOn { click }) => self.pass_on(click),
             (
+                Some(Role::Ui),
+                ClientMessage::Frames {
+                    output,
+                    surface,
+                    frames,
+                },
+            ) => self.profiler.on_frames(output, surface, frames),
+            (
                 Some(_),
                 ClientMessage::Event { .. }
                 | ClientMessage::BubbleClick { .. }
                 | ClientMessage::OverflowClick { .. }
-                | ClientMessage::PassOn { .. },
+                | ClientMessage::PassOn { .. }
+                | ClientMessage::Frames { .. },
             ) => {
                 self.reply_error(id, ErrorCode::NotAllowed, "only the ui sends events");
             }
@@ -632,6 +720,7 @@ impl Daemon {
                 }
                 self.reply(id, DaemonMessage::Ok);
             }
+            (Some(_), ClientMessage::Profile { seconds }) => self.start_profile(id, seconds),
             (Some(_), ClientMessage::StepAside { pid }) => {
                 tracing::info!(pid, "stepping aside for mochid --dev");
                 self.reply(id, DaemonMessage::Ok);
@@ -664,6 +753,108 @@ impl Daemon {
         let id = self.runner.ids.next();
         self.islands.submit(id, CORE_ID, spec, now);
         self.hidden_list = Some((id, area));
+    }
+
+    /// Opens the profiler's panel, or closes it: the dev bubble's click.
+    fn toggle_profiler(&mut self) {
+        let now = Instant::now();
+        if let Some(panel) = self.profiler.panel.take() {
+            if let Err(error) = self.islands.withdraw(CORE_ID, panel, now) {
+                tracing::debug!(%error, "the profiler's panel is gone");
+            }
+        } else {
+            let mut spec = ActivitySpec::new(PROFILER_VIEW)
+                .key("profiler")
+                .priority(Priority::URGENT)
+                .uninterruptible()
+                .payload(self.profiler.payload());
+            spec.output = self.panel_output();
+            let id = self.runner.ids.next();
+            self.islands.submit(id, CORE_ID, spec, now);
+            self.profiler.panel = Some(id);
+        }
+        self.sync_profiler();
+    }
+
+    /// Starts or stops the profiler's readings as the panel and recordings
+    /// need them, and tells the UI, which counts frames meanwhile.
+    fn sync_profiler(&mut self) {
+        if let Some(on) = self.profiler.sync() {
+            self.broadcast(&DaemonMessage::Profiling { on });
+        }
+    }
+
+    fn on_profile_sample(&mut self, sample: profile::sampler::Sample) {
+        self.profiler.on_sample(sample);
+        self.update_profiler_panel();
+    }
+
+    /// Shows the latest readings in the panel; one closed by the user stops
+    /// them.
+    fn update_profiler_panel(&mut self) {
+        let Some(panel) = self.profiler.panel else {
+            return;
+        };
+        if self
+            .islands
+            .update(CORE_ID, panel, self.profiler.payload())
+            .is_err()
+        {
+            self.profiler.panel = None;
+            self.sync_profiler();
+        }
+    }
+
+    /// `mochi profile`, or the panel's Record: answered with the report's
+    /// path once it's written.
+    fn start_profile(&mut self, id: ConnectionId, seconds: u32) {
+        match self.profiler.record(seconds, Some(id)) {
+            Ok(()) => {
+                self.sync_profiler();
+                self.update_profiler_panel();
+            }
+            Err(message) => self.reply_error(id, ErrorCode::InvalidArgs, message),
+        }
+    }
+
+    /// Writes the report of a recording that's due, and answers whoever
+    /// asked for it.
+    fn finish_profile(&mut self, now: Instant) {
+        if self.profiler.deadline().is_none_or(|until| until > now) {
+            return;
+        }
+        let status = self.compositor_status();
+        let (kernel, cpu, cores) = profile::Meta::machine();
+        let meta = profile::Meta {
+            version: VERSION.into(),
+            build: if cfg!(debug_assertions) {
+                "debug"
+            } else {
+                "release"
+            },
+            compositor: status.backend,
+            outputs: status.outputs,
+            modules: self.order.iter().map(|id| (*id).to_owned()).collect(),
+            kernel,
+            cpu,
+            cores,
+        };
+        let Some(finished) = self.profiler.finish(now, &meta) else {
+            return;
+        };
+        for who in finished.waiting {
+            match &finished.result {
+                Ok(path) => self.reply(
+                    who,
+                    DaemonMessage::Output {
+                        output: path.display().to_string(),
+                    },
+                ),
+                Err(message) => self.reply_error(who, ErrorCode::Internal, message.clone()),
+            }
+        }
+        self.sync_profiler();
+        self.update_profiler_panel();
     }
 
     /// Keeps the open list of hidden bubbles up to date, and closes it when
@@ -744,6 +935,9 @@ impl Daemon {
                 );
             }
             self.reply(id, self.bubbles_message());
+            self.reply(id, self.covered_message());
+            let on = self.profiler.on();
+            self.reply(id, DaemonMessage::Profiling { on });
         }
     }
 
@@ -1354,6 +1548,7 @@ const PASS_ON_DELAY: Duration = Duration::from_millis(80);
 const HIDDEN_VIEW: &str = "HiddenBubbles";
 /// `island/DevBubble.qml`, the bubble of `mochid --dev`.
 const DEV_VIEW: &str = "DevBubble";
+const PROFILER_VIEW: &str = "Profiler";
 
 fn hidden_payload(area: Area, bubbles: &[mochi_protocol::Bubble]) -> Value {
     serde_json::json!({ "area": area, "bubbles": bubbles })

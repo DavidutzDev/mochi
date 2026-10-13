@@ -1,4 +1,5 @@
 import QtQuick
+import Quickshell
 import qs.island
 
 // The performance widget: the readings with their last two minutes as
@@ -11,6 +12,16 @@ Item {
     property var payload: null
     property var settings: ({})
     property string instance: ""
+
+    // nvidia-smi runs only while a view shows the GPU: say so every 20
+    // seconds while this one can be seen.
+    Timer {
+        interval: 20000
+        repeat: true
+        triggeredOnStart: true
+        running: root.shown("gpu") && root.visible && Daemon.shows(root.QsWindow.window)
+        onTriggered: Daemon.command("performance", "gpu", [])
+    }
 
     readonly property var cpu: payload?.cpu ?? null
     readonly property var memory: payload?.memory ?? null

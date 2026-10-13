@@ -20,6 +20,9 @@ optdepends=(
   'uwsm: start apps from the launcher as units of their own'
   'xdg-desktop-portal-hyprland: pick what to share with the share module'
 )
+# The release's binaries are stripped already, mochid down to its function
+# names, for `mochi profile`'s flame graph.
+options=('!strip')
 provides=('mochi')
 conflicts=('mochi' 'mochi-git')
 source_x86_64=("mochi-$pkgver-x86_64.tar.gz::$url/releases/download/v$pkgver/mochi-x86_64-linux.tar.gz")

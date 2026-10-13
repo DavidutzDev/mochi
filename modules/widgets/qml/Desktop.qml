@@ -120,7 +120,7 @@ Item {
             return null;
         const top = Theme.anchor === "bottom" ? 0 : hole.height;
         const bottom = Theme.anchor === "bottom" ? hole.height : 0;
-        return [output, width, height, drawer.coveredLeft, drawer.coveredRight, top, bottom].map(value => typeof value === "string" ? value : `${Math.round(value)}`);
+        return [output, width, height, drawer.item?.coveredLeft ?? 0, drawer.item?.coveredRight ?? 0, top, bottom].map(value => typeof value === "string" ? value : `${Math.round(value)}`);
     }
     onReportChanged: {
         if (report)
@@ -136,7 +136,8 @@ Item {
         Image {
             anchors.fill: parent
             readonly property string path: Daemon.state("lock")?.background ?? ""
-            source: path !== "" ? `file://${path}` : ""
+            // Only while it shows: it's the whole wallpaper, on every monitor.
+            source: root.lockScreen && path !== "" ? `file://${path}` : ""
             fillMode: Image.PreserveAspectCrop
             asynchronous: true
         }
@@ -257,11 +258,18 @@ Item {
         }
     }
 
-    Drawer {
+    // Only while arranging: it holds a live preview of every widget, whose
+    // clocks and graphs would keep the desktop drawing frames, hidden or
+    // not, on every monitor.
+    Loader {
         id: drawer
 
+        anchors.fill: parent
         z: 2
-        desktop: root
-        visible: root.editing
+        active: root.editing
+
+        sourceComponent: Drawer {
+            desktop: root
+        }
     }
 }

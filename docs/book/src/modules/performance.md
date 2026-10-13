@@ -16,7 +16,7 @@ A reading that stays over its **notice** level shows a short notice on the islan
 
 GPU use defaults to a notice only at 95% and no critical level, since a game keeps the GPU at full use. Clicking the bubble opens the page. `mochi ipc performance status` prints the readings.
 
-The CPU's temperature comes from hwmon (k10temp or zenpower on AMD, coretemp on Intel). An AMD GPU is read from sysfs; an NVIDIA GPU through one long-running `nvidia-smi`, which comes with NVIDIA's driver. Intel GPUs aren't read yet.
+The CPU's temperature comes from hwmon (k10temp or zenpower on AMD, coretemp on Intel). An AMD GPU is read from sysfs; an NVIDIA GPU through `nvidia-smi`, which comes with NVIDIA's driver. It runs only while a view shows the GPU, like the Performance page or a performance widget on screen, and for 30 seconds after, since asking the driver can make games stutter. So an NVIDIA GPU's levels only count then. Intel GPUs aren't read yet.
 
 Disk speeds add up the whole disks in `/proc/diskstats` that have a `device` link in `/sys/block`. That leaves out partitions, which the disk already counts, and loop, RAM, zram, device-mapper and RAID devices, which pass their traffic on to a disk. Network speeds add up the interfaces in `/proc/net/dev` that have a `device` link in `/sys/class/net`: wired and wireless cards. That leaves out loopback, bridges, containers' virtual cards and VPN tunnels, whose traffic crosses a card anyway.
 
